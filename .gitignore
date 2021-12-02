@@ -1,0 +1,7 @@
+build/
+build-release/
+cmake-build*/
+.idea/
+.DS_Store
+embuild/
+*.swp
