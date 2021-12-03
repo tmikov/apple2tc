@@ -1,1 +1,2 @@
-add_executable(id id.cpp d6502.cpp d6502.h)
+link_libraries(d6502)
+add_executable(id id.cpp)

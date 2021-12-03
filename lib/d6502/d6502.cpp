@@ -1,4 +1,4 @@
-#include "d6502.h"
+#include "apple2c/d6502.h"
 
 #include <cassert>
 
