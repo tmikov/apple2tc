@@ -1,6 +1,8 @@
 #include "apple2c/d6502.h"
 
 #include <cassert>
+#include <cstdio>
+#include <cstring>
 
 const char *cpuInstName(CPUInstKind kind) {
   static const char s_instName[][4] = {
@@ -174,3 +176,68 @@ CPUInst decodeInst(uint16_t pc, ThreeBytes bytes) {
   return CPUInst{opcode.kind, opcode.addrMode, operand, size};
 }
 
+FormattedInst formatInst(uint16_t pc, ThreeBytes bytes) {
+  FormattedInst res;
+  CPUInst inst = decodeInst(pc, bytes);
+
+  res.size = inst.size;
+
+  // Format the instruction bytes.
+  for (unsigned i = 0, len = 0; i != inst.size; ++i) {
+    if (i != 0)
+      res.bytes[len++] = ' ';
+    len += snprintf(res.bytes + len, sizeof(res.bytes) - len, "%02X", bytes.d[i]);
+  }
+
+  if (inst.kind == CPUInstKind::INVALID) {
+    strcpy(res.inst, "???");
+    return res;
+  }
+
+  snprintf(res.inst, sizeof(res.inst), "%s", cpuInstName(inst.kind));
+
+  switch (inst.addrMode) {
+  case CPUAddrMode::A:
+    snprintf(res.operand, sizeof(res.operand), "A");
+    break;
+  case CPUAddrMode::Abs:
+    snprintf(res.operand, sizeof(res.operand), "$%04X", inst.operand);
+    break;
+  case CPUAddrMode::Abs_X:
+    snprintf(res.operand, sizeof(res.operand), "$%04X,X", inst.operand);
+    break;
+  case CPUAddrMode::Abs_Y:
+    snprintf(res.operand, sizeof(res.operand), "$%04X,Y", inst.operand);
+    break;
+  case CPUAddrMode::Imm:
+    snprintf(res.operand, sizeof(res.operand), "#$%02X", inst.operand);
+    break;
+  case CPUAddrMode::Implied:
+    break;
+  case CPUAddrMode::Ind:
+    snprintf(res.operand, sizeof(res.operand), "($%04X)", inst.operand);
+    break;
+  case CPUAddrMode::X_Ind:
+    snprintf(res.operand, sizeof(res.operand), "($%02X,X)", inst.operand);
+    break;
+  case CPUAddrMode::Ind_Y:
+    snprintf(res.operand, sizeof(res.operand), "($%02X),Y", inst.operand);
+    break;
+  case CPUAddrMode::Rel:
+    snprintf(res.operand, sizeof(res.operand), "$%04X", inst.operand);
+    break;
+  case CPUAddrMode::Zpg:
+    snprintf(res.operand, sizeof(res.operand), "$%02X", inst.operand);
+    break;
+  case CPUAddrMode::Zpg_X:
+    snprintf(res.operand, sizeof(res.operand), "$%02X,X", inst.operand);
+    break;
+  case CPUAddrMode::Zpg_Y:
+    snprintf(res.operand, sizeof(res.operand), "$%02X,Y", inst.operand);
+    break;
+  default:
+    break;
+  }
+
+  return res;
+}

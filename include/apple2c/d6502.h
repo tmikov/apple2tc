@@ -58,7 +58,7 @@ enum class CPUInstKind : uint8_t {
   LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA, PLP, ROL, ROR, RTI, RTS, SBC, SEC,
   SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA,
   INVALID
-  // clanf-format on
+  // clang-format on
 };
 
 struct CPUOpcode {
@@ -77,12 +77,31 @@ struct CPUInst {
   uint8_t size;
 
   static constexpr CPUInst invalid() {
-    return {CPUInstKind::INVALID, CPUAddrMode::A, 0, 0};
+    return {CPUInstKind::INVALID, CPUAddrMode::A, 0, 1};
   }
 };
 
 struct ThreeBytes {
   uint8_t d[3];
+};
+
+/// Formatted fields of a decoded instruction for easy printing.
+struct FormattedInst {
+  /// The instruction size in bytes.
+  uint8_t size;
+  /// Up to three instruction bytes as hex numbers.
+  char bytes[9];
+  /// The instruction name.
+  char inst[4];
+  /// Instruction operand.
+  char operand[8];
+
+  FormattedInst() {
+    size = 0;
+    bytes[0] = 0;
+    inst[0] = 0;
+    operand[0] = 0;
+  }
 };
 
 /// Return the instruction name as a C string.
@@ -94,3 +113,5 @@ CPUOpcode decodeOpcode(uint8_t opcode);
 /// length. If there is an instruction operand, extract and store its value.
 /// Note that the maximum instruction length is three bytes.
 CPUInst decodeInst(uint16_t pc, ThreeBytes bytes);
+/// Format an instruction for easy printing.
+FormattedInst formatInst(uint16_t pc, ThreeBytes bytes);
