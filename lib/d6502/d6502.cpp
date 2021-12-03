@@ -147,8 +147,6 @@ CPUInst decodeInst(uint16_t pc, ThreeBytes bytes) {
   case CPUAddrMode::Abs_X:
   case CPUAddrMode::Abs_Y:
   case CPUAddrMode::Ind:
-  case CPUAddrMode::X_Ind:
-  case CPUAddrMode::Ind_Y:
     operand = bytes.d[1] + bytes.d[2] * 256;
     size = 3;
     break;
@@ -166,6 +164,8 @@ CPUInst decodeInst(uint16_t pc, ThreeBytes bytes) {
   case CPUAddrMode::Zpg:
   case CPUAddrMode::Zpg_X:
   case CPUAddrMode::Zpg_Y:
+  case CPUAddrMode::X_Ind:
+  case CPUAddrMode::Ind_Y:
     operand = bytes.d[1];
     size = 2;
     break;
