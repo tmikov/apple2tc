@@ -20,60 +20,11 @@ static uint8_t printInst(uint16_t pc) {
   ThreeBytes bytes{0};
   for (unsigned i = 0; i != 3; ++i)
     bytes.d[i] = peek(pc + i);
-  CPUInst inst = decodeInst(0, bytes);
+  FormattedInst inst = formatInst(pc, bytes);
 
-  printf("%04X:  ", pc);
-  if (inst.kind == CPUInstKind::INVALID) {
-    printf("???\n");
-    return 1;
-  }
-
-  printf("%s", cpuInstName(inst.kind));
-  if (inst.addrMode != CPUAddrMode::Implied)
-    printf("  ");
-
-  switch (inst.addrMode) {
-  case CPUAddrMode::A:
-    printf("A");
-    break;
-  case CPUAddrMode::Abs:
-    printf("$%04X", inst.operand);
-    break;
-  case CPUAddrMode::Abs_X:
-    printf("$%04X,X", inst.operand);
-    break;
-  case CPUAddrMode::Abs_Y:
-    printf("$%04X,Y", inst.operand);
-    break;
-  case CPUAddrMode::Imm:
-    printf("#$%02X", inst.operand);
-    break;
-  case CPUAddrMode::Implied:
-    break;
-  case CPUAddrMode::Ind:
-    printf("($%04X)", inst.operand);
-    break;
-  case CPUAddrMode::X_Ind:
-    printf("($%02X,X)", inst.operand);
-    break;
-  case CPUAddrMode::Ind_Y:
-    printf("($%02X),Y", inst.operand);
-    break;
-  case CPUAddrMode::Rel:
-    printf("$%04X", inst.operand);
-    break;
-  case CPUAddrMode::Zpg:
-    printf("$%02X", inst.operand);
-    break;
-  case CPUAddrMode::Zpg_X:
-    printf("$%02X,X", inst.operand);
-    break;
-  case CPUAddrMode::Zpg_Y:
-    printf("$%02X,Y", inst.operand);
-    break;
-  default:
-    break;
-  }
+  printf("%04X: %-8s    %s", pc, inst.bytes, inst.inst);
+  if (inst.operand[0])
+    printf("  %s", inst.operand);
   printf("\n");
   return inst.size;
 }
