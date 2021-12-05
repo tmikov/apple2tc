@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <string>
 
 /// 6502 Address Modes.
 enum class CPUAddrMode : uint8_t {
@@ -50,6 +52,44 @@ inline unsigned cpuInstSize(CPUAddrMode am) {
   return s_instSize[(unsigned)am];
 }
 
+/// Return true if the instruction has an explicit operand encoded in memory.
+inline bool cpuAddrModeHasOperand(CPUAddrMode am) {
+  return am != CPUAddrMode::A && am != CPUAddrMode::Implied;
+}
+
+/// Return true if the resolved operand is 8-bit. What does "resolved" mean
+/// here? The difference is that while relative branches have an 8-bit operand,
+/// the resolved branch target is 16-bit and would return false here.
+inline bool cpuAddrModeResolvedOperand8Bit(CPUAddrMode m) {
+  switch (m) {
+  case CPUAddrMode::Imm:
+  case CPUAddrMode::X_Ind:
+  case CPUAddrMode::Ind_Y:
+  case CPUAddrMode::Zpg:
+  case CPUAddrMode::Zpg_X:
+  case CPUAddrMode::Zpg_Y:
+    return true;
+  default:
+    return false;
+  }
+}
+
+/// Return true if the resolved operand is 16-bit. What does "resolved" mean
+/// here? The difference is that while relative branches have an 8-bit operand,
+/// the resolved branch target is 16-bit and would return true here.
+inline bool cpuAddrModeResolvedOperand16Bit(CPUAddrMode m) {
+  switch (m) {
+  case CPUAddrMode::Abs:
+  case CPUAddrMode::Abs_X:
+  case CPUAddrMode::Abs_Y:
+  case CPUAddrMode::Ind:
+  case CPUAddrMode::Rel:
+    return true;
+  default:
+    return false;
+  }
+}
+
 /// Instructions.
 enum class CPUInstKind : uint8_t {
   // clang-format off
@@ -87,20 +127,16 @@ struct ThreeBytes {
 
 /// Formatted fields of a decoded instruction for easy printing.
 struct FormattedInst {
-  /// The instruction size in bytes.
-  uint8_t size;
   /// Up to three instruction bytes as hex numbers.
   char bytes[9];
   /// The instruction name.
   char inst[4];
   /// Instruction operand.
-  char operand[8];
+  std::string operand{};
 
   FormattedInst() {
-    size = 0;
     bytes[0] = 0;
     inst[0] = 0;
-    operand[0] = 0;
   }
 };
 
@@ -113,5 +149,7 @@ CPUOpcode decodeOpcode(uint8_t opcode);
 /// length. If there is an instruction operand, extract and store its value.
 /// Note that the maximum instruction length is three bytes.
 CPUInst decodeInst(uint16_t pc, ThreeBytes bytes);
-/// Format an instruction for easy printing.
-FormattedInst formatInst(uint16_t pc, ThreeBytes bytes);
+/// Format a decoded instruction for easy printing.
+/// An optional resolver can be supplied to resolve addresses into symbols.
+FormattedInst
+formatInst(CPUInst inst, ThreeBytes bytes, const std::function<std::string(CPUInst)> &resolve = {});

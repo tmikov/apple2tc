@@ -20,11 +20,12 @@ static uint8_t printInst(uint16_t pc) {
   ThreeBytes bytes{0};
   for (unsigned i = 0; i != 3; ++i)
     bytes.d[i] = peek(pc + i);
-  FormattedInst inst = formatInst(pc, bytes);
+  CPUInst inst = decodeInst(pc, bytes);
+  FormattedInst fmt = formatInst(inst, bytes);
 
-  printf("%04X: %-8s    %s", pc, inst.bytes, inst.inst);
-  if (inst.operand[0])
-    printf("  %s", inst.operand);
+  printf("%04X: %-8s    %s", pc, fmt.bytes, fmt.inst);
+  if (!fmt.operand.empty())
+    printf("  %s", fmt.operand.c_str());
   printf("\n");
   return inst.size;
 }
