@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(APPLE2TC_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(APPLE2TC_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
+# This is used for easy reference of dependency includes.
+set(A2TC_INC ${APPLE2TC_INCLUDE_DIR}/apple2tc)
 
 include_directories(${APPLE2TC_INCLUDE_DIR})
 
