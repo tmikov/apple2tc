@@ -1,10 +1,12 @@
+#include "apple2tc/d6502.h"
+#include "apple2tc/a2symbols.h"
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <optional>
 #include <string>
 #include <vector>
-#include "apple2tc/d6502.h"
 
 static uint8_t s_memory[0x10000];
 static uint16_t s_curAddr = 0;
@@ -21,7 +23,7 @@ static uint8_t printInst(uint16_t pc) {
   for (unsigned i = 0; i != 3; ++i)
     bytes.d[i] = peek(pc + i);
   CPUInst inst = decodeInst(pc, bytes);
-  FormattedInst fmt = formatInst(inst, bytes);
+  FormattedInst fmt = formatInst(inst, bytes, apple2SymbolResolver);
 
   printf("%04X: %-8s    %s", pc, fmt.bytes, fmt.inst);
   if (!fmt.operand.empty())
