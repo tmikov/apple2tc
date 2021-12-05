@@ -4,7 +4,7 @@
 #include <optional>
 #include <string>
 #include <vector>
-#include "apple2c/d6502.h"
+#include "apple2tc/d6502.h"
 
 static uint8_t s_memory[0x10000];
 static uint16_t s_curAddr = 0;
