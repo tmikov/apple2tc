@@ -9,7 +9,7 @@ farfetched, I believe it is an achievable goal, if a few caveats are considered:
 emulated on top of modern libraries.
 
 The project (will) consist of several components:
-- `a2emu`: an Apple2 emulator for running the original game and for *extracting and
+- [a2emu](https://tmikov.github.io/apple2tc/): an Apple2 emulator for running the original game and for *extracting and
 recording runtime knowledge about it based on dynamic behavior*.
 - A library implementing Apple II sound and graphics. This library will be used
 both by the emulator and by the generated C code.
