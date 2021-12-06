@@ -7,6 +7,8 @@
 
 #include "apple2tc/apple2.h"
 
+#include <cassert>
+
 /// KBD =($C00X)[R] Keyboard Input Register:
 /// Gets set to a Key's /// High-ASCII Value when a Key is pressed (e.g., KBD > 127
 /// if any Key has been pressed since last cleared via KBDSTRB).

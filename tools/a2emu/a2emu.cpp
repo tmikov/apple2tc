@@ -17,6 +17,7 @@
 #include "blit.h"
 
 #include <algorithm>
+#include <cctype>
 
 #define SCREEN_W 280
 #define SCREEN_H 192
@@ -69,6 +70,13 @@ private:
   uint8_t blinkOn_ = 0;
   double remainingBlinkTimeMs_ = BLINK_TIME_MS;
   uint64_t lastBlink_ = 0;
+
+  /// KBD handling.
+  /// If set to a valid character, the next character will be ignored, if it
+  /// matches this value. Next character, whatever it is, always clears this.
+  /// This is used on same platforms where some keys like ENTER arrive both as
+  /// characters and as keydown events.
+  int ignoreNextCh_ = -1;
 
   RGBA8 screen_[SCREEN_W_POT * SCREEN_H_POT];
 
@@ -140,18 +148,36 @@ A2Emu::~A2Emu() {
 }
 
 void A2Emu::event(const sapp_event *ev) {
+  int toIgnore = ignoreNextCh_;
+  ignoreNextCh_ = -1;
+
   if (ev->type == SAPP_EVENTTYPE_CHAR && ev->char_code < 128) {
     int k = (int)ev->char_code;
     if (k == 127) // Del
       k = 8;
     else if (isalpha(k))
       k = toupper(k);
-    emu_.pushKey(k);
+    if (k != toIgnore)
+      emu_.pushKey(k);
   } else if (ev->type == SAPP_EVENTTYPE_KEY_DOWN) {
-    if (ev->key_code == SAPP_KEYCODE_LEFT)
-      emu_.pushKey(8);
-    else if (ev->key_code == SAPP_KEYCODE_RIGHT)
-      emu_.pushKey(21); // CTRL+U
+    switch (ev->key_code) {
+    case SAPP_KEYCODE_DELETE:
+    case SAPP_KEYCODE_BACKSPACE:
+    case SAPP_KEYCODE_LEFT:
+      emu_.pushKey(ignoreNextCh_ = 8);
+      break;
+    case SAPP_KEYCODE_RIGHT:
+      emu_.pushKey(ignoreNextCh_ = 21); // CTRL+U
+      break;
+    case SAPP_KEYCODE_ENTER:
+      emu_.pushKey(ignoreNextCh_ = 13);
+      break;
+    case SAPP_KEYCODE_ESCAPE:
+      emu_.pushKey(ignoreNextCh_ = 27);
+      break;
+    default:
+      break;
+    }
   }
 }
 

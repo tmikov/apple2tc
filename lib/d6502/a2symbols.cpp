@@ -781,7 +781,7 @@ static const SymDef s_symbols[] = {
 };
 
 const char *findApple2Symbol(unsigned offset) {
-  static_assert(sizeof(uintptr_t) > sizeof(unsigned), "unsigbed must fit in const void*");
+  static_assert(sizeof(uintptr_t) >= sizeof(unsigned), "unsigned must fit in const void*");
 
   const auto *elem = (const SymDef *)bsearch(
       (const void *)(uintptr_t)offset,
