@@ -1,8 +1,8 @@
 /*
-* Copyright (c) Tzvetan Mikov.
-*
-* This source code is licensed under the MIT license found in the
-* LICENSE file in the root directory of this source tree.
+ * Copyright (c) Tzvetan Mikov.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "apple2tc/apple2.h"
@@ -159,4 +159,32 @@ void EmuApple2::ioPoke(uint16_t addr, uint8_t value) {
   if (debug_ & DebugIO1)
     fprintf(stderr, "[%u] IOPOKE\n", getCycles());
   EmuApple2::ioPeek(addr);
+}
+
+void apple2DecodeTextScreen(
+    const Emu6502 *emu,
+    unsigned pageStart,
+    void *ctx,
+    void (*drawGlyph)(void *ctx, uint8_t ch, unsigned x, unsigned y)) {
+  const uint8_t *memory = emu->getMainRAM();
+
+  // The screen memory is interleaved. It is organized in eight 128-byte
+  // regions, where every region contains three 40-byte lines (there are 8 extra
+  // bytes remaining in the end of each region).
+  // These three lines occupy every 8-th line vertically on the actual screen.
+
+  // How to convert from a screen line to memory offset?
+  // rgn = scr_line % 8;
+  // rgn_line = scr_line / 8;
+  // offset = rgn * 128 + rgn_line * 40;
+  //
+  // or simply:
+  // offset = (scr_line % 8) * 128 + (scr_line / 8) * 40;
+
+  for (unsigned scr_line = 0; scr_line != 24; ++scr_line) {
+    unsigned offset = pageStart + (scr_line % 8) * 128 + (scr_line / 8) * 40;
+    for (unsigned col = 0; col != 40; ++col) {
+      drawGlyph(ctx, memory[offset + col], col, scr_line);
+    }
+  }
 }

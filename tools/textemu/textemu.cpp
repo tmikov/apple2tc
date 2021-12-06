@@ -1,10 +1,9 @@
 /*
-* Copyright (c) Tzvetan Mikov.
-*
-* This source code is licensed under the MIT license found in the
-* LICENSE file in the root directory of this source tree.
+ * Copyright (c) Tzvetan Mikov.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
-
 #include "apple2tc/apple2.h"
 
 #include "apple2tc/a2symbols.h"
@@ -165,33 +164,17 @@ static void clearScreen() {
   fflush(stdout);
 }
 
-static void drawTextScreen(Emu6502 *emu) {
+static void drawTextScreen(const Emu6502 *emu) {
   unsigned pageStart = EmuApple2::TXT1SCRN;
-  const uint8_t *memory = emu->getMainRAM();
-
-  // The screen memory is interleaved. It is organized in eight 128-byte
-  // regions, where every region contains three 40-byte lines (there are 8 extra
-  // bytes remaining in the end of each region).
-  // These three lines occupy every 8-th line vertically on the actual screen.
-
-  // How to convert from a screen line to memory offset?
-  // rgn = scr_line % 8;
-  // rgn_line = scr_line / 8;
-  // offset = rgn * 128 + rgn_line * 40;
-  //
-  // or simply:
-  // offset = (scr_line % 8) * 128 + (scr_line / 8) * 40;
-
-  clearScreen();
-  for (unsigned scr_line = 0; scr_line != 24; ++scr_line) {
-    unsigned offset = pageStart + (scr_line % 8) * 128 + (scr_line / 8) * 40;
-    printf("%02u: ", scr_line);
-    for (unsigned col = 0; col != 40; ++col) {
-      uint8_t ch = memory[offset + col] & 0x7F;
-      putchar(ch >= 32 ? ch : ' ');
-    }
-    putchar('\n');
-  }
+  apple2DecodeTextScreen(
+      emu, EmuApple2::TXT1SCRN, nullptr, [](void *, uint8_t ch, unsigned x, unsigned y) {
+        if (x == 0)
+          printf("%02u: ", y);
+        ch &= 0x7F;
+        putchar(ch >= 32 ? ch : ' ');
+        if (x == 39)
+          putchar('\n');
+      });
 }
 
 static void consumeLine() {
@@ -269,9 +252,9 @@ int main(int argc, const char **argv) {
   emu->addDebugFlags(Emu6502::DebugStdout);
   emu->addNonDebug(0xFCA8, 0xFCB3); // MONWAIT
   emu->addNonDebug(0xFD0C, 0xFD3C), // Keyboard
-  // emu->addWatch("FRETOP", 0x6F, 2);
+                                    // emu->addWatch("FRETOP", 0x6F, 2);
 
-  runLoop(emu.get());
+      runLoop(emu.get());
 
   return 0;
 }

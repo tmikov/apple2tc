@@ -1,16 +1,16 @@
 /*
-* Copyright (c) Tzvetan Mikov.
-*
-* This source code is licensed under the MIT license found in the
-* LICENSE file in the root directory of this source tree.
+ * Copyright (c) Tzvetan Mikov.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
 
 #include "apple2tc/emu6502.h"
 
-#include <vector>
 #include <cstdio>
+#include <vector>
 
 class EmuApple2 : public Emu6502 {
 public:
@@ -62,3 +62,11 @@ private:
 
 /// Dump the BASIC program as binary tokens.
 void dumpApplesoftBasic(FILE *f, const EmuApple2 *emu);
+
+/// A helper function to decode the text mode screen. The callback is invoked
+/// consecutively with every character starting from top left.
+void apple2DecodeTextScreen(
+    const Emu6502 *emu,
+    unsigned pageStart,
+    void *ctx,
+    void (*drawGlyph)(void *ctx, uint8_t ch, unsigned x, unsigned y));

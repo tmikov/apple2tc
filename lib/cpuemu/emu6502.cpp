@@ -906,7 +906,11 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       break;
 
     default:
-      release_assert(false, "Invalid instruction $%02X", ram_[pc_]);
+      fprintf(stderr, "Invalid instruction $%02X\n", ram_[pc_]);
+      // TODO: we might want to decode the invalid instructions the way the
+      //       CPU would. Only if we find that it makes a difference.
+      pc_ += 1;
+      break;
     }
   }
 
