@@ -8,6 +8,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,6 +39,11 @@ typedef struct a2_screen {
 /// \param ms - millisecond since hardware reset. This is used to determine the
 ///     blink phase.
 void apple2_render_text_screen(const uint8_t *pageStart, a2_screen *screen, uint64_t ms);
+
+// Render the lowres graphics (GR) page pointed by pageStart into a RGB screen.
+/// \param ms - millisecond since hardware reset. This is used to determine the
+///     blink phase.
+void apple2_render_gr_screen(const uint8_t *pageStart, a2_screen *screen, uint64_t ms, bool mixed);
 
 #ifdef __cplusplus
 }

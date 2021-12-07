@@ -206,10 +206,14 @@ void A2Emu::simulateFrame() {
 }
 
 void A2Emu::updateScreen() {
-  apple2_render_text_screen(
-      emu_.getMainRAM() + EmuApple2::TXT1SCRN,
-      &screen_,
-      (uint64_t)stm_ms(stm_diff(curFrameTick_, firstFrameTick_)));
+  // Milliseconds since hw reset. Used to determine blink phase.
+  auto ms = (uint64_t)stm_ms(stm_diff(curFrameTick_, firstFrameTick_));
+  if (emu_.getVidMode() == EmuApple2::VidMode::GR) {
+    apple2_render_gr_screen(
+        emu_.getMainRAM() + EmuApple2::TXT1SCRN, &screen_, ms, emu_.isVidMixed());
+  } else {
+    apple2_render_text_screen(emu_.getMainRAM() + EmuApple2::TXT1SCRN, &screen_, ms);
+  }
 }
 
 void A2Emu::updateScreenImage() {

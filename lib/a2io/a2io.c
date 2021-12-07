@@ -9,8 +9,6 @@
 
 #include "font.h"
 
-#include <stdbool.h>
-
 void apple2_decode_text_screen(
     const uint8_t *pageStart,
     void *ctx,
@@ -40,6 +38,8 @@ struct RenderText {
   a2_screen *screen;
   /// 0 or 0x40.
   uint8_t blinkOn;
+  /// Set if the display mode is mixed.
+  bool mixed;
 };
 
 static void draw_glyph_cb(void *ctx, uint8_t ch, unsigned x, unsigned y) {
@@ -67,7 +67,54 @@ static void draw_glyph_cb(void *ctx, uint8_t ch, unsigned x, unsigned y) {
   }
 }
 
+/// GR colors.
+static const a2_rgba8 s_gr_colors[] = {
+    {0, 0, 0}, // 0x0 black
+    {227, 30, 96}, // 0x1 deep red
+    {96, 78, 189}, // 0x2 dark blue
+    {255, 68, 253}, // 0x3 purple
+    {0, 163, 96}, // 0x4 dark green
+    {156, 156, 156}, // 0x5 dark gray
+    {20, 207, 253}, // 0x6 medium blue
+    {208, 195, 255}, // 0x7 light blue
+    {96, 114, 3}, // 0x8 brown
+    {255, 106, 60}, // 0x9 orange
+    {156, 156, 156}, // 0xa light gray
+    {255, 160, 208}, // 0xb pink
+    {20, 245, 60}, // 0xc green
+    {208, 221, 141}, // 0xd yellow
+    {114, 255, 208}, // 0xe aquamarine
+    {255, 255, 255}, // 0xf white
+};
+
+static void draw_gr_cb(void *ctx, uint8_t ch, unsigned x, unsigned y) {
+  struct RenderText *self = (struct RenderText *)ctx;
+
+  if (y >= 20 && self->mixed) {
+    draw_glyph_cb(ctx, ch, x, y);
+    return;
+  }
+
+  a2_rgba8 *d = self->screen->data + y * A2_SCREEN_W_POT * 8 + x * 7;
+  for (unsigned row = 0; row != 4; ++row) {
+    for (unsigned col = 0; col != 7; ++col, ++d)
+      *d = s_gr_colors[ch & 0x0F];
+    d += A2_SCREEN_W_POT - 7;
+  }
+  ch >>= 4;
+  for (unsigned row = 0; row != 4; ++row) {
+    for (unsigned col = 0; col != 7; ++col, ++d)
+      *d = s_gr_colors[ch];
+    d += A2_SCREEN_W_POT - 7;
+  }
+}
+
 void apple2_render_text_screen(const uint8_t *pageStart, a2_screen *screen, uint64_t ms) {
   struct RenderText ctx = {.screen = screen, .blinkOn = (ms / 267) & 1 ? 0x40 : 0};
   apple2_decode_text_screen(pageStart, &ctx, draw_glyph_cb);
+}
+
+void apple2_render_gr_screen(const uint8_t *pageStart, a2_screen *screen, uint64_t ms, bool mixed) {
+  struct RenderText ctx = {.screen = screen, .blinkOn = (ms / 267) & 1 ? 0x40 : 0, .mixed = mixed};
+  apple2_decode_text_screen(pageStart, &ctx, draw_gr_cb);
 }

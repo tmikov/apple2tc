@@ -28,6 +28,8 @@ beginning.
 - Online version: https://tmikov.github.io/apple2tc/
 - Source: https://github.com/tmikov/apple2tc/tree/master/tools/a2emu
 
+![](images/a2emu-gr.png)
+ 
 The first version of the Apple II emulator is already up. It is portable and
 should work on MacOS, Linux, Windows and Web, although as of this writing only
 MacOS and Web have been tested.
