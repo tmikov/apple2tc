@@ -1,12 +1,12 @@
 /*
-* Copyright (c) Tzvetan Mikov.
-*
-* This source code is licensed under the MIT license found in the
-* LICENSE file in the root directory of this source tree.
+ * Copyright (c) Tzvetan Mikov.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
-#include "apple2tc/d6502.h"
 #include "apple2tc/a2symbols.h"
+#include "apple2tc/d6502.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -39,8 +39,8 @@ static uint8_t printInst(uint16_t pc) {
   return inst.size;
 }
 
-static std::vector<char> readAll(FILE *f) {
-  std::vector<char> buf;
+static std::vector<uint8_t> readAll(FILE *f) {
+  std::vector<uint8_t> buf;
   static constexpr unsigned CHUNK = 8192;
   for (;;) {
     size_t size = buf.size();
@@ -75,6 +75,57 @@ static void loadROM(const char *path) {
   fclose(f);
 }
 
+static void load33BIN(const char *path) {
+  FILE *f = fopen(path, "rb");
+  if (!f) {
+    printf("*** Error: opening '%s'\n", path);
+    return;
+  }
+
+  auto buf = readAll(f);
+
+  if (buf.size() > 0x10000) {
+    printf("*** Error: bin is too large\n");
+  } else if (buf.size() < 4) {
+    printf("*** Error: bin is too small\n");
+  } else {
+    uint16_t start = buf[0] + buf[1] * 256;
+    uint16_t len = buf[2] + buf[3] * 256;
+
+    printf("start: $%04X\n", start);
+    printf("len:   %u\n", len);
+
+    if (len > buf.size() - 4) {
+      printf("***Error: invalid length\n");
+    } else {
+      memcpy(s_memory + start, buf.data() + 4, len);
+    }
+  }
+
+  fclose(f);
+}
+
+static void loadBIN(const char *path, uint16_t start) {
+  FILE *f = fopen(path, "rb");
+  if (!f) {
+    printf("*** Error: opening '%s'\n", path);
+    return;
+  }
+
+  auto buf = readAll(f);
+
+  if (buf.size() > 0x10000 - start) {
+    printf("*** Error: bin is too large\n");
+  } else {
+    printf("start: $%04X\n", start);
+    printf("len:   %zu\n", buf.size());
+
+    memcpy(s_memory + start, buf.data(), buf.size());
+  }
+
+  fclose(f);
+}
+
 static std::optional<std::string> readLine() {
   std::string res;
   int ch;
@@ -90,6 +141,8 @@ static std::optional<std::string> readLine() {
 static void printHelp() {
   printf("help - print this help\n");
   printf("loadrom file - Load file at end of memory\n");
+  printf("loadbin file - Load DOS3.3 binary file to addr encoded in file header\n");
+  printf("loadbin file addr - Load arbitrary binary file to specified addr\n");
   printf("s addr - Set current address\n");
   printf("s - Print current address\n");
   printf("dis - Disassemble 20 instructions\n");
@@ -203,6 +256,14 @@ int main() {
       printHelp();
     } else if (tokens[0] == "loadrom" && tokens.size() == 2) {
       loadROM(tokens[1].c_str());
+    } else if (tokens[0] == "loadbin" && tokens.size() == 2) {
+      load33BIN(tokens[1].c_str());
+    } else if (tokens[0] == "loadbin" && tokens.size() == 3) {
+      auto addr = parse16(tokens[2].c_str());
+      if (!addr)
+        printf("Error: invalid number.\n");
+      else
+        loadBIN(tokens[1].c_str(), *addr);
     } else if (tokens[0] == "s" && tokens.size() == 1) {
       printf("Current address is $%04X (%u)\n", s_curAddr, s_curAddr);
     } else if (tokens[0] == "s" && tokens.size() == 2) {
