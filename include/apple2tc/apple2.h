@@ -20,7 +20,7 @@ public:
   static constexpr uint16_t PRGEND = 0xAF;
 
   static constexpr uint16_t TXT1SCRN = 0x0400;
-  static constexpr uint16_t TXT2SCRN = 0x0400;
+  static constexpr uint16_t TXT2SCRN = 0x0800;
   static constexpr uint16_t HGR1SCRN = 0x2000;
   static constexpr uint16_t HGR2SCRN = 0x4000;
 
@@ -43,6 +43,50 @@ public:
     return keys_;
   }
 
+  /// Encoding of the video control bits.
+  enum VidControl {
+    /// When set, text, otherwise graphics (default set).
+    VCText = 1,
+    /// When set, mixed graphics with 4-lines of text below (default clr).
+    VCMixed = 2,
+    /// When set, display page 2 (default clr).
+    VCPage2 = 4,
+    /// When set, high resolution graphics (default clr),
+    VCHires = 8,
+  };
+
+  /// Return the status of the video control bits.
+  [[nodiscard]] uint8_t getVidControl() const {
+    return vidControl_;
+  }
+
+  /// Video mode.
+  enum class VidMode { TEXT, GR, HGR };
+
+  /// Decode and return the vid control bits as a video mode.
+  [[nodiscard]] VidMode getVidMode() const {
+    return vidControl_ & VCText ? VidMode::TEXT
+        : vidControl_ & VCHires ? VidMode::HGR
+                                : VidMode::GR;
+  }
+
+  /// Return true if this is a mixed graphics mode (graphics with 4 lines of
+  /// text in the bottom).
+  [[nodiscard]] bool isVidMixed() const {
+    return (vidControl_ & (VCText | VCMixed)) == VCMixed;
+  }
+
+  /// Decode the vid ctrl bits to return an actuve page number: 0 or 1.
+  [[nodiscard]] uint8_t getVidPageNo() const {
+    return (vidControl_ & VCPage2) ? 1 : 0;
+  }
+
+  /// Return the starting address of the current video page.
+  [[nodiscard]] uint16_t getVidPageAddr() const {
+    return vidControl_ & VCText ? (vidControl_ & VCPage2 ? TXT2SCRN : TXT1SCRN)
+                                : (vidControl_ & VCPage2 ? HGR2SCRN : HGR1SCRN);
+  }
+
 protected:
   /// Perform a read in the IO range.
   uint8_t ioPeek(uint16_t addr) override;
@@ -58,15 +102,9 @@ private:
   std::vector<uint8_t> keys_{};
   /// The last key that was returned.
   uint8_t lastKey_ = 0;
+
+  uint8_t vidControl_ = VCText;
 };
 
 /// Dump the BASIC program as binary tokens.
 void dumpApplesoftBasic(FILE *f, const EmuApple2 *emu);
-
-/// A helper function to decode the text mode screen. The callback is invoked
-/// consecutively with every character starting from top left.
-void apple2DecodeTextScreen(
-    const Emu6502 *emu,
-    unsigned pageStart,
-    void *ctx,
-    void (*drawGlyph)(void *ctx, uint8_t ch, unsigned x, unsigned y));

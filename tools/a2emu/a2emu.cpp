@@ -6,8 +6,8 @@
  */
 
 #include "apple2plus_rom.h"
+#include "apple2tc/a2io.h"
 #include "apple2tc/apple2.h"
-#include "font.h"
 
 #include "sokol_app.h"
 #include "sokol_gfx.h"
@@ -18,15 +18,6 @@
 
 #include <algorithm>
 #include <cctype>
-
-#define SCREEN_W 280
-#define SCREEN_H 192
-#define SCREEN_W_POT 512
-#define SCREEN_H_POT 256
-
-struct RGBA8 {
-  uint8_t r, g, b, a;
-};
 
 class A2Emu {
 public:
@@ -57,19 +48,8 @@ private:
   uint64_t curFrameTick_ = 0;
 
   uint64_t lastRunTick_ = 0;
+  uint64_t firstFrameTick_ = 0;
   bool firstFrame_ = true;
-
-  // Blinking machinery. The `blinkOn_` flag changes between 0x40 and 0 every
-  // 267ms. 0x40 happens to be the "blink" bit attribute, so binary AND between
-  // the flag and the character tells us whether it needs to be "inversed" at
-  // this time.
-  // `remainingBlinkTimeMs_` helps us keep track of blinking accurately without
-  // accumulating error (not that it really matters).
-  static constexpr uint8_t BLINK_FLAG = 0x40;
-  static constexpr unsigned BLINK_TIME_MS = 267;
-  uint8_t blinkOn_ = 0;
-  double remainingBlinkTimeMs_ = BLINK_TIME_MS;
-  uint64_t lastBlink_ = 0;
 
   /// KBD handling.
   /// If set to a valid character, the next character will be ignored, if it
@@ -78,7 +58,7 @@ private:
   /// characters and as keydown events.
   int ignoreNextCh_ = -1;
 
-  RGBA8 screen_[SCREEN_W_POT * SCREEN_H_POT];
+  a2_screen screen_;
 
   EmuApple2 emu_{};
 };
@@ -90,7 +70,6 @@ A2Emu::A2Emu() {
   emu_.loadROM(apple2plus_rom, apple2plus_rom_len);
 
   stm_setup();
-  lastBlink_ = curFrameTick_ = stm_now();
 }
 
 void A2Emu::initWindow() {
@@ -98,8 +77,8 @@ void A2Emu::initWindow() {
   sg_setup(&desc);
 
   sg_image_desc idesc = {
-      .width = SCREEN_W_POT,
-      .height = SCREEN_H_POT,
+      .width = A2_SCREEN_W_POT,
+      .height = A2_SCREEN_H_POT,
       .usage = SG_USAGE_STREAM,
       .min_filter = SG_FILTER_LINEAR,
       .mag_filter = SG_FILTER_LINEAR,
@@ -113,8 +92,8 @@ void A2Emu::initWindow() {
    * ------+------
    *    3  |  1
    */
-  static const float U = (float)SCREEN_W / SCREEN_W_POT;
-  static const float V = (float)SCREEN_H / SCREEN_H_POT;
+  static const float U = (float)A2_SCREEN_W / A2_SCREEN_W_POT;
+  static const float V = (float)A2_SCREEN_H / A2_SCREEN_H_POT;
   static const float vertices[][4] = {
       {1, 1, U, 0},
       {1, -1, U, V},
@@ -197,12 +176,12 @@ void A2Emu::frame() {
     int h = sapp_height();
     int desiredW, desiredH;
 
-    if (w * SCREEN_H / h >= SCREEN_W) {
+    if (w * A2_SCREEN_H / h >= A2_SCREEN_W) {
       desiredH = h;
-      desiredW = h * SCREEN_W / SCREEN_H;
+      desiredW = h * A2_SCREEN_W / A2_SCREEN_H;
     } else {
       desiredW = w;
-      desiredH = w * SCREEN_H / SCREEN_W;
+      desiredH = w * A2_SCREEN_H / A2_SCREEN_W;
     }
     sg_apply_viewport((w - desiredW) / 2, (h - desiredH) / 2, desiredW, desiredH, true);
   }
@@ -217,6 +196,7 @@ void A2Emu::frame() {
 void A2Emu::simulateFrame() {
   if (firstFrame_) {
     firstFrame_ = false;
+    firstFrameTick_ = curFrameTick_;
   } else {
     double elapsed = stm_sec(curFrameTick_ - lastRunTick_);
     unsigned runCycles = (unsigned)(std::min(elapsed, 0.200) * EmuApple2::CLOCK_FREQ);
@@ -226,40 +206,14 @@ void A2Emu::simulateFrame() {
 }
 
 void A2Emu::updateScreen() {
-  auto blinkElapsed = stm_ms(stm_diff(curFrameTick_, lastBlink_));
-  if (blinkElapsed >= remainingBlinkTimeMs_) {
-    remainingBlinkTimeMs_ = remainingBlinkTimeMs_ - blinkElapsed + BLINK_TIME_MS;
-    if (remainingBlinkTimeMs_ <= 0)
-      remainingBlinkTimeMs_ = BLINK_TIME_MS;
-    lastBlink_ = curFrameTick_;
-
-    blinkOn_ ^= BLINK_FLAG;
-  }
-
-  apple2DecodeTextScreen(
-      &emu_, EmuApple2::TXT1SCRN, this, [](void *ctx, uint8_t ch, unsigned x, unsigned y) {
-        auto *self = (A2Emu *)ctx;
-        bool inverse = !(ch & (0x80 | self->blinkOn_));
-        ch = (ch >= 0x40 && ch < 0x80) ? ch - 0x40 : ch;
-
-        RGBA8 fg = {0xFF, 0xFF, 0xFF, 0};
-        RGBA8 bg = {0, 0, 0, 0};
-        if (inverse)
-          std::swap(fg, bg);
-
-        const uint8_t *glyph = font_rom + (ch & 0x3F) * 8;
-        auto *d = self->screen_ + y * SCREEN_W_POT * 8 + x * 7;
-        for (unsigned row = 0; row != 8; ++glyph, ++row) {
-          for (unsigned col = 0; col != 7; ++col, ++d) {
-            *d = *glyph & (0x40 >> col) ? fg : bg;
-          }
-          d += SCREEN_W_POT - 7;
-        }
-      });
+  apple2_render_text_screen(
+      emu_.getMainRAM() + EmuApple2::TXT1SCRN,
+      &screen_,
+      (uint64_t)stm_ms(stm_diff(curFrameTick_, firstFrameTick_)));
 }
 
 void A2Emu::updateScreenImage() {
-  sg_image_data imgData = {.subimage[0][0] = {.ptr = screen_, .size = sizeof(screen_)}};
+  sg_image_data imgData = {.subimage[0][0] = {.ptr = screen_.data, .size = sizeof(screen_.data)}};
   sg_update_image(bind_.fs_images[SLOT_tex], &imgData);
 }
 
@@ -279,8 +233,8 @@ sapp_desc sokol_main(int argc, char *argv[]) {
             if (s_a2emu)
               s_a2emu->event(ev);
           },
-      .width = SCREEN_W * 2,
-      .height = SCREEN_H * 2,
+      .width = A2_SCREEN_W * 2,
+      .height = A2_SCREEN_H * 2,
       .window_title = "A2Emu",
       .icon.sokol_default = true,
   };

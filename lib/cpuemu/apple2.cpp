@@ -114,34 +114,42 @@ uint8_t EmuApple2::ioPeek(uint16_t addr) {
     case TXTCLR:
       if (debug_ & DebugIO1)
         fprintf(stderr, "[%u] TXTCLR\n", getCycles());
+      vidControl_ &= ~VCText;
       break;
     case TXTSET:
       if (debug_ & DebugIO1)
         fprintf(stderr, "[%u] TXTSET\n", getCycles());
+      vidControl_ |= VCText;
       break;
     case MIXCLR:
       if (debug_ & DebugIO1)
         fprintf(stderr, "[%u] MIXCLR\n", getCycles());
+      vidControl_ &= ~VCMixed;
       break;
     case MIXSET:
       if (debug_ & DebugIO1)
         fprintf(stderr, "[%u] MIXSET\n", getCycles());
+      vidControl_ |= VCMixed;
       break;
     case LOWSCR:
       if (debug_ & DebugIO1)
         fprintf(stderr, "[%u] LOWSCR\n", getCycles());
+      vidControl_ &= ~VCPage2;
       break;
     case HISCR:
       if (debug_ & DebugIO1)
         fprintf(stderr, "[%u] HISCR\n", getCycles());
+      vidControl_ |= VCPage2;
       break;
     case LORES:
       if (debug_ & DebugIO1)
         fprintf(stderr, "[%u] LORES\n", getCycles());
+      vidControl_ &= ~VCHires;
       break;
     case HIRES:
       if (debug_ & DebugIO1)
         fprintf(stderr, "[%u] HIRES\n", getCycles());
+      vidControl_ |= VCHires;
       break;
     default:
       if (debug_ & DebugIO1)
@@ -161,32 +169,4 @@ void EmuApple2::ioPoke(uint16_t addr, uint8_t value) {
   if (debug_ & DebugIO1)
     fprintf(stderr, "[%u] IOPOKE\n", getCycles());
   EmuApple2::ioPeek(addr);
-}
-
-void apple2DecodeTextScreen(
-    const Emu6502 *emu,
-    unsigned pageStart,
-    void *ctx,
-    void (*drawGlyph)(void *ctx, uint8_t ch, unsigned x, unsigned y)) {
-  const uint8_t *memory = emu->getMainRAM();
-
-  // The screen memory is interleaved. It is organized in eight 128-byte
-  // regions, where every region contains three 40-byte lines (there are 8 extra
-  // bytes remaining in the end of each region).
-  // These three lines occupy every 8-th line vertically on the actual screen.
-
-  // How to convert from a screen line to memory offset?
-  // rgn = scr_line % 8;
-  // rgn_line = scr_line / 8;
-  // offset = rgn * 128 + rgn_line * 40;
-  //
-  // or simply:
-  // offset = (scr_line % 8) * 128 + (scr_line / 8) * 40;
-
-  for (unsigned scr_line = 0; scr_line != 24; ++scr_line) {
-    unsigned offset = pageStart + (scr_line % 8) * 128 + (scr_line / 8) * 40;
-    for (unsigned col = 0; col != 40; ++col) {
-      drawGlyph(ctx, memory[offset + col], col, scr_line);
-    }
-  }
 }

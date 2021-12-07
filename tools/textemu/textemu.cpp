@@ -6,6 +6,7 @@
  */
 #include "apple2tc/apple2.h"
 
+#include "apple2tc/a2io.h"
 #include "apple2tc/a2symbols.h"
 #include "apple2tc/d6502.h"
 
@@ -166,8 +167,10 @@ static void clearScreen() {
 
 static void drawTextScreen(const Emu6502 *emu) {
   unsigned pageStart = EmuApple2::TXT1SCRN;
-  apple2DecodeTextScreen(
-      emu, EmuApple2::TXT1SCRN, nullptr, [](void *, uint8_t ch, unsigned x, unsigned y) {
+  apple2_decode_text_screen(
+      emu->getMainRAM() + EmuApple2::TXT1SCRN,
+      nullptr,
+      [](void *, uint8_t ch, unsigned x, unsigned y) {
         if (x == 0)
           printf("%02u: ", y);
         ch &= 0x7F;
