@@ -97,9 +97,14 @@ public:
     return cycles_;
   }
 
-  /// Return a pointer to a 64KB buffer of RAM. Not all of that RAM is actually
-  /// usable.
+  /// Return a read-only pointer to a 64KB buffer of RAM. Not all of that RAM is
+  /// actually usable.
   [[nodiscard]] const uint8_t *getMainRAM() const {
+    return ram_;
+  }
+  /// Return a writable pointer to a 64KB buffer of RAM. Not all of that RAM is
+  /// actually usable.
+  [[nodiscard]] uint8_t *getMainRAMWritable() {
     return ram_;
   }
 
