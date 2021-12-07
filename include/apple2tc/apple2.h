@@ -81,10 +81,14 @@ public:
     return (vidControl_ & VCPage2) ? 1 : 0;
   }
 
-  /// Return the starting address of the current video page.
-  [[nodiscard]] uint16_t getVidPageAddr() const {
-    return vidControl_ & VCText ? (vidControl_ & VCPage2 ? TXT2SCRN : TXT1SCRN)
-                                : (vidControl_ & VCPage2 ? HGR2SCRN : HGR1SCRN);
+  /// Return the starting address of the active Hires page.
+  [[nodiscard]] const uint8_t *getHiresPageAddr() const {
+    return getMainRAM() + (vidControl_ & VCPage2 ? HGR2SCRN : HGR1SCRN);
+  }
+
+  /// Return the starting address of the active text page.
+  [[nodiscard]] const uint8_t *getTextPageAddr() const {
+    return getMainRAM() + (vidControl_ & VCPage2 ? TXT2SCRN : TXT1SCRN);
   }
 
 protected:

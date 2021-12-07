@@ -118,3 +118,97 @@ void apple2_render_gr_screen(const uint8_t *pageStart, a2_screen *screen, uint64
   struct RenderText ctx = {.screen = screen, .blinkOn = (ms / 267) & 1 ? 0x40 : 0, .mixed = mixed};
   apple2_decode_text_screen(pageStart, &ctx, draw_gr_cb);
 }
+
+void apple2_render_hgr_screen(
+    const uint8_t *grPageStart,
+    const uint8_t *textPageStart,
+    a2_screen *screen,
+    uint64_t ms,
+    bool mixed,
+    bool mono) {
+  // There are 8 1024B blocks. Block 0 starts at line 0, block 1 starts at line 1, etc.
+  //
+  // Each 1024KB block consists of 8 128B regions. Each region consists of 3 40B lines,
+  // with 8 bytes extra at the end. Each region starts 8 lines after the previous one.
+  //
+  // The 3 lines in a region are spaced vertically across 64 screen lines.
+  //
+  // Example:
+  // Block 0, region 7, line 2 would be at: 0 + 7 * 8 + 2 * 64 = screen line 184
+  //
+  // How to calculate offset of screen line scr_line?
+  // block = scr_line % 8
+  // rgn = (scr_line / 8) % 8
+  // rgn_line = (scr_line / 8) / 8
+  // offset = block * 1024 + rgn * 128 + rgn_line * 40;
+  //    or
+  // offset = (scr_line % 8) * 1024 + (scr_line / 8) % 8 * 128 + (scr_line / 64) * 40
+
+  a2_rgba8 *srow = screen->data;
+  unsigned end_line = mixed ? 160 : 192;
+  for (unsigned scr_line = 0; scr_line != end_line; srow += A2_SCREEN_W_POT, ++scr_line) {
+    const uint8_t *start =
+        grPageStart + (scr_line % 8) * 1024 + ((scr_line / 8) % 8) * 128 + (scr_line / 64) * 40;
+
+    a2_rgba8 *d = srow;
+    if (mono) {
+      const a2_rgba8 fg = {0xFF, 0xFF, 0xFF, 0};
+      const a2_rgba8 bg = {0, 0, 0, 0};
+      for (unsigned bcol = 0; bcol != 40; ++start, ++bcol) {
+        uint8_t memb = *start;
+        for (unsigned i = 0; i != 7; memb >>= 1, ++d, ++i) {
+          *d = memb & 1 ? fg : bg;
+        }
+      }
+    } else {
+      // const orangeCol: Color = [255, 106, 60];
+      // const greenCol: Color = [20, 245, 60];
+      // const blueCol: Color = [20, 207, 253];
+      // const violetCol: Color = [255, 68, 253];
+      // const whiteCol: Color = [255, 255, 255];
+      // const blackCol: Color = [0, 0, 0];
+      const a2_rgba8 black = {0, 0, 0};
+      const a2_rgba8 white = {0xFF, 0xFF, 0xFF};
+      static a2_rgba8 colors[4] = {
+          // Violet.
+          {255, 68, 253},
+          // Green.
+          {20, 245, 60},
+          // Blue.
+          {20, 207, 253},
+          // Red.
+          {255, 106, 60},
+      };
+      uint8_t odd = 0;
+      uint8_t last = 0;
+
+      for (unsigned bcol = 0; bcol != 40; ++start, ++bcol) {
+        uint8_t memb = *start;
+        uint8_t highBit = (memb >> 6) & 2;
+        for (unsigned i = 0; i != 7; memb >>= 1, ++d, ++i) {
+          if ((memb & 1) == 0) {
+            *d = black;
+          } else {
+            if (last)
+              *d = white;
+            else {
+              *d = colors[highBit | odd];
+            }
+          }
+          last = memb & 1;
+          odd ^= 1;
+        }
+      }
+    }
+  }
+
+  if (mixed) {
+    struct RenderText ctx = {.screen = screen, .blinkOn = (ms / 267) & 1 ? 0x40 : 0};
+    for (unsigned scr_line = 20; scr_line != 24; ++scr_line) {
+      const uint8_t *start = textPageStart + (scr_line % 8) * 128 + (scr_line / 8) * 40;
+      for (unsigned col = 0; col != 40; ++col, ++start) {
+        draw_glyph_cb(&ctx, *start, col, scr_line);
+      }
+    }
+  }
+}

@@ -169,4 +169,6 @@ void EmuApple2::ioPoke(uint16_t addr, uint8_t value) {
   if (debug_ & DebugIO1)
     fprintf(stderr, "[%u] IOPOKE\n", getCycles());
   EmuApple2::ioPeek(addr);
+  // According to the Apple II Reference Manual, a write is preceeded by a read.
+  EmuApple2::ioPeek(addr);
 }

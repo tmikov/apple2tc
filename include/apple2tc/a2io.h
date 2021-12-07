@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,10 +40,22 @@ typedef struct a2_screen {
 ///     blink phase.
 void apple2_render_text_screen(const uint8_t *pageStart, a2_screen *screen, uint64_t ms);
 
-// Render the lowres graphics (GR) page pointed by pageStart into a RGB screen.
+/// Render the lowres graphics (GR) page pointed by pageStart into a RGB screen.
 /// \param ms - millisecond since hardware reset. This is used to determine the
-///     blink phase.
+///     blink phase. Only needed if mixed == true.
 void apple2_render_gr_screen(const uint8_t *pageStart, a2_screen *screen, uint64_t ms, bool mixed);
+
+/// Render the hires graphics (GR) page pointed by pageStart into a RGB screen.
+/// \param textPageStart - the start of the text page. Only used if mixed == true.
+/// \param ms - millisecond since hardware reset. This is used to determine the
+///     blink phase. Only needed if mixed == true.
+void apple2_render_hgr_screen(
+    const uint8_t *grPageStart,
+    const uint8_t *textPageStart,
+    a2_screen *screen,
+    uint64_t ms,
+    bool mixed,
+    bool mono);
 
 #ifdef __cplusplus
 }
