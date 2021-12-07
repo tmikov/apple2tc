@@ -2691,6 +2691,12 @@ function stm_js_perfnow(){ return performance.now(); }
       return success ? 0 : -5;
     }
 
+  function _exit(status) {
+      // void _exit(int status);
+      // http://pubs.opengroup.org/onlinepubs/000095399/functions/exit.html
+      exit(status);
+    }
+
   var SYSCALLS={mappings:{},buffers:[null,[],[]],printChar:function(stream, curr) {
         var buffer = SYSCALLS.buffers[stream];
         assert(buffer);
@@ -3532,6 +3538,7 @@ var asmLibraryArg = {
   "emscripten_webgl_enable_extension": _emscripten_webgl_enable_extension,
   "emscripten_webgl_init_context_attributes": _emscripten_webgl_init_context_attributes,
   "emscripten_webgl_make_context_current": _emscripten_webgl_make_context_current,
+  "exit": _exit,
   "fd_close": _fd_close,
   "fd_seek": _fd_seek,
   "fd_write": _fd_write,
