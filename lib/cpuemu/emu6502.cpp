@@ -533,13 +533,13 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       break;
     }
     case 0xEE: { // INC abs
-      uint8_t op16 = OP16();
+      uint16_t op16 = OP16();
       poke(op16, updateNZ(peek(op16) + 1));
       pc_ += 3;
       break;
     }
     case 0xFE: { // INC abs,X
-      uint8_t op16 = OP16();
+      uint16_t op16 = OP16();
       poke_abs_x(op16, updateNZ(peek_abs_x(op16) + 1));
       pc_ += 3;
       break;
@@ -558,13 +558,13 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       break;
     }
     case 0xCE: { // DEC abs
-      uint8_t op16 = OP16();
+      uint16_t op16 = OP16();
       poke(op16, updateNZ(peek(op16) - 1));
       pc_ += 3;
       break;
     }
     case 0xDE: { // DEC abs,X
-      uint8_t op16 = OP16();
+      uint16_t op16 = OP16();
       poke_abs_x(op16, updateNZ(peek_abs_x(op16) - 1));
       pc_ += 3;
       break;
