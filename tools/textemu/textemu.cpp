@@ -17,6 +17,11 @@
 
 class Debug6502 : public EmuApple2 {
 public:
+  explicit Debug6502() {
+    setDebugStateCB(
+        this, [](void *ctx, Emu6502 *) { return static_cast<Debug6502 *>(ctx)->debugState(); });
+  }
+
   /// Set maximum number of instructions to execute. 0 means unlimited.
   void setLimit(unsigned limit) {
     limit_ = limit;
@@ -30,8 +35,8 @@ public:
   /// inclusive.
   void addNonDebug(uint16_t from, uint16_t to);
 
-protected:
-  StopReason debugState() override;
+private:
+  StopReason debugState();
 
 private:
   /// Number of instruction to execute.

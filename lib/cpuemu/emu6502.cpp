@@ -1,8 +1,8 @@
 /*
-* Copyright (c) Tzvetan Mikov.
-*
-* This source code is licensed under the MIT license found in the
-* LICENSE file in the root directory of this source tree.
+ * Copyright (c) Tzvetan Mikov.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "apple2tc/emu6502.h"
@@ -54,10 +54,6 @@ void Emu6502::reset() {
   status_ = STATUS_IGNORED;
   sp_ = 0xFF;
   pc_ = peek16(RESET_VEC);
-}
-
-Emu6502::StopReason Emu6502::debugState() {
-  return StopReason::None;
 }
 
 void Emu6502::adcDecimal(uint8_t b) {
@@ -113,7 +109,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
 
   for (unsigned startCycles = cycles_; cycles_ - startCycles < runCycles; cycles_ += 3) {
     if (debug_ & DebugASM)
-      if (debugState() == StopReason::StopRequesed)
+      if (debugStateCB_ && debugStateCB_(debugStateCBCtx_, this) == StopReason::StopRequesed)
         return StopReason::StopRequesed;
 
     switch (ram_[pc_]) {

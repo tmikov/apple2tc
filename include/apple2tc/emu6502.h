@@ -1,8 +1,8 @@
 /*
-* Copyright (c) Tzvetan Mikov.
-*
-* This source code is licensed under the MIT license found in the
-* LICENSE file in the root directory of this source tree.
+ * Copyright (c) Tzvetan Mikov.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -50,6 +50,11 @@ public:
 
 public:
   explicit Emu6502(unsigned ioRangeStart, unsigned ioRangeEnd);
+
+  void setDebugStateCB(void *ctx, StopReason (*debugStateCB)(void *, Emu6502 *)) {
+    debugStateCB_ = debugStateCB;
+    debugStateCBCtx_ = ctx;
+  }
 
   /// Load ROM data at the end of address space and mark it as read-only.
   void loadROM(const uint8_t *rom, unsigned size);
@@ -153,10 +158,6 @@ public:
   }
 
 protected:
-  /// If debugging is activated, invoked before every instruction. Can cause
-  /// the execution loop to terminated by returning StopRequested.
-  virtual StopReason debugState();
-
   /// Perform a read in the IO range.
   virtual uint8_t ioPeek(uint16_t addr);
   /// Perform a write in the IO range.
@@ -316,6 +317,11 @@ private:
 
   /// Number of processor cycles.
   unsigned cycles_ = 0;
+
+  /// If debugging is activated, invoked before every instruction. Can cause
+  /// the execution loop to terminated by returning StopRequested.
+  StopReason (*debugStateCB_)(void *ctx, Emu6502 *emu) = nullptr;
+  void *debugStateCBCtx_ = nullptr;
 
   /// 64Kb of RAM.
   uint8_t ram_[0x10000];
