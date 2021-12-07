@@ -8,6 +8,8 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
+#include <vector>
 
 class Emu6502 {
 public:
