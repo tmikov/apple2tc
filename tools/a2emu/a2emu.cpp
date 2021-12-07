@@ -6,6 +6,7 @@
  */
 
 #include "apple2plus_rom.h"
+#include "apple2tc/DebugState6502.h"
 #include "apple2tc/a2io.h"
 #include "apple2tc/apple2.h"
 
@@ -18,6 +19,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <optional>
 
 class A2Emu {
 public:
@@ -40,6 +42,9 @@ private:
   /// Update the GFX image with data from the screen.
   void updateScreenImage();
 
+  /// Optionally dump debugging state.
+  Emu6502::StopReason debugState();
+
 private:
   sg_bindings bind_ = {0};
   sg_pipeline pip_ = {0};
@@ -60,6 +65,7 @@ private:
 
   a2_screen screen_;
 
+  DebugState6502 dbg_{};
   EmuApple2 emu_{};
 };
 
@@ -67,6 +73,9 @@ static A2Emu *s_a2emu = nullptr;
 
 A2Emu::A2Emu() {
   initWindow();
+
+  dbg_.addDefaultNonDebug();
+  emu_.setDebugStateCB(&dbg_, DebugState6502::debugStateCB);
   emu_.loadROM(apple2plus_rom, apple2plus_rom_len);
 
   stm_setup();
@@ -126,6 +135,68 @@ A2Emu::~A2Emu() {
   sg_shutdown();
 }
 
+static std::vector<uint8_t> readAll(FILE *f) {
+  std::vector<uint8_t> buf;
+  static constexpr unsigned CHUNK = 8192;
+  for (;;) {
+    size_t size = buf.size();
+    buf.resize(size + CHUNK);
+    size_t nr = fread(&buf[size], 1, CHUNK, f);
+    buf.resize(size + nr);
+    if (nr != CHUNK)
+      break;
+  }
+  return buf;
+}
+
+/// Load a DOS3.3 binary buffer into emulated RAM.
+/// Return the load address.
+static std::optional<uint16_t> loadBin(EmuApple2 *emu, const uint8_t *data, size_t len) {
+  if (len > 4) {
+    uint16_t start = data[0] + data[1] * 256;
+    if (len - 4 <= 0x10000 - start) {
+      memcpy(emu->getMainRAMWritable() + start, data + 4, len - 4);
+      printf("Loaded %zu at $%04X (%u)\n", len - 4, start, start);
+      return start;
+    }
+  }
+  return std::nullopt;
+}
+
+/// Start executing from the specified address.
+static void run(EmuApple2 *emu, uint16_t addr) {
+  printf("Executing!\n");
+  auto r = emu->getRegs();
+  r.pc = addr;
+  emu->setRegs(r);
+}
+
+/// Load a DOS3.3 binary into RAM and execute it.
+static void runBin(EmuApple2 *emu, const uint8_t *data, size_t len) {
+  if (auto addr = loadBin(emu, data, len))
+    run(emu, *addr);
+}
+
+/// Load a DOS3.3 binary file, where the first 4 bytes are start addr and
+/// length.
+static std::optional<uint16_t> loadBinFile(EmuApple2 *emu, const char *path) {
+  if (FILE *f = fopen(path, "rb")) {
+    auto b = readAll(f);
+    fclose(f);
+    return loadBin(emu, b.data(), b.size());
+  }
+  return std::nullopt;
+}
+
+/// Load and run a DOS3.3 binary file.
+static void runBinFile(EmuApple2 *emu, const char *path) {
+  if (auto addr = loadBinFile(emu, path))
+    run(emu, *addr);
+}
+
+#include "bolo.h"
+#include "robotron2084.h"
+
 void A2Emu::event(const sapp_event *ev) {
   int toIgnore = ignoreNextCh_;
   ignoreNextCh_ = -1;
@@ -140,6 +211,13 @@ void A2Emu::event(const sapp_event *ev) {
       emu_.pushKey(k);
   } else if (ev->type == SAPP_EVENTTYPE_KEY_DOWN) {
     switch (ev->key_code) {
+    case SAPP_KEYCODE_F1:
+      runBin(&emu_, bolo_bin, bolo_bin_len);
+      break;
+    case SAPP_KEYCODE_F2:
+      runBin(&emu_, robotron2084_bin, robotron2084_bin_len);
+      break;
+
     case SAPP_KEYCODE_DELETE:
     case SAPP_KEYCODE_BACKSPACE:
     case SAPP_KEYCODE_LEFT:
@@ -200,7 +278,9 @@ void A2Emu::simulateFrame() {
   } else {
     double elapsed = stm_sec(curFrameTick_ - lastRunTick_);
     unsigned runCycles = (unsigned)(std::min(elapsed, 0.200) * EmuApple2::CLOCK_FREQ);
-    emu_.runFor(runCycles);
+    auto stopReason = emu_.runFor(runCycles);
+    if (stopReason == Emu6502::StopReason::StopRequesed)
+      exit(1);
   }
   lastRunTick_ = curFrameTick_;
 }

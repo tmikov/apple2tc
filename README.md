@@ -25,10 +25,11 @@ beginning.
 
 ## a2emu: Apple II Emulator
 
-- Online version: https://tmikov.github.io/apple2tc/
 - Source: https://github.com/tmikov/apple2tc/tree/master/tools/a2emu
+- Online version: https://tmikov.github.io/apple2tc/ . Use F1 and F2 to load and run example games.
 
 ![](images/a2emu-gr.png)
+![](images/robo.jpg)
  
 The first version of the Apple II emulator is already up. It is portable and
 should work on MacOS, Linux, Windows and Web, although as of this writing only
@@ -45,17 +46,17 @@ external dependencies!), and portable across many platforms, which puts it in a
 fairly unique space.
 
 Status:
-- All CPU instructions implemented
-- Text mode implemented
+- Two test games (Bolo and Robotron 2084) work and can be executed with F1/F2.
+- Text, GR and HGR modes implemented
 - Keyboard support implemented
-- It is basically possible to program in text mode Applesoft Basic, however it
-may be a bit annoying since it is impossible to save and restore the code.
+- Diskelss games seem to work.
+- Applesoft Basic works.
 
 Missing:
+- Colors in HiRes mode need some improvement.
 - The emulator code is not super flexible in how it handles IO, since this is
 not supposed to be a very powerful emulator.
 - Sound: coming soon.
-- Lores and Hires graphics: coming soon.
 - Tape support (we may be add it soon, because it seems simple and may be a
 convenient way to save restore).
 - Disk support. No plans to add it for now, since it appears to be a non-trivial
