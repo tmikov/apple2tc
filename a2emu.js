@@ -1698,6 +1698,10 @@ function sapp_js_request_pointerlock(){ if (Module.sapp_emsc_target) { if (Modul
 function sapp_js_set_favicon(w,h,pixels){ var canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h; var ctx = canvas.getContext('2d'); var img_data = ctx.createImageData(w, h); img_data.data.set(HEAPU8.subarray(pixels, pixels + w*h*4)); ctx.putImageData(img_data, 0, 0); var new_link = document.createElement('link'); new_link.id = 'sokol-app-favicon'; new_link.rel = 'shortcut icon'; new_link.href = canvas.toDataURL(); document.head.appendChild(new_link); }
 function sapp_js_unfocus_textfield(){ document.getElementById("_sokol_app_input_element").blur(); }
 function sapp_js_write_clipboard(c_str){ var str = UTF8ToString(c_str); var ta = document.createElement('textarea'); ta.setAttribute('autocomplete', 'off'); ta.setAttribute('autocorrect', 'off'); ta.setAttribute('autocapitalize', 'off'); ta.setAttribute('spellcheck', 'false'); ta.style.left = -100 + 'px'; ta.style.top = -100 + 'px'; ta.style.height = 1; ta.style.width = 1; ta.value = str; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); }
+function saudio_js_buffer_frames(){ if (Module._saudio_node) { return Module._saudio_node.bufferSize; } else { return 0; } }
+function saudio_js_init(sample_rate,num_channels,buffer_size){ Module._saudio_context = null; Module._saudio_node = null; if (typeof AudioContext !== 'undefined') { Module._saudio_context = new AudioContext({ sampleRate: sample_rate, latencyHint: 'interactive', }); } else if (typeof webkitAudioContext !== 'undefined') { Module._saudio_context = new webkitAudioContext({ sampleRate: sample_rate, latencyHint: 'interactive', }); } else { Module._saudio_context = null; console.log('sokol_audio.h: no WebAudio support'); } if (Module._saudio_context) { console.log('sokol_audio.h: sample rate ', Module._saudio_context.sampleRate); Module._saudio_node = Module._saudio_context.createScriptProcessor(buffer_size, 0, num_channels); Module._saudio_node.onaudioprocess = function pump_audio(event) { var num_frames = event.outputBuffer.length; var ptr = __saudio_emsc_pull(num_frames); if (ptr) { var num_channels = event.outputBuffer.numberOfChannels; for (var chn = 0; chn < num_channels; chn++) { var chan = event.outputBuffer.getChannelData(chn); for (var i = 0; i < num_frames; i++) { chan[i] = HEAPF32[(ptr>>2) + ((num_channels*i)+chn)] } } } }; Module._saudio_node.connect(Module._saudio_context.destination); var resume_webaudio = function() { if (Module._saudio_context) { if (Module._saudio_context.state === 'suspended') { Module._saudio_context.resume(); } } }; document.addEventListener('click', resume_webaudio, {once:true}); document.addEventListener('touchstart', resume_webaudio, {once:true}); document.addEventListener('keydown', resume_webaudio, {once:true}); return 1; } else { return 0; } }
+function saudio_js_sample_rate(){ if (Module._saudio_context) { return Module._saudio_context.sampleRate; } else { return 0; } }
+function saudio_js_shutdown(){ if (Module._saudio_context !== null) { if (Module._saudio_node) { Module._saudio_node.disconnect(); } Module._saudio_context.close(); Module._saudio_context = null; Module._saudio_node = null; } }
 function stm_js_perfnow(){ return performance.now(); }
 
 
@@ -3627,6 +3631,10 @@ var asmLibraryArg = {
   "sapp_js_set_favicon": sapp_js_set_favicon,
   "sapp_js_unfocus_textfield": sapp_js_unfocus_textfield,
   "sapp_js_write_clipboard": sapp_js_write_clipboard,
+  "saudio_js_buffer_frames": saudio_js_buffer_frames,
+  "saudio_js_init": saudio_js_init,
+  "saudio_js_sample_rate": saudio_js_sample_rate,
+  "saudio_js_shutdown": saudio_js_shutdown,
   "setTempRet0": _setTempRet0,
   "stm_js_perfnow": stm_js_perfnow
 };
@@ -3657,6 +3665,9 @@ var __sapp_emsc_invoke_fetch_cb = Module["__sapp_emsc_invoke_fetch_cb"] = create
 
 /** @type {function(...*):?} */
 var _main = Module["_main"] = createExportWrapper("main");
+
+/** @type {function(...*):?} */
+var __saudio_emsc_pull = Module["__saudio_emsc_pull"] = createExportWrapper("_saudio_emsc_pull");
 
 /** @type {function(...*):?} */
 var _malloc = Module["_malloc"] = createExportWrapper("malloc");
