@@ -1,15 +1,41 @@
 /*
-* Copyright (c) Tzvetan Mikov.
-*
-* This source code is licensed under the MIT license found in the
-* LICENSE file in the root directory of this source tree.
+ * Copyright (c) Tzvetan Mikov.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "apple2tc/d6502.h"
 
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+
+// Code-generated tables.
+#include "opcodes.h"
+
+const char *cpuAddrModeName(CPUAddrMode am) {
+  static const char s_amName[][8] = {
+      "A",
+      "Abs",
+      "Abs_X",
+      "Abs_Y",
+      "Imm",
+      "Implied",
+      "Ind",
+      "X_Ind",
+      "Ind_Y",
+      "Rel",
+      "Zpg",
+      "Zpg_X",
+      "Zpg_Y"};
+  static_assert(
+      sizeof(s_amName) / sizeof(s_amName[0]) == (unsigned)CPUAddrMode::_last,
+      "string table incorrect");
+  assert(am < CPUAddrMode::_last);
+  return s_amName[(unsigned)am];
+}
 
 const char *cpuInstName(CPUInstKind kind) {
   static const char s_instName[][4] = {
@@ -18,10 +44,11 @@ const char *cpuInstName(CPUInstKind kind) {
       "INC", "INX", "INY", "JMP", "JSR", "LDA", "LDX", "LDY", "LSR", "NOP", "ORA", "PHA",
       "PHP", "PLA", "PLP", "ROL", "ROR", "RTI", "RTS", "SBC", "SEC", "SED", "SEI", "STA",
       "STX", "STY", "TAX", "TAY", "TSX", "TXA", "TXS", "TYA", "???"};
+
   return s_instName[(unsigned)kind];
 }
 
-CPUOpcode decodeOpcode(uint8_t opcode) {
+CPUOpcode decodeOpcodeSlow(uint8_t opcode) {
   // The 6502 instruction table is laid out according to a pattern a-b-c, where
   // a and b are an octal number each, followed by a group of two binary digits c,
   // as in the bit-vector "aaabbbcc".
@@ -135,6 +162,10 @@ CPUOpcode decodeOpcode(uint8_t opcode) {
   }
 
   return CPUOpcode::invalid();
+}
+
+CPUOpcode decodeOpcode(uint8_t opcode) {
+  return s_opcodes[opcode];
 }
 
 CPUInst decodeInst(uint16_t pc, ThreeBytes bytes) {
@@ -263,4 +294,42 @@ formatInst(CPUInst inst, ThreeBytes bytes, const std::function<std::string(CPUIn
   }
 
   return res;
+}
+
+std::optional<CPUInstKind> findInstKind(const char *name) {
+  if (strlen(name) != 3)
+    return std::nullopt;
+  char uname[4];
+  for (unsigned i = 0; i != 3; ++i)
+    uname[i] = (char)toupper(name[i]);
+  uname[3] = 0;
+
+  const auto *res = (const char(*)[4])bsearch(
+      uname,
+      s_sortedNames,
+      (unsigned)CPUInstKind::_last,
+      sizeof(s_sortedNames[0]),
+      [](const void *key, const void *elem) -> int { return memcmp(key, elem, 4); });
+  if (!res)
+    return std::nullopt;
+
+  return s_sortedNameKinds[res - s_sortedNames];
+}
+
+std::optional<uint8_t> encodeInst(CPUOpcode opcode) {
+  const auto *encoding = (const AsmEncoding *)bsearch(
+      &opcode,
+      s_encodings,
+      s_encodings_len,
+      sizeof(s_encodings[0]),
+      [](const void *_key, const void *_elem) -> int {
+        const auto *key = (const CPUOpcode *)_key;
+        const auto *elem = (const AsmEncoding *)_elem;
+        return (int)key->kind * ((int)CPUAddrMode::_invalid + 2) + (int)key->addrMode -
+            ((int)elem->opcode.kind * ((int)CPUAddrMode::_invalid + 2) +
+             (int)elem->opcode.addrMode);
+      });
+  if (!encoding)
+    return std::nullopt;
+  return encoding->encoding;
 }

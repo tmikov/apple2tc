@@ -4,6 +4,8 @@
 # LICENSE file in the root directory of this source tree.
 
 add_library(d6502
-  d6502.cpp ${A2TC_INC}/d6502.h
-  a2symbols.cpp ${A2TC_INC}/a2symbols.h
-  )
+  d6502.cpp ${A2TC_INC}/d6502.h opcodes.h
+  a2symbols.cpp ${A2TC_INC}/a2symbols.h)
+
+add_executable(gen6502 gen.cpp)
+target_link_libraries(gen6502 d6502)
