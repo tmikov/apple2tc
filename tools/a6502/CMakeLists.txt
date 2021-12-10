@@ -3,7 +3,5 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-add_subdirectory(id)
-add_subdirectory(textemu)
-add_subdirectory(a2emu)
-add_subdirectory(a6502)
+link_libraries(d6502)
+add_executable(a6502 a6502.cpp)
