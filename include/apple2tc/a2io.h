@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "apple2tc/soundqueue.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -56,6 +58,36 @@ void apple2_render_hgr_screen(
     uint64_t ms,
     bool mixed,
     bool mono);
+
+typedef struct {
+  /// Queue of float sound samples. Filled by the main thread, read by the
+  /// sound callback.
+  sound_queue_t sq;
+
+  /// On web the sound callback may not activate until the user interacts
+  /// with the page. We keep track of that to avoid filling the sound queue.
+  atomic_bool cb_running;
+
+  /// The cycle count for the previous speaker access. This allows us
+  /// to detect cycle overflow/wraparound.
+  unsigned last_cycle;
+  /// After cycle wraparound, this keeps the high part that has been "lost".
+  uint64_t cycle_base;
+  /// The last speaker cycle we generated sound for.
+  double last_generated_cycle;
+  /// The last speaker state.
+  float last_state;
+} a2_sound_t;
+
+void a2_sound_init(a2_sound_t *sound);
+void a2_sound_free(a2_sound_t *sound);
+
+/// The speaker bit has been accessed at cycle \p cycle.
+void a2_sound_spkr(a2_sound_t *sound, unsigned cpu_freq, unsigned audio_rate, unsigned cycle);
+/// Submit the sound generated up to cycle \p cycle.
+void a2_sound_submit(a2_sound_t *sound, unsigned cpu_freq, unsigned audio_rate, unsigned cycle);
+/// The asynchronous sound callback. Needs to populate the specified buffer with samples.
+void a2_sound_cb(a2_sound_t *sound, float *buffer, unsigned num_frames, unsigned num_channels);
 
 #ifdef __cplusplus
 }

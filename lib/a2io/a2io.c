@@ -212,3 +212,77 @@ void apple2_render_hgr_screen(
     }
   }
 }
+
+void a2_sound_init(a2_sound_t *sound) {
+  sound_queue_init(&sound->sq, sizeof(float) * 8192, sizeof(float));
+  atomic_store_explicit(&sound->cb_running, false, memory_order_relaxed);
+  sound->last_cycle = 0;
+  sound->cycle_base = 0;
+  sound->last_generated_cycle = 0;
+  sound->last_state = -0.1f;
+}
+
+void a2_sound_free(a2_sound_t *sound) {
+  sound_queue_free(&sound->sq);
+}
+
+void a2_sound_spkr(a2_sound_t *sound, unsigned cpu_freq, unsigned audio_rate, unsigned cycle) {
+  a2_sound_submit(sound, cpu_freq, audio_rate, cycle);
+  sound->last_state = -sound->last_state;
+}
+
+void a2_sound_submit(a2_sound_t *sound, unsigned cpu_freq, unsigned audio_rate, unsigned cycle) {
+  if (cycle < sound->last_cycle)
+    sound->cycle_base += 0x100000000LLU;
+  sound->last_cycle = cycle;
+  uint64_t currentCycle = sound->cycle_base + cycle;
+
+  if (!atomic_load_explicit(&sound->cb_running, memory_order_relaxed)) {
+    sound->last_generated_cycle = (double)currentCycle;
+  } else {
+    // Number of 6502 cycles per sound frame.
+    double frameCycles = (double)cpu_freq / audio_rate;
+
+    // TODO: we don't really need a buffer, we can acquire space in the queue directly.
+    enum { BUF_SIZE = 256 };
+    float buf[BUF_SIZE];
+    unsigned bufIndex = 0;
+
+    while (sound->last_generated_cycle < (double)currentCycle) {
+      buf[bufIndex++] = sound->last_state;
+      if (bufIndex == BUF_SIZE) {
+        sound_queue_push(&sound->sq, buf, bufIndex * sizeof(float));
+        bufIndex = 0;
+      }
+      sound->last_generated_cycle += frameCycles;
+    }
+    if (bufIndex)
+      sound_queue_push(&sound->sq, buf, bufIndex * sizeof(float));
+  }
+}
+
+void a2_sound_cb(a2_sound_t *sound, float *buffer, unsigned num_frames, unsigned num_channels) {
+  // Tell the main thread that the sond callback is running, so the main thread
+  // can start generating sound.
+  atomic_store_explicit(&sound->cb_running, true, memory_order_relaxed);
+
+  do {
+    queue_parts_t parts = sound_queue_readparts(&sound->sq, num_frames * sizeof(float));
+    if (parts.size1 == 0)
+      break;
+    const float *rptr = (const float *)parts.part1;
+    unsigned rlen = parts.size1 / sizeof(float);
+    if (num_channels == 1) {
+      memcpy(buffer, rptr, rlen * sizeof(float));
+      buffer += rlen;
+    } else {
+      for (unsigned cnt = rlen; cnt; buffer += 2, --cnt)
+        buffer[0] = buffer[1] = *rptr++;
+    }
+    num_frames -= rlen;
+    sound_queue_adv_head(&sound->sq, rlen * sizeof(float));
+  } while (num_frames);
+
+  if (num_frames)
+    memset(buffer, 0, sizeof(float) * num_channels * num_frames);
+}

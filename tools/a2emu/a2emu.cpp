@@ -9,8 +9,12 @@
 #include "apple2tc/DebugState6502.h"
 #include "apple2tc/a2io.h"
 #include "apple2tc/apple2.h"
+#include "apple2tc/soundqueue.h"
 
 #include "sokol_app.h"
+#if A2EMU_SOUND
+#include "sokol_audio.h"
+#endif
 #include "sokol_gfx.h"
 #include "sokol_glue.h"
 #include "sokol_time.h"
@@ -42,9 +46,6 @@ private:
   /// Update the GFX image with data from the screen.
   void updateScreenImage();
 
-  /// Optionally dump debugging state.
-  Emu6502::StopReason debugState();
-
 private:
   sg_bindings bind_ = {0};
   sg_pipeline pip_ = {0};
@@ -63,6 +64,7 @@ private:
   /// characters and as keydown events.
   int ignoreNextCh_ = -1;
 
+  a2_sound_t sound_;
   a2_screen screen_;
 
   DebugState6502 dbg_{};
@@ -76,6 +78,24 @@ A2Emu::A2Emu() {
 
   dbg_.addDefaultNonDebug();
   emu_.setDebugStateCB(&dbg_, DebugState6502::debugStateCB);
+
+  a2_sound_init(&sound_);
+
+  saudio_desc audioDesc = {
+      .num_channels = 1,
+      //.sample_rate = 44100,
+      //.buffer_frames = 2048,
+      .stream_userdata_cb =
+          [](float *buffer, int num_frames, int num_channels, void *user_data) {
+            a2_sound_cb((a2_sound_t *)user_data, buffer, num_frames, num_channels);
+          },
+      .user_data = &sound_,
+  };
+  saudio_setup(&audioDesc);
+
+  emu_.setSpeakerCB(&sound_, [](void *ctx, unsigned cycles) {
+    a2_sound_spkr((a2_sound_t *)ctx, Emu6502::CLOCK_FREQ, saudio_sample_rate(), cycles);
+  });
   emu_.loadROM(apple2plus_rom, apple2plus_rom_len);
 
   stm_setup();
@@ -133,6 +153,8 @@ void A2Emu::initWindow() {
 
 A2Emu::~A2Emu() {
   sg_shutdown();
+  saudio_shutdown();
+  a2_sound_free(&sound_);
 }
 
 static std::vector<uint8_t> readAll(FILE *f) {
@@ -271,6 +293,7 @@ void A2Emu::frame() {
   sg_commit();
 }
 
+static bool started_ = false;
 void A2Emu::simulateFrame() {
   if (firstFrame_) {
     firstFrame_ = false;
@@ -278,9 +301,11 @@ void A2Emu::simulateFrame() {
   } else {
     double elapsed = stm_sec(curFrameTick_ - lastRunTick_);
     unsigned runCycles = (unsigned)(std::min(elapsed, 0.200) * EmuApple2::CLOCK_FREQ);
+    started_ = true;
     auto stopReason = emu_.runFor(runCycles);
     if (stopReason == Emu6502::StopReason::StopRequesed)
       exit(1);
+    a2_sound_submit(&sound_, Emu6502::CLOCK_FREQ, saudio_sample_rate(), emu_.getCycles());
   }
   lastRunTick_ = curFrameTick_;
 }

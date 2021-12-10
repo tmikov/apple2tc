@@ -103,6 +103,8 @@ uint8_t EmuApple2::ioPeek(uint16_t addr) {
   case SPKR:
     if (debug_ & DebugIO2)
       fprintf(stderr, "[%u] SPKR\n", getCycles());
+    if (spkrCB_)
+      spkrCB_(spkrCBCtx_, getCycles());
     break;
   case STROBE:
     if (debug_ & DebugIO1)

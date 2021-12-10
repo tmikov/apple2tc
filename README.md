@@ -59,7 +59,8 @@ Status:
 - Two test games (Bolo and Robotron 2084) work and can be executed with F1/F2.
 - Text, GR and HGR modes implemented
 - Keyboard support implemented
-- Diskelss games seem to work.
+- Diskless games seem to work.
+- Sound works (but on web the user needs to interact with the page first due to https://developer.chrome.com/blog/autoplay/).
 - Applesoft Basic works.
 
 Missing:
@@ -67,7 +68,6 @@ Missing:
 - Colors in HiRes mode need some improvement.
 - The emulator code is not super flexible in how it handles IO, since this is
   not supposed to be a very powerful emulator.
-- Sound: coming soon.
 - Tape support (we may be add it soon, because it seems simple and may be a
   convenient way to save restore).
 - Disk support. No plans to add it for now, since it appears to be a non-trivial

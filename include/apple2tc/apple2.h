@@ -34,6 +34,11 @@ public:
 
   EmuApple2() : Emu6502(IO_RANGE_START, IO_RANGE_END) {}
 
+  void setSpeakerCB(void * ctx, void (*spkrCB)(void *ctx, unsigned cycles)) {
+    spkrCB_ = spkrCB;
+    spkrCBCtx_ = ctx;
+  }
+
   void pushKey(int key) {
     keys_.push_back(key & 0x7F);
   }
@@ -108,6 +113,10 @@ private:
   uint8_t lastKey_ = 0;
 
   uint8_t vidControl_ = VCText;
+
+  /// Callback invoked SPKR ($C03x) access.
+  void (*spkrCB_)(void *ctx, unsigned cycles) = nullptr;
+  void * spkrCBCtx_ = nullptr;
 };
 
 /// Dump the BASIC program as binary tokens.

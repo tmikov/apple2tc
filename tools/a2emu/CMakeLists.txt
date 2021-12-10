@@ -13,10 +13,13 @@ elseif (APPLE)
   set(SOKOL_SRC sokol.m)
 else ()
   add_definitions(-DSOKOL_GLCORE33)
-  set(SOKOL_SRC sokol.c)
+  set(SOKOL_SRC sokol.c soundqueue.c soundqueue.h)
 endif ()
 
+add_definitions(-DA2EMU_SOUND=1)
+
 link_libraries(d6502 cpuemu a2io)
+
 add_executable(a2emu a2emu.cpp
   bolo.h robotron2084.h
   blit.h
