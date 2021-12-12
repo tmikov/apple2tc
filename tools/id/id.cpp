@@ -195,35 +195,15 @@ static void printDB() {
 }
 
 static void printDW() {
-  uint16_t addr = s_curAddr & ~15;
-  uint16_t end = addr + 64;
+  uint16_t addr = s_curAddr;
+  uint16_t end = addr + 16;
+  printf("%04X: ", addr);
   while (addr != end) {
-    // Offset in a 16 byte row.
-    uint16_t ofs = addr & 15;
-    // Address.
-    if (ofs == 0) {
-      printf("%04X:  ", addr);
-    }
-
-    // Spaces between values.
-    if (ofs == 8)
-      printf("  ");
-    else if (ofs != 0)
-      printf(" ");
-
-    // Actual values.
-    if (addr < s_curAddr) {
-      printf("____");
-    } else {
-      uint16_t v = peek16(addr);
-      printf("%04X", v);
-    }
-
-    if (ofs == 14)
-      printf("\n");
-
+    uint16_t v = peek16(addr);
+    printf(" %04X", v);
     addr += 2;
   }
+  printf("\n");
   s_curAddr = addr;
 }
 
@@ -237,7 +217,8 @@ static void printHelp() {
   printf("s addr - Set current address\n");
   printf("s - Print current address\n");
   printf("dis - Disassemble 20 instructions\n");
-  printf("db/dw - print up to 64 hex bytes/words\n");
+  printf("db - print up to 64 bytes/words\n");
+  printf("dw - print 8 words\n");
   printf("memcpy dest src len - copy memory\n");
 }
 
