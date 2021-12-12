@@ -53,8 +53,8 @@ static void loadROM(const char *path) {
     printf("*** Error: ROM is roo large\n");
   } else {
     unsigned start = 0x10000 - buf.size();
-    printf("$%zX bytes read\n", buf.size());
-    printf("ROM start at $%04X\n", start);
+    printf("loaded: [$%04X..$%04X]\n", start, (unsigned)(start + buf.size() - 1));
+    printf("len   : %u\n", (unsigned)buf.size());
 
     memcpy(s_memory + start, buf.data(), buf.size());
   }
@@ -79,8 +79,8 @@ static void loadB33(const char *path) {
     uint16_t start = buf[0] + buf[1] * 256;
     uint16_t len = buf[2] + buf[3] * 256;
 
-    printf("start: $%04X\n", start);
-    printf("len:   %u\n", len);
+    printf("loaded: [$%04X..$%04X]\n", start, start + len - 1);
+    printf("len   : %u\n", len);
 
     if (len > buf.size() - 4) {
       printf("***Error: invalid length\n");
@@ -107,7 +107,8 @@ void saveB33(const char *path, uint16_t addr, uint16_t len) {
   fwrite(s_memory + addr, 1, len, f);
   fclose(f);
 
-  printf("Saved %u bytes from $%04X to '%s'\n", len, addr, path);
+  printf("saved: [$%04X..$%04X] to %s\n", addr, addr + len - 1, path);
+  printf("len  : %u\n", len);
 }
 
 static void loadBIN(const char *path, uint16_t start) {
@@ -122,8 +123,8 @@ static void loadBIN(const char *path, uint16_t start) {
   if (buf.size() > 0x10000 - start) {
     printf("*** Error: bin is too large\n");
   } else {
-    printf("start: $%04X\n", start);
-    printf("len:   %zu\n", buf.size());
+    printf("loaded: [$%04X..$%04X]\n", start, start + (unsigned)buf.size() - 1);
+    printf("len   : %u\n", (unsigned)buf.size());
 
     memcpy(s_memory + start, buf.data(), buf.size());
   }
