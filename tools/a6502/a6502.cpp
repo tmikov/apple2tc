@@ -766,12 +766,16 @@ static void run() {
 }
 
 static void printHelp(const char **argv) {
-  fprintf(stderr, "syntax: %s [--lst] [--syms] input_file [output_file]\n", argv[0]);
+  fprintf(stderr, "syntax: %s [--lst] [--syms] [--bin] input_file [output_file]\n", argv[0]);
+  fprintf(stderr, "  --lst    print listing to stdout\n");
+  fprintf(stderr, "  --syms   print symbol list to stdout\n");
+  fprintf(stderr, "  --bin    if output file is specified, generate binary instead of b33\n");
 }
 
 int main(int argc, const char **argv) {
   bool lst = false;
   bool dsyms = false;
+  bool b33 = true;
   std::string outPath{};
 
   for (int i = 1; i < argc; ++i) {
@@ -781,6 +785,10 @@ int main(int argc, const char **argv) {
     }
     if (strcmp(argv[i], "--syms") == 0) {
       dsyms = true;
+      continue;
+    }
+    if (strcmp(argv[i], "--bin") == 0) {
+      b33 = false;
       continue;
     }
     if (argv[i][0] == '-') {
@@ -819,8 +827,9 @@ int main(int argc, const char **argv) {
   if (s_numErrors)
     return 2;
 
+  uint16_t startAddr = s_startAddr.value_or(0);
   if (!lst) {
-    printf("START : $%04X\n", s_startAddr.value_or(0));
+    printf("START : $%04X\n", startAddr);
     printf("LENGTH: %zu\n", s_binary.size());
   }
 
@@ -850,6 +859,12 @@ int main(int argc, const char **argv) {
       return 1;
     }
 
+    if (b33) {
+      fputc(startAddr, out);
+      fputc(startAddr >> 8, out);
+      fputc((int)s_binary.size(), out);
+      fputc((int)s_binary.size() >> 8, out);
+    }
     fwrite(s_binary.data(), 1, s_binary.size(), out);
     fclose(out);
   }
