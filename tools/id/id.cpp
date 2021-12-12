@@ -29,6 +29,10 @@ static void poke(unsigned addr, uint8_t value) {
 static uint16_t peek16(unsigned addr) {
   return peek(addr) + peek(addr + 1) * 256;
 }
+static void poke16(unsigned addr, uint16_t value) {
+  poke(addr, value);
+  poke(addr + 1, value >> 8);
+}
 
 static uint8_t printInst(uint16_t pc) {
   ThreeBytes bytes{0};
@@ -225,6 +229,8 @@ static void printHelp() {
   printf("dw - print 8 words\n");
   printf("memcpy dest src len - copy memory\n");
   printf("asm inst operand - assemble an instruction at the current location\n");
+  printf("wb v1 v2... - write bytes\n");
+  printf("ww v1 v2... - write words\n");
 }
 
 int main() {
@@ -341,6 +347,42 @@ int main() {
           printInst(s_curAddr);
           s_curAddr += len;
         }
+    } else if (tokens[0] == "wb" && tokens.size() > 1) {
+      std::vector<uint8_t> bytes;
+      for (size_t i = 1; i < tokens.size(); ++i) {
+        if (auto val = parse16(tokens[i].c_str())) {
+          if (*val <= 0xFF) {
+            bytes.push_back(*val);
+            continue;
+          }
+        }
+        printf("Error: invalid byte %zu", i - 1);
+        break;
+      }
+      // Did we parse all tokens?
+      if (bytes.size() == tokens.size() - 1) {
+        for (size_t i = 0; i != bytes.size(); ++i)
+          poke(s_curAddr + i, bytes[i]);
+        s_curAddr += bytes.size();
+        printf("%04X:\n", s_curAddr);
+      }
+    } else if (tokens[0] == "ww" && tokens.size() > 1) {
+      std::vector<uint16_t> words;
+      for (size_t i = 1; i < tokens.size(); ++i) {
+        if (auto val = parse16(tokens[i].c_str())) {
+          words.push_back(*val);
+        } else {
+          printf("Error: invalid word %zu", i - 1);
+          break;
+        }
+      }
+      // Did we parse all tokens?
+      if (words.size() == tokens.size() - 1) {
+        for (size_t i = 0; i != words.size(); ++i)
+          poke16(s_curAddr + i * 2, words[i]);
+        s_curAddr += words.size() * 2;
+        printf("%04X:\n", s_curAddr);
+      }
     } else {
       printf("Error: invalid command. Use \"help\" for help.\n");
     }
