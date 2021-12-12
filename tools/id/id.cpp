@@ -144,20 +144,6 @@ static std::optional<std::string> readLine() {
   return res;
 }
 
-static void printHelp() {
-  printf("help - print this help\n");
-  printf("loadrom file - Load file at end of memory\n");
-  printf("loadb33 file - Load DOS3.3 binary file to addr encoded in file header\n");
-  printf("loadbin file addr - Load arbitrary binary file to specified addr\n");
-  printf("saveb33 file addr last - Store a DOS3.3 binary file\n");
-  printf("saveb33 file addr L length - Store a DOS3.3 binary file\n");
-  printf("s addr - Set current address\n");
-  printf("s - Print current address\n");
-  printf("dis - Disassemble 20 instructions\n");
-  printf("db/dw - print up to 64 hex bytes/words\n");
-  printf("memcpy dest src len - copy memory\n");
-}
-
 static std::optional<uint16_t> parse16(const char *token) {
   int base = 0;
   if (*token == '$') {
@@ -239,6 +225,20 @@ static void printDW() {
     addr += 2;
   }
   s_curAddr = addr;
+}
+
+static void printHelp() {
+  printf("help - print this help\n");
+  printf("loadrom file - Load file at end of memory\n");
+  printf("loadb33 file - Load DOS3.3 binary file to addr encoded in file header\n");
+  printf("loadbin file addr - Load arbitrary binary file to specified addr\n");
+  printf("saveb33 file addr L len - Store a DOS3.3 binary file\n");
+  printf("saveb33 file addr last_addr - Store a DOS3.3 binary file\n");
+  printf("s addr - Set current address\n");
+  printf("s - Print current address\n");
+  printf("dis - Disassemble 20 instructions\n");
+  printf("db/dw - print up to 64 hex bytes/words\n");
+  printf("memcpy dest src len - copy memory\n");
 }
 
 int main() {
