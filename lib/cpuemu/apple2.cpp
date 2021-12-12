@@ -7,70 +7,9 @@
 
 #include "apple2tc/apple2.h"
 
+#include "apple2tc/apple2iodefs.h"
+
 #include <cassert>
-
-/// KBD =($C00X)[R] Keyboard Input Register:
-/// Gets set to a Key's /// High-ASCII Value when a Key is pressed (e.g., KBD > 127
-/// if any Key has been pressed since last cleared via KBDSTRB).
-static constexpr uint16_t KBD = 0xC000;
-/// KBDSTRB =($C01X)[W] Clear Keyboard Strobe:
-/// Resets Keyboard Input /// Register's high bit (from 1 to 0) so that the next
-/// keypress can set KBD again.
-static constexpr uint16_t KBDSTRB = 0xC010;
-/// TAPEOUT =($C02X)[R] Cassette Data Out:
-/// Digital to Analog Audio.
-/// Output Toggle; Read Only!--Do NOT Write to these
-/// addresses [(49184~49199)= ($C020~$C02F)] (which are
-/// decoded {hard-wired} as the same single bit location);
-/// Toggles Audio Output
-/// (creates a 'click' on Cassette-Tape recordings).
-static constexpr uint16_t TAPEOUT = 0xC020;
-/// SPKR =($C03X)[R/W] Speaker Data Out:
-/// Digital to Analog Audio
-/// Output Toggle; Read Only!--Do NOT Write to these
-/// addresses [(49200~49215)=($C030~ $C03F)] (which are
-/// decoded {hard-wired} as the same single bitlocation);
-/// Toggles Audio Output
-/// (Your Apple's speaker' clicks' once).
-static constexpr uint16_t SPKR = 0xC030;
-/// STROBE =($C04X); Outputs Strobe Pulse to Game I/O Connector;
-/// Any one of these 16 locations
-/// [(49216~49231)=($C040~$C04F)] has the same effect
-static constexpr uint16_t STROBE = 0xC040;
-
-/// [R/W] Sets Graphics Mode without Clearing Screen;
-static constexpr uint16_t TXTCLR = 0xC050;
-/// [R/W] Sets Text Mode without Resetting Scrolling Window;
-static constexpr uint16_t TXTSET = 0xC051;
-/// [R/W] Sets Full-Screen Graphics Mode;
-static constexpr uint16_t MIXCLR = 0xC052;
-/// [R/W] Sets Mixed Text & Graphics Mode  (with 4 lines of text at the bottom of the screen).
-static constexpr uint16_t MIXSET = 0xC053;
-/// [R/W] Displays Page 1 without Clearing the Screen.
-static constexpr uint16_t LOWSCR = 0xC054;
-/// [R/W] Displays Page 2 without Clearing the Screen.
-static constexpr uint16_t HISCR = 0xC055;
-/// [R/W] Resets Page from Hi-Res to Lo-Res/Text Mode.
-static constexpr uint16_t LORES = 0xC056;
-/// [R/W] Resets Page from Lo-Res/Text to Hi-Res Mode.
-static constexpr uint16_t HIRES = 0xC057;
-
-/// [R/W] CLRAN0: Reset AN0: Toggle OFF (0VDC)
-static constexpr uint16_t AN0OFF = 0xC058;
-/// [R/W] SETAN0: * Set AN0: Toggle ON (+5VDC)
-static constexpr uint16_t AN0ON = 0xC059;
-/// [R/W] CLRAN1: Reset AN1: Toggle OFF (0VDC)
-static constexpr uint16_t AN1OFF = 0xC05A;
-/// [R/W] SETAN1: * Set AN1: Toggle ON (+5VDC)
-static constexpr uint16_t AN1ON = 0xC05B;
-/// [R/W] CLRAN2: Reset AN2: Toggle OFF (0VDC)
-static constexpr uint16_t AN2OFF = 0xC05C;
-/// [R/W] SETAN2: * Set AN2: Toggle ON (+5VDC)
-static constexpr uint16_t AN2ON = 0xC05D;
-/// [R/W] CLRAN3: Reset AN3: Toggle OFF (0VDC)
-static constexpr uint16_t AN3OFF = 0xC05E;
-/// [R/W] SETAN3: * Set AN3: Toggle ON (+5VDC)
-static constexpr uint16_t AN3ON = 0xC05F;
 
 uint8_t EmuApple2::kbd() {
   return keys_.empty() ? lastKey_ : keys_.front() | 0x80;
@@ -87,68 +26,68 @@ uint8_t EmuApple2::ioPeek(uint16_t addr) {
   assert(addr >= IO_RANGE_START && addr <= IO_RANGE_END);
 
   switch (addr & 0xCFF0) {
-  case KBD:
+  case A2_KBD:
     if (debug_ & DebugIO2)
       fprintf(stderr, "[%u] KBD\n", getCycles());
     return kbd();
-  case KBDSTRB:
+  case A2_KBDSTRB:
     if (debug_ & DebugIO1)
       fprintf(stderr, "[%u] KBDSTRB\n", getCycles());
     kbdstrb();
     break;
-  case TAPEOUT:
+  case A2_TAPEOUT:
     if (debug_ & DebugIO1)
       fprintf(stderr, "[%u] TAPEOUT\n", getCycles());
     break;
-  case SPKR:
+  case A2_SPKR:
     if (debug_ & DebugIO2)
       fprintf(stderr, "[%u] SPKR\n", getCycles());
     if (spkrCB_)
       spkrCB_(spkrCBCtx_, getCycles());
     break;
-  case STROBE:
+  case A2_STROBE:
     if (debug_ & DebugIO1)
       fprintf(stderr, "[%u] STROBE\n", getCycles());
     break;
 
-  case TXTCLR:
+  case A2_TXTCLR:
     switch (addr) {
-    case TXTCLR:
+    case A2_TXTCLR:
       if (debug_ & DebugIO1)
         fprintf(stderr, "[%u] TXTCLR\n", getCycles());
       vidControl_ &= ~VCText;
       break;
-    case TXTSET:
+    case A2_TXTSET:
       if (debug_ & DebugIO1)
         fprintf(stderr, "[%u] TXTSET\n", getCycles());
       vidControl_ |= VCText;
       break;
-    case MIXCLR:
+    case A2_MIXCLR:
       if (debug_ & DebugIO1)
         fprintf(stderr, "[%u] MIXCLR\n", getCycles());
       vidControl_ &= ~VCMixed;
       break;
-    case MIXSET:
+    case A2_MIXSET:
       if (debug_ & DebugIO1)
         fprintf(stderr, "[%u] MIXSET\n", getCycles());
       vidControl_ |= VCMixed;
       break;
-    case LOWSCR:
+    case A2_LOWSCR:
       if (debug_ & DebugIO1)
         fprintf(stderr, "[%u] LOWSCR\n", getCycles());
       vidControl_ &= ~VCPage2;
       break;
-    case HISCR:
+    case A2_HISCR:
       if (debug_ & DebugIO1)
         fprintf(stderr, "[%u] HISCR\n", getCycles());
       vidControl_ |= VCPage2;
       break;
-    case LORES:
+    case A2_LORES:
       if (debug_ & DebugIO1)
         fprintf(stderr, "[%u] LORES\n", getCycles());
       vidControl_ &= ~VCHires;
       break;
-    case HIRES:
+    case A2_HIRES:
       if (debug_ & DebugIO1)
         fprintf(stderr, "[%u] HIRES\n", getCycles());
       vidControl_ |= VCHires;
