@@ -43,7 +43,7 @@ static uint8_t printInst(uint16_t pc) {
 static void loadROM(const char *path) {
   FILE *f = fopen(path, "rb");
   if (!f) {
-    printf("*** Error: opening '%s'\n", path);
+    perror(path);
     return;
   }
 
@@ -62,10 +62,10 @@ static void loadROM(const char *path) {
   fclose(f);
 }
 
-static void load33BIN(const char *path) {
+static void loadB33(const char *path) {
   FILE *f = fopen(path, "rb");
   if (!f) {
-    printf("*** Error: opening '%s'\n", path);
+    perror(path);
     return;
   }
 
@@ -90,6 +90,24 @@ static void load33BIN(const char *path) {
   }
 
   fclose(f);
+}
+
+void saveB33(const char *path, uint16_t addr, uint16_t len) {
+  assert(addr <= 0x10000 - len && "length should have been validated");
+  FILE *f = fopen(path, "wb");
+  if (!f) {
+    perror(path);
+    return;
+  }
+
+  fputc(addr, f);
+  fputc(addr >> 8, f);
+  fputc(len, f);
+  fputc(len >> 8, f);
+  fwrite(s_memory + addr, 1, len, f);
+  fclose(f);
+
+  printf("Saved %u bytes from $%04X to '%s'\n", len, addr, path);
 }
 
 static void loadBIN(const char *path, uint16_t start) {
@@ -128,12 +146,14 @@ static std::optional<std::string> readLine() {
 static void printHelp() {
   printf("help - print this help\n");
   printf("loadrom file - Load file at end of memory\n");
-  printf("loadbin file - Load DOS3.3 binary file to addr encoded in file header\n");
+  printf("loadb33 file - Load DOS3.3 binary file to addr encoded in file header\n");
   printf("loadbin file addr - Load arbitrary binary file to specified addr\n");
+  printf("saveb33 file addr len - Store a DOS3.3 binary file\n");
   printf("s addr - Set current address\n");
   printf("s - Print current address\n");
   printf("dis - Disassemble 20 instructions\n");
   printf("db/dw - print up to 64 hex bytes/words\n");
+  printf("memcpy dest src len - copy memory\n");
 }
 
 static std::optional<uint16_t> parse16(const char *token) {
@@ -243,14 +263,24 @@ int main() {
       printHelp();
     } else if (tokens[0] == "loadrom" && tokens.size() == 2) {
       loadROM(tokens[1].c_str());
-    } else if (tokens[0] == "loadbin" && tokens.size() == 2) {
-      load33BIN(tokens[1].c_str());
+    } else if (tokens[0] == "loadb33" && tokens.size() == 2) {
+      loadB33(tokens[1].c_str());
     } else if (tokens[0] == "loadbin" && tokens.size() == 3) {
       auto addr = parse16(tokens[2].c_str());
       if (!addr)
         printf("Error: invalid number.\n");
       else
         loadBIN(tokens[1].c_str(), *addr);
+    } else if (tokens[0] == "saveb33" && tokens.size() == 4) {
+      auto addr = parse16(tokens[2].c_str());
+      auto len = parse16(tokens[3].c_str());
+      if (!addr || !len) {
+        printf("Error: invalid number.\n");
+      } else if (*addr > 0x10000 - *len) {
+        printf("Error: invalid length.\n");
+      } else {
+        saveB33(tokens[1].c_str(), *addr, *len);
+      }
     } else if (tokens[0] == "s" && tokens.size() == 1) {
       printf("Current address is $%04X (%u)\n", s_curAddr, s_curAddr);
     } else if (tokens[0] == "s" && tokens.size() == 2) {
@@ -267,6 +297,18 @@ int main() {
       printDB();
     } else if (tokens[0] == "dw" && tokens.size() == 1) {
       printDW();
+    } else if (tokens[0] == "memcpy" && tokens.size() == 4) {
+      auto dest = parse16(tokens[1].c_str());
+      auto src = parse16(tokens[2].c_str());
+      auto len = parse16(tokens[3].c_str());
+      if (!dest || !src || !len) {
+        printf("Error: invalid number.\n");
+      } else if (*dest > 0x10000 - *len || *src > 0x10000 - *len) {
+        printf("Error: invalid copy length.\n");
+      } else {
+        memmove(s_memory + *dest, s_memory + *src, *len);
+        printf("%u bytes copied from $%04X to $%04X\n", *len, *src, *dest);
+      }
     } else {
       printf("Error: invalid command. Use \"help\" for help.\n");
     }
