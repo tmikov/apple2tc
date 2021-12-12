@@ -131,6 +131,10 @@ struct CPUInst {
   uint16_t operand;
   uint8_t size;
 
+  [[nodiscard]] bool isInvalid() const {
+    return kind == CPUInstKind::INVALID;
+  }
+
   static constexpr CPUInst invalid() {
     return {CPUInstKind::INVALID, CPUAddrMode::A, 0, 1};
   }
