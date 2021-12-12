@@ -293,10 +293,10 @@ private:
     status_ = (status_ & ~STATUS_C) | (value & STATUS_C);
   }
 
-  /// Perform A = A + b + Carry in decimal mode and update the flags.
-  void adcDecimal(uint8_t b);
-  /// Perform A = A - b - Carry in decimal mode and update the flags.
-  void sbcDecimal(uint8_t b);
+  /// Perform A + B + Carry in decimal mode and update the flags.
+  uint8_t adcDecimal(uint8_t b);
+  /// Perform A - B - Carry in decimal mode and update the flags.
+  uint8_t sbcDecimal(uint8_t b);
 
 protected:
   /// A combination of DebugFlags.

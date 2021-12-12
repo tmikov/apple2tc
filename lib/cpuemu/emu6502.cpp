@@ -56,7 +56,7 @@ void Emu6502::reset() {
   pc_ = peek16(RESET_VEC);
 }
 
-void Emu6502::adcDecimal(uint8_t b) {
+uint8_t Emu6502::adcDecimal(uint8_t b) {
   uint8_t c = status_ & STATUS_C;
   uint8_t al = (a_ & 15) + (b & 15) + c;
   if (al >= 10)
@@ -77,10 +77,10 @@ void Emu6502::adcDecimal(uint8_t b) {
   if (ah > 15)
     status_ |= STATUS_C;
 
-  a_ = (ah << 4) | (al & 15);
+  return (ah << 4) | (al & 15);
 }
 
-void Emu6502::sbcDecimal(uint8_t b) {
+uint8_t Emu6502::sbcDecimal(uint8_t b) {
   uint8_t c = ~status_ & STATUS_C;
   uint8_t al = (a_ & 15) - (b & 15) - c;
   if ((int8_t)(al) < 0)
@@ -100,7 +100,7 @@ void Emu6502::sbcDecimal(uint8_t b) {
     status_ |= STATUS_C;
   if ((int8_t)ah < 0)
     ah -= 6;
-  a_ = (ah << 4) | (al & 15);
+  return (ah << 4) | (al & 15);
 }
 
 Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
@@ -118,7 +118,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       if (!(status_ & STATUS_D))
         a_ = updateNZVC(a_ + m + (status_ & STATUS_C), a_, m);
       else
-        adcDecimal(m);
+        a_ = adcDecimal(m);
       pc_ += 2;
       break;
     }
@@ -127,7 +127,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       if (!(status_ & STATUS_D))
         a_ = updateNZVC(a_ + m + (status_ & STATUS_C), a_, m);
       else
-        adcDecimal(m);
+        a_ = adcDecimal(m);
       pc_ += 2;
       break;
     }
@@ -136,7 +136,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       if (!(status_ & STATUS_D))
         a_ = updateNZVC(a_ + m + (status_ & STATUS_C), a_, m);
       else
-        adcDecimal(m);
+        a_ = adcDecimal(m);
       pc_ += 2;
       break;
     }
@@ -145,7 +145,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       if (!(status_ & STATUS_D))
         a_ = updateNZVC(a_ + m + (status_ & STATUS_C), a_, m);
       else
-        adcDecimal(m);
+        a_ = adcDecimal(m);
       pc_ += 3;
       break;
     }
@@ -154,7 +154,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       if (!(status_ & STATUS_D))
         a_ = updateNZVC(a_ + m + (status_ & STATUS_C), a_, m);
       else
-        adcDecimal(m);
+        a_ = adcDecimal(m);
       pc_ += 3;
       break;
     }
@@ -163,7 +163,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       if (!(status_ & STATUS_D))
         a_ = updateNZVC(a_ + m + (status_ & STATUS_C), a_, m);
       else
-        adcDecimal(m);
+        a_ = adcDecimal(m);
       pc_ += 3;
       break;
     }
@@ -172,7 +172,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       if (!(status_ & STATUS_D))
         a_ = updateNZVC(a_ + m + (status_ & STATUS_C), a_, m);
       else
-        adcDecimal(m);
+        a_ = adcDecimal(m);
       pc_ += 2;
       break;
     }
@@ -181,7 +181,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       if (!(status_ & STATUS_D))
         a_ = updateNZVC(a_ + m + (status_ & STATUS_C), a_, m);
       else
-        adcDecimal(m);
+        a_ = adcDecimal(m);
       pc_ += 2;
       break;
     }
@@ -191,7 +191,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       if (!(status_ & STATUS_D))
         a_ = updateNZVInvC(a_ - m - (~status_ & STATUS_C), a_, ~m);
       else
-        sbcDecimal(m);
+        a_ = sbcDecimal(m);
       pc_ += 2;
       break;
     }
@@ -200,7 +200,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       if (!(status_ & STATUS_D))
         a_ = updateNZVInvC(a_ - m - (~status_ & STATUS_C), a_, ~m);
       else
-        sbcDecimal(m);
+        a_ = sbcDecimal(m);
       pc_ += 2;
       break;
     }
@@ -209,7 +209,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       if (!(status_ & STATUS_D))
         a_ = updateNZVInvC(a_ - m - (~status_ & STATUS_C), a_, ~m);
       else
-        sbcDecimal(m);
+        a_ = sbcDecimal(m);
       pc_ += 2;
       break;
     }
@@ -218,7 +218,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       if (!(status_ & STATUS_D))
         a_ = updateNZVInvC(a_ - m - (~status_ & STATUS_C), a_, ~m);
       else
-        sbcDecimal(m);
+        a_ = sbcDecimal(m);
       pc_ += 3;
       break;
     }
@@ -227,7 +227,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       if (!(status_ & STATUS_D))
         a_ = updateNZVInvC(a_ - m - (~status_ & STATUS_C), a_, ~m);
       else
-        sbcDecimal(m);
+        a_ = sbcDecimal(m);
       pc_ += 3;
       break;
     }
@@ -236,7 +236,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       if (!(status_ & STATUS_D))
         a_ = updateNZVInvC(a_ - m - (~status_ & STATUS_C), a_, ~m);
       else
-        sbcDecimal(m);
+        a_ = sbcDecimal(m);
       pc_ += 3;
       break;
     }
@@ -245,7 +245,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       if (!(status_ & STATUS_D))
         a_ = updateNZVInvC(a_ - m - (~status_ & STATUS_C), a_, ~m);
       else
-        sbcDecimal(m);
+        a_ = sbcDecimal(m);
       pc_ += 2;
       break;
     }
@@ -254,7 +254,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       if (!(status_ & STATUS_D))
         a_ = updateNZVInvC(a_ - m - (~status_ & STATUS_C), a_, ~m);
       else
-        sbcDecimal(m);
+        a_ = sbcDecimal(m);
       pc_ += 2;
       break;
     }
