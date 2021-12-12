@@ -177,7 +177,8 @@ private:
     push8(v);
   }
   uint16_t pop16() {
-    return pop8() + (pop8() << 8);
+    uint8_t tmp = pop8();
+    return tmp + (pop8() << 8);
   }
 
   /// Read from the zero page.
