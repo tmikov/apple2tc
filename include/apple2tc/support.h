@@ -7,8 +7,10 @@
 
 #pragma once
 
+#include <cstdarg>
 #include <cstdio>
 #include <optional>
+#include <string>
 
 /// Read a file into a container T. T is usually std::string for text files
 /// and std::vector<uint8_t> for binary files.
@@ -26,3 +28,11 @@ T readAll(FILE *f) {
   }
   return buf;
 }
+
+std::string vformat(const char *msg, va_list ap);
+std::string format(const char *msg, ...) __attribute__((__format__(__printf__, 1, 2)));
+
+/// Case insensitive ASCII string equality.
+bool eqci(const char *a, const char *b);
+
+void upcaseStr(std::string &s);
