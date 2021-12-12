@@ -231,6 +231,7 @@ static void printHelp() {
   printf("asm inst operand - assemble an instruction at the current location\n");
   printf("wb v1 v2... - write bytes\n");
   printf("ww v1 v2... - write words\n");
+  printf("p expr - evaluate an expression using the operand parser\n");
 }
 
 int main() {
@@ -382,6 +383,24 @@ int main() {
           poke16(s_curAddr + i * 2, words[i]);
         s_curAddr += words.size() * 2;
         printf("%04X:\n", s_curAddr);
+      }
+    } else if (tokens[0] == "p" && tokens.size() > 1) {
+      std::string buf = tokens[1];
+      for (size_t i = 2; i < tokens.size(); ++i) {
+        buf += ' ';
+        buf += tokens[i];
+      }
+      SimpleAsm::ExprResult res;
+      const char *s = sasm.parseExpr(&res, buf.c_str(), true);
+      if (!errors) {
+        if (*s) {
+          printf("Error: extra characters\n");
+        } else {
+          if (res.width == 1)
+            printf("= $%02X u:%u i:%d\n", res.value, res.value, (int8_t)res.value);
+          else
+            printf("= $%04X u:%u i:%d\n", res.value, res.value, (int16_t)res.value);
+        }
       }
     } else {
       printf("Error: invalid command. Use \"help\" for help.\n");
