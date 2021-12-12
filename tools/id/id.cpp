@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "apple2tc/SimpleAsm.h"
 #include "apple2tc/a2symbols.h"
 #include "apple2tc/d6502.h"
 #include "apple2tc/support.h"
@@ -21,6 +22,9 @@ static uint16_t s_curAddr = 0;
 
 static uint8_t peek(unsigned addr) {
   return s_memory[addr & 0xFFFF];
+}
+static void poke(unsigned addr, uint8_t value) {
+  s_memory[addr & 0xFFFF] = value;
 }
 static uint16_t peek16(unsigned addr) {
   return peek(addr) + peek(addr + 1) * 256;
@@ -220,12 +224,23 @@ static void printHelp() {
   printf("db - print up to 64 bytes/words\n");
   printf("dw - print 8 words\n");
   printf("memcpy dest src len - copy memory\n");
+  printf("asm inst operand - assemble an instruction at the current location\n");
 }
 
 int main() {
   printf("Interactive 6502 Disassembler\n\n");
   printf("Use \"help\" for help\n");
+
+  // Keep track of how many sasm errors occurred in the last loop.
+  unsigned errors = 0;
+  SimpleAsm sasm([&errors](const char *, const char *msg) {
+    ++errors;
+    printf("Error: %s\n", msg);
+  });
+
   for (;;) {
+    // Reset errors.
+    errors = 0;
     printf("\n> ");
     auto line = readLine();
     if (!line)
@@ -309,6 +324,23 @@ int main() {
         memmove(s_memory + *dest, s_memory + *src, *len);
         printf("%u bytes copied from $%04X to $%04X\n", *len, *src, *dest);
       }
+    } else if (tokens[0] == "asm" && tokens.size() >= 2) {
+      // Concatenate all tokens >= 2 into one "right" operand.
+      std::string right = tokens.size() > 2 ? tokens[2] : std::string();
+      for (size_t i = 3; i < tokens.size(); ++i) {
+        right += ' ';
+        right += tokens[i];
+      }
+
+      ThreeBytes bytes;
+      if (auto optLen = sasm.assemble(&bytes, s_curAddr, tokens[1].c_str(), right.c_str(), true))
+        if (!errors) {
+          unsigned len = *optLen;
+          for (unsigned i = 0; i != len; ++i)
+            poke(s_curAddr + i, bytes.d[i]);
+          printInst(s_curAddr);
+          s_curAddr += len;
+        }
     } else {
       printf("Error: invalid command. Use \"help\" for help.\n");
     }
