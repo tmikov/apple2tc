@@ -149,7 +149,8 @@ static void printHelp() {
   printf("loadrom file - Load file at end of memory\n");
   printf("loadb33 file - Load DOS3.3 binary file to addr encoded in file header\n");
   printf("loadbin file addr - Load arbitrary binary file to specified addr\n");
-  printf("saveb33 file addr len - Store a DOS3.3 binary file\n");
+  printf("saveb33 file addr last - Store a DOS3.3 binary file\n");
+  printf("saveb33 file addr L length - Store a DOS3.3 binary file\n");
   printf("s addr - Set current address\n");
   printf("s - Print current address\n");
   printf("dis - Disassemble 20 instructions\n");
@@ -275,12 +276,27 @@ int main() {
       else
         loadBIN(tokens[1].c_str(), *addr);
     } else if (tokens[0] == "saveb33" && tokens.size() == 4) {
+      // saveb33 path addr end_addr
       auto addr = parse16(tokens[2].c_str());
-      auto len = parse16(tokens[3].c_str());
+      auto end_addr = parse16(tokens[3].c_str());
+      if (!addr || !end_addr) {
+        printf("Error: invalid number.\n");
+      } else if (*addr > *end_addr) {
+        printf("Error: invalid start address.\n");
+      } else if (*end_addr - *addr == 0xFFFF) {
+        printf("Error: length exceeds 16-bits.\n");
+      } else {
+        saveB33(tokens[1].c_str(), *addr, *end_addr - *addr + 1);
+      }
+    } else if (
+        tokens[0] == "saveb33" && tokens.size() == 5 && (tokens[3] == "L" || tokens[3] == "l")) {
+      // saveb33 path addr L length
+      auto addr = parse16(tokens[2].c_str());
+      auto len = parse16(tokens[4].c_str());
       if (!addr || !len) {
         printf("Error: invalid number.\n");
       } else if (*addr > 0x10000 - *len) {
-        printf("Error: invalid length.\n");
+        printf("Error: invalid start address.\n");
       } else {
         saveB33(tokens[1].c_str(), *addr, *len);
       }
