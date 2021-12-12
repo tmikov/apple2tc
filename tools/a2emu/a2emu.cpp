@@ -10,6 +10,7 @@
 #include "apple2tc/a2io.h"
 #include "apple2tc/apple2.h"
 #include "apple2tc/soundqueue.h"
+#include "apple2tc/support.h"
 
 #include "sokol_app.h"
 #if A2EMU_SOUND
@@ -157,20 +158,6 @@ A2Emu::~A2Emu() {
   a2_sound_free(&sound_);
 }
 
-static std::vector<uint8_t> readAll(FILE *f) {
-  std::vector<uint8_t> buf;
-  static constexpr unsigned CHUNK = 8192;
-  for (;;) {
-    size_t size = buf.size();
-    buf.resize(size + CHUNK);
-    size_t nr = fread(&buf[size], 1, CHUNK, f);
-    buf.resize(size + nr);
-    if (nr != CHUNK)
-      break;
-  }
-  return buf;
-}
-
 /// Load a DOS3.3 binary buffer into emulated RAM.
 /// Return the load address.
 static std::optional<uint16_t> loadBin(EmuApple2 *emu, const uint8_t *data, size_t len) {
@@ -203,7 +190,7 @@ static void runBin(EmuApple2 *emu, const uint8_t *data, size_t len) {
 /// length.
 static std::optional<uint16_t> loadBinFile(EmuApple2 *emu, const char *path) {
   if (FILE *f = fopen(path, "rb")) {
-    auto b = readAll(f);
+    auto b = readAll<std::vector<uint8_t>>(f);
     fclose(f);
     return loadBin(emu, b.data(), b.size());
   }

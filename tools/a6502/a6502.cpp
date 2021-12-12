@@ -6,6 +6,7 @@
  */
 
 #include "apple2tc/d6502.h"
+#include "apple2tc/support.h"
 
 #include <cassert>
 #include <cctype>
@@ -764,20 +765,6 @@ static void run() {
   }
 }
 
-static std::string readAll(FILE *f) {
-  std::string buf;
-  static constexpr unsigned CHUNK = 8192;
-  for (;;) {
-    size_t size = buf.size();
-    buf.resize(size + CHUNK);
-    size_t nr = fread(&buf[size], 1, CHUNK, f);
-    buf.resize(size + nr);
-    if (nr != CHUNK)
-      break;
-  }
-  return buf;
-}
-
 static void printHelp(const char **argv) {
   fprintf(stderr, "syntax: %s [--lst] [--syms] input_file [output_file]\n", argv[0]);
 }
@@ -822,7 +809,7 @@ int main(int argc, const char **argv) {
     perror(s_inputPath.c_str());
     return 1;
   }
-  s_inputData = readAll(f);
+  s_inputData = readAll<std::string>(f);
   fclose(f);
 
   if (lst)

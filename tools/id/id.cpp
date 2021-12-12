@@ -7,6 +7,7 @@
 
 #include "apple2tc/a2symbols.h"
 #include "apple2tc/d6502.h"
+#include "apple2tc/support.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -39,20 +40,6 @@ static uint8_t printInst(uint16_t pc) {
   return inst.size;
 }
 
-static std::vector<uint8_t> readAll(FILE *f) {
-  std::vector<uint8_t> buf;
-  static constexpr unsigned CHUNK = 8192;
-  for (;;) {
-    size_t size = buf.size();
-    buf.resize(size + CHUNK);
-    size_t nr = fread(&buf[size], 1, CHUNK, f);
-    buf.resize(size + nr);
-    if (nr != CHUNK)
-      break;
-  }
-  return buf;
-}
-
 static void loadROM(const char *path) {
   FILE *f = fopen(path, "rb");
   if (!f) {
@@ -60,7 +47,7 @@ static void loadROM(const char *path) {
     return;
   }
 
-  auto buf = readAll(f);
+  auto buf = readAll<std::vector<uint8_t>>(f);
 
   if (buf.size() > 0x10000) {
     printf("*** Error: ROM is roo large\n");
@@ -82,7 +69,7 @@ static void load33BIN(const char *path) {
     return;
   }
 
-  auto buf = readAll(f);
+  auto buf = readAll<std::vector<uint8_t>>(f);
 
   if (buf.size() > 0x10000) {
     printf("*** Error: bin is too large\n");
@@ -112,7 +99,7 @@ static void loadBIN(const char *path, uint16_t start) {
     return;
   }
 
-  auto buf = readAll(f);
+  auto buf = readAll<std::vector<uint8_t>>(f);
 
   if (buf.size() > 0x10000 - start) {
     printf("*** Error: bin is too large\n");

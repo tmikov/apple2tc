@@ -18,7 +18,7 @@ endif ()
 
 add_definitions(-DA2EMU_SOUND=1)
 
-link_libraries(d6502 cpuemu a2io)
+link_libraries(d6502 cpuemu a2io support)
 
 add_executable(a2emu a2emu.cpp
   bolo.h robotron2084.h

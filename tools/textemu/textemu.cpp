@@ -9,6 +9,7 @@
 #include "apple2tc/a2symbols.h"
 #include "apple2tc/apple2.h"
 #include "apple2tc/d6502.h"
+#include "apple2tc/support.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -24,27 +25,13 @@ public:
   }
 };
 
-static std::vector<char> readAll(FILE *f) {
-  std::vector<char> buf;
-  static constexpr unsigned CHUNK = 8192;
-  for (;;) {
-    size_t size = buf.size();
-    buf.resize(size + CHUNK);
-    size_t nr = fread(&buf[size], 1, CHUNK, f);
-    buf.resize(size + nr);
-    if (nr != CHUNK)
-      break;
-  }
-  return buf;
-}
-
 static std::vector<char> readAll(const char *path) {
   FILE *f = fopen(path, "rb");
   if (!f) {
     fprintf(stderr, "***ERROR: can't open %s", path);
     exit(1);
   }
-  auto res = readAll(f);
+  auto res = readAll<std::vector<char>>(f);
   fclose(f);
   return res;
 }

@@ -3,5 +3,5 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-link_libraries(d6502)
+link_libraries(d6502 support)
 add_executable(a6502 a6502.cpp)

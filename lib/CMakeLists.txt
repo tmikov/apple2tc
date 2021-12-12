@@ -6,3 +6,4 @@
 add_subdirectory(d6502)
 add_subdirectory(a2io)
 add_subdirectory(cpuemu)
+add_subdirectory(support)

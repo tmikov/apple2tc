@@ -3,5 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-link_libraries(d6502 cpuemu a2io support)
-add_executable(textemu textemu.cpp)
+add_library(support STATIC
+  support.cpp ${A2TC_INC}/support.h
+  )
+
