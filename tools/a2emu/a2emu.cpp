@@ -34,6 +34,15 @@ public:
   void event(const sapp_event *ev);
   void frame();
 
+  uint8_t peek(uint16_t addr) {
+    return emu_.peek(addr);
+  }
+
+  /// Method intended to be invoked from the host debugger.
+  void disasm(uint16_t pc);
+  /// Method intended to be invoked from the host debugger.
+  void printDB(uint16_t startAddr);
+
 private:
   /// Prepare the system window, init GFX.
   void initWindow();
@@ -319,6 +328,60 @@ void A2Emu::updateScreen() {
 void A2Emu::updateScreenImage() {
   sg_image_data imgData = {.subimage[0][0] = {.ptr = screen_.data, .size = sizeof(screen_.data)}};
   sg_update_image(bind_.fs_images[SLOT_tex], &imgData);
+}
+
+void A2Emu::disasm(uint16_t pc) {
+  for (unsigned i = 0; i != 20; ++i) {
+    ThreeBytes bytes{0};
+    for (unsigned i = 0; i != 3; ++i)
+      bytes.d[i] = peek(pc + i);
+    CPUInst inst = decodeInst(pc, bytes);
+    FormattedInst fmt = formatInst(inst, bytes);
+
+    printf("%04X: %-8s    %s", pc, fmt.bytes, fmt.inst);
+    if (!fmt.operand.empty())
+      printf("  %s", fmt.operand.c_str());
+    printf("\n");
+
+    pc += inst.size;
+  }
+}
+
+void A2Emu::printDB(uint16_t startAddr) {
+  char asciiBuf[17];
+  asciiBuf[16] = 0;
+  uint16_t addr = startAddr & ~15;
+  uint16_t end = addr + 64;
+  while (addr != end) {
+    // Offset in a 16 byte row.
+    uint16_t ofs = addr & 15;
+    // Address.
+    if (ofs == 0) {
+      printf("%04X:  ", addr);
+    }
+
+    // Spaces between values.
+    if (ofs == 8)
+      printf("  ");
+    else if (ofs != 0)
+      printf(" ");
+
+    // Actual values.
+    if (addr < startAddr) {
+      printf("__");
+      asciiBuf[ofs] = '.';
+    } else {
+      uint8_t v = peek(addr);
+      printf("%02X", v);
+      asciiBuf[ofs] = v >= 32 && v < 128 ? v : '.';
+    }
+
+    if (ofs == 15)
+      printf("  %s\n", asciiBuf);
+
+    ++addr;
+  }
+  // s_curAddr = addr;
 }
 
 sapp_desc sokol_main(int argc, char *argv[]) {
