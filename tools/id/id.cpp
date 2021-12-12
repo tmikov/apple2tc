@@ -257,8 +257,10 @@ int main() {
       tokens.emplace_back(token);
     }
 
-    if (tokens.empty())
+    if (tokens.empty()) {
+      printf("%04X:\n", s_curAddr);
       continue;
+    }
 
     if (tokens[0] == "help") {
       printHelp();
