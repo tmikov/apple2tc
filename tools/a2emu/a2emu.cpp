@@ -28,7 +28,7 @@
 
 class A2Emu {
 public:
-  explicit A2Emu();
+  explicit A2Emu(const char *cliPath = "");
   ~A2Emu();
 
   void event(const sapp_event *ev);
@@ -57,6 +57,10 @@ private:
   void updateScreenImage();
 
 private:
+  /// File path specified as a command line argument. It will be loaded with
+  /// the F3/F4 key.
+  std::string cliPath_{};
+
   sg_bindings bind_ = {0};
   sg_pipeline pip_ = {0};
 
@@ -83,7 +87,7 @@ private:
 
 static A2Emu *s_a2emu = nullptr;
 
-A2Emu::A2Emu() {
+A2Emu::A2Emu(const char *cliPath) : cliPath_(cliPath) {
   initWindow();
 
   dbg_.addDefaultNonDebug();
@@ -186,6 +190,7 @@ static void run(EmuApple2 *emu, uint16_t addr) {
   printf("Executing!\n");
   auto r = emu->getRegs();
   r.pc = addr;
+  r.status = Emu6502::STATUS_IGNORED;
   emu->setRegs(r);
 }
 
@@ -234,6 +239,26 @@ void A2Emu::event(const sapp_event *ev) {
       break;
     case SAPP_KEYCODE_F2:
       runBin(&emu_, robotron2084_bin, robotron2084_bin_len);
+      break;
+    case SAPP_KEYCODE_F3:
+    case SAPP_KEYCODE_F4:
+      if (cliPath_.empty()) {
+        fprintf(stderr, "F3/F4 pressed but a path was not supplied to the CLI\n");
+      } else {
+        if (auto addr = loadBinFile(&emu_, cliPath_.c_str())) {
+          run(&emu_, *addr);
+          if (ev->key_code == SAPP_KEYCODE_F3) {
+            emu_.addDebugFlags(Emu6502::DebugASM);
+            dbg_.setDebugBB(true);
+          } else {
+            emu_.setDebugFlags(emu_.getDebugFlags() & ~Emu6502::DebugASM);
+            dbg_.setDebugBB(false);
+            dbg_.clearWatches();
+          }
+        } else {
+          perror(cliPath_.c_str());
+        }
+      }
       break;
 
     case SAPP_KEYCODE_DELETE:
@@ -387,8 +412,11 @@ void A2Emu::printDB(uint16_t startAddr) {
 sapp_desc sokol_main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
+  static int s_argc = argc;
+  static char **s_argv = argv;
+
   return (sapp_desc){
-      .init_cb = []() { s_a2emu = new A2Emu(); },
+      .init_cb = []() { s_a2emu = new A2Emu(s_argc > 1 ? s_argv[1] : ""); },
       .frame_cb =
           []() {
             if (s_a2emu)
