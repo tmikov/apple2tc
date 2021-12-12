@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "apple2tc/SimpleAsm.h"
 #include "apple2tc/d6502.h"
 #include "apple2tc/support.h"
 
@@ -24,11 +25,7 @@ struct SymbolDef {
   Location defined{};
 };
 
-struct ExprResult {
-  uint16_t value = 0;
-  // 1 or 2.
-  uint8_t width = 1;
-};
+using ExprResult = SimpleAsm::ExprResult;
 
 static std::string s_inputPath;
 static std::string s_inputData;
@@ -109,6 +106,20 @@ static void error(const char *errLoc, const char *format, ...) {
   fprintf(stderr, "\n");
 }
 
+static SimpleAsm s_asm(
+    [](const char *where, const char *msg) { error(where, "%s", msg); },
+    [](std::string_view label) -> std::optional<SimpleAsm::ExprResult> {
+      auto it = s_symbols.find(std::string(label));
+      if (it != s_symbols.end() && it->second.value.has_value()) {
+        SimpleAsm::ExprResult res;
+        res.value = *it->second.value;
+        // If the label is defined after the current line, we treat is as 16-bit.
+        res.width = it->second.defined.line > s_curLine || *it->second.value > 255 ? 2 : 1;
+        return res;
+      }
+      return std::nullopt;
+    });
+
 static void skipBlanks() {
   for (;;) {
     if (*s_curPtr == ';') {
@@ -136,9 +147,6 @@ static const char *skip(const char *s) {
     ++s;
   return s;
 }
-
-/// Extra characters valid in a label.
-static const char s_labelChars[] = "._?";
 
 /// Parse the line into label, middle and right parts.
 static void parseLine() {
@@ -253,7 +261,7 @@ static void parseLine() {
       error(s_labelStart, "invalid label");
     } else {
       for (char c : s_label) {
-        if (!isalnum(c) && !strchr(s_labelChars, c)) {
+        if (!isalnum(c) && !strchr(SimpleAsm::LABEL_CHARS, c)) {
           error(s_labelStart, "invalid label");
           break;
         }
@@ -269,199 +277,6 @@ static void defineLabel(uint16_t value) {
     sr.defined.line = s_curLine;
     sr.defined.col = s_labelStart - s_curLineStart + 1;
   }
-}
-
-static uint8_t parseXDigit(char c) {
-  assert(isxdigit(c));
-  c = (char)tolower(c);
-  return c >= 'a' ? c - 'a' + 10 : c - '0';
-}
-
-/// Parse a number or label.
-/// \param needLabels: if true, labels must be defined.
-static const char *parseExpr2(ExprResult *res, const char *s, bool needLabels) {
-  s = skip(s);
-  if (*s == '%') {
-    // Binary.
-    ++s;
-    res->value = 0;
-    const char *start = s;
-    for (; *s == '0' || *s == '1'; ++s) {
-      if (s - start == 16)
-        error(s, "binary number overflow");
-      else if (s - start < 16)
-        res->value = (res->value << 1) + (*s - '0');
-    }
-    if (s == start)
-      error(s, "invalid binary number");
-    res->width = res->value > 255;
-  } else if (*s == '$') {
-    // Hex.
-    ++s;
-    res->value = 0;
-    const char *start = s;
-    for (; isxdigit(*s); ++s) {
-      if (s - start == 4)
-        error(s, "binary number overflow");
-      else if (s - start < 4)
-        res->value = (res->value << 4) + parseXDigit(*s);
-    }
-    if (s == start)
-      error(s, "invalid hex number");
-    res->width = res->value > 255 ? 2 : 1;
-  } else if (isdigit(*s)) {
-    res->value = 0;
-    const char *start = s;
-    bool ovf = false;
-    for (; isdigit(*s); ++s) {
-      if (ovf)
-        continue;
-      uint32_t tmp = (uint32_t)res->value * 10 + *s - '0';
-      if (tmp > 0xFFFF) {
-        ovf = true;
-        error(s, "decimal number overflow");
-      } else {
-        res->value = (uint16_t)tmp;
-      }
-    }
-    res->width = res->value > 255 ? 2 : 1;
-  } else if (*s == '\'') {
-    ++s;
-    res->width = 1;
-    res->value = (uint8_t)*s;
-    if (!*s || s[1] != '\'') {
-      error(s, "unterminated character");
-    } else {
-      s += 2;
-    }
-  } else {
-    // By default we assume labels are 16-bit.
-    res->value = 0;
-    res->width = 2;
-    const char *start = s;
-    for (; *s && (isalnum(*s) || strchr(s_labelChars, *s)); ++s)
-      ;
-    if (s == start) {
-      error(s, "missing label");
-    } else {
-      std::string label(start, s - start);
-      auto it = s_symbols.find(label);
-      if (it != s_symbols.end() && it->second.value.has_value()) {
-        res->value = *it->second.value;
-        // If the label is defined after the current line, we treat is as 16-bit.
-        res->width = it->second.defined.line > s_curLine || *it->second.value > 255 ? 2 : 1;
-      } else {
-        if (s_curPass != 1 || needLabels)
-          error(start, "undefined label '%s", label.c_str());
-      }
-    }
-  }
-
-  return s;
-}
-
-/// Parse additions.
-static const char *parseExpr1(ExprResult *res, const char *s, bool needLabels) {
-  s = skip(parseExpr2(res, s, needLabels));
-  while (*s == '+' || *s == '-' || *s == '|') {
-    char op = *s;
-    ExprResult tmp;
-    s = skip(parseExpr2(&tmp, s + 1, needLabels));
-    switch (op) {
-    case '+':
-      res->value += tmp.value;
-      break;
-    case '-':
-      res->value -= tmp.value;
-      break;
-    case '|':
-      res->value |= tmp.value;
-      break;
-    }
-    res->width = std::max(res->width, tmp.width);
-  }
-  return s;
-}
-
-// < low byte
-// > high byte
-// #X+1
-static const char *parseExpr0(ExprResult *res, const char *s, bool needLabels = false) {
-  s = skip(s);
-  if (*s == '<') {
-    s = parseExpr1(res, s + 1, needLabels);
-    res->width = 1;
-    res->value &= 0xFF;
-  } else if (*s == '>') {
-    s = parseExpr1(res, s + 1, needLabels);
-    res->width = 1;
-    res->value >>= 8;
-  } else {
-    s = parseExpr1(res, s, needLabels);
-  }
-
-  return s;
-}
-
-static CPUAddrMode parseInstOperand(ExprResult *res) {
-  if (s_right.empty())
-    return CPUAddrMode::Implied;
-  if (s_right == "A")
-    return CPUAddrMode::A;
-
-  const char *s = s_right.c_str();
-
-  if (*s == '#') {
-    s = skip(parseExpr0(res, s + 1));
-    if (*s)
-      error(s, "invalid expression");
-    if (res->width == 2)
-      error(s_rightStart, "16-bit immediate value");
-    return CPUAddrMode::Imm;
-  }
-
-  if (*s == '(') {
-    s = skip(parseExpr0(res, s + 1));
-    if (*s == ',') {
-      s = skip(s + 1);
-      if (strcmp(s, "X)") != 0)
-        error(s, "X) expected");
-      return CPUAddrMode::X_Ind;
-    }
-    if (*s != ')') {
-      error(s, ") expected");
-      return CPUAddrMode::Ind;
-    }
-    s = skip(s + 1);
-    if (*s == 0)
-      return CPUAddrMode::Ind;
-    if (*s != ',') {
-      error(s, ", expected");
-      return CPUAddrMode::Ind;
-    }
-    s = skip(s + 1);
-    if (strcmp(s, "Y") != 0)
-      error(s, "Y expected");
-    return CPUAddrMode::Ind_Y;
-  }
-
-  s = skip(parseExpr0(res, s));
-  if (*s == ',') {
-    s = skip(s + 1);
-    if (strcmp(s, "X") == 0) {
-      return res->width == 2 ? CPUAddrMode::Abs_X : CPUAddrMode::Zpg_X;
-    } else if (strcmp(s, "Y") == 0) {
-      return res->width == 2 ? CPUAddrMode::Abs_Y : CPUAddrMode::Zpg_Y;
-    } else {
-      error(s, "X or Y expected");
-      return res->width == 2 ? CPUAddrMode::Abs : CPUAddrMode::Zpg;
-    }
-  }
-
-  if (*s)
-    error(s, "invalid expression");
-
-  return res->width == 2 ? CPUAddrMode::Abs : CPUAddrMode::Zpg;
 }
 
 /// Keep track of the smallest binary address.
@@ -523,7 +338,7 @@ static void analyzeLine() {
 
   ExprResult res;
   if (dir == Dir::EQU || dir == Dir::ORG) {
-    const char *s = skip(parseExpr0(&res, s_right.c_str(), true));
+    const char *s = skip(s_asm.parseExpr(&res, s_right.c_str(), true));
     if (*s)
       error(s, "invalid expression");
     defineLabel(res.value);
@@ -575,7 +390,7 @@ static void analyzeLine() {
         caret = false;
       } else {
         const char *start = s;
-        s = parseExpr0(&res, s);
+        s = s_asm.parseExpr(&res, s, s_curPass > 1);
         put8(s_curAddr++, res.value);
       }
 
@@ -606,13 +421,13 @@ static void analyzeLine() {
         error(s, "invalid HEX number");
         return;
       }
-      put8(s_curAddr++, parseXDigit(s[0]) * 16 + parseXDigit(s[1]));
+      put8(s_curAddr++, SimpleAsm::parseXDigit(s[0]) * 16 + SimpleAsm::parseXDigit(s[1]));
     }
   } else if (dir == Dir::DFB || dir == Dir::DW) {
     const char *s = skip(s_right.c_str());
     for (;;) {
       const char *start = s;
-      s = skip(parseExpr0(&res, s));
+      s = skip(s_asm.parseExpr(&res, s, s_curPass > 1));
       if (dir == Dir::DFB) {
         put8(s_curAddr++, res.value);
       } else {
@@ -627,13 +442,13 @@ static void analyzeLine() {
     }
   } else if (dir == Dir::DS) {
     const char *s = s_right.c_str();
-    s = skip(parseExpr0(&res, s, true));
+    s = skip(s_asm.parseExpr(&res, s, true));
     uint32_t repeat = res.value;
     if (*s != ',') {
       error(s, ", expected");
       res.width = 1;
     } else {
-      s = skip(parseExpr0(&res, skip(s + 1)));
+      s = skip(s_asm.parseExpr(&res, skip(s + 1), s_curPass > 1));
       if (*s)
         error(s, "invalid expression");
     }
@@ -650,77 +465,18 @@ static void analyzeLine() {
         put8(s_curAddr, res.value);
       s_curAddr += res.width;
     }
-  } else if (auto optKind = findInstKind(s_middle.c_str())) {
-    std::optional<uint8_t> encoding;
-    CPUAddrMode am = parseInstOperand(&res);
-    encoding = encodeInst(CPUOpcode{.kind = *optKind, .addrMode = am});
-
-    if (!encoding) {
-      bool tryIt = true;
-      switch (am) {
-      case CPUAddrMode::Zpg:
-        am = CPUAddrMode::Abs;
-        break;
-      case CPUAddrMode::Zpg_X:
-        am = CPUAddrMode::Abs_X;
-        break;
-      case CPUAddrMode::Zpg_Y:
-        am = CPUAddrMode::Abs_Y;
-        break;
-      default:
-        tryIt = false;
-        break;
-      }
-      if (tryIt)
-        encoding = encodeInst(CPUOpcode{.kind = *optKind, .addrMode = am});
-    }
-    if (!encoding && am == CPUAddrMode::Abs) {
-      am = CPUAddrMode::Rel;
-      encoding = encodeInst(CPUOpcode{.kind = *optKind, .addrMode = am});
-    }
-    if (!encoding) {
-      error(s_rightStart, "unsupported address mode for '%s'", s_middle.c_str());
-      return;
-    }
-
-    if (s_curPass == 2) {
-      put8(s_curAddr, *encoding);
-      switch (am) {
-      default:
-      case CPUAddrMode::A:
-      case CPUAddrMode::Implied:
-        break;
-
-      case CPUAddrMode::Abs:
-      case CPUAddrMode::Ind:
-      case CPUAddrMode::Abs_X:
-      case CPUAddrMode::Abs_Y:
-        put16(s_curAddr + 1, res.value);
-        break;
-
-      case CPUAddrMode::Rel: {
-        int32_t d = (int32_t)res.value - s_curAddr - 2;
-        if (d < INT8_MIN || d > INT8_MAX)
-          error(s_rightStart, "relative branch out of range");
-        put8(s_curAddr + 1, res.value - s_curAddr - 2);
-        break;
-      }
-
-      case CPUAddrMode::Imm:
-      case CPUAddrMode::X_Ind:
-      case CPUAddrMode::Ind_Y:
-      case CPUAddrMode::Zpg:
-      case CPUAddrMode::Zpg_X:
-      case CPUAddrMode::Zpg_Y:
-        put8(s_curAddr + 1, res.value);
-        break;
-      }
-    }
-    s_curAddr += cpuInstSize(am);
   } else {
-    error(s_middleStart, "Unknown directive '%s'", s_middle.c_str());
+    ThreeBytes bytes;
+    if (auto optLen =
+            s_asm.assemble(&bytes, s_curAddr, s_middle.c_str(), s_right.c_str(), s_curPass > 1)) {
+      auto len = *optLen;
+      if (s_curPass == 2) {
+        for (unsigned i = 0; i != len; ++i)
+          put8(s_curAddr + i, bytes.d[i]);
+      }
+      s_curAddr += len;
+    }
   }
-
   if (s_curPass == 2 && s_listing) {
     fprintf(s_listing, "%04X:", prevAddr);
     unsigned i = 0;
