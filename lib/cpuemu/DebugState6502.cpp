@@ -77,7 +77,7 @@ void DebugState6502::printRecord(const InstRecord &rec) {
     putchar((r.status & (0x80 >> i)) ? names[i] : '.');
 
   // The PC again for convenience.
-  printf("PC=%04X  ", r.pc);
+  printf(" PC=%04X  ", r.pc);
 
   // Dump the next instruction.
   ThreeBytes bytes = rec.bytes;
