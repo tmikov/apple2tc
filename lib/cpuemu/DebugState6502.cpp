@@ -57,8 +57,8 @@ void DebugState6502::addNonDebug(uint16_t from, uint16_t to) {
   nonDebug_.emplace_back(from, to);
 }
 
-Emu6502::StopReason DebugState6502::debugStateCB(void *ctx, Emu6502 *emu) {
-  return static_cast<DebugState6502 *>(ctx)->debugState(emu);
+Emu6502::StopReason DebugState6502::debugStateCB(void *ctx, Emu6502 *emu, uint16_t pc) {
+  return static_cast<DebugState6502 *>(ctx)->debugState(emu, pc);
 }
 
 void DebugState6502::printRecord(const InstRecord &rec) {
@@ -98,12 +98,10 @@ void DebugState6502::addRecord(const InstRecord &rec) {
   history_.push_back(rec);
 }
 
-Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu) {
-  Emu6502::Regs r = emu->getRegs();
-
+Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu, uint16_t pc) {
   // Don't debug in areas that have been excluded.
   for (auto p : nonDebug_) {
-    if (r.pc >= p.first && r.pc <= p.second)
+    if (pc >= p.first && pc <= p.second)
       return Emu6502::StopReason::None;
   }
 
@@ -111,9 +109,10 @@ Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu) {
     return Emu6502::StopReason::StopRequesed;
   ++icount_;
 
+  Emu6502::Regs r = emu->getRegs();
   InstRecord rec = {.regs = r};
   for (unsigned i = 0; i != 3; ++i)
-    rec.bytes.d[i] = emu->ram_peek(r.pc + i);
+    rec.bytes.d[i] = emu->ram_peek(pc + i);
 
   if (buffering_) {
     addRecord(rec);

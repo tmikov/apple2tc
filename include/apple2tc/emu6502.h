@@ -53,7 +53,7 @@ public:
 public:
   explicit Emu6502(unsigned ioRangeStart, unsigned ioRangeEnd);
 
-  void setDebugStateCB(void *ctx, StopReason (*debugStateCB)(void *, Emu6502 *)) {
+  void setDebugStateCB(void *ctx, StopReason (*debugStateCB)(void *, Emu6502 *, uint16_t pc)) {
     debugStateCB_ = debugStateCB;
     debugStateCBCtx_ = ctx;
   }
@@ -323,7 +323,7 @@ private:
 
   /// If debugging is activated, invoked before every instruction. Can cause
   /// the execution loop to terminated by returning StopRequested.
-  StopReason (*debugStateCB_)(void *ctx, Emu6502 *emu) = nullptr;
+  StopReason (*debugStateCB_)(void *ctx, Emu6502 *emu, uint16_t pc) = nullptr;
   void *debugStateCBCtx_ = nullptr;
 
   /// 64Kb of RAM.

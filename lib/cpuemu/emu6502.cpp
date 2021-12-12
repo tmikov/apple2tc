@@ -106,11 +106,14 @@ uint8_t Emu6502::sbcDecimal(uint8_t b) {
 Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
 #define OP8() peek(pc_ + 1)
 #define OP16() peek16(pc_ + 1)
+#define BR_ABS(x) (pc_ = (x))
+#define BR_REL(x) (pc_ += (x))
 
   for (unsigned startCycles = cycles_; cycles_ - startCycles < runCycles; cycles_ += 3) {
-    if (debug_ & DebugASM)
-      if (debugStateCB_ && debugStateCB_(debugStateCBCtx_, this) == StopReason::StopRequesed)
+    if (debug_ & DebugASM) {
+      if (debugStateCB_ && debugStateCB_(debugStateCBCtx_, this, pc_) == StopReason::StopRequesed)
         return StopReason::StopRequesed;
+    }
 
     switch (ram_[pc_]) {
     case 0x69: { // ADC #imm
@@ -448,28 +451,28 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
     }
 
     case 0x90: // BCC
-      pc_ += 2 + (status_ & STATUS_C ? 0 : (int8_t)OP8());
+      BR_REL(2 + (status_ & STATUS_C ? 0 : (int8_t)OP8()));
       break;
     case 0xB0: // BCS
-      pc_ += 2 + (status_ & STATUS_C ? (int8_t)OP8() : 0);
+      BR_REL(2 + (status_ & STATUS_C ? (int8_t)OP8() : 0));
       break;
     case 0xF0: // BEQ
-      pc_ += 2 + (status_ & STATUS_Z ? (int8_t)OP8() : 0);
+      BR_REL(2 + (status_ & STATUS_Z ? (int8_t)OP8() : 0));
       break;
     case 0x30: // BMI
-      pc_ += 2 + (status_ & STATUS_N ? (int8_t)OP8() : 0);
+      BR_REL(2 + (status_ & STATUS_N ? (int8_t)OP8() : 0));
       break;
     case 0xD0: // BNE
-      pc_ += 2 + (status_ & STATUS_Z ? 0 : (int8_t)OP8());
+      BR_REL(2 + (status_ & STATUS_Z ? 0 : (int8_t)OP8()));
       break;
     case 0x10: // BPL
-      pc_ += 2 + (status_ & STATUS_N ? 0 : (int8_t)OP8());
+      BR_REL(2 + (status_ & STATUS_N ? 0 : (int8_t)OP8()));
       break;
     case 0x50: // BVC
-      pc_ += 2 + (status_ & STATUS_V ? 0 : (int8_t)OP8());
+      BR_REL(2 + (status_ & STATUS_V ? 0 : (int8_t)OP8()));
       break;
     case 0x70: // BVS
-      pc_ += 2 + (status_ & STATUS_V ? (int8_t)OP8() : 0);
+      BR_REL(2 + (status_ & STATUS_V ? (int8_t)OP8() : 0));
       break;
 
     case 0x24: { // BIT zpg
@@ -488,7 +491,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
     case 0x00: // BRK
       push16(pc_ + 2);
       push8(status_ | STATUS_B);
-      pc_ = peek16(IRQ_VEC);
+      BR_ABS(peek16(IRQ_VEC));
       break;
 
     case 0x18: // CLC
@@ -589,15 +592,15 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       break;
 
     case 0x4C: // JMP abs
-      pc_ = OP16();
+      BR_ABS(OP16());
       break;
     case 0x6C: // JMP (abs)
-      pc_ = peek16(OP16());
+      BR_ABS(peek16(OP16()));
       break;
 
     case 0x20: // JSR abs
       push16(pc_ + 2);
-      pc_ = OP16();
+      BR_ABS(OP16());
       break;
 
     case 0xA9: // LDA #.
@@ -816,10 +819,10 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
 
     case 0x40: // RTI
       status_ = pop8() & ~STATUS_B;
-      pc_ = pop16();
+      BR_ABS(pop16());
       break;
     case 0x60: // RTS
-      pc_ = pop16() + 1;
+      BR_ABS(pop16() + 1);
       break;
 
     case 0x85: // STA zpg.
@@ -913,6 +916,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
 
   return StopReason::CyclesExpired;
 
+#undef BR_ABS
 #undef OP16
 #undef OP8
 }

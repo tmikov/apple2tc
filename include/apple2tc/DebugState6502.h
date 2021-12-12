@@ -7,19 +7,19 @@
 
 #pragma once
 
-#include "apple2tc/emu6502.h"
 #include "apple2tc/d6502.h"
+#include "apple2tc/emu6502.h"
 
+#include <deque>
 #include <string>
 #include <vector>
-#include <deque>
 
 /// A helper class for dumping debug state to stdout.
 class DebugState6502 {
 public:
   /// This callback should be installed in Emu6502 with setDebugStateCB(),
   /// passing the address of DebugState6502 as `ctx`.
-  static Emu6502::StopReason debugStateCB(void *ctx, Emu6502 *emu);
+  static Emu6502::StopReason debugStateCB(void *ctx, Emu6502 *emu, uint16_t pc);
 
   void setBuffering(bool buffering);
   void setMaxHistory(unsigned maxHistory);
@@ -58,7 +58,7 @@ private:
 
 private:
   void addRecord(const InstRecord &rec);
-  Emu6502::StopReason debugState(Emu6502 *emu);
+  Emu6502::StopReason debugState(Emu6502 *emu, uint16_t pc);
 
 private:
   /// Number of instruction to execute.
