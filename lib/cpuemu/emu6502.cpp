@@ -488,6 +488,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
     case 0x00: // BRK
       push16(pc_ + 2);
       push8(status_ | STATUS_B);
+      pc_ = peek16(IRQ_VEC);
       break;
 
     case 0x18: // CLC
