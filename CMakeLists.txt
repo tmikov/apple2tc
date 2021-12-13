@@ -20,3 +20,4 @@ include_directories(${APPLE2TC_INCLUDE_DIR})
 
 add_subdirectory(lib)
 add_subdirectory(tools)
+add_subdirectory(decoded)
