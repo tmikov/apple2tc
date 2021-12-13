@@ -30,17 +30,19 @@ void DebugState6502::clearHistory() {
 }
 
 void DebugState6502::printHistory() {
-  for (const auto &rec : history_)
-    printRecord(rec);
+  for (const auto &rec : history_) {
+    printRecord(rec, true);
+    printf("\n");
+  }
 }
 
 void DebugState6502::addWatch(std::string name, uint16_t addr, uint8_t size) {
-  auto it = std::find_if(
-      watches_.begin(), watches_.end(), [&name](const Watch &w) { return w.name == name; });
+  auto it = std::find_if(watches_.begin(), watches_.end(), [addr, size](const Watch &w) {
+    return w.addr == addr && w.size == size;
+  });
 
   if (it != watches_.end()) {
-    it->addr = addr;
-    it->size = size;
+    it->name = name;
   } else {
     watches_.emplace_back(std::move(name), addr, size);
   }
@@ -61,7 +63,7 @@ Emu6502::StopReason DebugState6502::debugStateCB(void *ctx, Emu6502 *emu, uint16
   return static_cast<DebugState6502 *>(ctx)->debugState(emu, pc);
 }
 
-void DebugState6502::printRecord(const InstRecord &rec) {
+void DebugState6502::printRecord(const InstRecord &rec, bool showInst) {
   auto r = rec.regs;
   // Address.
   {
@@ -76,20 +78,20 @@ void DebugState6502::printRecord(const InstRecord &rec) {
   for (unsigned i = 0; i != 8; ++i)
     putchar((r.status & (0x80 >> i)) ? names[i] : '.');
 
-  // The PC again for convenience.
-  printf(" PC=%04X  ", r.pc);
-
-  // Dump the next instruction.
-  ThreeBytes bytes = rec.bytes;
-  auto inst = decodeInst(r.pc, bytes);
-  auto fmt = formatInst(inst, bytes, apple2SymbolResolver);
-  printf("  %-8s    %s", fmt.bytes, fmt.inst);
-  if (fmt.operand[0]) {
-    printf("  %s", fmt.operand.c_str());
-    if (inst.addrMode == CPUAddrMode::Rel)
-      printf(" (%d)", (int8_t)bytes.d[1]);
+  if (showInst) {
+    // The PC again for convenience.
+    printf(" PC=%04X  ", r.pc);
+    // Dump the next instruction.
+    ThreeBytes bytes = rec.bytes;
+    auto inst = decodeInst(r.pc, bytes);
+    auto fmt = formatInst(inst, bytes, apple2SymbolResolver);
+    printf("  %-8s    %s", fmt.bytes, fmt.inst);
+    if (fmt.operand[0]) {
+      printf("  %s", fmt.operand.c_str());
+      if (inst.addrMode == CPUAddrMode::Rel)
+        printf(" (%d)", (int8_t)bytes.d[1]);
+    }
   }
-  printf("\n");
 }
 
 void DebugState6502::addRecord(const InstRecord &rec) {
@@ -150,20 +152,24 @@ Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu, uint16_t pc) {
     return Emu6502::StopReason::None;
   }
 
-  printRecord(rec);
+  printRecord(rec, watches_.empty());
 
   // Dump watches
-  for (const auto &watch : watches_) {
-    printf("  %-8s", watch.name.c_str());
+  for (unsigned i = 0; i != watches_.size(); ++i) {
+    const auto &watch = watches_[i];
+    putchar(' ');
+    if (!watch.name.empty())
+      printf("%s", watch.name.c_str());
     if (watch.addr < 256)
-      printf("($%02X)  = ", watch.addr);
+      printf("($%02X)=", watch.addr);
     else
-      printf("($%04X)= ", watch.addr);
+      printf("($%04X)=", watch.addr);
     if (watch.size == 1)
-      printf("$%02X (%u)\n", emu->peek(watch.addr), emu->peek(watch.addr));
+      printf("$%02X", emu->ram_peek(watch.addr));
     else
-      printf("$%04X (%u)\n", emu->peek16(watch.addr), emu->peek16(watch.addr));
+      printf("$%04X", emu->ram_peek16(watch.addr));
   }
+  putchar('\n');
 
   return Emu6502::StopReason::None;
 }

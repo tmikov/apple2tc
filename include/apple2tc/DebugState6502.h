@@ -51,6 +51,10 @@ public:
   void addWatch(std::string name, uint16_t addr, uint8_t size);
   /// Remove a watch.
   void removeWatch(const char *name);
+  /// Remove all watches.
+  void clearWatches() {
+    watches_.clear();
+  }
   /// Execution in the following area will not be debugged. The range is
   /// inclusive.
   void addNonDebug(uint16_t from, uint16_t to);
@@ -64,7 +68,8 @@ private:
   };
 
   /// Print a single InstRecord.
-  void printRecord(const InstRecord &rec);
+  /// \param showInst - whether to show the instruction bytes and disassembly.
+  static void printRecord(const InstRecord &rec, bool showInst);
 
 private:
   void addRecord(const InstRecord &rec);
