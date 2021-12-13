@@ -105,6 +105,30 @@ Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu, uint16_t pc) {
       return Emu6502::StopReason::None;
   }
 
+  if (debugBB_) {
+    bool wasBranchTarget = branchTarget_;
+
+    // Determine whether the next instruction is a branch target.
+    CPUOpcode opc = decodeOpcode(emu->ram_peek(pc));
+    switch (opc.kind) {
+    case CPUInstKind::BRK:
+    case CPUInstKind::JMP:
+    case CPUInstKind::JSR:
+    case CPUInstKind::RTI:
+    case CPUInstKind::RTS:
+      branchTarget_ = true;
+      break;
+    default:
+      // Only relative branches use relative address mode.
+      branchTarget_ = opc.addrMode == CPUAddrMode::Rel;
+      break;
+    }
+
+    // If the current instruction was not a branch, leave.
+    if (!wasBranchTarget)
+      return Emu6502::StopReason::None;
+  }
+
   if (limit_ && icount_ >= limit_)
     return Emu6502::StopReason::StopRequesed;
   ++icount_;

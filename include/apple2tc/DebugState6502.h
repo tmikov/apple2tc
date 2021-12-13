@@ -21,6 +21,16 @@ public:
   /// passing the address of DebugState6502 as `ctx`.
   static Emu6502::StopReason debugStateCB(void *ctx, Emu6502 *emu, uint16_t pc);
 
+  /// Enable/disable basic block debugging, where only the instruction at the
+  /// start of every basic block is printed.
+  void setDebugBB(bool on) {
+    // When we turn basic block debugging on for the first time, treat the next
+    // instruction as a branch target so it will get printed.
+    if (!debugBB_ && on)
+      branchTarget_ = true;
+    debugBB_ = true;
+  }
+
   void setBuffering(bool buffering);
   void setMaxHistory(unsigned maxHistory);
   void clearHistory();
@@ -85,4 +95,10 @@ private:
   bool buffering_ = false;
   unsigned maxHistory_ = 16384;
   std::deque<InstRecord> history_{};
+
+  /// When true, we print the instruction at the beginning of every basic block.
+  bool debugBB_ = false;
+  /// Set by every branch instruction so the next one can be treated as a branch
+  /// target.
+  bool branchTarget_ = false;
 };
