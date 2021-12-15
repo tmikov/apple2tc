@@ -4,3 +4,4 @@
 # LICENSE file in the root directory of this source tree.
 
 add_subdirectory(bolo)
+add_subdirectory(rom)
