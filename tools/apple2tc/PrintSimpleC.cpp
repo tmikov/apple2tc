@@ -51,9 +51,9 @@ void Disas::printSimpleC(FILE *f) {
   printSimpleCPrologue(f);
 
   fprintf(f, "\n");
-  fprintf(f, "void run_emulated(void) {\n");
+  fprintf(f, "void run_emulated(unsigned run_cycles) {\n");
   fprintf(f, "  bool branchTarget = true;\n");
-  fprintf(f, "  for(;;) {\n");
+  fprintf(f, "  for(unsigned start_cycles = s_cycles; s_cycles - start_cycles < run_cycles;) {\n");
   fprintf(f, "    uint16_t tmp16;\n");
   fprintf(f, "    uint8_t tmp;\n");
   fprintf(f, "    switch (s_pc) {\n");

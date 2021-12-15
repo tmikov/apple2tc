@@ -178,6 +178,7 @@ int main(int argc, char **argv) {
   set_regs((regs_t){.pc = 0, .a = 0xa0, .x = 0, .y = 1, .sp = 0xf0, .status = STATUS_IGNORED});
 
   init_emulated();
-  run_emulated();
+  for(;;)
+    run_emulated(~0u);
   return 0;
 }

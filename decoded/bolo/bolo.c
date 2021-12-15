@@ -13,9 +13,9 @@ void init_emulated(void) {
   s_pc = 0x10dd;
 }
 
-void run_emulated(void) {
+void run_emulated(unsigned run_cycles) {
   bool branchTarget = true;
-  for(;;) {
+  for(unsigned start_cycles = s_cycles; s_cycles - start_cycles < run_cycles;) {
     uint16_t tmp16;
     uint8_t tmp;
     switch (s_pc) {
