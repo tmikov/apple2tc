@@ -13,9 +13,7 @@
 #include "apple2tc/support.h"
 
 #include "sokol_app.h"
-#if A2EMU_SOUND
 #include "sokol_audio.h"
-#endif
 #include "sokol_gfx.h"
 #include "sokol_glue.h"
 #include "sokol_time.h"
@@ -384,7 +382,6 @@ void A2Emu::frame() {
   sg_commit();
 }
 
-static bool started_ = false;
 void A2Emu::simulateFrame() {
   if (firstFrame_) {
     firstFrame_ = false;
@@ -392,7 +389,6 @@ void A2Emu::simulateFrame() {
   } else {
     double elapsed = stm_sec(curFrameTick_ - lastRunTick_);
     unsigned runCycles = (unsigned)(std::min(elapsed, 0.200) * EmuApple2::CLOCK_FREQ);
-    started_ = true;
     auto stopReason = emu_.runFor(runCycles);
     a2_sound_submit(&sound_, Emu6502::CLOCK_FREQ, saudio_sample_rate(), emu_.getCycles());
     if (stopReason == Emu6502::StopReason::StopRequesed)

@@ -16,8 +16,6 @@ else ()
   set(SOKOL_SRC sokol.c soundqueue.c soundqueue.h)
 endif ()
 
-add_definitions(-DA2EMU_SOUND=1)
-
 link_libraries(d6502 cpuemu a2io support)
 
 add_executable(a2emu a2emu.cpp
