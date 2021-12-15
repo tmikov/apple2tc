@@ -24,11 +24,29 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
+#include <fstream>
+#include <iostream>
 #include <optional>
+
+struct CLIArgs {
+  enum Action {
+    // Just run the specified file.
+    Run,
+    // Run with tracing.
+    Trace,
+    // Collect data for disassembly.
+    Collect,
+  };
+  Action action = Action::Run;
+  unsigned limit = 100000;
+  std::string runPath{};
+  std::string outputPath{};
+};
 
 class A2Emu {
 public:
-  explicit A2Emu(const char *cliPath = "");
+  explicit A2Emu(CLIArgs &&cliArgs);
   ~A2Emu();
 
   void event(const sapp_event *ev);
@@ -56,10 +74,14 @@ private:
   /// Update the GFX image with data from the screen.
   void updateScreenImage();
 
+  /// The CLI command has been activated by pressing F3.
+  void cliCommand();
+  /// Invoked when the simulation returns that stop was requested.
+  void simulationStop();
+
 private:
-  /// File path specified as a command line argument. It will be loaded with
-  /// the F3/F4 key.
-  std::string cliPath_{};
+  CLIArgs cliArgs_;
+  std::optional<CLIArgs::Action> curAction_{};
 
   sg_bindings bind_ = {0};
   sg_pipeline pip_ = {0};
@@ -87,7 +109,7 @@ private:
 
 static A2Emu *s_a2emu = nullptr;
 
-A2Emu::A2Emu(const char *cliPath) : cliPath_(cliPath) {
+A2Emu::A2Emu(CLIArgs &&cliArgs) : cliArgs_(std::move(cliArgs)) {
   initWindow();
 
   dbg_.addDefaultNonDebug();
@@ -173,7 +195,7 @@ A2Emu::~A2Emu() {
 
 /// Load a DOS3.3 binary buffer into emulated RAM.
 /// Return the load address.
-static std::optional<uint16_t> loadBin(EmuApple2 *emu, const uint8_t *data, size_t len) {
+static std::optional<uint16_t> loadB33Buf(EmuApple2 *emu, const uint8_t *data, size_t len) {
   if (len > 4) {
     uint16_t start = data[0] + data[1] * 256;
     if (len - 4 <= 0x10000 - start) {
@@ -182,12 +204,13 @@ static std::optional<uint16_t> loadBin(EmuApple2 *emu, const uint8_t *data, size
       return start;
     }
   }
+  fprintf(stderr, "Invalid b33 format\n");
   return std::nullopt;
 }
 
 /// Start executing from the specified address.
-static void run(EmuApple2 *emu, uint16_t addr) {
-  printf("Executing!\n");
+static void setRegsForRun(EmuApple2 *emu, uint16_t addr) {
+  printf("Executing at $%04X!\n", addr);
   auto r = emu->getRegs();
   r.pc = addr;
   r.status = Emu6502::STATUS_IGNORED;
@@ -195,26 +218,91 @@ static void run(EmuApple2 *emu, uint16_t addr) {
 }
 
 /// Load a DOS3.3 binary into RAM and execute it.
-static void runBin(EmuApple2 *emu, const uint8_t *data, size_t len) {
-  if (auto addr = loadBin(emu, data, len))
-    run(emu, *addr);
+static void runB33(EmuApple2 *emu, const uint8_t *data, size_t len) {
+  if (auto addr = loadB33Buf(emu, data, len))
+    setRegsForRun(emu, *addr);
 }
 
 /// Load a DOS3.3 binary file, where the first 4 bytes are start addr and
 /// length.
-static std::optional<uint16_t> loadBinFile(EmuApple2 *emu, const char *path) {
+static std::optional<uint16_t> loadB33File(EmuApple2 *emu, const char *path) {
   if (FILE *f = fopen(path, "rb")) {
     auto b = readAll<std::vector<uint8_t>>(f);
     fclose(f);
-    return loadBin(emu, b.data(), b.size());
+    return loadB33Buf(emu, b.data(), b.size());
+  } else {
+    perror(path);
   }
   return std::nullopt;
 }
 
 /// Load and run a DOS3.3 binary file.
-static void runBinFile(EmuApple2 *emu, const char *path) {
-  if (auto addr = loadBinFile(emu, path))
-    run(emu, *addr);
+static void runB33File(EmuApple2 *emu, const char *path) {
+  if (auto addr = loadB33File(emu, path))
+    setRegsForRun(emu, *addr);
+}
+
+void A2Emu::cliCommand() {
+  if (curAction_.has_value())
+    return;
+
+  if (cliArgs_.runPath.empty()) {
+    fprintf(stderr, "A path was not supplied to the CLI\n");
+    return;
+  }
+  auto addr = loadB33File(&emu_, cliArgs_.runPath.c_str());
+  if (!addr)
+    return;
+
+  emu_.setDebugFlags(emu_.getDebugFlags() & ~Emu6502::DebugASM);
+  dbg_.reset();
+
+  setRegsForRun(&emu_, *addr);
+
+  switch (cliArgs_.action) {
+  case CLIArgs::Run:
+    break;
+  case CLIArgs::Trace:
+    emu_.addDebugFlags(Emu6502::DebugASM);
+    dbg_.setDebugBB(true);
+    dbg_.setLimit(cliArgs_.limit);
+    break;
+  case CLIArgs::Collect:
+    emu_.addDebugFlags(Emu6502::DebugASM);
+    dbg_.setCollect(true);
+    dbg_.setLimit(cliArgs_.limit);
+    break;
+  }
+
+  curAction_ = cliArgs_.action;
+}
+
+void A2Emu::simulationStop() {
+  if (!curAction_.has_value()) {
+    // Not clear why and whether this might happen, but to be safe do nothing.
+    return;
+  }
+
+  fprintf(stderr, "Command completed\n");
+
+  if (*curAction_ == CLIArgs::Action::Collect) {
+    fflush(stdout);
+    std::ostream *os;
+    std::ofstream of;
+    if (!cliArgs_.outputPath.empty()) {
+      of.open(cliArgs_.outputPath, std::ios_base::out);
+      os = &of;
+    } else {
+      os = &std::cout;
+    }
+    dbg_.finishCollection(*os);
+    os->flush();
+  }
+
+  emu_.setDebugFlags(emu_.getDebugFlags() & ~Emu6502::DebugASM);
+  dbg_.reset();
+
+  curAction_.reset();
 }
 
 #include "bolo.h"
@@ -235,32 +323,14 @@ void A2Emu::event(const sapp_event *ev) {
   } else if (ev->type == SAPP_EVENTTYPE_KEY_DOWN) {
     switch (ev->key_code) {
     case SAPP_KEYCODE_F1:
-      runBin(&emu_, bolo_bin, bolo_bin_len);
+      runB33(&emu_, bolo_bin, bolo_bin_len);
       break;
     case SAPP_KEYCODE_F2:
-      runBin(&emu_, robotron2084_bin, robotron2084_bin_len);
+      runB33(&emu_, robotron2084_bin, robotron2084_bin_len);
       break;
     case SAPP_KEYCODE_F3:
-    case SAPP_KEYCODE_F4:
-      if (cliPath_.empty()) {
-        fprintf(stderr, "F3/F4 pressed but a path was not supplied to the CLI\n");
-      } else {
-        if (auto addr = loadBinFile(&emu_, cliPath_.c_str())) {
-          run(&emu_, *addr);
-          if (ev->key_code == SAPP_KEYCODE_F3) {
-            emu_.addDebugFlags(Emu6502::DebugASM);
-            dbg_.setDebugBB(true);
-          } else {
-            emu_.setDebugFlags(emu_.getDebugFlags() & ~Emu6502::DebugASM);
-            dbg_.setDebugBB(false);
-            dbg_.clearWatches();
-          }
-        } else {
-          perror(cliPath_.c_str());
-        }
-      }
+      cliCommand();
       break;
-
     case SAPP_KEYCODE_DELETE:
     case SAPP_KEYCODE_BACKSPACE:
     case SAPP_KEYCODE_LEFT:
@@ -324,9 +394,9 @@ void A2Emu::simulateFrame() {
     unsigned runCycles = (unsigned)(std::min(elapsed, 0.200) * EmuApple2::CLOCK_FREQ);
     started_ = true;
     auto stopReason = emu_.runFor(runCycles);
-    if (stopReason == Emu6502::StopReason::StopRequesed)
-      exit(1);
     a2_sound_submit(&sound_, Emu6502::CLOCK_FREQ, saudio_sample_rate(), emu_.getCycles());
+    if (stopReason == Emu6502::StopReason::StopRequesed)
+      simulationStop();
   }
   lastRunTick_ = curFrameTick_;
 }
@@ -409,14 +479,74 @@ void A2Emu::printDB(uint16_t startAddr) {
   // s_curAddr = addr;
 }
 
+static const char *s_argv0 = "a2emu";
+static void printHelp() {
+  printf("syntax: %s [options] [inputFile [outputFile]]\n", s_argv0);
+  printf(" --help           This help\n");
+  printf(" --run            Run the binary\n");
+  printf(" --trace          Trace the binary\n");
+  printf(" --collect        Collect data from running and write to outputFile or stdout\n");
+  printf(" --limit=number   Number of basic blocks to trace/collect\n");
+}
+
+static CLIArgs parseCLI(int argc, char **argv) {
+  s_argv0 = argc ? argv[0] : "a2emu";
+  CLIArgs cliArgs{};
+  for (int i = 1; i != argc; ++i) {
+    char *arg = argv[i];
+    if (strcmp(arg, "--help") == 0) {
+      printHelp();
+      exit(0);
+    }
+    if (strcmp(arg, "--run") == 0) {
+      cliArgs.action = CLIArgs::Action::Run;
+      continue;
+    }
+    if (strcmp(arg, "--trace") == 0) {
+      cliArgs.action = CLIArgs::Action::Trace;
+      continue;
+    }
+    if (strcmp(arg, "--collect") == 0) {
+      cliArgs.action = CLIArgs::Action::Collect;
+      continue;
+    }
+    if (strncmp(arg, "--limit=", 8) == 0) {
+      auto cr = std::from_chars(arg + 8, strchr(arg, 0), cliArgs.limit);
+      if (*cr.ptr || cr.ec != std::errc()) {
+        fprintf(stderr, "Invalid number in '%s'\n", arg);
+        printHelp();
+        exit(1);
+      }
+      continue;
+    }
+    if (arg[0] == '-') {
+      fprintf(stderr, "Invalid option '%s'\n", arg);
+      printHelp();
+      exit(1);
+    }
+    if (cliArgs.runPath.empty()) {
+      cliArgs.runPath = arg;
+      continue;
+    }
+    if (cliArgs.outputPath.empty()) {
+      cliArgs.outputPath = arg;
+      continue;
+    }
+    fprintf(stderr, "Extra command line argument '%s'\n", arg);
+    printHelp();
+    exit(1);
+  }
+
+  return cliArgs;
+}
+
 sapp_desc sokol_main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
-  static int s_argc = argc;
-  static char **s_argv = argv;
+  static CLIArgs s_cliArgs = parseCLI(argc, argv);
 
   return (sapp_desc){
-      .init_cb = []() { s_a2emu = new A2Emu(s_argc > 1 ? s_argv[1] : ""); },
+      .init_cb = []() { s_a2emu = new A2Emu(std::move(s_cliArgs)); },
       .frame_cb =
           []() {
             if (s_a2emu)

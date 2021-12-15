@@ -11,7 +11,9 @@
 #include "apple2tc/emu6502.h"
 
 #include <deque>
+#include <ostream>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 /// A helper class for dumping debug state to stdout.
@@ -21,6 +23,21 @@ public:
   /// passing the address of DebugState6502 as `ctx`.
   static Emu6502::StopReason debugStateCB(void *ctx, Emu6502 *emu, uint16_t pc);
 
+  /// Reset all debugging.
+  void reset();
+
+  /// Reset all collected data.
+  void resetCollectedData();
+
+  /// Enable/disable data collection for disassembler.
+  void setCollect(bool on) {
+    collect_ = on;
+    setDebugBB(on);
+  }
+
+  /// Record the collected data as JSON to a stream.
+  void finishCollection(std::ostream &os);
+
   /// Enable/disable basic block debugging, where only the instruction at the
   /// start of every basic block is printed.
   void setDebugBB(bool on) {
@@ -28,7 +45,7 @@ public:
     // instruction as a branch target so it will get printed.
     if (!debugBB_ && on)
       branchTarget_ = true;
-    debugBB_ = true;
+    debugBB_ = on;
   }
 
   void setBuffering(bool buffering);
@@ -106,4 +123,10 @@ private:
   /// Set by every branch instruction so the next one can be treated as a branch
   /// target.
   bool branchTarget_ = false;
+
+  /// When true, collect data for the disassembler.
+  bool collect_ = false;
+
+  /// Collected branch targets.
+  std::unordered_set<uint16_t> branchTargets_{};
 };

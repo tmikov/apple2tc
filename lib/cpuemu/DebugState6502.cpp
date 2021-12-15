@@ -9,6 +9,21 @@
 
 #include "apple2tc/a2symbols.h"
 
+/// Reset all debugging.
+void DebugState6502::reset() {
+  setCollect(false);
+  setDebugBB(false);
+  setBuffering(false);
+  setLimit(0);
+  clearHistory();
+  clearWatches();
+  resetCollectedData();
+}
+
+void DebugState6502::resetCollectedData() {
+  branchTargets_.clear();
+}
+
 void DebugState6502::setBuffering(bool buffering) {
   if (!buffering && buffering_) {
     history_.clear();
@@ -107,9 +122,8 @@ Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu, uint16_t pc) {
       return Emu6502::StopReason::None;
   }
 
+  bool wasBranchTarget = branchTarget_;
   if (debugBB_) {
-    bool wasBranchTarget = branchTarget_;
-
     // Determine whether the next instruction is a branch target.
     CPUOpcode opc = decodeOpcode(emu->ram_peek(pc));
     switch (opc.kind) {
@@ -135,6 +149,12 @@ Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu, uint16_t pc) {
     return Emu6502::StopReason::StopRequesed;
   ++icount_;
 
+  if (collect_) {
+    if (wasBranchTarget)
+      branchTargets_.insert(pc);
+    return Emu6502::StopReason::None;
+  }
+
   Emu6502::Regs r = emu->getRegs();
   InstRecord rec = {.regs = r};
   for (unsigned i = 0; i != 3; ++i)
@@ -155,8 +175,7 @@ Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu, uint16_t pc) {
   printRecord(rec, watches_.empty());
 
   // Dump watches
-  for (unsigned i = 0; i != watches_.size(); ++i) {
-    const auto &watch = watches_[i];
+  for (const auto &watch : watches_) {
     putchar(' ');
     if (!watch.name.empty())
       printf("%s", watch.name.c_str());
