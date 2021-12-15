@@ -4,5 +4,5 @@
 # LICENSE file in the root directory of this source tree.
 
 add_executable(bolo
-  main.c system.h
-  bolo.c system-inc.h)
+  main.c ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
+  bolo.c)

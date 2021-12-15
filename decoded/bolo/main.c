@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "system.h"
+#include "apple2tc/system.h"
 
 #include "apple2tc/apple2iodefs.h"
 

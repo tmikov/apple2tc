@@ -4,7 +4,7 @@
 // code labels: 1413
 // data labels: 399
 
-#include "system-inc.h"
+#include "apple2tc/system-inc.h"
 
 static const uint8_t s_mem_10dd[0x8f06];
 

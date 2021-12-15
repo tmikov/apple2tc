@@ -13,7 +13,7 @@
 #include <cmath>
 
 void Disas::printSimpleCPrologue(FILE *f) {
-  fprintf(f, "\n#include \"system-inc.h\"\n\n");
+  fprintf(f, "\n#include \"apple2tc/system-inc.h\"\n\n");
 
   for (auto const &mr : memRanges_) {
     unsigned len = mr.to - mr.from + 1;

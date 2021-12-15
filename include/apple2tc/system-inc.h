@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "system.h"
+#include "apple2tc/system.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -55,6 +55,9 @@ unsigned get_cycles(void) {
   return s_cycles;
 }
 
+const uint8_t * get_ram(void) {
+  return s_ram;
+}
 uint8_t ram_peek(uint16_t addr) {
   return s_ram[addr];
 }
@@ -78,10 +81,13 @@ static uint8_t peek(uint16_t addr) {
   return s_ram[addr];
 }
 static inline void poke(uint16_t addr, uint8_t value) {
-  if (addr >= 0xC000 && addr <= 0xCFFF)
-    io_poke(addr, value);
-  else
+  if (addr < 0xC000) {
     s_ram[addr] = value;
+  } else if (addr <= 0xCFFF) {
+    io_poke(addr, value);
+  } else {
+    // Ignore writes to ROM.
+  }
 }
 static uint16_t peek16(uint16_t addr) {
   return peek(addr) + (peek(addr + 1) << 8);
