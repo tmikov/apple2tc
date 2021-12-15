@@ -70,3 +70,22 @@
 /// [R/W] SETAN3: * Set AN3: Toggle ON (+5VDC)
 #define A2_AN3ON 0xC05F
 
+#define A2_CLOCK_FREQ 1023000
+
+/// TXTTAB Applesoft Start of Program Pointer (2B).
+#define A2_TXTTAB 0x67
+/// PRGEND Applesoft End of Program Pointer (2B).
+#define A2_PRGEND 0xAF
+
+#define A2_TXT1SCRN 0x0400
+#define A2_TXT2SCRN 0x0800
+#define A2_HGR1SCRN 0x2000
+#define A2_HGR2SCRN 0x4000
+
+/// Enqueue a new key press.
+/// IO space range.
+///
+/// In the future we may want to support dynamic callbacks per page, and
+/// register device behavior, etc, but for now this is sufficient.
+#define A2_IO_RANGE_START 0xC000
+#define A2_IO_RANGE_END 0xCFFF
