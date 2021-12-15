@@ -73,7 +73,10 @@ private:
   void updateScreenImage();
 
   /// The CLI command has been activated by pressing F3.
-  void cliCommand();
+  void onCLICommand();
+  /// Actually perform the command once the binary is in memory and regs are
+  /// setup.
+  void cliCommandApply();
   /// Invoked when the simulation returns that stop was requested.
   void simulationStop();
 
@@ -133,6 +136,13 @@ A2Emu::A2Emu(CLIArgs &&cliArgs) : cliArgs_(std::move(cliArgs)) {
   emu_.loadROM(apple2plus_rom, apple2plus_rom_len);
 
   stm_setup();
+
+  if (cliArgs_.action != CLIArgs::Run) {
+    curAction_ = cliArgs_.action;
+    // When tracing the ROM we don't want to miss anything.
+    dbg_.clearNonDebug();
+    cliCommandApply();
+  }
 }
 
 void A2Emu::initWindow() {
@@ -240,7 +250,7 @@ static void runB33File(EmuApple2 *emu, const char *path) {
     setRegsForRun(emu, *addr);
 }
 
-void A2Emu::cliCommand() {
+void A2Emu::onCLICommand() {
   if (curAction_.has_value())
     return;
 
@@ -252,10 +262,12 @@ void A2Emu::cliCommand() {
   if (!addr)
     return;
 
+  setRegsForRun(&emu_, *addr);
+}
+
+void A2Emu::cliCommandApply() {
   emu_.setDebugFlags(emu_.getDebugFlags() & ~Emu6502::DebugASM);
   dbg_.reset();
-
-  setRegsForRun(&emu_, *addr);
 
   switch (cliArgs_.action) {
   case CLIArgs::Run:
@@ -327,7 +339,7 @@ void A2Emu::event(const sapp_event *ev) {
       runB33(&emu_, robotron2084_bin, robotron2084_bin_len);
       break;
     case SAPP_KEYCODE_F3:
-      cliCommand();
+      onCLICommand();
       break;
     case SAPP_KEYCODE_DELETE:
     case SAPP_KEYCODE_BACKSPACE:

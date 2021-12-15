@@ -59,6 +59,10 @@ public:
     addNonDebug(0xFD0C, 0xFD3C); // Keyboard
   }
 
+  void clearNonDebug() {
+    nonDebug_.clear();
+  }
+
   /// Set maximum number of instructions to execute. 0 means unlimited.
   void setLimit(unsigned limit) {
     limit_ = limit;
