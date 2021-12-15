@@ -62,9 +62,16 @@ struct MemRange : public Range {
   MemRange(uint16_t from, uint16_t to, bool writable) : Range(from, to), writable(writable) {}
 };
 
+struct RuntimeData {
+  /// All branch targets seen at runtime, sorted by address.
+  std::vector<uint16_t> branchTargets;
+
+  static std::unique_ptr<RuntimeData> load(const std::string &path);
+};
+
 class Disas {
 public:
-  explicit Disas();
+  explicit Disas(std::string runDataPath);
 
   void loadBinary(uint16_t addr, const uint8_t *data, size_t len);
   void loadROM(const uint8_t *data, size_t len);
@@ -87,10 +94,12 @@ private:
 
   std::set<Range, CompareRange>::iterator findCodeRange(uint16_t addr);
   void addCodeRange(Range range);
-  void addLabel(uint16_t target, uint16_t comingFrom);
+  /// Add a new label with an optional xref.
+  /// \return true if this is a new code range and the label was added to the work list.
+  bool addLabel(uint16_t target, std::optional<uint16_t> comingFrom);
   void addImplicitLabel(uint16_t addr);
 
-  void identifyCodeRanges(uint16_t start);
+  void identifyCodeRanges();
 
   void printAsmCodeRange(Range r);
   void printAsmDataRange(Range r);
@@ -102,7 +111,6 @@ private:
   static const char *simpleCReadOp(CPUInst inst);
   static const char *simpleCWriteOp(CPUInst inst);
   std::string simpleCAddr(CPUInst inst) const;
-
 private:
   /// Current PC in simple C mode.
   uint16_t scPC_ = 0;
@@ -110,16 +118,25 @@ private:
   bool scSelfModOperand_ = false;
 
 private:
+  /// Optional path to a JSON file with runtime data.
+  std::string runDataPath_;
+
+  /// Optional runtimt execution data.
+  std::unique_ptr<RuntimeData> runData_;
+
   /// Whether to name labels by their address or their order of definition.
   bool labelsByAddr_ = true;
   std::vector<MemRange> memRanges_{};
 
   struct LabelDesc {
     char name[8];
-    bool implicit = false;
     std::set<uint16_t> comingFrom{};
 
     LabelDesc() {name[0] = 0;}
+
+    bool implicit() const {
+      return comingFrom.empty();
+    }
   };
 
   uint16_t start_ = 0;

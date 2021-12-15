@@ -82,7 +82,7 @@ void Disas::printSimpleC(FILE *f) {
 
   fprintf(f, "    default:\n");
   fprintf(f, "      fprintf(stderr, \"Unknown code address: $%%04X\\n\", s_pc);\n");
-  fprintf(f, "      abort();\n");
+  fprintf(f, "      error_handler(s_pc);\n");
   fprintf(f, "    }\n");
   fprintf(f, "  }\n");
   fprintf(f, "}\n");
@@ -570,7 +570,12 @@ std::string Disas::simpleCAddr(CPUInst inst) const {
       snprintf(buf, sizeof(buf), "peek16_zpg(ram_peek(0x%04x)) + s_y", scPC_ + 1);
       break;
     case CPUAddrMode::Rel:
-      snprintf(buf, sizeof(buf), "(uint16_t)(0x%04x + (int8_t)ram_peek(0x%04x))", (uint16_t)(scPC_ + 2), scPC_ + 1);
+      snprintf(
+          buf,
+          sizeof(buf),
+          "(uint16_t)(0x%04x + (int8_t)ram_peek(0x%04x))",
+          (uint16_t)(scPC_ + 2),
+          scPC_ + 1);
       break;
     case CPUAddrMode::Zpg:
       snprintf(buf, sizeof(buf), "ram_peek(0x%04x)", scPC_ + 1);

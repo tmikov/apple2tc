@@ -43,9 +43,10 @@ static std::tuple<std::vector<uint8_t>, uint16_t> loadInputBinary(const char *in
 
 static const char *s_appPath;
 static void printHelp() {
-  fprintf(stderr, "syntax: %s [--asm] [--simple-c] input_file\n", s_appPath);
-  fprintf(stderr, "  --asm        Generate asm listing\n");
-  fprintf(stderr, "  --simple-c   Generate simple C code\n");
+  fprintf(stderr, "syntax: %s [options] input_file\n", s_appPath);
+  fprintf(stderr, "  --asm               Generate asm listing (default)\n");
+  fprintf(stderr, "  --simple-c          Generate simple C code\n");
+  fprintf(stderr, "  --run-data=d.json   Load runtime data from specified file\n");
 }
 
 int main(int argc, char **argv) {
@@ -57,6 +58,7 @@ int main(int argc, char **argv) {
   s_appPath = argc ? argv[0] : "a2tc";
 
   std::string inputPath;
+  std::string runDataPath;
   for (int i = 1; i < argc; ++i) {
     if (strcmp(argv[i], "--asm") == 0) {
       action = Action::GenAsm;
@@ -64,6 +66,10 @@ int main(int argc, char **argv) {
     }
     if (strcmp(argv[i], "--simple-c") == 0) {
       action = Action::GenSimpleC;
+      continue;
+    }
+    if (strncmp(argv[i], "--run-data=", 11) == 0) {
+      runDataPath = argv[i]+11;
       continue;
     }
     if (argv[i][0] == '-') {
@@ -91,7 +97,7 @@ int main(int argc, char **argv) {
   auto [binary, start] = loadInputBinary(inputPath.c_str());
 
   try {
-    auto dis = std::make_unique<Disas>();
+    auto dis = std::make_unique<Disas>(runDataPath);
     dis->loadBinary(start, binary.data(), binary.size());
     dis->run(start);
     switch (action) {

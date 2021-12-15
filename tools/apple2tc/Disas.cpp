@@ -8,12 +8,13 @@
 #include "Disas.h"
 
 #include <stdexcept>
+#include <utility>
 
 Range intersect(const Range &a, const Range &b) {
   return {std::max(a.from, b.from), std::min(a.to, b.to)};
 }
 
-Disas::Disas() {
+Disas::Disas(std::string runDataPath) : runDataPath_(std::move(runDataPath)) {
   memset(memory_, 0xFF, sizeof(memory_));
 }
 
@@ -100,26 +101,25 @@ void Disas::addCodeRange(Range range) {
 }
 
 // Add a branch target to the work queue, if it is new.
-void Disas::addLabel(uint16_t target, uint16_t comingFrom) {
+bool Disas::addLabel(uint16_t target, std::optional<uint16_t> comingFrom) {
   auto res = codeLabels_.try_emplace(target);
-  res.first->second.comingFrom.insert(comingFrom);
-  res.first->second.implicit = false;
+  if (comingFrom.has_value())
+    res.first->second.comingFrom.insert(*comingFrom);
   if (!res.second)
-    return;
+    return false;
   if (findCodeRange(target) != codeRanges_.end())
-    return;
+    return false;
   work_.push_back(target);
+  return true;
 };
 
 void Disas::addImplicitLabel(uint16_t addr) {
   auto res = codeLabels_.try_emplace(addr);
   if (!res.second)
     return;
-  res.first->second.implicit = true;
 }
 
-void Disas::identifyCodeRanges(uint16_t start) {
-  addLabel(start, start);
+void Disas::identifyCodeRanges() {
   while (!work_.empty()) {
     uint16_t const target = work_.front();
     work_.pop_front();
@@ -186,7 +186,7 @@ static bool instWritesMemNormal(CPUInstKind kind, CPUAddrMode am) {
   case CPUInstKind::STX:
   case CPUInstKind::STY:
     return true;
-    
+
   default:
     return false;
   }
@@ -225,7 +225,20 @@ static bool operandIsIndexed(CPUAddrMode am) {
 }
 
 void Disas::run(uint16_t start) {
-  identifyCodeRanges(start);
+  addLabel(start, start);
+  identifyCodeRanges();
+
+  if (!runDataPath_.empty()) {
+    runData_ = RuntimeData::load(runDataPath_);
+    unsigned newLabelCount = 0;
+    for (auto addr : runData_->branchTargets) {
+      newLabelCount += addLabel(addr, std::nullopt);
+    }
+    if (newLabelCount)
+      printf("// %u new runtime labels added\n", newLabelCount);
+    // Identify additional code ranges.
+    identifyCodeRanges();
+  }
 
   // Collect all data labels.
   for (auto r : codeRanges_) {
@@ -243,7 +256,8 @@ void Disas::run(uint16_t start) {
           }
         }
 
-        if (!(inst.operand >= 0xC000 && inst.operand <= 0xCFFF) && !codeLabels_.count(inst.operand)) {
+        if (!(inst.operand >= 0xC000 && inst.operand <= 0xCFFF) &&
+            !codeLabels_.count(inst.operand)) {
           dataLabels_[inst.operand].comingFrom.insert(addr);
         }
       }
@@ -264,7 +278,7 @@ void Disas::printAsmListing() {
   for (auto &l : codeLabels_) {
     if (labelsByAddr_)
       snprintf(l.second.name, sizeof(l.second.name), "L_%04X", l.first);
-    else if (!l.second.implicit)
+    else if (!l.second.implicit())
       snprintf(l.second.name, sizeof(l.second.name), "L_%04u", ++labelNumber);
   }
   labelNumber = 0;
@@ -274,7 +288,7 @@ void Disas::printAsmListing() {
         snprintf(l.second.name, sizeof(l.second.name), "M_%02X", l.first);
       else
         snprintf(l.second.name, sizeof(l.second.name), "M_%04X", l.first);
-    } else if (!l.second.implicit)
+    } else if (!l.second.implicit())
       snprintf(l.second.name, sizeof(l.second.name), "M_%04u", ++labelNumber);
   }
 
@@ -313,10 +327,12 @@ void Disas::printAsmCodeRange(Range r) {
   for (uint16_t addr = r.from; addr - 1 != r.to;) {
     ThreeBytes bytes = peek3(addr);
     CPUInst inst = decodeInst(addr, bytes);
+    if (inst.isInvalid())
+      printf("; ERROR: Invalid instruction\n");
 
     if (selfModifers_.count(addr))
       printf("; WARNING: Instruction performs code modification\n");
-    for(unsigned i = 0, e = cpuInstSize(inst.addrMode); i != e; ++i) {
+    for (unsigned i = 0, e = cpuInstSize(inst.addrMode); i != e; ++i) {
       auto it = selfModified_.find((uint16_t)(addr + i));
       if (it != selfModified_.end())
         printf("; WARNING: Instruction byte %u %s modified\n", i, it->second ? "is" : "may be");
@@ -325,7 +341,7 @@ void Disas::printAsmCodeRange(Range r) {
     printf("/*%04X*/ ", addr);
 
     auto label = codeLabels_.find(addr);
-    if (label != codeLabels_.end() && !label->second.implicit) {
+    if (label != codeLabels_.end() && !label->second.implicit()) {
       printf("%s:                  ; xref", label->second.name);
       for (auto from : label->second.comingFrom)
         printf(" $%04X", from);
