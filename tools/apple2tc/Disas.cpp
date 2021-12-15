@@ -25,8 +25,6 @@ void Disas::loadBinary(uint16_t addr, const uint8_t *data, size_t len) {
     throw std::range_error("binary is too large");
   addMemRange(MemRange(addr, (uint16_t)(addr + len - 1), true));
   memcpy(memory_ + addr, data, len);
-  if (start_ == 0)
-    start_ = addr;
 
   printf("// Loaded binary at [$%04X..$%04X]\n", addr, (uint16_t)(addr + len - 1));
 }
@@ -38,6 +36,7 @@ void Disas::loadROM(const uint8_t *data, size_t len) {
     throw std::range_error("ROM is too large");
   uint16_t start = 0x10000 - len;
   addMemRange(MemRange(start, 0xFFFF, false));
+  memcpy(memory_ + start, data, len);
 }
 
 void Disas::addMemRange(MemRange range) {
@@ -101,10 +100,12 @@ void Disas::addCodeRange(Range range) {
 }
 
 // Add a branch target to the work queue, if it is new.
-bool Disas::addLabel(uint16_t target, std::optional<uint16_t> comingFrom) {
+bool Disas::addLabel(uint16_t target, std::optional<uint16_t> comingFrom, const char *name) {
   auto res = codeLabels_.try_emplace(target);
   if (comingFrom.has_value())
     res.first->second.comingFrom.insert(*comingFrom);
+  if (name && !res.first->second.name[0])
+    snprintf(res.first->second.name, sizeof(res.first->second.name), "%s", name);
   if (!res.second)
     return false;
   if (findCodeRange(target) != codeRanges_.end())
@@ -224,8 +225,10 @@ static bool operandIsIndexed(CPUAddrMode am) {
   }
 }
 
-void Disas::run(uint16_t start) {
-  addLabel(start, start);
+void Disas::run() {
+  if (!start_.has_value())
+    throw std::logic_error("starting address not set");
+  addLabel(*start_, *start_, "START");
   identifyCodeRanges();
 
   if (!runDataPath_.empty()) {
@@ -276,6 +279,8 @@ void Disas::printAsmListing() {
   // Name all labels by address.
   unsigned labelNumber = 0;
   for (auto &l : codeLabels_) {
+    if (l.second.name[0])
+      continue;
     if (labelsByAddr_)
       snprintf(l.second.name, sizeof(l.second.name), "L_%04X", l.first);
     else if (!l.second.implicit())
@@ -283,6 +288,8 @@ void Disas::printAsmListing() {
   }
   labelNumber = 0;
   for (auto &l : dataLabels_) {
+    if (l.second.name[0])
+      continue;
     if (labelsByAddr_) {
       if (l.first < 0x100)
         snprintf(l.second.name, sizeof(l.second.name), "M_%02X", l.first);
@@ -377,7 +384,7 @@ void Disas::printAsmDataRange(Range r) {
     if (!cross.empty()) {
       printf("; Data range [$%04x-$%04X]\n", cross.from, cross.to);
 
-      for (uint16_t addr = cross.from; addr - 1 != cross.to; ++addr) {
+      for (uint16_t addr = cross.from; (uint16_t)(addr - 1) != cross.to; ++addr) {
         printf("/*%04X*/ ", addr);
 
         auto label = dataLabels_.find(addr);

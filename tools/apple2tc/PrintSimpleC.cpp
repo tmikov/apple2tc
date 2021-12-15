@@ -25,7 +25,7 @@ void Disas::printSimpleCPrologue(FILE *f) {
     unsigned len = mr.to - mr.from + 1;
     fprintf(f, "  memcpy(s_ram + 0x%04x, s_mem_%04x, 0x%04x);\n", mr.from, mr.from, len);
   }
-  fprintf(f, "  s_pc = 0x%04x;\n", start_);
+  fprintf(f, "  s_pc = 0x%04x;\n", *start_);
   fprintf(f, "}\n");
 }
 

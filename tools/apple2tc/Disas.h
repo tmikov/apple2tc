@@ -12,8 +12,8 @@
 #include <deque>
 #include <map>
 #include <set>
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 struct Range {
@@ -76,12 +76,22 @@ public:
   void loadBinary(uint16_t addr, const uint8_t *data, size_t len);
   void loadROM(const uint8_t *data, size_t len);
 
-  void run(uint16_t start);
+  [[nodiscard]] std::optional<uint16_t> getStart() const {
+    return start_;
+  }
+  void setStart(uint16_t start) {
+    start_ = start;
+  }
+
+  void run();
   void printAsmListing();
   void printSimpleC(FILE *f);
 
   uint8_t peek(uint16_t addr) {
     return memory_[addr];
+  }
+  uint16_t peek16(uint16_t addr) {
+    return peek(addr) + peek(addr + 1) * 256;
   }
   ThreeBytes peek3(uint16_t addr) {
     return {{peek(addr), peek(addr + 1), peek(addr + 2)}};
@@ -96,7 +106,7 @@ private:
   void addCodeRange(Range range);
   /// Add a new label with an optional xref.
   /// \return true if this is a new code range and the label was added to the work list.
-  bool addLabel(uint16_t target, std::optional<uint16_t> comingFrom);
+  bool addLabel(uint16_t target, std::optional<uint16_t> comingFrom, const char *name = nullptr);
   void addImplicitLabel(uint16_t addr);
 
   void identifyCodeRanges();
@@ -111,6 +121,7 @@ private:
   static const char *simpleCReadOp(CPUInst inst);
   static const char *simpleCWriteOp(CPUInst inst);
   std::string simpleCAddr(CPUInst inst) const;
+
 private:
   /// Current PC in simple C mode.
   uint16_t scPC_ = 0;
@@ -132,14 +143,16 @@ private:
     char name[8];
     std::set<uint16_t> comingFrom{};
 
-    LabelDesc() {name[0] = 0;}
+    LabelDesc() {
+      name[0] = 0;
+    }
 
     bool implicit() const {
       return comingFrom.empty();
     }
   };
 
-  uint16_t start_ = 0;
+  std::optional<uint16_t> start_{};
   std::set<Range, CompareRange> codeRanges_{};
   /// NOTE: we rely in the labels being sorted by address.
   std::map<uint16_t, LabelDesc> codeLabels_{};
