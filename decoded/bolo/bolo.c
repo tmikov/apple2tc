@@ -1,7 +1,8 @@
 // Loaded binary at [$10DD..$9FE2]
-// ranges: 24
-// code labels: 1336
-// data labels: 383
+// 71 new runtime labels added
+// ranges: 35
+// code labels: 1413
+// data labels: 399
 
 #include "system-inc.h"
 
@@ -28,6 +29,36 @@ void run_emulated(void) {
       CYCLES(0x03e8, 2);
       // ERROR: opcode self modification.
       /* $03E8 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x03e8);
+                      abort();
+
+    case 0x0cee: // [$0CEE..$0CEE]    1 bytes
+      CYCLES(0x0cee, 2);
+      /* $0CEE ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0cee);
+                      abort();
+
+    case 0x0d4b: // [$0D4B..$0D4B]    1 bytes
+      CYCLES(0x0d4b, 2);
+      /* $0D4B ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0d4b);
+                      abort();
+
+    case 0x0dbd: // [$0DBD..$0DBD]    1 bytes
+      CYCLES(0x0dbd, 2);
+      /* $0DBD ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0dbd);
+                      abort();
+
+    case 0x0e2f: // [$0E2F..$0E2F]    1 bytes
+      CYCLES(0x0e2f, 2);
+      /* $0E2F ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0e2f);
+                      abort();
+
+    case 0x0ea1: // [$0EA1..$0EA1]    1 bytes
+      CYCLES(0x0ea1, 2);
+      /* $0EA1 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0ea1);
+                      abort();
+
+    case 0x0f13: // [$0F13..$0F13]    1 bytes
+      CYCLES(0x0f13, 2);
+      /* $0F13 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0f13);
                       abort();
 
     case 0x10dd: // [$10DD..$10FF]   35 bytes
@@ -4648,6 +4679,48 @@ void run_emulated(void) {
       /* $6C19 RTS */ s_pc = pop16() + 1;
       branchTarget = true;
       break;
+    case 0x6c1a: // [$6C1A..$6C25]   12 bytes
+      CYCLES(0x6c1a, 21);
+      /* $6C1A STA */ poke_zpg(0x81, s_a);
+      /* $6C1C LDA */ s_a = update_nz(peek_zpg(0xea));
+      /* $6C1E PHA */ push8(s_a);
+      /* $6C1F LDX */ s_x = update_nz(0x00);
+      /* $6C21 ASL */ s_a = update_nzc(s_a << 1);
+      /* $6C22 STX */ poke_zpg(0xea, s_x);
+      /* $6C24 BPL */ s_pc = !(s_status & STATUS_N) ? 0x6c36 : 0x6c26;
+      branchTarget = true;
+      break;
+    case 0x6c26: // [$6C26..$6C2C]    7 bytes
+      CYCLES(0x6c26, 12);
+      /* $6C26 LDX */ s_x = update_nz(peek_zpg(0xec));
+      /* $6C28 INX */ s_x = update_nz(s_x + 1);
+      /* $6C29 CPX */ update_nz_inv_c(s_x - 0x1d);
+      /* $6C2B BCS */ s_pc = s_status & STATUS_C ? 0x6c36 : 0x6c2d;
+      branchTarget = true;
+      break;
+    case 0x6c2d: // [$6C2D..$6C33]    7 bytes
+      CYCLES(0x6c2d, 12);
+      /* $6C2D STX */ poke_zpg(0xec, s_x);
+      /* $6C2F LDA */ s_a = update_nz(peek_zpg(0x81));
+      /* $6C31 JSR */ push16(0x6c33), s_pc = 0x95cc;
+      branchTarget = true;
+      break;
+    case 0x6c34: // [$6C34..$6C35]    2 bytes
+      CYCLES(0x6c34, 4);
+      /* $6C34 DEC */ tmp16 = 0xec, poke_zpg(tmp16, update_nz(peek_zpg(tmp16) - 1));
+    case 0x6c36: // [$6C36..$6C3A]    5 bytes
+      CYCLES(0x6c36, 9);
+      /* $6C36 LDA */ s_a = update_nz(peek_zpg(0x81));
+      /* $6C38 JSR */ push16(0x6c3a), s_pc = 0x95cc;
+      branchTarget = true;
+      break;
+    case 0x6c3b: // [$6C3B..$6C3E]    4 bytes
+      CYCLES(0x6c3b, 7);
+      /* $6C3B PLA */ s_a = update_nz(pop8());
+      /* $6C3C STA */ poke_zpg(0xea, s_a);
+      /* $6C3E RTS */ s_pc = pop16() + 1;
+      branchTarget = true;
+      break;
     case 0x6c3f: // [$6C3F..$6C42]    4 bytes
       CYCLES(0x6c3f, 7);
       /* $6C3F LDA */ s_a = update_nz(0x1e);
@@ -5018,6 +5091,65 @@ void run_emulated(void) {
     case 0x6dda: // [$6DDA..$6DDA]    1 bytes
       CYCLES(0x6dda, 2);
       /* $6DDA RTS */ s_pc = pop16() + 1;
+      branchTarget = true;
+      break;
+    case 0x6ddb: // [$6DDB..$6DE1]    7 bytes
+      CYCLES(0x6ddb, 12);
+      /* $6DDB STA */ poke_zpg(0x80, s_a);
+      /* $6DDD LDA */ s_a = update_nz(peek_zpg(0xeb));
+      /* $6DDF JSR */ push16(0x6de1), s_pc = 0x726e;
+      branchTarget = true;
+      break;
+    case 0x6de2: // [$6DE2..$6DE5]    4 bytes
+      CYCLES(0x6de2, 7);
+      /* $6DE2 DEC */ tmp16 = 0x80, poke_zpg(tmp16, update_nz(peek_zpg(tmp16) - 1));
+      /* $6DE4 BEQ */ s_pc = s_status & STATUS_Z ? 0x6e06 : 0x6de6;
+      branchTarget = true;
+      break;
+    case 0x6de6: // [$6DE6..$6DE8]    3 bytes
+      CYCLES(0x6de6, 6);
+      /* $6DE6 ASL */ s_a = update_nzc(s_a << 1);
+      /* $6DE7 BPL */ s_pc = !(s_status & STATUS_N) ? 0x6de2 : 0x6de9;
+      branchTarget = true;
+      break;
+    case 0x6de9: // [$6DE9..$6DF9]   17 bytes
+      CYCLES(0x6de9, 29);
+      /* $6DE9 LDA */ s_a = update_nz(0x00);
+      /* $6DEB STA */ poke(peek16_zpg(0xee) + s_y, s_a);
+      /* $6DED INY */ s_y = update_nz(s_y + 1);
+      /* $6DEE LDX */ s_x = update_nz(peek_zpg(0x80));
+      /* $6DF0 LDA */ s_a = update_nz(peek(0x08d8 + s_x));
+      /* $6DF3 PHA */ push8(s_a);
+      /* $6DF4 LDA */ s_a = update_nz(peek(0x0200 + s_x));
+      /* $6DF7 TAX */ s_x = update_nz(s_a);
+      /* $6DF8 BEQ */ s_pc = s_status & STATUS_Z ? 0x6e02 : 0x6dfa;
+      branchTarget = true;
+      break;
+    case 0x6dfa: // [$6DFA..$6DFB]    2 bytes
+      CYCLES(0x6dfa, 4);
+      /* $6DFA LDA */ s_a = update_nz(0x00);
+    case 0x6dfc: // [$6DFC..$6E01]    6 bytes
+      CYCLES(0x6dfc, 11);
+      /* $6DFC STA */ poke(peek16_zpg(0xee) + s_y, s_a);
+      /* $6DFE INY */ s_y = update_nz(s_y + 1);
+      /* $6DFF DEX */ s_x = update_nz(s_x - 1);
+      /* $6E00 BNE */ s_pc = !(s_status & STATUS_Z) ? 0x6dfc : 0x6e02;
+      branchTarget = true;
+      break;
+    case 0x6e02: // [$6E02..$6E05]    4 bytes
+      CYCLES(0x6e02, 7);
+      /* $6E02 PLA */ s_a = update_nz(pop8());
+      /* $6E03 TAX */ s_x = update_nz(s_a);
+      /* $6E04 BEQ */ s_pc = s_status & STATUS_Z ? 0x6e0a : 0x6e06;
+      branchTarget = true;
+      break;
+    case 0x6e06: // [$6E06..$6E09]    4 bytes
+      CYCLES(0x6e06, 7);
+      /* $6E06 LDA */ s_a = update_nz(0x00);
+      /* $6E08 STA */ poke(peek16_zpg(0xee) + s_y, s_a);
+    case 0x6e0a: // [$6E0A..$6E0A]    1 bytes
+      CYCLES(0x6e0a, 2);
+      /* $6E0A RTS */ s_pc = pop16() + 1;
       branchTarget = true;
       break;
     case 0x6e0b: // [$6E0B..$6E11]    7 bytes
@@ -7159,8 +7291,10 @@ void run_emulated(void) {
       CYCLES(0x78f7, 40);
       /* $78F7 TAY */ s_y = update_nz(s_a);
       /* $78F8 LDA */ s_a = update_nz(peek(0x74a6 + s_y));
+      // WARNING: performs self modification.
       /* $78FB STA */ poke(0x7939, s_a);
       /* $78FE LDA */ s_a = update_nz(peek(0x749f + s_y));
+      // WARNING: performs self modification.
       /* $7901 STA */ poke(0x793a, s_a);
       /* $7904 LDA */ s_a = update_nz(peek(0x0688 + s_x));
       /* $7907 SEC */ s_status |= STATUS_C;
@@ -7173,6 +7307,21 @@ void run_emulated(void) {
       CYCLES(0x792f, 4);
       /* $792F CLC */ s_status &= ~STATUS_C;
       /* $7930 RTS */ s_pc = pop16() + 1;
+      branchTarget = true;
+      break;
+    case 0x7931: // [$7931..$793A]   10 bytes
+      CYCLES(0x7931, 18);
+      /* $7931 LDA */ s_a = update_nz(peek(0x06b2 + s_x));
+      /* $7934 SEC */ s_status |= STATUS_C;
+      /* $7935 SBC */ tmp = peek(0x06b2), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      // WARNING: operand self modification.
+      /* $7938 JMP */ s_pc = ram_peek16(0x7939);
+      branchTarget = true;
+      break;
+    case 0x795c: // [$795C..$795D]    2 bytes
+      CYCLES(0x795c, 4);
+      /* $795C SEC */ s_status |= STATUS_C;
+      /* $795D RTS */ s_pc = pop16() + 1;
       branchTarget = true;
       break;
     case 0x795e: // [$795E..$7961]    4 bytes
@@ -7527,8 +7676,8 @@ void run_emulated(void) {
       /* $7DC1 BEQ */ s_pc = s_status & STATUS_Z ? 0x7df9 : 0x7dc3;
       branchTarget = true;
       break;
-    case 0x7dc3: // [$7DC3..$7DD5]   19 bytes
-      CYCLES(0x7dc3, 33);
+    case 0x7dc3: // [$7DC3..$7DD0]   14 bytes
+      CYCLES(0x7dc3, 24);
       /* $7DC3 LDA */ s_a = update_nz(peek_zpg(0xe5));
       /* $7DC5 ASL */ s_a = update_nzc(s_a << 1);
       /* $7DC6 ASL */ s_a = update_nzc(s_a << 1);
@@ -7537,6 +7686,8 @@ void run_emulated(void) {
       /* $7DCB LDA */ s_a = update_nz(0x7c);
       /* $7DCD ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $7DCF STA */ poke_zpg(0xa8, s_a);
+    case 0x7dd1: // [$7DD1..$7DD5]    5 bytes
+      CYCLES(0x7dd1, 9);
       /* $7DD1 LDX */ s_x = update_nz(0x04);
       /* $7DD3 JSR */ push16(0x7dd5), s_pc = 0x9439;
       branchTarget = true;
@@ -7552,6 +7703,31 @@ void run_emulated(void) {
       /* $7DE0 LDA */ s_a = update_nz(peek(0x7ca9 + s_x));
       /* $7DE3 STA */ poke_zpg(0xbb, s_a);
       /* $7DE5 JMP */ s_pc = peek16(0x00ba);
+      branchTarget = true;
+      break;
+    case 0x7de8: // [$7DE8..$7DF0]    9 bytes
+      CYCLES(0x7de8, 16);
+      /* $7DE8 LDA */ s_a = update_nz(peek_zpg(0x95));
+      /* $7DEA SEC */ s_status |= STATUS_C;
+      /* $7DEB SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $7DED STA */ poke_zpg(0x95, s_a);
+      /* $7DEF BCS */ s_pc = s_status & STATUS_C ? 0x7d81 : 0x7df1;
+      branchTarget = true;
+      break;
+    case 0x7df1: // [$7DF1..$7DF4]    4 bytes
+      CYCLES(0x7df1, 7);
+      /* $7DF1 DEC */ tmp16 = 0x96, poke_zpg(tmp16, update_nz(peek_zpg(tmp16) - 1));
+      /* $7DF3 BPL */ s_pc = !(s_status & STATUS_N) ? 0x7d81 : 0x7df5;
+      branchTarget = true;
+      break;
+    case 0x7df5: // [$7DF5..$7DF7]    3 bytes
+      CYCLES(0x7df5, 6);
+      /* $7DF5 JSR */ push16(0x7df7), s_pc = 0x7e91;
+      branchTarget = true;
+      break;
+    case 0x7df8: // [$7DF8..$7DF8]    1 bytes
+      CYCLES(0x7df8, 2);
+      /* $7DF8 RTS */ s_pc = pop16() + 1;
       branchTarget = true;
       break;
     case 0x7df9: // [$7DF9..$7E01]    9 bytes
@@ -7594,6 +7770,271 @@ void run_emulated(void) {
     case 0x7e1a: // [$7E1A..$7E1C]    3 bytes
       CYCLES(0x7e1a, 6);
       /* $7E1A JMP */ s_pc = 0x7d81;
+      branchTarget = true;
+      break;
+    case 0x7e1d: // [$7E1D..$7E2E]   18 bytes
+      CYCLES(0x7e1d, 31);
+      /* $7E1D LDY */ s_y = update_nz(0x00);
+      /* $7E1F LDA */ s_a = update_nz(peek(peek16_zpg(0x90) + s_y));
+      /* $7E21 AND */ s_a = update_nz(s_a & 0x0b);
+      /* $7E23 STA */ poke(peek16_zpg(0x90) + s_y, s_a);
+      /* $7E25 LDX */ s_x = update_nz(peek_zpg(0xc5));
+      /* $7E27 LDY */ s_y = update_nz(peek_zpg(0xc6));
+      /* $7E29 INX */ s_x = update_nz(s_x + 1);
+      /* $7E2A STX */ poke_zpg(0xc5, s_x);
+      /* $7E2C JSR */ push16(0x7e2e), s_pc = 0x919c;
+      branchTarget = true;
+      break;
+    case 0x7e2f: // [$7E2F..$7E39]   11 bytes
+      CYCLES(0x7e2f, 19);
+      /* $7E2F LDY */ s_y = update_nz(0x00);
+      /* $7E31 LDA */ s_a = update_nz(peek(peek16_zpg(0x92) + s_y));
+      /* $7E33 AND */ s_a = update_nz(s_a & 0x0e);
+      /* $7E35 STA */ poke(peek16_zpg(0x92) + s_y, s_a);
+      /* $7E37 JMP */ s_pc = 0x7de8;
+      branchTarget = true;
+      break;
+    case 0x7e3a: // [$7E3A..$7E4B]   18 bytes
+      CYCLES(0x7e3a, 31);
+      /* $7E3A LDY */ s_y = update_nz(0x00);
+      /* $7E3C LDA */ s_a = update_nz(peek(peek16_zpg(0x90) + s_y));
+      /* $7E3E AND */ s_a = update_nz(s_a & 0x0d);
+      /* $7E40 STA */ poke(peek16_zpg(0x90) + s_y, s_a);
+      /* $7E42 LDX */ s_x = update_nz(peek_zpg(0xc5));
+      /* $7E44 LDY */ s_y = update_nz(peek_zpg(0xc6));
+      /* $7E46 DEY */ s_y = update_nz(s_y - 1);
+      /* $7E47 STY */ poke_zpg(0xc6, s_y);
+      /* $7E49 JSR */ push16(0x7e4b), s_pc = 0x919c;
+      branchTarget = true;
+      break;
+    case 0x7e4c: // [$7E4C..$7E56]   11 bytes
+      CYCLES(0x7e4c, 19);
+      /* $7E4C LDY */ s_y = update_nz(0x00);
+      /* $7E4E LDA */ s_a = update_nz(peek(peek16_zpg(0x92) + s_y));
+      /* $7E50 AND */ s_a = update_nz(s_a & 0x07);
+      /* $7E52 STA */ poke(peek16_zpg(0x92) + s_y, s_a);
+      /* $7E54 JMP */ s_pc = 0x7de8;
+      branchTarget = true;
+      break;
+    case 0x7e57: // [$7E57..$7E68]   18 bytes
+      CYCLES(0x7e57, 31);
+      /* $7E57 LDY */ s_y = update_nz(0x00);
+      /* $7E59 LDA */ s_a = update_nz(peek(peek16_zpg(0x90) + s_y));
+      /* $7E5B AND */ s_a = update_nz(s_a & 0x07);
+      /* $7E5D STA */ poke(peek16_zpg(0x90) + s_y, s_a);
+      /* $7E5F LDX */ s_x = update_nz(peek_zpg(0xc5));
+      /* $7E61 LDY */ s_y = update_nz(peek_zpg(0xc6));
+      /* $7E63 INY */ s_y = update_nz(s_y + 1);
+      /* $7E64 STY */ poke_zpg(0xc6, s_y);
+      /* $7E66 JSR */ push16(0x7e68), s_pc = 0x919c;
+      branchTarget = true;
+      break;
+    case 0x7e69: // [$7E69..$7E73]   11 bytes
+      CYCLES(0x7e69, 19);
+      /* $7E69 LDY */ s_y = update_nz(0x00);
+      /* $7E6B LDA */ s_a = update_nz(peek(peek16_zpg(0x92) + s_y));
+      /* $7E6D AND */ s_a = update_nz(s_a & 0x0d);
+      /* $7E6F STA */ poke(peek16_zpg(0x92) + s_y, s_a);
+      /* $7E71 JMP */ s_pc = 0x7de8;
+      branchTarget = true;
+      break;
+    case 0x7e74: // [$7E74..$7E85]   18 bytes
+      CYCLES(0x7e74, 31);
+      /* $7E74 LDY */ s_y = update_nz(0x00);
+      /* $7E76 LDA */ s_a = update_nz(peek(peek16_zpg(0x90) + s_y));
+      /* $7E78 AND */ s_a = update_nz(s_a & 0x0e);
+      /* $7E7A STA */ poke(peek16_zpg(0x90) + s_y, s_a);
+      /* $7E7C LDX */ s_x = update_nz(peek_zpg(0xc5));
+      /* $7E7E LDY */ s_y = update_nz(peek_zpg(0xc6));
+      /* $7E80 DEX */ s_x = update_nz(s_x - 1);
+      /* $7E81 STX */ poke_zpg(0xc5, s_x);
+      /* $7E83 JSR */ push16(0x7e85), s_pc = 0x919c;
+      branchTarget = true;
+      break;
+    case 0x7e86: // [$7E86..$7E90]   11 bytes
+      CYCLES(0x7e86, 19);
+      /* $7E86 LDY */ s_y = update_nz(0x00);
+      /* $7E88 LDA */ s_a = update_nz(peek(peek16_zpg(0x92) + s_y));
+      /* $7E8A AND */ s_a = update_nz(s_a & 0x0b);
+      /* $7E8C STA */ poke(peek16_zpg(0x92) + s_y, s_a);
+      /* $7E8E JMP */ s_pc = 0x7de8;
+      branchTarget = true;
+      break;
+    case 0x7e91: // [$7E91..$7E9C]   12 bytes
+      CYCLES(0x7e91, 21);
+      /* $7E91 LDX */ s_x = update_nz(peek_zpg(0xbd));
+      /* $7E93 LDA */ s_a = update_nz(peek(0x7d21 + s_x));
+      /* $7E96 STA */ poke_zpg(0xce, s_a);
+      /* $7E98 LDA */ s_a = update_nz(peek(0x7d1c + s_x));
+      /* $7E9B STA */ poke_zpg(0xcf, s_a);
+    case 0x7e9d: // [$7E9D..$7EA5]    9 bytes
+      CYCLES(0x7e9d, 16);
+      /* $7E9D LDA */ s_a = update_nz(peek_zpg(0xce));
+      /* $7E9F SEC */ s_status |= STATUS_C;
+      /* $7EA0 SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $7EA2 STA */ poke_zpg(0xce, s_a);
+      /* $7EA4 BCS */ s_pc = s_status & STATUS_C ? 0x7eaa : 0x7ea6;
+      branchTarget = true;
+      break;
+    case 0x7ea6: // [$7EA6..$7EA9]    4 bytes
+      CYCLES(0x7ea6, 7);
+      /* $7EA6 DEC */ tmp16 = 0xcf, poke_zpg(tmp16, update_nz(peek_zpg(tmp16) - 1));
+      /* $7EA8 BMI */ s_pc = s_status & STATUS_N ? 0x7ec7 : 0x7eaa;
+      branchTarget = true;
+      break;
+    case 0x7eaa: // [$7EAA..$7EAC]    3 bytes
+      CYCLES(0x7eaa, 6);
+      /* $7EAA JSR */ push16(0x7eac), s_pc = 0x9498;
+      branchTarget = true;
+      break;
+    case 0x7ead: // [$7EAD..$7EB3]    7 bytes
+      CYCLES(0x7ead, 12);
+      /* $7EAD LDX */ s_x = update_nz(peek_zpg(0xc5));
+      /* $7EAF LDY */ s_y = update_nz(peek_zpg(0xc6));
+      /* $7EB1 JSR */ push16(0x7eb3), s_pc = 0x9184;
+      branchTarget = true;
+      break;
+    case 0x7eb4: // [$7EB4..$7EB8]    5 bytes
+      CYCLES(0x7eb4, 9);
+      /* $7EB4 LDX */ s_x = update_nz(0x04);
+      /* $7EB6 JSR */ push16(0x7eb8), s_pc = 0x9439;
+      branchTarget = true;
+      break;
+    case 0x7eb9: // [$7EB9..$7EBD]    5 bytes
+      CYCLES(0x7eb9, 9);
+      /* $7EB9 LDY */ s_y = update_nz(peek_zpg(0xc6));
+      /* $7EBB TAX */ s_x = update_nz(s_a);
+      /* $7EBC BEQ */ s_pc = s_status & STATUS_Z ? 0x7efe : 0x7ebe;
+      branchTarget = true;
+      break;
+    case 0x7ebe: // [$7EBE..$7EC0]    3 bytes
+      CYCLES(0x7ebe, 6);
+      /* $7EBE DEX */ s_x = update_nz(s_x - 1);
+      /* $7EBF BEQ */ s_pc = s_status & STATUS_Z ? 0x7ec8 : 0x7ec1;
+      branchTarget = true;
+      break;
+    case 0x7ec1: // [$7EC1..$7EC3]    3 bytes
+      CYCLES(0x7ec1, 6);
+      /* $7EC1 DEX */ s_x = update_nz(s_x - 1);
+      /* $7EC2 BEQ */ s_pc = s_status & STATUS_Z ? 0x7ee3 : 0x7ec4;
+      branchTarget = true;
+      break;
+    case 0x7ec4: // [$7EC4..$7EC6]    3 bytes
+      CYCLES(0x7ec4, 6);
+      /* $7EC4 JMP */ s_pc = 0x7f19;
+      branchTarget = true;
+      break;
+    case 0x7ec7: // [$7EC7..$7EC7]    1 bytes
+      CYCLES(0x7ec7, 2);
+      /* $7EC7 RTS */ s_pc = pop16() + 1;
+      branchTarget = true;
+      break;
+    case 0x7ec8: // [$7EC8..$7ECD]    6 bytes
+      CYCLES(0x7ec8, 11);
+      /* $7EC8 LDX */ s_x = update_nz(peek_zpg(0xc5));
+      /* $7ECA CPX */ update_nz_inv_c(s_x - 0x3d);
+      /* $7ECC BEQ */ s_pc = s_status & STATUS_Z ? 0x7ee0 : 0x7ece;
+      branchTarget = true;
+      break;
+    case 0x7ece: // [$7ECE..$7ED1]    4 bytes
+      CYCLES(0x7ece, 7);
+      /* $7ECE INX */ s_x = update_nz(s_x + 1);
+      /* $7ECF JSR */ push16(0x7ed1), s_pc = 0x919c;
+      branchTarget = true;
+      break;
+    case 0x7ed2: // [$7ED2..$7EDF]   14 bytes
+      CYCLES(0x7ed2, 24);
+      /* $7ED2 LDY */ s_y = update_nz(0x00);
+      /* $7ED4 LDA */ s_a = update_nz(peek(peek16_zpg(0x90) + s_y));
+      /* $7ED6 AND */ s_a = update_nz(s_a & 0x0b);
+      /* $7ED8 STA */ poke(peek16_zpg(0x90) + s_y, s_a);
+      /* $7EDA LDA */ s_a = update_nz(peek(peek16_zpg(0x92) + s_y));
+      /* $7EDC AND */ s_a = update_nz(s_a & 0x0e);
+      /* $7EDE STA */ poke(peek16_zpg(0x92) + s_y, s_a);
+    case 0x7ee0: // [$7EE0..$7EE2]    3 bytes
+      CYCLES(0x7ee0, 6);
+      /* $7EE0 JMP */ s_pc = 0x7e9d;
+      branchTarget = true;
+      break;
+    case 0x7ee3: // [$7EE3..$7EE8]    6 bytes
+      CYCLES(0x7ee3, 11);
+      /* $7EE3 LDX */ s_x = update_nz(peek_zpg(0xc5));
+      /* $7EE5 CPY */ update_nz_inv_c(s_y - 0x03);
+      /* $7EE7 BEQ */ s_pc = s_status & STATUS_Z ? 0x7efb : 0x7ee9;
+      branchTarget = true;
+      break;
+    case 0x7ee9: // [$7EE9..$7EEC]    4 bytes
+      CYCLES(0x7ee9, 7);
+      /* $7EE9 DEY */ s_y = update_nz(s_y - 1);
+      /* $7EEA JSR */ push16(0x7eec), s_pc = 0x919c;
+      branchTarget = true;
+      break;
+    case 0x7eed: // [$7EED..$7EFA]   14 bytes
+      CYCLES(0x7eed, 24);
+      /* $7EED LDY */ s_y = update_nz(0x00);
+      /* $7EEF LDA */ s_a = update_nz(peek(peek16_zpg(0x90) + s_y));
+      /* $7EF1 AND */ s_a = update_nz(s_a & 0x0d);
+      /* $7EF3 STA */ poke(peek16_zpg(0x90) + s_y, s_a);
+      /* $7EF5 LDA */ s_a = update_nz(peek(peek16_zpg(0x92) + s_y));
+      /* $7EF7 AND */ s_a = update_nz(s_a & 0x07);
+      /* $7EF9 STA */ poke(peek16_zpg(0x92) + s_y, s_a);
+    case 0x7efb: // [$7EFB..$7EFD]    3 bytes
+      CYCLES(0x7efb, 6);
+      /* $7EFB JMP */ s_pc = 0x7e9d;
+      branchTarget = true;
+      break;
+    case 0x7efe: // [$7EFE..$7F03]    6 bytes
+      CYCLES(0x7efe, 11);
+      /* $7EFE LDX */ s_x = update_nz(peek_zpg(0xc5));
+      /* $7F00 CPY */ update_nz_inv_c(s_y - 0x3c);
+      /* $7F02 BEQ */ s_pc = s_status & STATUS_Z ? 0x7f16 : 0x7f04;
+      branchTarget = true;
+      break;
+    case 0x7f04: // [$7F04..$7F07]    4 bytes
+      CYCLES(0x7f04, 7);
+      /* $7F04 INY */ s_y = update_nz(s_y + 1);
+      /* $7F05 JSR */ push16(0x7f07), s_pc = 0x919c;
+      branchTarget = true;
+      break;
+    case 0x7f08: // [$7F08..$7F15]   14 bytes
+      CYCLES(0x7f08, 24);
+      /* $7F08 LDY */ s_y = update_nz(0x00);
+      /* $7F0A LDA */ s_a = update_nz(peek(peek16_zpg(0x90) + s_y));
+      /* $7F0C AND */ s_a = update_nz(s_a & 0x07);
+      /* $7F0E STA */ poke(peek16_zpg(0x90) + s_y, s_a);
+      /* $7F10 LDA */ s_a = update_nz(peek(peek16_zpg(0x92) + s_y));
+      /* $7F12 AND */ s_a = update_nz(s_a & 0x0d);
+      /* $7F14 STA */ poke(peek16_zpg(0x92) + s_y, s_a);
+    case 0x7f16: // [$7F16..$7F18]    3 bytes
+      CYCLES(0x7f16, 6);
+      /* $7F16 JMP */ s_pc = 0x7e9d;
+      branchTarget = true;
+      break;
+    case 0x7f19: // [$7F19..$7F1E]    6 bytes
+      CYCLES(0x7f19, 11);
+      /* $7F19 LDX */ s_x = update_nz(peek_zpg(0xc5));
+      /* $7F1B CPX */ update_nz_inv_c(s_x - 0x01);
+      /* $7F1D BEQ */ s_pc = s_status & STATUS_Z ? 0x7f31 : 0x7f1f;
+      branchTarget = true;
+      break;
+    case 0x7f1f: // [$7F1F..$7F22]    4 bytes
+      CYCLES(0x7f1f, 7);
+      /* $7F1F DEX */ s_x = update_nz(s_x - 1);
+      /* $7F20 JSR */ push16(0x7f22), s_pc = 0x919c;
+      branchTarget = true;
+      break;
+    case 0x7f23: // [$7F23..$7F30]   14 bytes
+      CYCLES(0x7f23, 24);
+      /* $7F23 LDY */ s_y = update_nz(0x00);
+      /* $7F25 LDA */ s_a = update_nz(peek(peek16_zpg(0x90) + s_y));
+      /* $7F27 AND */ s_a = update_nz(s_a & 0x0e);
+      /* $7F29 STA */ poke(peek16_zpg(0x90) + s_y, s_a);
+      /* $7F2B LDA */ s_a = update_nz(peek(peek16_zpg(0x92) + s_y));
+      /* $7F2D AND */ s_a = update_nz(s_a & 0x0b);
+      /* $7F2F STA */ poke(peek16_zpg(0x92) + s_y, s_a);
+    case 0x7f31: // [$7F31..$7F33]    3 bytes
+      CYCLES(0x7f31, 6);
+      /* $7F31 JMP */ s_pc = 0x7e9d;
       branchTarget = true;
       break;
     case 0x7faa: // [$7FAA..$7FAC]    3 bytes
@@ -8679,6 +9120,43 @@ void run_emulated(void) {
       /* $877A LDX */ s_x = update_nz(0x1e);
       // WARNING: operand self modification.
       /* $877C JMP */ s_pc = ram_peek16(0x877d);
+      branchTarget = true;
+      break;
+    case 0x8e4d: // [$8E4D..$8E4F]    3 bytes
+      CYCLES(0x8e4d, 6);
+      /* $8E4D DEX */ s_x = update_nz(s_x - 1);
+      /* $8E4E BMI */ s_pc = s_status & STATUS_N ? 0x8e75 : 0x8e50;
+      branchTarget = true;
+      break;
+    case 0x8e50: // [$8E50..$8E57]    8 bytes
+      CYCLES(0x8e50, 14);
+      /* $8E50 LDA */ s_a = update_nz(peek(0x0616 + s_x));
+      /* $8E53 STA */ poke(0x05f8 + s_x, s_a);
+      /* $8E56 BMI */ s_pc = s_status & STATUS_N ? 0x8e4d : 0x8e58;
+      branchTarget = true;
+      break;
+    case 0x8e58: // [$8E58..$8E6C]   21 bytes
+      CYCLES(0x8e58, 36);
+      /* $8E58 LDA */ s_a = update_nz(peek(0x05da + s_x));
+      /* $8E5B STA */ poke(0x059e + s_x, s_a);
+      /* $8E5E LDA */ s_a = update_nz(peek(0x05bc + s_x));
+      /* $8E61 STA */ poke(0x0580 + s_x, s_a);
+      /* $8E64 SEC */ s_status |= STATUS_C;
+      /* $8E65 SBC */ tmp = peek(0x071c), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $8E68 STA */ poke(0x05bc + s_x, s_a);
+      /* $8E6B BCS */ s_pc = s_status & STATUS_C ? 0x8e4d : 0x8e6d;
+      branchTarget = true;
+      break;
+    case 0x8e6d: // [$8E6D..$8E74]    8 bytes
+      CYCLES(0x8e6d, 14);
+      /* $8E6D LDA */ s_a = update_nz(0xff);
+      /* $8E6F STA */ poke(0x0616 + s_x, s_a);
+      /* $8E72 JMP */ s_pc = 0x8e4d;
+      branchTarget = true;
+      break;
+    case 0x8e75: // [$8E75..$8E75]    1 bytes
+      CYCLES(0x8e75, 2);
+      /* $8E75 RTS */ s_pc = pop16() + 1;
       branchTarget = true;
       break;
     case 0x914c: // [$914C..$914F]    4 bytes
@@ -9855,6 +10333,66 @@ void run_emulated(void) {
       /* $961C RTS */ s_pc = pop16() + 1;
       branchTarget = true;
       break;
+    case 0x9dae: // [$9DAE..$9DC1]   20 bytes
+      CYCLES(0x9dae, 35);
+      /* $9DAE ROL */ tmp16 = 0x7e, tmp = peek_zpg(tmp16), poke_zpg(tmp16, update_nz((tmp << 1) | (s_status & STATUS_C))), set_c_to_bit0(tmp >> 7);
+      /* $9DB0 DEC */ tmp16 = 0x2a, poke_zpg(tmp16, update_nz(peek_zpg(tmp16) - 1));
+      /* $9DB2 ROR */ tmp16 = 0x33ee + s_x, tmp = peek(tmp16), poke(tmp16, update_nz((tmp >> 1) | ((s_status & STATUS_C) << 7))), set_c_to_bit0(tmp);
+      /* $9DB5 ROR */ tmp16 = 0x37ee + s_x, tmp = peek(tmp16), poke(tmp16, update_nz((tmp >> 1) | ((s_status & STATUS_C) << 7))), set_c_to_bit0(tmp);
+      /* $9DB8 ROR */ tmp16 = 0x33c6 + s_x, tmp = peek(tmp16), poke(tmp16, update_nz((tmp >> 1) | ((s_status & STATUS_C) << 7))), set_c_to_bit0(tmp);
+      /* $9DBB ROR */ tmp16 = 0x37c6 + s_x, tmp = peek(tmp16), poke(tmp16, update_nz((tmp >> 1) | ((s_status & STATUS_C) << 7))), set_c_to_bit0(tmp);
+      /* $9DBE ROR */ tmp16 = 0x23ca + s_x, tmp = peek(tmp16), poke(tmp16, update_nz((tmp >> 1) | ((s_status & STATUS_C) << 7))), set_c_to_bit0(tmp);
+      /* $9DC1 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x9dc1);
+                      abort();
+
+    case 0x9e0b: // [$9E0B..$9E0B]    1 bytes
+      CYCLES(0x9e0b, 2);
+      /* $9E0B ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x9e0b);
+                      abort();
+
+    case 0x9e7d: // [$9E7D..$9E83]    7 bytes
+      CYCLES(0x9e7d, 12);
+      /* $9E7D ROR */ tmp16 = 0x4c, tmp = peek_zpg(tmp16), poke_zpg(tmp16, update_nz((tmp >> 1) | ((s_status & STATUS_C) << 7))), set_c_to_bit0(tmp);
+      /* $9E7F ORA */ s_a = update_nz(s_a | peek(peek16_zpg(0x70 + s_x)));
+      /* $9E81 CLC */ s_status &= ~STATUS_C;
+      /* $9E82 BMI */ s_pc = s_status & STATUS_N ? 0x9eea : 0x9e84;
+      branchTarget = true;
+      break;
+    case 0x9e84: // [$9E84..$9E84]    1 bytes
+      CYCLES(0x9e84, 2);
+      /* $9E84 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x9e84);
+                      abort();
+
+    case 0x9eea: // [$9EEA..$9EEA]    1 bytes
+      CYCLES(0x9eea, 2);
+      /* $9EEA ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x9eea);
+                      abort();
+
+    case 0x9eef: // [$9EEF..$9EF1]    3 bytes
+      CYCLES(0x9eef, 6);
+      /* $9EEF EOR */ s_a = update_nz(s_a ^ peek_zpg((uint8_t)(0x04 + s_x)));
+      /* $9EF1 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x9ef1);
+                      abort();
+
+    case 0x9f61: // [$9F61..$9F62]    2 bytes
+      CYCLES(0x9f61, 4);
+      /* $9F61 BRK */ fprintf(stderr, "Warning: BRK at $%04X\n", 0x9f61);
+                      push16(0x9f63);
+                      push8(s_status | STATUS_B);
+                      s_pc = peek16(0xFFFE);
+      branchTarget = true;
+      break;
+      /* $9F62 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x9f62);
+                      abort();
+
+    case 0x9fd3: // [$9FD3..$9FDA]    8 bytes
+      CYCLES(0x9fd3, 14);
+      /* $9FD3 EOR */ s_a = update_nz(s_a ^ peek_zpg(0x4c));
+      /* $9FD5 LSR */ tmp16 = (uint8_t)(0x59 + s_x), tmp = peek_zpg(tmp16), set_c_to_bit0(tmp), poke_zpg(tmp16, update_nz(tmp >> 1));
+      /* $9FD7 LSR */ tmp16 = 0x5320, tmp = peek(tmp16), set_c_to_bit0(tmp), poke(tmp16, update_nz(tmp >> 1));
+      /* $9FDA ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x9fda);
+                      abort();
+
     case 0xfa62: // [$FA62..$FA62]    1 bytes
       CYCLES(0xfa62, 2);
       /* $FA62 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0xfa62);
@@ -9862,7 +10400,7 @@ void run_emulated(void) {
 
     default:
       fprintf(stderr, "Unknown code address: $%04X\n", s_pc);
-      abort();
+      error_handler(s_pc);
     }
   }
 }

@@ -48,6 +48,7 @@ enum  {
   DebugIO2 = 4,
   DebugKbdin = 8,
   DebugStdout = 16,
+  DebugCountBB = 32,
 };
 
 extern uint8_t g_debug;
@@ -65,3 +66,4 @@ void run_emulated(void);
 uint8_t io_peek(uint16_t addr);
 void io_poke(uint16_t addr, uint8_t value);
 void debug_asm(uint16_t pc);
+void error_handler(uint16_t pc);

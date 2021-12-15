@@ -120,9 +120,17 @@ static void add_watch(uint16_t addr, uint8_t size) {
 }
 
 static unsigned s_numDebugLines = 0;
-enum { MAX_DEBUG_LINES = 200000 };
+enum { MAX_DEBUG_LINES = 2000000 };
 
 void debug_asm(uint16_t pc) {
+  if (g_debug & DebugCountBB) {
+    if (++s_numDebugLines == MAX_DEBUG_LINES) {
+      printf("Reached %u basic blocks\n", s_numDebugLines);
+      exit(0);
+    }
+    return;
+  }
+
   regs_t r = get_regs();
   r.pc = pc;
   printf("%04X: %-8s  ", r.pc, "");
@@ -153,14 +161,19 @@ void debug_asm(uint16_t pc) {
   }
   putchar('\n');
 
-  if (++s_numDebugLines == MAX_DEBUG_LINES - 1) {
+  if (++s_numDebugLines == MAX_DEBUG_LINES) {
     fflush(stdout);
     exit(0);
   }
 }
 
+void error_handler(uint16_t pc) {
+  printf("BB count=%u\n", s_numDebugLines);
+  exit(1);
+}
+
 int main(int argc, char **argv) {
-  g_debug = DebugASM;
+  g_debug = DebugASM | DebugCountBB;
   reset_regs();
   set_regs((regs_t){.pc = 0, .a = 0xa0, .x = 0, .y = 1, .sp = 0xf0, .status = STATUS_IGNORED});
 
