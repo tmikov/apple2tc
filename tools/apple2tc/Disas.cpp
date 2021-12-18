@@ -194,11 +194,13 @@ void Disas::detectMisalignedLabels() {
 
       if (labelIt->first - addr < size) {
         // Decode the overlapped instruction.
+        uint8_t offset = labelIt->first - addr;
         CPUOpcode opc1 = decodeOpcode(peek(labelIt->first));
         unsigned size1 = cpuInstSize(opc1.addrMode);
         // Does it end exactly where the original instruction ends?
-        bool simple = labelIt->first + size1 == addr + size;
-        misalignedLabels_.try_emplace(labelIt->first, MisalignedDesc{.simple = simple});
+        bool simple = offset + size1 == size;
+        misalignedLabels_.try_emplace(
+            labelIt->first, MisalignedDesc{.simple = simple, .offset = offset});
 
         printf(
             "// Misaligned label (%s) at $%04X\n",

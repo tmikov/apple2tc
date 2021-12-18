@@ -159,6 +159,7 @@ private:
 
   void printSimpleCPrologue(FILE *f);
   void printSimpleCEpilogue(FILE *f);
+  void printSimpleCRange(FILE *f, Range cr);
   void printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst);
   std::string simpleCRead(CPUInst inst) const;
   static const char *simpleCReadOp(CPUInst inst);
@@ -203,9 +204,11 @@ private:
   std::deque<uint16_t> work_{};
 
   struct MisalignedDesc {
-    // If true, the misaligned label points to an instruction extending exactly
-    // to the end of the "parent" instruction.
+    /// If true, the misaligned label points to an instruction extending exactly
+    /// to the end of the "parent" instruction.
     bool simple;
+    /// Offset from the parent instruction.
+    uint8_t offset;
   };
 
   /// Labels that point inside an existing instruction. The bool indicates

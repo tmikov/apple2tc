@@ -1,4 +1,13 @@
 // 19 new runtime labels added
+// Misaligned label (simple) at $DB5A
+// Misaligned label (simple) at $DD6C
+// Misaligned label (simple) at $DD86
+// Misaligned label (simple) at $DE9F
+// Misaligned label (simple) at $DEBB
+// Misaligned label (simple) at $DEBE
+// Misaligned label (simple) at $E199
+// Misaligned label (simple) at $E30E
+// Misaligned label (simple) at $EA1B
 // ranges: 54
 // code labels: 1120
 // data labels: 186
@@ -1815,6 +1824,14 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xdb57, 6);
       /* $DB57 LDA */ s_a = update_nz(0x20);
       /* $DB59 BIT */ tmp = peek(0x3fa9), s_status = (s_status & ~(0xC0 | STATUS_Z)) | (tmp & 0xC0) | (s_a & tmp ? 0 : STATUS_Z);
+      s_pc = 0xdb5c;
+      break;
+    // WARNING: simple misaligned label
+    case 0xdb5a: // [$DB5A..$DB5B]    2 bytes
+      CYCLES(0xdb5a, 4);
+      /* $DB5A LDA */ s_a = update_nz(0x3f);
+      s_pc = 0xdb5c;
+      break;
     case 0xdb5c: // [$DB5C..$DB61]    6 bytes
       CYCLES(0xdb5c, 11);
       /* $DB5C ORA */ s_a = update_nz(s_a | 0x80);
@@ -1853,6 +1870,14 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xdd6a, 4);
       /* $DD6A CLC */ s_status &= ~STATUS_C;
       /* $DD6B BIT */ tmp = peek_zpg(0x38), s_status = (s_status & ~(0xC0 | STATUS_Z)) | (tmp & 0xC0) | (s_a & tmp ? 0 : STATUS_Z);
+      s_pc = 0xdd6d;
+      break;
+    // WARNING: simple misaligned label
+    case 0xdd6c: // [$DD6C..$DD6C]    1 bytes
+      CYCLES(0xdd6c, 2);
+      /* $DD6C SEC */ s_status |= STATUS_C;
+      s_pc = 0xdd6d;
+      break;
     case 0xdd6d: // [$DD6D..$DD70]    4 bytes
       CYCLES(0xdd6d, 7);
       /* $DD6D BIT */ tmp = peek_zpg(0x11), s_status = (s_status & ~(0xC0 | STATUS_Z)) | (tmp & 0xC0) | (s_a & tmp ? 0 : STATUS_Z);
@@ -1896,6 +1921,16 @@ void run_emulated(unsigned run_cycles) {
       /* $DD81 DEC */ tmp16 = 0xb8, poke_zpg(tmp16, update_nz(peek_zpg(tmp16) - 1));
       /* $DD83 LDX */ s_x = update_nz(0x00);
       /* $DD85 BIT */ tmp = peek_zpg(0x48), s_status = (s_status & ~(0xC0 | STATUS_Z)) | (tmp & 0xC0) | (s_a & tmp ? 0 : STATUS_Z);
+      s_pc = 0xdd87;
+      break;
+    // WARNING: simple misaligned label
+    case 0xdd86: // [$DD86..$DD86]    1 bytes
+      CYCLES(0xdd86, 2);
+      /* $DD86 PHA */ push8(s_a);
+      s_pc = 0xdd87;
+      break;
+    case 0xdd87: // [$DD87..$DD8D]    7 bytes
+      CYCLES(0xdd87, 12);
       /* $DD87 TXA */ s_a = update_nz(s_x);
       /* $DD88 PHA */ push8(s_a);
       /* $DD89 LDA */ s_a = update_nz(0x01);
@@ -2250,6 +2285,16 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xde9c, 6);
       /* $DE9C LDY */ s_y = update_nz(0x01);
       /* $DE9E BIT */ tmp = peek(0x00a0), s_status = (s_status & ~(0xC0 | STATUS_Z)) | (tmp & 0xC0) | (s_a & tmp ? 0 : STATUS_Z);
+      s_pc = 0xdea1;
+      break;
+    // WARNING: simple misaligned label
+    case 0xde9f: // [$DE9F..$DEA0]    2 bytes
+      CYCLES(0xde9f, 4);
+      /* $DE9F LDY */ s_y = update_nz(0x00);
+      s_pc = 0xdea1;
+      break;
+    case 0xdea1: // [$DEA1..$DEA3]    3 bytes
+      CYCLES(0xdea1, 6);
       /* $DEA1 JMP */ s_pc = 0xe301;
       branchTarget = true;
       break;
@@ -2289,7 +2334,25 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xdeb8, 6);
       /* $DEB8 LDA */ s_a = update_nz(0x29);
       /* $DEBA BIT */ tmp = peek(0x28a9), s_status = (s_status & ~(0xC0 | STATUS_Z)) | (tmp & 0xC0) | (s_a & tmp ? 0 : STATUS_Z);
+      s_pc = 0xdebd;
+      break;
+    // WARNING: simple misaligned label
+    case 0xdebb: // [$DEBB..$DEBC]    2 bytes
+      CYCLES(0xdebb, 4);
+      /* $DEBB LDA */ s_a = update_nz(0x28);
+      s_pc = 0xdebd;
+      break;
+    case 0xdebd: // [$DEBD..$DEBD]    1 bytes
+      CYCLES(0xdebd, 2);
       /* $DEBD BIT */ tmp = peek(0x2ca9), s_status = (s_status & ~(0xC0 | STATUS_Z)) | (tmp & 0xC0) | (s_a & tmp ? 0 : STATUS_Z);
+      s_pc = 0xdec0;
+      break;
+    // WARNING: simple misaligned label
+    case 0xdebe: // [$DEBE..$DEBF]    2 bytes
+      CYCLES(0xdebe, 4);
+      /* $DEBE LDA */ s_a = update_nz(0x2c);
+      s_pc = 0xdec0;
+      break;
     case 0xdec0: // [$DEC0..$DEC5]    6 bytes
       CYCLES(0xdec0, 11);
       /* $DEC0 LDY */ s_y = update_nz(0x00);
@@ -2963,6 +3026,14 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xe196, 6);
       /* $E196 LDX */ s_x = update_nz(0x6b);
       /* $E198 BIT */ tmp = peek(0x35a2), s_status = (s_status & ~(0xC0 | STATUS_Z)) | (tmp & 0xC0) | (s_a & tmp ? 0 : STATUS_Z);
+      s_pc = 0xe19b;
+      break;
+    // WARNING: simple misaligned label
+    case 0xe199: // [$E199..$E19A]    2 bytes
+      CYCLES(0xe199, 4);
+      /* $E199 LDX */ s_x = update_nz(0x35);
+      s_pc = 0xe19b;
+      break;
     case 0xe19b: // [$E19B..$E19D]    3 bytes
       CYCLES(0xe19b, 6);
       /* $E19B JMP */ s_pc = 0xd412;
@@ -3364,6 +3435,16 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xe30b, 6);
       /* $E30B LDX */ s_x = update_nz(0x95);
       /* $E30D BIT */ tmp = peek(0xe0a2), s_status = (s_status & ~(0xC0 | STATUS_Z)) | (tmp & 0xC0) | (s_a & tmp ? 0 : STATUS_Z);
+      s_pc = 0xe310;
+      break;
+    // WARNING: simple misaligned label
+    case 0xe30e: // [$E30E..$E30F]    2 bytes
+      CYCLES(0xe30e, 4);
+      /* $E30E LDX */ s_x = update_nz(0xe0);
+      s_pc = 0xe310;
+      break;
+    case 0xe310: // [$E310..$E312]    3 bytes
+      CYCLES(0xe310, 6);
       /* $E310 JMP */ s_pc = 0xd412;
       branchTarget = true;
       break;
@@ -4764,6 +4845,18 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xea19, 4);
       /* $EA19 CLC */ s_status &= ~STATUS_C;
       /* $EA1A BIT */ tmp = peek(0x1410), s_status = (s_status & ~(0xC0 | STATUS_Z)) | (tmp & 0xC0) | (s_a & tmp ? 0 : STATUS_Z);
+      s_pc = 0xea1d;
+      break;
+    // WARNING: simple misaligned label
+    case 0xea1b: // [$EA1B..$EA1C]    2 bytes
+      CYCLES(0xea1b, 4);
+      /* $EA1B BPL */ s_pc = !(s_status & STATUS_N) ? 0xea31 : 0xea1d;
+      branchTarget = true;
+      break;
+      s_pc = 0xea1d;
+      break;
+    case 0xea1d: // [$EA1D..$EA22]    6 bytes
+      CYCLES(0xea1d, 11);
       /* $EA1D ADC */ tmp = 0x80, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $EA1F STA */ poke_zpg(0x9d, s_a);
       /* $EA21 BNE */ s_pc = !(s_status & STATUS_Z) ? 0xea26 : 0xea23;

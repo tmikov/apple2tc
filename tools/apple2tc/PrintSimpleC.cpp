@@ -59,24 +59,43 @@ void Disas::printSimpleC(FILE *f) {
   fprintf(f, "    switch (s_pc) {\n");
 
   for (Range cr : codeRanges_) {
-    for (uint16_t addr = cr.from; addr - 1 != cr.to;) {
-      auto it = codeLabels_.find(addr);
-      if (it != codeLabels_.end()) {
-        // Find the end of this BB in order to approximate execution cycles.
-        ++it;
-        uint16_t bbLast = it != codeLabels_.end() && it->first - 1 < cr.to ? it->first - 1 : cr.to;
-        printf(
-            "    case 0x%04x: // [$%04X..$%04X] %4u bytes\n",
-            addr,
-            addr,
-            bbLast,
-            bbLast - addr + 1);
-        printf("      CYCLES(0x%04x, %ld);\n", addr, lround((bbLast - addr + 1) * 1.7 + 0.5));
+    uint32_t from = cr.from;
+    auto labelIt = misalignedLabels_.upper_bound(from);
+    while (from <= cr.to) {
+      // If there is no misaligned label in the remaining range, generate it
+      // normally and we are done.
+      if (labelIt == misalignedLabels_.end() || labelIt->first > cr.to) {
+        printSimpleCRange(f, Range(from, cr.to));
+        break;
       }
 
-      CPUInst inst = decodeInst(addr, peek3(addr));
-      printSimpleCInst(f, addr, inst);
-      addr += inst.size;
+      if (labelIt->second.simple) {
+        // labelIt points to a misaligned label between from and cr.to.
+        // Calculate the previous instruction address and decode its size.
+        uint16_t prevAddr = labelIt->first - labelIt->second.offset;
+        unsigned prevSize = cpuInstSize(decodeOpcode(peek(prevAddr)).addrMode);
+        // Generate a range up to and including the previous instruction.
+        printSimpleCRange(f, Range(from, prevAddr + prevSize - 1));
+
+        // Branch over the misaligned instruction.
+        fprintf(f, "      s_pc = 0x%04x;\n", prevAddr + prevSize);
+        fprintf(f, "      break;\n");
+
+        // Generate the overlapped instruction.
+        fprintf(f, "    // WARNING: simple misaligned label\n");
+        printSimpleCRange(f, Range(labelIt->first, prevAddr + prevSize - 1));
+        // It also branches to the same point.
+        fprintf(f, "      s_pc = 0x%04x;\n", prevAddr + prevSize);
+        fprintf(f, "      break;\n");
+
+        from = prevAddr + prevSize;
+      } else {
+        printSimpleCRange(f, Range(from, cr.to));
+        from = labelIt->first;
+        fprintf(f, "    // WARNING: non-simple misaligned label (not tested)\n");
+      }
+
+      ++labelIt;
     }
   }
 
@@ -90,7 +109,22 @@ void Disas::printSimpleC(FILE *f) {
   printSimpleCEpilogue(f);
 }
 
-void func() {}
+void Disas::printSimpleCRange(FILE *f, Range cr) {
+  for (uint16_t addr = cr.from; addr - 1 != cr.to;) {
+    if (addr == cr.from || codeLabels_.count(addr)) {
+      // Find the end of this BB in order to approximate execution cycles.
+      auto it = codeLabels_.upper_bound(addr);
+      uint16_t bbLast = it != codeLabels_.end() && it->first - 1 < cr.to ? it->first - 1 : cr.to;
+      printf(
+          "    case 0x%04x: // [$%04X..$%04X] %4u bytes\n", addr, addr, bbLast, bbLast - addr + 1);
+      printf("      CYCLES(0x%04x, %ld);\n", addr, lround((bbLast - addr + 1) * 1.7 + 0.5));
+    }
+
+    CPUInst inst = decodeInst(addr, peek3(addr));
+    printSimpleCInst(f, addr, inst);
+    addr += inst.size;
+  }
+}
 
 void Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
   scSelfModOperand_ = false;
