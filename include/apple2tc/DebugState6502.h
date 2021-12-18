@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "apple2tc/BitSet.h"
 #include "apple2tc/d6502.h"
 #include "apple2tc/emu6502.h"
 
@@ -30,13 +31,10 @@ public:
   void resetCollectedData();
 
   /// Enable/disable data collection for disassembler.
-  void setCollect(bool on) {
-    collect_ = on;
-    setDebugBB(on);
-  }
+  void setCollect(Emu6502 *emu, bool on);
 
   /// Record the collected data as JSON to a stream.
-  void finishCollection(std::ostream &os);
+  void finishCollection(const Emu6502 *emu, std::ostream &os);
 
   /// Enable/disable basic block debugging, where only the instruction at the
   /// start of every basic block is printed.
@@ -95,6 +93,8 @@ private:
 private:
   void addRecord(const InstRecord &rec);
   Emu6502::StopReason debugState(Emu6502 *emu, uint16_t pc);
+  Emu6502::StopReason collectData(const Emu6502 *emu, uint16_t pc);
+  void newGeneration(const Emu6502 *emu, Emu6502::Regs regs);
 
 private:
   /// Number of instruction to execute.
@@ -133,4 +133,32 @@ private:
 
   /// Collected branch targets.
   std::unordered_set<uint16_t> branchTargets_{};
+
+  /// Addresses that were written to in the previous generation.
+  BitSet prevMemWritten_{0x10000};
+  /// Keep track of addresses that are written to in the current generation.
+  BitSet curMemWritten_{0x10000};
+  /// Addresses written in the previous generation and executed in the current.
+  BitSet curMemExec_{0x10000};
+
+  /// A descriptor of a range of memory.
+  struct MemDesc {
+    uint16_t addr;
+    uint16_t len;
+  };
+
+  struct Generation {
+    Emu6502::Regs regs;
+    /// Descriptors of memory stored in data.
+    std::vector<MemDesc> descs{};
+    std::vector<uint8_t> data{};
+    Generation() {}
+
+    void addRange(uint16_t addr, uint16_t len, const uint8_t *d) {
+      this->descs.push_back(MemDesc{.addr = addr, .len = len});
+      this->data.insert(this->data.end(), d, d + len);
+    }
+  };
+
+  std::vector<Generation> generations_{};
 };

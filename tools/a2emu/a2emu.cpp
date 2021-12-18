@@ -279,7 +279,7 @@ void A2Emu::cliCommandApply() {
     break;
   case CLIArgs::Collect:
     emu_.addDebugFlags(Emu6502::DebugASM);
-    dbg_.setCollect(true);
+    dbg_.setCollect(&emu_, true);
     dbg_.setLimit(cliArgs_.limit);
     break;
   }
@@ -305,7 +305,7 @@ void A2Emu::simulationStop() {
     } else {
       os = &std::cout;
     }
-    dbg_.finishCollection(*os);
+    dbg_.finishCollection(&emu_, *os);
     os->flush();
   }
 
@@ -489,12 +489,13 @@ void A2Emu::printDB(uint16_t startAddr) {
 
 static const char *s_argv0 = "a2emu";
 static void printHelp() {
-  printf("syntax: %s [options] [inputFile [outputFile]]\n", s_argv0);
+  printf("syntax: %s [options] [inputFile]\n", s_argv0);
   printf(" --help           This help\n");
   printf(" --run            Run the binary\n");
   printf(" --trace          Trace the binary\n");
   printf(" --collect        Collect data from running and write to outputFile or stdout\n");
   printf(" --limit=number   Number of basic blocks to trace/collect\n");
+  printf(" --out=path       Specify output file\n");
 }
 
 static CLIArgs parseCLI(int argc, char **argv) {
@@ -527,6 +528,10 @@ static CLIArgs parseCLI(int argc, char **argv) {
       }
       continue;
     }
+    if (strncmp(arg, "--out=", 6) == 0) {
+      cliArgs.outputPath = arg + 6;
+      continue;
+    }
     if (arg[0] == '-') {
       fprintf(stderr, "Invalid option '%s'\n", arg);
       printHelp();
@@ -534,10 +539,6 @@ static CLIArgs parseCLI(int argc, char **argv) {
     }
     if (cliArgs.runPath.empty()) {
       cliArgs.runPath = arg;
-      continue;
-    }
-    if (cliArgs.outputPath.empty()) {
-      cliArgs.outputPath = arg;
       continue;
     }
     fprintf(stderr, "Extra command line argument '%s'\n", arg);

@@ -11,17 +11,13 @@
 
 /// Reset all debugging.
 void DebugState6502::reset() {
-  setCollect(false);
+  setCollect(nullptr, false);
   setDebugBB(false);
   setBuffering(false);
   setLimit(0);
   clearHistory();
   clearWatches();
   resetCollectedData();
-}
-
-void DebugState6502::resetCollectedData() {
-  branchTargets_.clear();
 }
 
 void DebugState6502::setBuffering(bool buffering) {
@@ -115,6 +111,14 @@ void DebugState6502::addRecord(const InstRecord &rec) {
   history_.push_back(rec);
 }
 
+static inline ThreeBytes ram_peek3(const Emu6502 *emu, uint16_t addr) {
+  ThreeBytes b;
+  b.d[0] = emu->ram_peek(addr);
+  b.d[1] = emu->ram_peek(addr + 1);
+  b.d[2] = emu->ram_peek(addr + 2);
+  return b;
+}
+
 Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu, uint16_t pc) {
   // Don't debug in areas that have been excluded.
   for (auto p : nonDebug_) {
@@ -122,24 +126,13 @@ Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu, uint16_t pc) {
       return Emu6502::StopReason::None;
   }
 
-  bool wasBranchTarget = branchTarget_;
-  if (debugBB_) {
-    // Determine whether the next instruction is a branch target.
-    CPUOpcode opc = decodeOpcode(emu->ram_peek(pc));
-    switch (opc.kind) {
-    case CPUInstKind::BRK:
-    case CPUInstKind::JMP:
-    case CPUInstKind::JSR:
-    case CPUInstKind::RTI:
-    case CPUInstKind::RTS:
-      branchTarget_ = true;
-      break;
-    default:
-      // Only relative branches use relative address mode.
-      branchTarget_ = opc.addrMode == CPUAddrMode::Rel;
-      break;
-    }
+  if (collect_)
+    return collectData(emu, pc);
 
+  if (debugBB_) {
+    bool wasBranchTarget = branchTarget_;
+    CPUOpcode opc = decodeOpcode(emu->ram_peek(pc));
+    branchTarget_ = instIsBranch(opc.kind, opc.addrMode);
     // If the current instruction was not a branch, leave.
     if (!wasBranchTarget)
       return Emu6502::StopReason::None;
@@ -149,16 +142,8 @@ Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu, uint16_t pc) {
     return Emu6502::StopReason::StopRequesed;
   ++icount_;
 
-  if (collect_) {
-    if (wasBranchTarget)
-      branchTargets_.insert(pc);
-    return Emu6502::StopReason::None;
-  }
-
   Emu6502::Regs r = emu->getRegs();
-  InstRecord rec = {.regs = r};
-  for (unsigned i = 0; i != 3; ++i)
-    rec.bytes.d[i] = emu->ram_peek(pc + i);
+  InstRecord rec = {.regs = r, .bytes = ram_peek3(emu, pc)};
 
   if (buffering_) {
     addRecord(rec);
@@ -191,4 +176,101 @@ Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu, uint16_t pc) {
   putchar('\n');
 
   return Emu6502::StopReason::None;
+}
+
+void DebugState6502::setCollect(Emu6502 *emu, bool on) {
+  if (on && !collect_) {
+    curMemWritten_.clear();
+    prevMemWritten_.clear();
+    curMemExec_.clear();
+    generations_.clear();
+    generations_.emplace_back();
+    generations_.back().regs = emu->getRegs();
+  }
+  collect_ = on;
+}
+
+/// Calculate the effective address that would be operated on by the instruction.
+/// If the instruction doesn't access memory, just return 0, so it is always safe
+/// to call this function.
+static uint16_t
+operandEA(const Emu6502 *emu, Emu6502::Regs regs, CPUAddrMode am, uint16_t operand) {
+  switch (am) {
+  case CPUAddrMode::Abs:
+  case CPUAddrMode::Rel:
+  case CPUAddrMode::Zpg:
+    return operand;
+
+  case CPUAddrMode::Abs_X:
+    return operand + regs.x;
+  case CPUAddrMode::Abs_Y:
+    return operand + regs.y;
+  case CPUAddrMode::Ind:
+    return emu->ram_peek16(operand);
+  case CPUAddrMode::X_Ind:
+    return emu->ram_peek16((operand + regs.x) & 0xFF);
+  case CPUAddrMode::Ind_Y:
+    return emu->ram_peek16(operand & 0xFF) + regs.y;
+  case CPUAddrMode::Zpg_X:
+    return (operand + regs.x) & 255;
+  case CPUAddrMode::Zpg_Y:
+    return (operand + regs.y) & 255;
+
+  default:
+    return 0;
+  }
+}
+
+Emu6502::StopReason DebugState6502::collectData(const Emu6502 *emu, uint16_t pc) {
+  ThreeBytes b = ram_peek3(emu, pc);
+  CPUInst inst = decodeInst(pc, b);
+  Emu6502::Regs regs = emu->getRegs();
+  uint16_t ea = operandEA(emu, regs, inst.addrMode, inst.operand);
+
+  if (curMemWritten_.get(pc)) {
+    // Are we executing an opcode that was modified in the current generation?
+    // If so, start a new generation.
+    newGeneration(emu, regs);
+    curMemExec_.setMulti(pc, pc + inst.size, true);
+  } else if (prevMemWritten_.get(pc)) {
+    // We are executing something that was written in the previous generation.
+    // Record the range of the entire instruction.
+    curMemExec_.setMulti(pc, pc + inst.size, true);
+  }
+
+  if (instIsBranch(inst.kind, inst.addrMode)) {
+    branchTargets_.insert(ea);
+    if (limit_ && icount_ >= limit_)
+      return Emu6502::StopReason::StopRequesed;
+    ++icount_;
+  } else if (instWritesMemNormal(inst.kind, inst.addrMode)) {
+    curMemWritten_.set(ea, true);
+  }
+  return Emu6502::StopReason::None;
+}
+
+void DebugState6502::newGeneration(const Emu6502 *emu, Emu6502::Regs regs) {
+  generations_.emplace_back();
+  auto &gen = generations_.back();
+  gen.regs = regs;
+
+  unsigned from = 0;
+  while ((from = curMemExec_.findSetBit(from)) != curMemExec_.size()) {
+    unsigned to = curMemExec_.findClearBit(from + 1);
+    gen.addRange(from, to - from, emu->getMainRAM() + from);
+    if (to == curMemExec_.size())
+      break;
+    from = to + 1;
+  }
+
+  fprintf(stderr, "Saved %zu bytes to previous generation\n", gen.data.size());
+
+  curMemExec_.clear();
+  prevMemWritten_.swap(curMemWritten_);
+  curMemWritten_.clear();
+}
+
+void DebugState6502::resetCollectedData() {
+  branchTargets_.clear();
+  generations_.clear();
 }
