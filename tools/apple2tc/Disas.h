@@ -62,9 +62,48 @@ struct MemRange : public Range {
   MemRange(uint16_t from, uint16_t to, bool writable) : Range(from, to), writable(writable) {}
 };
 
+
+struct Regs {
+  /// Negative.
+  static constexpr uint8_t STATUS_N = 0x80;
+  /// Overflow.
+  static constexpr uint8_t STATUS_V = 0x40;
+  /// Ignored..
+  static constexpr uint8_t STATUS_IGNORED = 0x20;
+  /// Break.
+  static constexpr uint8_t STATUS_B = 0x10;
+  /// Decimal.
+  static constexpr uint8_t STATUS_D = 0x08;
+  /// Interrupt.
+  static constexpr uint8_t STATUS_I = 0x04;
+  /// Zero.
+  static constexpr uint8_t STATUS_Z = 0x02;
+  /// Carry.
+  static constexpr uint8_t STATUS_C = 0x01;
+
+  uint16_t pc = 0;
+  uint8_t a = 0;
+  uint8_t x = 0;
+  uint8_t y = 0;
+  uint8_t status = 0;
+  uint8_t sp = 0;
+};
+
 struct RuntimeData {
+  struct Segment {
+    uint16_t addr;
+    std::vector<uint8_t> bytes;
+  };
+  struct Generation {
+    Regs regs{};
+    std::vector<Segment> code{};
+    Generation() {};
+  };
+
   /// All branch targets seen at runtime, sorted by address.
   std::vector<uint16_t> branchTargets;
+  /// All executable generations.
+  std::vector<Generation> generations;
 
   static std::unique_ptr<RuntimeData> load(const std::string &path);
 };
@@ -164,6 +203,9 @@ private:
   /// Code addresses that are being modified. The value indicates whether it is
   /// certain (true), or is indexed (false).
   std::unordered_map<uint16_t, bool> selfModified_{};
+
+  /// Current generation from RuntimeData.
+  unsigned curGeneration_ = 0;
 
   uint8_t memory_[0x10000];
 };

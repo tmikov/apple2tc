@@ -85,6 +85,7 @@ std::set<Range, CompareRange>::iterator Disas::findCodeRange(uint16_t addr) {
 }
 
 void Disas::addCodeRange(Range range) {
+  // FIXME: support overlapping ranges.
   auto next = range.to != 0xFFFF ? findCodeRange(range.to + 1) : codeRanges_.end();
   if (next != codeRanges_.end()) {
     range |= *next;
@@ -173,10 +174,23 @@ void Disas::run() {
   if (!start_.has_value())
     throw std::logic_error("starting address not set");
   addLabel(*start_, *start_, "START");
+
+  if (!runDataPath_.empty())
+    runData_ = RuntimeData::load(runDataPath_);
+
+  // Just naively load all runtime data generations.
+  if (runData_) {
+    for(const auto &gen : runData_->generations) {
+      for(const auto &seg: gen.code) {
+        // FIXME: add memory and code ranges.
+        memcpy(memory_ + seg.addr, seg.bytes.data(), seg.bytes.size());
+      }
+    }
+  }
+
   identifyCodeRanges();
 
-  if (!runDataPath_.empty()) {
-    runData_ = RuntimeData::load(runDataPath_);
+  if (runData_) {
     unsigned newLabelCount = 0;
     for (auto addr : runData_->branchTargets) {
       newLabelCount += addLabel(addr, std::nullopt);

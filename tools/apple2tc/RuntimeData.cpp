@@ -26,5 +26,23 @@ std::unique_ptr<RuntimeData> RuntimeData::load(const std::string &path) {
   auto res = std::make_unique<RuntimeData>();
   res->branchTargets = static_cast<std::vector<uint16_t>>(root["BranchTargets"]);
 
+  for (const json &jgen : root["generations"]) {
+    res->generations.emplace_back();
+
+    const auto &jregs = jgen["regs"];
+    res->generations.back().regs = Regs{
+        .pc = jregs["pc"],
+        .a = jregs["a"],
+        .x = jregs["x"],
+        .y = jregs["y"],
+        .status = jregs["status"],
+        .sp = jregs["sp"],
+    };
+
+    for (const json &jseg : jgen["code"]) {
+      res->generations.back().code.push_back(Segment{.addr = jseg["addr"], .bytes = jseg["bytes"]});
+    }
+  }
+
   return res;
 }
