@@ -5,5 +5,6 @@
 
 add_library(support STATIC
   support.cpp ${A2TC_INC}/support.h
+  ${A2TC_INC}/BitSet.h
   )
 
