@@ -169,62 +169,6 @@ void Disas::identifyCodeRanges() {
   }
 }
 
-static inline bool instAccessesData(CPUAddrMode am) {
-  return cpuAddrModeHasOperand(am) && am != CPUAddrMode::Imm;
-}
-
-static bool instWritesMemNormal(CPUInstKind kind, CPUAddrMode am) {
-  switch (kind) {
-  case CPUInstKind::ASL:
-  case CPUInstKind::LSR:
-  case CPUInstKind::ROL:
-  case CPUInstKind::ROR:
-    return am != CPUAddrMode::A;
-
-  case CPUInstKind::DEC:
-  case CPUInstKind::INC:
-  case CPUInstKind::STA:
-  case CPUInstKind::STX:
-  case CPUInstKind::STY:
-    return true;
-
-  default:
-    return false;
-  }
-}
-
-/// Return true if the operand is the effective address the instruction is accessing.
-static bool operandIsEA(CPUAddrMode am) {
-  switch (am) {
-  case CPUAddrMode::Abs:
-  case CPUAddrMode::Abs_X:
-  case CPUAddrMode::Abs_Y:
-  case CPUAddrMode::Zpg:
-  case CPUAddrMode::Zpg_X:
-  case CPUAddrMode::Zpg_Y:
-    return true;
-
-  default:
-    return false;
-  }
-}
-
-static bool operandIsIndexed(CPUAddrMode am) {
-  switch (am) {
-  case CPUAddrMode::Abs_X:
-  case CPUAddrMode::Abs_Y:
-  case CPUAddrMode::Ind:
-  case CPUAddrMode::X_Ind:
-  case CPUAddrMode::Ind_Y:
-  case CPUAddrMode::Zpg_X:
-  case CPUAddrMode::Zpg_Y:
-    return true;
-
-  default:
-    return false;
-  }
-}
-
 void Disas::run() {
   if (!start_.has_value())
     throw std::logic_error("starting address not set");

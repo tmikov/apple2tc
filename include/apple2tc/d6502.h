@@ -180,10 +180,81 @@ CPUInst decodeInst(uint16_t pc, ThreeBytes bytes);
 FormattedInst
 formatInst(CPUInst inst, ThreeBytes bytes, const std::function<std::string(CPUInst)> &resolve = {});
 
-
 /// Convert from a string to CPUInstKind.
 std::optional<CPUInstKind> findInstKind(const char *name);
 
 /// Return the instruction encoding of the specified instruction kind with the
 /// specified address mode.
 std::optional<uint8_t> encodeInst(CPUOpcode opcode);
+
+inline bool instAccessesData(CPUAddrMode am) {
+  return cpuAddrModeHasOperand(am) && am != CPUAddrMode::Imm;
+}
+
+/// Return true if the instruction writes to memory in a "normal" way, as opposed
+/// to implicitly manipulating the stack.
+inline bool instWritesMemNormal(CPUInstKind kind, CPUAddrMode am) {
+  switch (kind) {
+  case CPUInstKind::ASL:
+  case CPUInstKind::LSR:
+  case CPUInstKind::ROL:
+  case CPUInstKind::ROR:
+    return am != CPUAddrMode::A;
+
+  case CPUInstKind::DEC:
+  case CPUInstKind::INC:
+  case CPUInstKind::STA:
+  case CPUInstKind::STX:
+  case CPUInstKind::STY:
+    return true;
+
+  default:
+    return false;
+  }
+}
+
+/// Return true if the operand is the effective address the instruction is accessing.
+inline bool operandIsEA(CPUAddrMode am) {
+  switch (am) {
+  case CPUAddrMode::Abs:
+  case CPUAddrMode::Abs_X:
+  case CPUAddrMode::Abs_Y:
+  case CPUAddrMode::Zpg:
+  case CPUAddrMode::Zpg_X:
+  case CPUAddrMode::Zpg_Y:
+    return true;
+
+  default:
+    return false;
+  }
+}
+
+inline bool operandIsIndexed(CPUAddrMode am) {
+  switch (am) {
+  case CPUAddrMode::Abs_X:
+  case CPUAddrMode::Abs_Y:
+  case CPUAddrMode::Ind:
+  case CPUAddrMode::X_Ind:
+  case CPUAddrMode::Ind_Y:
+  case CPUAddrMode::Zpg_X:
+  case CPUAddrMode::Zpg_Y:
+    return true;
+
+  default:
+    return false;
+  }
+}
+
+inline bool instIsBranch(CPUInstKind kind, CPUAddrMode am) {
+  switch (kind) {
+  case CPUInstKind::BRK:
+  case CPUInstKind::JMP:
+  case CPUInstKind::JSR:
+  case CPUInstKind::RTI:
+  case CPUInstKind::RTS:
+    return true;
+  default:
+    // Only relative branches use relative address mode.
+    return am == CPUAddrMode::Rel;
+  }
+}
