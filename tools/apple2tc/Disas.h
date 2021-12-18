@@ -62,7 +62,6 @@ struct MemRange : public Range {
   MemRange(uint16_t from, uint16_t to, bool writable) : Range(from, to), writable(writable) {}
 };
 
-
 struct Regs {
   /// Negative.
   static constexpr uint8_t STATUS_N = 0x80;
@@ -97,7 +96,7 @@ struct RuntimeData {
   struct Generation {
     Regs regs{};
     std::vector<Segment> code{};
-    Generation() {};
+    Generation(){};
   };
 
   /// All branch targets seen at runtime, sorted by address.
@@ -149,6 +148,11 @@ private:
   void addImplicitLabel(uint16_t addr);
 
   void identifyCodeRanges();
+  /// On 6502 it is a common technique to "skip" over an instruction by placing it
+  /// inside the operand of the previous instruction. This saves one byte compared
+  /// to a branch (yay!). So, we have to identify all labels that point "in the
+  /// middle" of an instruction and treat them specially.
+  void detectMisalignedLabels();
 
   void printAsmCodeRange(Range r);
   void printAsmDataRange(Range r);
@@ -186,7 +190,7 @@ private:
       name[0] = 0;
     }
 
-    bool implicit() const {
+    [[nodiscard]] bool implicit() const {
       return comingFrom.empty();
     }
   };
@@ -197,6 +201,16 @@ private:
   std::map<uint16_t, LabelDesc> codeLabels_{};
   std::map<uint16_t, LabelDesc> dataLabels_{};
   std::deque<uint16_t> work_{};
+
+  struct MisalignedDesc {
+    // If true, the misaligned label points to an instruction extending exactly
+    // to the end of the "parent" instruction.
+    bool simple;
+  };
+
+  /// Labels that point inside an existing instruction. The bool indicates
+  /// whether the label is simple.
+  std::map<uint16_t, MisalignedDesc> misalignedLabels_{};
 
   /// Instructions that modify code.
   std::unordered_set<uint16_t> selfModifers_{};

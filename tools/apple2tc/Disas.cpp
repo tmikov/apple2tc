@@ -170,6 +170,49 @@ void Disas::identifyCodeRanges() {
   }
 }
 
+void Disas::detectMisalignedLabels() {
+  // This walks over labels in incremental address order.
+  auto labelIt = codeLabels_.begin();
+  if (labelIt == codeLabels_.end())
+    return;
+
+  for (const auto &r : codeRanges_) {
+    for (uint16_t addr = r.from; addr - 1 != r.to;) {
+      CPUOpcode opc = decodeOpcode(peek(addr));
+      if (opc.kind == CPUInstKind::INVALID) {
+        ++addr;
+        continue;
+      }
+      unsigned size = cpuInstSize(opc.addrMode);
+
+      // Look for the first label after the instruction start.
+      while (labelIt->first <= addr) {
+        // If no more labels, we are done.
+        if (++labelIt == codeLabels_.end())
+          return;
+      }
+
+      if (labelIt->first - addr < size) {
+        // Decode the overlapped instruction.
+        CPUOpcode opc1 = decodeOpcode(peek(labelIt->first));
+        unsigned size1 = cpuInstSize(opc1.addrMode);
+        // Does it end exactly where the original instruction ends?
+        bool simple = labelIt->first + size1 == addr + size;
+        misalignedLabels_.try_emplace(labelIt->first, MisalignedDesc{.simple = simple});
+
+        printf(
+            "// Misaligned label (%s) at $%04X\n",
+            simple ? "simple" : "non-simple",
+            labelIt->first);
+        if (!simple)
+          fprintf(stderr, "Warning: non-simple misaligned label at $%04X\n", labelIt->first);
+      }
+
+      addr += size;
+    }
+  }
+}
+
 void Disas::run() {
   if (!start_.has_value())
     throw std::logic_error("starting address not set");
@@ -180,8 +223,8 @@ void Disas::run() {
 
   // Just naively load all runtime data generations.
   if (runData_) {
-    for(const auto &gen : runData_->generations) {
-      for(const auto &seg: gen.code) {
+    for (const auto &gen : runData_->generations) {
+      for (const auto &seg : gen.code) {
         // FIXME: add memory and code ranges.
         memcpy(memory_ + seg.addr, seg.bytes.data(), seg.bytes.size());
       }
@@ -200,6 +243,8 @@ void Disas::run() {
     // Identify additional code ranges.
     identifyCodeRanges();
   }
+
+  detectMisalignedLabels();
 
   // Collect all data labels.
   for (auto r : codeRanges_) {
@@ -289,6 +334,8 @@ void Disas::printAsmListing() {
 void Disas::printAsmCodeRange(Range r) {
   printf("; Code range [$%04x-$%04X]\n", r.from, r.to);
 
+  auto labelIt = misalignedLabels_.upper_bound(r.from);
+
   for (uint16_t addr = r.from; addr - 1 != r.to;) {
     ThreeBytes bytes = peek3(addr);
     CPUInst inst = decodeInst(addr, bytes);
@@ -314,6 +361,7 @@ void Disas::printAsmCodeRange(Range r) {
       printf("/*%04X*/ ", addr);
     }
 
+    // Prepare the disassembled instruction string.
     FormattedInst fmt = formatInst(inst, bytes, [this](CPUInst inst) -> std::string {
       if (inst.addrMode != CPUAddrMode::Imm) {
         auto it = codeLabels_.find(inst.operand);
@@ -326,6 +374,36 @@ void Disas::printAsmCodeRange(Range r) {
       return {};
     });
 
+    // Find a misaligned code label inside the instruction.
+    for (; labelIt != misalignedLabels_.end(); ++labelIt) {
+      if (labelIt->first <= addr)
+        continue;
+      if (labelIt->first - addr >= inst.size)
+        break;
+      // addr < labelIt->first < addr + size.
+      printf(
+          "; WARNING: misaligned label (%s) at $%04X\n",
+          labelIt->second.simple ? "simple" : "non-simple",
+          labelIt->first);
+      printf("/*%04X*/ ", addr);
+      if (labelIt->second.simple) {
+        printf("            DFB    ");
+        for (unsigned i = 0; addr + i != labelIt->first; ++i) {
+          if (i)
+            printf(", ");
+          printf("$%02X", bytes.d[i]);
+        }
+        printf("   ; %s", fmt.inst);
+        if (!fmt.operand.empty())
+          printf(" %s", fmt.operand.c_str());
+        printf("\n");
+        addr = labelIt->first;
+        goto continue_label;
+      } else {
+        printf("; ERROR: don't know how to handle non-simple misaligned label\n");
+      }
+    }
+
     printf("            %-3s", fmt.inst);
     if (!fmt.operand.empty()) {
       printf("    %-16s ; $%04X", fmt.operand.c_str(), inst.operand);
@@ -333,6 +411,8 @@ void Disas::printAsmCodeRange(Range r) {
     putchar('\n');
 
     addr += inst.size;
+
+  continue_label:;
   }
 }
 
