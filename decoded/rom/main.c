@@ -279,7 +279,7 @@ static void init_cb(void) {
   init_window();
   stm_setup();
 
-  g_debug = DebugIO2 | DebugASM;
+  g_debug = DebugIO2; //| DebugASM;
   reset_regs();
   set_regs((regs_t){.pc = 0, .a = 0, .x = 0, .y = 0, .sp = 0xff, .status = STATUS_IGNORED});
 
