@@ -24,6 +24,11 @@ public:
   /// passing the address of DebugState6502 as `ctx`.
   static Emu6502::StopReason debugStateCB(void *ctx, Emu6502 *emu, uint16_t pc);
 
+  /// Whether to attempt to resolve operand addresses to well known AppleII symbols.
+  void setResolveApple2Symbols(bool resolveApple2Symbols) {
+    resolveApple2Symbols_ = resolveApple2Symbols;
+  }
+
   /// Reset all debugging.
   void reset();
 
@@ -88,7 +93,7 @@ private:
 
   /// Print a single InstRecord.
   /// \param showInst - whether to show the instruction bytes and disassembly.
-  static void printRecord(const InstRecord &rec, bool showInst);
+  void printRecord(const InstRecord &rec, bool showInst);
 
 private:
   void addRecord(const InstRecord &rec);
@@ -121,6 +126,8 @@ private:
   bool buffering_ = false;
   unsigned maxHistory_ = 16384;
   std::deque<InstRecord> history_{};
+  /// Whether to attempt to resolve operand addresses to well known AppleII symbols.
+  bool resolveApple2Symbols_ = true;
 
   /// When true, we print the instruction at the beginning of every basic block.
   bool debugBB_ = false;

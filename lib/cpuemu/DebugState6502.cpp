@@ -78,7 +78,7 @@ void DebugState6502::printRecord(const InstRecord &rec, bool showInst) {
   auto r = rec.regs;
   // Address.
   {
-    const char *name = findApple2Symbol(r.pc);
+    const char *name = resolveApple2Symbols_ ? findApple2Symbol(r.pc) : nullptr;
     printf("%04X: %-8s  ", r.pc, name ? name : "");
   }
 
@@ -95,7 +95,8 @@ void DebugState6502::printRecord(const InstRecord &rec, bool showInst) {
     // Dump the next instruction.
     ThreeBytes bytes = rec.bytes;
     auto inst = decodeInst(r.pc, bytes);
-    auto fmt = formatInst(inst, bytes, apple2SymbolResolver);
+    auto fmt = resolveApple2Symbols_ ? formatInst(inst, bytes, apple2SymbolResolver)
+                                     : formatInst(inst, bytes);
     printf("  %-8s    %s", fmt.bytes, fmt.inst);
     if (fmt.operand[0]) {
       printf("  %s", fmt.operand.c_str());
