@@ -80,7 +80,7 @@ typedef struct {
 } a2_sound_t;
 
 void a2_sound_init(a2_sound_t *sound);
-void a2_sound_free(a2_sound_t *sound);
+void a2_sound_done(a2_sound_t *sound);
 
 /// The speaker bit has been accessed at cycle \p cycle.
 void a2_sound_spkr(a2_sound_t *sound, unsigned cpu_freq, unsigned audio_rate, unsigned cycle);
@@ -115,12 +115,22 @@ typedef struct {
   uint8_t last_key;
   /// Video control status.
   uint8_t vid_control;
+  /// Callback when speaker is accessed.
+  void *spkr_cb_ctx;
+  void (*spkr_cb)(void *ctx, unsigned cycles);
   /// Debug flags.
   uint8_t debug;
 } a2_iostate_t;
 
 void a2_io_init(a2_iostate_t *io);
 void a2_io_done(a2_iostate_t *io);
+static inline void a2_io_set_spkr_cb(
+    a2_iostate_t *io,
+    void *spkr_cb_ctx,
+    void (*spkr_cb)(void *ctx, unsigned cycles)) {
+  io->spkr_cb_ctx = spkr_cb_ctx;
+  io->spkr_cb = spkr_cb;
+}
 void a2_io_push_key(a2_iostate_t *io, uint8_t key);
 uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles);
 void a2_io_poke(a2_iostate_t *io, uint16_t addr, uint8_t value, unsigned cycles);

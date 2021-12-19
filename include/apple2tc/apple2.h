@@ -41,11 +41,10 @@ public:
   }
 
   void setSpeakerCB(void *ctx, void (*spkrCB)(void *ctx, unsigned cycles)) {
-    spkrCB_ = spkrCB;
-    spkrCBCtx_ = ctx;
+    a2_io_set_spkr_cb(&io_, ctx, spkrCB);
   }
 
-  const a2_iostate_t *io() const {
+  [[nodiscard]] const a2_iostate_t *io() const {
     return &io_;
   }
   a2_iostate_t *io() {
@@ -60,10 +59,6 @@ protected:
 
 private:
   a2_iostate_t io_;
-
-  /// Callback invoked SPKR ($C03x) access.
-  void (*spkrCB_)(void *ctx, unsigned cycles) = nullptr;
-  void *spkrCBCtx_ = nullptr;
 };
 
 /// Dump the BASIC program as binary tokens.

@@ -20,6 +20,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static bool sound_enabled_ = true;
+
 static sg_bindings bind_;
 static sg_pipeline pip_;
 
@@ -36,8 +38,8 @@ static bool firstFrame_ = true;
 /// characters and as keydown events.
 static int ignoreNextCh_ = -1;
 
-static a2_iostate_t io_;
 static a2_sound_t sound_;
+static a2_iostate_t io_;
 static a2_screen screen_;
 
 uint8_t io_peek(uint16_t addr) {
@@ -189,13 +191,35 @@ static void init_window(void) {
   pip_ = sg_make_pipeline(&pdesc);
 }
 
+/// Callback from a2_io_t, when speaker has been flipped.
+static void speaker_cb(void *ctx, unsigned cycles) {
+  a2_sound_spkr((a2_sound_t *)ctx, A2_CLOCK_FREQ, saudio_sample_rate(), cycles);
+}
+
+/// Callback from saudio to generate new sound samples.
+static void stream_userdata_cb(float *buffer, int num_frames, int num_channels, void *user_data) {
+  a2_sound_cb((a2_sound_t *)user_data, buffer, num_frames, num_channels);
+}
+
 static void init_cb(void) {
   init_window();
   stm_setup();
 
   g_debug = 0;
+  a2_sound_init(&sound_);
   a2_io_init(&io_);
+  a2_io_set_spkr_cb(&io_, &sound_, speaker_cb);
   io_.debug = A2_DEBUG_IO2;
+
+  if (sound_enabled_) {
+    saudio_desc audioDesc = {
+        .num_channels = 1,
+        .stream_userdata_cb = stream_userdata_cb,
+        .user_data = &sound_,
+    };
+    saudio_setup(&audioDesc);
+  }
+
   add_default_nondebug();
   reset_regs();
   set_regs((regs_t){.pc = 0, .a = 0, .x = 0, .y = 0, .sp = 0xff, .status = STATUS_IGNORED});
@@ -203,7 +227,13 @@ static void init_cb(void) {
   init_emulated();
 }
 
-static void cleanup_cb(void) {}
+static void cleanup_cb(void) {
+  sg_shutdown();
+  if (sound_enabled_)
+    saudio_shutdown();
+  a2_io_done(&io_);
+  a2_sound_done(&sound_);
+}
 
 static void simulate_frame(void) {
   if (firstFrame_) {

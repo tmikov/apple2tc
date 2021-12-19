@@ -36,6 +36,7 @@ struct CLIArgs {
     Collect,
   };
   Action action = Action::Run;
+  bool soundEnabled = true;
   unsigned limit = 100000;
   std::string runPath{};
   std::string outputPath{};
@@ -117,18 +118,19 @@ A2Emu::A2Emu(CLIArgs &&cliArgs) : cliArgs_(std::move(cliArgs)) {
 
   a2_sound_init(&sound_);
 
-  saudio_desc audioDesc = {
-      .num_channels = 1,
-      //.sample_rate = 44100,
-      //.buffer_frames = 2048,
-      .stream_userdata_cb =
-          [](float *buffer, int num_frames, int num_channels, void *user_data) {
-            a2_sound_cb((a2_sound_t *)user_data, buffer, num_frames, num_channels);
-          },
-      .user_data = &sound_,
-  };
-  saudio_setup(&audioDesc);
-
+  if (cliArgs_.soundEnabled) {
+    saudio_desc audioDesc = {
+        .num_channels = 1,
+        //.sample_rate = 44100,
+        //.buffer_frames = 2048,
+        .stream_userdata_cb =
+            [](float *buffer, int num_frames, int num_channels, void *user_data) {
+              a2_sound_cb((a2_sound_t *)user_data, buffer, num_frames, num_channels);
+            },
+        .user_data = &sound_,
+    };
+    saudio_setup(&audioDesc);
+  }
   emu_.setSpeakerCB(&sound_, [](void *ctx, unsigned cycles) {
     a2_sound_spkr((a2_sound_t *)ctx, Emu6502::CLOCK_FREQ, saudio_sample_rate(), cycles);
   });
@@ -198,8 +200,9 @@ void A2Emu::initWindow() {
 
 A2Emu::~A2Emu() {
   sg_shutdown();
-  saudio_shutdown();
-  a2_sound_free(&sound_);
+  if (cliArgs_.soundEnabled)
+    saudio_shutdown();
+  a2_sound_done(&sound_);
 }
 
 /// Load a DOS3.3 binary buffer into emulated RAM.
@@ -508,6 +511,7 @@ static void printHelp() {
   printf(" --collect        Collect data from running and write to outputFile or stdout\n");
   printf(" --limit=number   Number of basic blocks to trace/collect\n");
   printf(" --out=path       Specify output file\n");
+  printf(" --no-sound       Disable sound\n");
 }
 
 static CLIArgs parseCLI(int argc, char **argv) {
@@ -542,6 +546,10 @@ static CLIArgs parseCLI(int argc, char **argv) {
     }
     if (strncmp(arg, "--out=", 6) == 0) {
       cliArgs.outputPath = arg + 6;
+      continue;
+    }
+    if (strcmp(arg, "--no-sound") == 0) {
+      cliArgs.soundEnabled = false;
       continue;
     }
     if (arg[0] == '-') {

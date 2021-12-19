@@ -226,7 +226,7 @@ void a2_sound_init(a2_sound_t *sound) {
   sound->last_state = -0.1f;
 }
 
-void a2_sound_free(a2_sound_t *sound) {
+void a2_sound_done(a2_sound_t *sound) {
   sound_queue_free(&sound->sq);
 }
 
@@ -295,6 +295,7 @@ void a2_io_init(a2_iostate_t *io) {
   memset(io, 0, sizeof(*io));
   io->vid_control = A2_VC_TEXT;
 }
+
 void a2_io_done(a2_iostate_t *io) {
   memset(io, 0, sizeof(*io));
 }
@@ -333,10 +334,10 @@ uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
       fprintf(stdout, "[%u] TAPEOUT\n", cycles);
     break;
   case A2_SPKR:
-    if (io->debug & A2_DEBUG_IO2)
+    if (io->debug & A2_DEBUG_IO1)
       fprintf(stdout, "[%u] SPKR\n", cycles);
-    // if (spkrCB_)
-    //   spkrCB_(spkrCBCtx_, cycles);
+    if (io->spkr_cb)
+      io->spkr_cb(io->spkr_cb_ctx, cycles);
     break;
   case A2_STROBE:
     if (io->debug & A2_DEBUG_IO1)
