@@ -7,6 +7,12 @@
 
 #pragma once
 
+#ifdef __cplusplus
+// Conflicts require these to be included before <stdatomic.h> in C++.
+#include <atomic>
+#include <memory>
+#endif
+
 #include <assert.h>
 #include <stdatomic.h>
 #include <stdbool.h>

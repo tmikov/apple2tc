@@ -7,7 +7,11 @@
 
 #include "apple2tc/a2io.h"
 
+#include "apple2tc/apple2iodefs.h"
+
 #include "font.h"
+
+#include <stdio.h>
 
 void apple2_decode_text_screen(
     const uint8_t *pageStart,
@@ -285,4 +289,127 @@ void a2_sound_cb(a2_sound_t *sound, float *buffer, unsigned num_frames, unsigned
 
   if (num_frames)
     memset(buffer, 0, sizeof(float) * num_channels * num_frames);
+}
+
+void a2_io_init(a2_iostate_t *io) {
+  memset(io, 0, sizeof(*io));
+  io->vid_control = A2_VC_TEXT;
+}
+void a2_io_done(a2_iostate_t *io) {
+  memset(io, 0, sizeof(*io));
+}
+
+void a2_io_push_key(a2_iostate_t *io, uint8_t key) {
+  if (io->keys_count == A2_KBD_QUEUE_SIZE)
+    return;
+  io->keys[(io->keys_head + io->keys_count++) % A2_KBD_QUEUE_SIZE] = key;
+}
+
+static uint8_t kbd(a2_iostate_t *io) {
+  return io->keys_count == 0 ? io->last_key : io->keys[io->keys_head] | 0x80;
+}
+
+static void kbdstrb(a2_iostate_t *io) {
+  if (io->keys_count) {
+    io->last_key = io->keys[io->keys_head] & 0x7F;
+    io->keys_head = (io->keys_head + 1) % A2_KBD_QUEUE_SIZE;
+    --io->keys_count;
+  }
+}
+
+uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
+  switch (addr & 0xCFF0) {
+  case A2_KBD:
+    if (io->debug & A2_DEBUG_IO1)
+      fprintf(stdout, "[%u] KBD\n", cycles);
+    return kbd(io);
+  case A2_KBDSTRB:
+    if (io->debug & A2_DEBUG_IO2)
+      fprintf(stdout, "[%u] KBDSTRB\n", cycles);
+    kbdstrb(io);
+    break;
+  case A2_TAPEOUT:
+    if (io->debug & A2_DEBUG_IO1)
+      fprintf(stdout, "[%u] TAPEOUT\n", cycles);
+    break;
+  case A2_SPKR:
+    if (io->debug & A2_DEBUG_IO2)
+      fprintf(stdout, "[%u] SPKR\n", cycles);
+    // if (spkrCB_)
+    //   spkrCB_(spkrCBCtx_, cycles);
+    break;
+  case A2_STROBE:
+    if (io->debug & A2_DEBUG_IO1)
+      fprintf(stdout, "[%u] STROBE\n", cycles);
+    break;
+
+  case A2_TXTCLR:
+    switch (addr) {
+    case A2_TXTCLR:
+      if (io->debug & A2_DEBUG_IO1)
+        fprintf(stdout, "[%u] TXTCLR\n", cycles);
+      io->vid_control &= ~A2_VC_TEXT;
+      break;
+    case A2_TXTSET:
+      if (io->debug & A2_DEBUG_IO1)
+        fprintf(stdout, "[%u] TXTSET\n", cycles);
+      io->vid_control |= A2_VC_TEXT;
+      break;
+    case A2_MIXCLR:
+      if (io->debug & A2_DEBUG_IO1)
+        fprintf(stdout, "[%u] MIXCLR\n", cycles);
+      io->vid_control &= ~A2_VC_MIXED;
+      break;
+    case A2_MIXSET:
+      if (io->debug & A2_DEBUG_IO1)
+        fprintf(stdout, "[%u] MIXSET\n", cycles);
+      io->vid_control |= A2_VC_MIXED;
+      break;
+    case A2_LOWSCR:
+      if (io->debug & A2_DEBUG_IO1)
+        fprintf(stdout, "[%u] LOWSCR\n", cycles);
+      io->vid_control &= ~A2_VC_PAGE2;
+      break;
+    case A2_HISCR:
+      if (io->debug & A2_DEBUG_IO1)
+        fprintf(stdout, "[%u] HISCR\n", cycles);
+      io->vid_control |= A2_VC_PAGE2;
+      break;
+    case A2_LORES:
+      if (io->debug & A2_DEBUG_IO1)
+        fprintf(stdout, "[%u] LORES\n", cycles);
+      io->vid_control &= ~A2_VC_HIRES;
+      break;
+    case A2_HIRES:
+      if (io->debug & A2_DEBUG_IO1)
+        fprintf(stdout, "[%u] HIRES\n", cycles);
+      io->vid_control |= A2_VC_HIRES;
+      break;
+    default:
+      if (io->debug & A2_DEBUG_IO1)
+        fprintf(stdout, "[%u] ANNUNCIATORS $%04X\n", cycles, addr);
+      break;
+    }
+    break;
+
+  default:
+    fprintf(stderr, "[%u] Unsupported IO location read $%04X\n", cycles, addr);
+  }
+
+  return 0;
+}
+
+void a2_io_poke(a2_iostate_t *io, uint16_t addr, uint8_t value, unsigned cycles) {
+  a2_io_peek(io, addr, cycles);
+  a2_io_peek(io, addr, cycles);
+}
+
+/// Return the starting offset of the active Hires page.
+uint16_t a2_io_get_hires_page_offset(const a2_iostate_t *io) {
+  return io->vid_control & A2_VC_PAGE2 ? A2_HGR2SCRN : A2_HGR1SCRN;
+}
+
+/// Return the starting address of the active text page.
+uint16_t a2_io_get_text_page_offset(const a2_iostate_t *io) {
+  return io->vid_control & A2_VC_PAGE2 ? A2_TXT2SCRN : A2_TXT1SCRN;
 }

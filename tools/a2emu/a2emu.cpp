@@ -19,7 +19,6 @@
 #include "apple2plus_rom.h"
 #include "apple2tc/sokol/blit.h"
 
-
 #include <algorithm>
 #include <cctype>
 #include <charconv>
@@ -331,7 +330,7 @@ void A2Emu::event(const sapp_event *ev) {
     else if (isalpha(k))
       k = toupper(k);
     if (k != toIgnore)
-      emu_.pushKey(k);
+      a2_io_push_key(emu_.io(), k);
   } else if (ev->type == SAPP_EVENTTYPE_KEY_DOWN) {
     switch (ev->key_code) {
     case SAPP_KEYCODE_F1:
@@ -346,16 +345,16 @@ void A2Emu::event(const sapp_event *ev) {
     case SAPP_KEYCODE_DELETE:
     case SAPP_KEYCODE_BACKSPACE:
     case SAPP_KEYCODE_LEFT:
-      emu_.pushKey(ignoreNextCh_ = 8);
+      a2_io_push_key(emu_.io(), ignoreNextCh_ = 8);
       break;
     case SAPP_KEYCODE_RIGHT:
-      emu_.pushKey(ignoreNextCh_ = 21); // CTRL+U
+      a2_io_push_key(emu_.io(), ignoreNextCh_ = 21); // CTRL+U
       break;
     case SAPP_KEYCODE_ENTER:
-      emu_.pushKey(ignoreNextCh_ = 13);
+      a2_io_push_key(emu_.io(), ignoreNextCh_ = 13);
       break;
     case SAPP_KEYCODE_ESCAPE:
-      emu_.pushKey(ignoreNextCh_ = 27);
+      a2_io_push_key(emu_.io(), ignoreNextCh_ = 27);
       break;
     default:
       break;
@@ -415,17 +414,28 @@ void A2Emu::updateScreen() {
   // Milliseconds since hw reset. Used to determine blink phase.
   auto ms = (uint64_t)stm_ms(stm_diff(curFrameTick_, firstFrameTick_));
 
-  switch (emu_.getVidMode()) {
-  case EmuApple2::VidMode::TEXT:
-    apple2_render_text_screen(emu_.getTextPageAddr(), &screen_, ms);
+  switch (a2_io_get_vidmode(emu_.io())) {
+  case A2_VIDMODE_TEXT:
+    apple2_render_text_screen(
+        emu_.getMainRAM() + a2_io_get_text_page_offset(emu_.io()), &screen_, ms);
     break;
-  case EmuApple2::VidMode::GR:
-    apple2_render_gr_screen(emu_.getTextPageAddr(), &screen_, ms, emu_.isVidMixed());
+  case A2_VIDMODE_GR:
+    apple2_render_gr_screen(
+        emu_.getMainRAM() + a2_io_get_text_page_offset(emu_.io()),
+        &screen_,
+        ms,
+        a2_io_is_vidmode_mixed(emu_.io()));
     break;
-  case EmuApple2::VidMode::HGR:
+  case A2_VIDMODE_HGR:
+  default:;
     bool mono = false;
     apple2_render_hgr_screen(
-        emu_.getHiresPageAddr(), emu_.getTextPageAddr(), &screen_, ms, emu_.isVidMixed(), mono);
+        emu_.getMainRAM() + a2_io_get_hires_page_offset(emu_.io()),
+        emu_.getMainRAM() + a2_io_get_text_page_offset(emu_.io()),
+        &screen_,
+        ms,
+        a2_io_is_vidmode_mixed(emu_.io()),
+        mono);
     break;
   }
 }

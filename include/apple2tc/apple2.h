@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "apple2tc/a2io.h"
 #include "apple2tc/emu6502.h"
 
 #include <cstdio>
@@ -32,68 +33,23 @@ public:
   static constexpr uint16_t IO_RANGE_START = 0xC000;
   static constexpr uint16_t IO_RANGE_END = 0xCFFF;
 
-  EmuApple2() : Emu6502(IO_RANGE_START, IO_RANGE_END) {}
+  EmuApple2() : Emu6502(IO_RANGE_START, IO_RANGE_END) {
+    a2_io_init(&io_);
+  }
+  ~EmuApple2() {
+    a2_io_done(&io_);
+  }
 
-  void setSpeakerCB(void * ctx, void (*spkrCB)(void *ctx, unsigned cycles)) {
+  void setSpeakerCB(void *ctx, void (*spkrCB)(void *ctx, unsigned cycles)) {
     spkrCB_ = spkrCB;
     spkrCBCtx_ = ctx;
   }
 
-  void pushKey(int key) {
-    keys_.push_back(key & 0x7F);
+  const a2_iostate_t *io() const {
+    return &io_;
   }
-
-  /// Provide access to the keyboard queue.
-  std::vector<uint8_t> &getKeys() {
-    return keys_;
-  }
-
-  /// Encoding of the video control bits.
-  enum VidControl {
-    /// When set, text, otherwise graphics (default set).
-    VCText = 1,
-    /// When set, mixed graphics with 4-lines of text below (default clr).
-    VCMixed = 2,
-    /// When set, display page 2 (default clr).
-    VCPage2 = 4,
-    /// When set, high resolution graphics (default clr),
-    VCHires = 8,
-  };
-
-  /// Return the status of the video control bits.
-  [[nodiscard]] uint8_t getVidControl() const {
-    return vidControl_;
-  }
-
-  /// Video mode.
-  enum class VidMode { TEXT, GR, HGR };
-
-  /// Decode and return the vid control bits as a video mode.
-  [[nodiscard]] VidMode getVidMode() const {
-    return vidControl_ & VCText ? VidMode::TEXT
-        : vidControl_ & VCHires ? VidMode::HGR
-                                : VidMode::GR;
-  }
-
-  /// Return true if this is a mixed graphics mode (graphics with 4 lines of
-  /// text in the bottom).
-  [[nodiscard]] bool isVidMixed() const {
-    return (vidControl_ & (VCText | VCMixed)) == VCMixed;
-  }
-
-  /// Decode the vid ctrl bits to return an actuve page number: 0 or 1.
-  [[nodiscard]] uint8_t getVidPageNo() const {
-    return (vidControl_ & VCPage2) ? 1 : 0;
-  }
-
-  /// Return the starting address of the active Hires page.
-  [[nodiscard]] const uint8_t *getHiresPageAddr() const {
-    return getMainRAM() + (vidControl_ & VCPage2 ? HGR2SCRN : HGR1SCRN);
-  }
-
-  /// Return the starting address of the active text page.
-  [[nodiscard]] const uint8_t *getTextPageAddr() const {
-    return getMainRAM() + (vidControl_ & VCPage2 ? TXT2SCRN : TXT1SCRN);
+  a2_iostate_t *io() {
+    return &io_;
   }
 
 protected:
@@ -103,20 +59,11 @@ protected:
   void ioPoke(uint16_t addr, uint8_t value) override;
 
 private:
-  uint8_t kbd();
-  void kbdstrb();
-
-private:
-  /// Input keyboard queue.
-  std::vector<uint8_t> keys_{};
-  /// The last key that was returned.
-  uint8_t lastKey_ = 0;
-
-  uint8_t vidControl_ = VCText;
+  a2_iostate_t io_;
 
   /// Callback invoked SPKR ($C03x) access.
   void (*spkrCB_)(void *ctx, unsigned cycles) = nullptr;
-  void * spkrCBCtx_ = nullptr;
+  void *spkrCBCtx_ = nullptr;
 };
 
 /// Dump the BASIC program as binary tokens.

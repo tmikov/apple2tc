@@ -36,125 +36,16 @@ static bool firstFrame_ = true;
 /// characters and as keydown events.
 static int ignoreNextCh_ = -1;
 
-// Input keyboard queue.
-#define KEY_QUEUE_SIZE 32
-static uint8_t s_keys[KEY_QUEUE_SIZE];
-static unsigned s_keys_head = 0;
-static unsigned s_keys_count = 0;
-/// The last key that was returned.
-static uint8_t s_last_key = 0;
-
+static a2_iostate_t io_;
 static a2_sound_t sound_;
 static a2_screen screen_;
 
-static void push_key(uint8_t key) {
-  if (s_keys_count == KEY_QUEUE_SIZE)
-    return;
-  s_keys[(s_keys_head + s_keys_count++) % KEY_QUEUE_SIZE] = key;
-}
-
-static uint8_t kbd(void) {
-  return s_keys_count == 0 ? s_last_key : s_keys[s_keys_head] | 0x80;
-}
-
-static void kbdstrb(void) {
-  if (s_keys_count) {
-    s_last_key = s_keys[s_keys_head] & 0x7F;
-    s_keys_head = (s_keys_head + 1) % KEY_QUEUE_SIZE;
-    --s_keys_count;
-  }
-}
-
 uint8_t io_peek(uint16_t addr) {
-  switch (addr & 0xCFF0) {
-  case A2_KBD:
-    if (g_debug & DebugIO1)
-      fprintf(stdout, "[%u] KBD\n", get_cycles());
-    return kbd();
-  case A2_KBDSTRB:
-    if (g_debug & DebugIO2)
-      fprintf(stdout, "[%u] KBDSTRB\n", get_cycles());
-    kbdstrb();
-    break;
-  case A2_TAPEOUT:
-    if (g_debug & DebugIO1)
-      fprintf(stdout, "[%u] TAPEOUT\n", get_cycles());
-    break;
-  case A2_SPKR:
-    if (g_debug & DebugIO2)
-      fprintf(stdout, "[%u] SPKR\n", get_cycles());
-    // if (spkrCB_)
-    //   spkrCB_(spkrCBCtx_, get_cycles());
-    break;
-  case A2_STROBE:
-    if (g_debug & DebugIO1)
-      fprintf(stdout, "[%u] STROBE\n", get_cycles());
-    break;
-
-  case A2_TXTCLR:
-    switch (addr) {
-    case A2_TXTCLR:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] TXTCLR\n", get_cycles());
-      // vidControl_ &= ~VCText;
-      break;
-    case A2_TXTSET:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] TXTSET\n", get_cycles());
-      // vidControl_ |= VCText;
-      break;
-    case A2_MIXCLR:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] MIXCLR\n", get_cycles());
-      // vidControl_ &= ~VCMixed;
-      break;
-    case A2_MIXSET:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] MIXSET\n", get_cycles());
-      // vidControl_ |= VCMixed;
-      break;
-    case A2_LOWSCR:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] LOWSCR\n", get_cycles());
-      // vidControl_ &= ~VCPage2;
-      break;
-    case A2_HISCR:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] HISCR\n", get_cycles());
-      // vidControl_ |= VCPage2;
-      break;
-    case A2_LORES:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] LORES\n", get_cycles());
-      // vidControl_ &= ~VCHires;
-      break;
-    case A2_HIRES:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] HIRES\n", get_cycles());
-      // vidControl_ |= VCHires;
-      break;
-    default:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] ANNUNCIATORS $%04X\n", get_cycles(), addr);
-      break;
-    }
-    break;
-
-  default:
-    fprintf(
-        stderr,
-        "[%u] pc=$%04X Unsupported IO location read $%04X\n",
-        get_cycles(),
-        get_regs().pc,
-        addr);
-  }
-
-  return 0;
+  return a2_io_peek(&io_, addr, get_cycles());
 }
 
 void io_poke(uint16_t addr, uint8_t value) {
-  io_peek(addr);
-  io_peek(addr);
+  a2_io_poke(&io_, addr, value, get_cycles());
 }
 
 typedef struct {
@@ -302,7 +193,9 @@ static void init_cb(void) {
   init_window();
   stm_setup();
 
-  g_debug = DebugIO2;
+  g_debug = 0;
+  a2_io_init(&io_);
+  io_.debug = A2_DEBUG_IO2;
   add_default_nondebug();
   reset_regs();
   set_regs((regs_t){.pc = 0, .a = 0, .x = 0, .y = 0, .sp = 0xff, .status = STATUS_IGNORED});
@@ -329,19 +222,26 @@ static void update_screen(void) {
   // Milliseconds since hw reset. Used to determine blink phase.
   uint64_t ms = (uint64_t)stm_ms(stm_diff(curFrameTick_, firstFrameTick_));
 
-  // switch (emu_.getVidMode()) {
-  // case EmuApple2::VidMode::TEXT:
-  apple2_render_text_screen(get_ram() + A2_TXT1SCRN, &screen_, ms);
-  //  break;
-  // case EmuApple2::VidMode::GR:
-  //  apple2_render_gr_screen(emu_.getTextPageAddr(), &screen_, ms, emu_.isVidMixed());
-  //  break;
-  // case EmuApple2::VidMode::HGR:
-  //  bool mono = false;
-  //  apple2_render_hgr_screen(
-  //      emu_.getHiresPageAddr(), emu_.getTextPageAddr(), &screen_, ms, emu_.isVidMixed(), mono);
-  //  break;
-  //}
+  switch (a2_io_get_vidmode(&io_)) {
+  case A2_VIDMODE_TEXT:
+    apple2_render_text_screen(get_ram() + a2_io_get_text_page_offset(&io_), &screen_, ms);
+    break;
+  case A2_VIDMODE_GR:
+    apple2_render_gr_screen(
+        get_ram() + a2_io_get_text_page_offset(&io_), &screen_, ms, a2_io_is_vidmode_mixed(&io_));
+    break;
+  case A2_VIDMODE_HGR:
+  default:;
+    bool mono = false;
+    apple2_render_hgr_screen(
+        get_ram() + a2_io_get_hires_page_offset(&io_),
+        get_ram() + a2_io_get_text_page_offset(&io_),
+        &screen_,
+        ms,
+        a2_io_is_vidmode_mixed(&io_),
+        mono);
+    break;
+  }
 }
 
 static void update_screen_image(void) {
@@ -393,22 +293,22 @@ static void event_cb(const sapp_event *ev) {
     else if (isalpha(k))
       k = toupper(k);
     if (k != toIgnore)
-      push_key(k);
+      a2_io_push_key(&io_, k);
   } else if (ev->type == SAPP_EVENTTYPE_KEY_DOWN) {
     switch (ev->key_code) {
     case SAPP_KEYCODE_DELETE:
     case SAPP_KEYCODE_BACKSPACE:
     case SAPP_KEYCODE_LEFT:
-      push_key(ignoreNextCh_ = 8);
+      a2_io_push_key(&io_, ignoreNextCh_ = 8);
       break;
     case SAPP_KEYCODE_RIGHT:
-      push_key(ignoreNextCh_ = 21); // CTRL+U
+      a2_io_push_key(&io_, ignoreNextCh_ = 21); // CTRL+U
       break;
     case SAPP_KEYCODE_ENTER:
-      push_key(ignoreNextCh_ = 13);
+      a2_io_push_key(&io_, ignoreNextCh_ = 13);
       break;
     case SAPP_KEYCODE_ESCAPE:
-      push_key(ignoreNextCh_ = 27);
+      a2_io_push_key(&io_, ignoreNextCh_ = 27);
       break;
     default:
       break;
