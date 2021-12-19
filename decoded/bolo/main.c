@@ -7,102 +7,19 @@
 
 #include "apple2tc/system.h"
 
-#include "apple2tc/apple2iodefs.h"
+#include "apple2tc/a2io.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 
+static a2_iostate_t io_;
+
 uint8_t io_peek(uint16_t addr) {
-  switch (addr & 0xCFF0) {
-  case A2_KBD:
-    if (g_debug & DebugIO1)
-      fprintf(stdout, "[%u] KBD\n", get_cycles());
-    return 0;
-    // return kbd();
-  case A2_KBDSTRB:
-    if (g_debug & DebugIO1)
-      fprintf(stdout, "[%u] KBDSTRB\n", get_cycles());
-    // kbdstrb();
-    break;
-  case A2_TAPEOUT:
-    if (g_debug & DebugIO1)
-      fprintf(stdout, "[%u] TAPEOUT\n", get_cycles());
-    break;
-  case A2_SPKR:
-    if (g_debug & DebugIO2)
-      fprintf(stdout, "[%u] SPKR\n", get_cycles());
-    // if (spkrCB_)
-    //   spkrCB_(spkrCBCtx_, get_cycles());
-    break;
-  case A2_STROBE:
-    if (g_debug & DebugIO1)
-      fprintf(stdout, "[%u] STROBE\n", get_cycles());
-    break;
-
-  case A2_TXTCLR:
-    switch (addr) {
-    case A2_TXTCLR:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] TXTCLR\n", get_cycles());
-      // vidControl_ &= ~VCText;
-      break;
-    case A2_TXTSET:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] TXTSET\n", get_cycles());
-      // vidControl_ |= VCText;
-      break;
-    case A2_MIXCLR:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] MIXCLR\n", get_cycles());
-      // vidControl_ &= ~VCMixed;
-      break;
-    case A2_MIXSET:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] MIXSET\n", get_cycles());
-      // vidControl_ |= VCMixed;
-      break;
-    case A2_LOWSCR:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] LOWSCR\n", get_cycles());
-      // vidControl_ &= ~VCPage2;
-      break;
-    case A2_HISCR:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] HISCR\n", get_cycles());
-      // vidControl_ |= VCPage2;
-      break;
-    case A2_LORES:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] LORES\n", get_cycles());
-      // vidControl_ &= ~VCHires;
-      break;
-    case A2_HIRES:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] HIRES\n", get_cycles());
-      // vidControl_ |= VCHires;
-      break;
-    default:
-      if (g_debug & DebugIO1)
-        fprintf(stdout, "[%u] ANNUNCIATORS $%04X\n", get_cycles(), addr);
-      break;
-    }
-    break;
-
-  default:
-    fprintf(
-        stdout,
-        "[%u] pc=$%04X Unsupported IO location read $%04X\n",
-        get_cycles(),
-        get_regs().pc,
-        addr);
-  }
-
-  return 0;
+  return a2_io_peek(&io_, addr, get_cycles());
 }
 
 void io_poke(uint16_t addr, uint8_t value) {
-  io_peek(addr);
-  io_peek(addr);
+  a2_io_poke(&io_, addr, value, get_cycles());
 }
 
 typedef struct {
@@ -173,12 +90,15 @@ void error_handler(uint16_t pc) {
 }
 
 int main(int argc, char **argv) {
+  a2_io_init(&io_);
   g_debug = DebugASM | DebugCountBB;
   reset_regs();
   set_regs((regs_t){.pc = 0, .a = 0xa0, .x = 0, .y = 1, .sp = 0xf0, .status = STATUS_IGNORED});
 
   init_emulated();
-  for(;;)
+  for (;;)
     run_emulated(~0u);
+
+  a2_io_done(&io_);
   return 0;
 }

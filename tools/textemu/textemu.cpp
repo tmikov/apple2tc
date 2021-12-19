@@ -93,8 +93,8 @@ static void runLoop(Debug6502 *emu) {
           dumpApplesoftBasic(stdout, emu);
           emu->setDebugFlags(Emu6502::DebugKbdin | Emu6502::DebugASM);
           while ((ch = getchar()) != EOF && ch != '\n')
-            emu->pushKey(ch);
-          emu->pushKey('\r');
+            a2_io_push_key(emu->io(), ch);
+          a2_io_push_key(emu->io(), '\r');
           break;
         case 'r':
           consumeLine();
@@ -102,13 +102,13 @@ static void runLoop(Debug6502 *emu) {
           break;
         case ':':
           while ((ch = getchar()) != EOF && ch != '\n')
-            emu->pushKey(ch);
-          emu->pushKey('\r');
+            a2_io_push_key(emu->io(), ch);
+          a2_io_push_key(emu->io(), '\r');
           break;
         case '`':
-          emu->pushKey(27);
+          a2_io_push_key(emu->io(), 27);
           while ((ch = getchar()) != EOF && ch != '\n') {
-            emu->pushKey(ch);
+            a2_io_push_key(emu->io(), ch);
           }
           break;
 
