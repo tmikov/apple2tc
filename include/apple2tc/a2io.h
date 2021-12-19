@@ -131,7 +131,12 @@ static inline void a2_io_set_spkr_cb(
   io->spkr_cb_ctx = spkr_cb_ctx;
   io->spkr_cb = spkr_cb;
 }
-void a2_io_push_key(a2_iostate_t *io, uint8_t key);
+/// Return false if the keyboard queue was full.
+bool a2_io_push_key(a2_iostate_t *io, uint8_t key);
+/// Return the number of keys that can be pushed onto the keyboard queue.
+static inline unsigned a2_io_keys_expect(const a2_iostate_t *io) {
+  return A2_KBD_QUEUE_SIZE - io->keys_count;
+}
 uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles);
 void a2_io_poke(a2_iostate_t *io, uint16_t addr, uint8_t value, unsigned cycles);
 

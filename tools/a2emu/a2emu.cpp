@@ -40,6 +40,8 @@ struct CLIArgs {
   unsigned limit = 100000;
   std::string runPath{};
   std::string outputPath{};
+  /// Kbd input streamed from here.
+  std::string kbdPath{};
 };
 
 class A2Emu {
@@ -62,6 +64,10 @@ public:
 private:
   /// Prepare the system window, init GFX.
   void initWindow();
+
+  /// While the KBD file is open, read as many characters from it as possible.
+  /// Close the file of EOF is reached.
+  void drainKBDFile();
 
   /// Simulate the last frame.
   void simulateFrame();
@@ -94,12 +100,15 @@ private:
   uint64_t firstFrameTick_ = 0;
   bool firstFrame_ = true;
 
-  /// KBD handling.
+  // KBD handling.
+
   /// If set to a valid character, the next character will be ignored, if it
   /// matches this value. Next character, whatever it is, always clears this.
   /// This is used on same platforms where some keys like ENTER arrive both as
   /// characters and as keydown events.
   int ignoreNextCh_ = -1;
+  /// If not-null, a file from where to read keyboard presses.
+  FILE *kbdFile_ = nullptr;
 
   a2_sound_t sound_;
   a2_screen screen_;
@@ -137,6 +146,16 @@ A2Emu::A2Emu(CLIArgs &&cliArgs) : cliArgs_(std::move(cliArgs)) {
   emu_.loadROM(apple2plus_rom, apple2plus_rom_len);
 
   stm_setup();
+
+  if (!cliArgs_.kbdPath.empty()) {
+    if ((kbdFile_ = fopen(cliArgs_.kbdPath.c_str(), "rt")) == nullptr) {
+      perror(cliArgs_.kbdPath.c_str());
+      exit(2);
+    }
+    // The first key pressed before initialization is lost, so just add a dummy keypress.
+    a2_io_push_key(emu_.io(), '\r');
+    drainKBDFile();
+  }
 
   if (cliArgs_.action != CLIArgs::Run) {
     curAction_ = cliArgs_.action;
@@ -199,10 +218,32 @@ void A2Emu::initWindow() {
 }
 
 A2Emu::~A2Emu() {
+  if (kbdFile_) {
+    fclose(kbdFile_);
+    kbdFile_ = nullptr;
+  }
   sg_shutdown();
   if (cliArgs_.soundEnabled)
     saudio_shutdown();
   a2_sound_done(&sound_);
+}
+
+void A2Emu::drainKBDFile() {
+  if (!kbdFile_)
+    return;
+  while (a2_io_keys_expect(emu_.io())) {
+    int ch = getc(kbdFile_);
+    if (ch == EOF) {
+      fclose(kbdFile_);
+      kbdFile_ = nullptr;
+      break;
+    }
+    if (ch == '\r')
+      continue;
+    if (ch == '\n')
+      ch = '\r';
+    a2_io_push_key(emu_.io(), (int8_t)ch);
+  }
 }
 
 /// Load a DOS3.3 binary buffer into emulated RAM.
@@ -323,8 +364,18 @@ void A2Emu::simulationStop() {
 #include "robotron2084.h"
 
 void A2Emu::event(const sapp_event *ev) {
+  if (ev->type == SAPP_EVENTTYPE_QUIT_REQUESTED) {
+    simulationStop();
+    return;
+  }
+
   int toIgnore = ignoreNextCh_;
   ignoreNextCh_ = -1;
+
+  // If we are reading from a file, just ensure that the keyboard queue us full,
+  // so events here will have no effect.
+  if (kbdFile_)
+    drainKBDFile();
 
   if (ev->type == SAPP_EVENTTYPE_CHAR && ev->char_code < 128) {
     int k = (int)ev->char_code;
@@ -403,6 +454,9 @@ void A2Emu::simulateFrame() {
     firstFrame_ = false;
     firstFrameTick_ = curFrameTick_;
   } else {
+    if (kbdFile_)
+      drainKBDFile();
+
     double elapsed = stm_sec(curFrameTick_ - lastRunTick_);
     unsigned runCycles = (unsigned)(std::min(elapsed, 0.200) * EmuApple2::CLOCK_FREQ);
     auto stopReason = emu_.runFor(runCycles);
@@ -512,6 +566,7 @@ static void printHelp() {
   printf(" --limit=number   Number of basic blocks to trace/collect\n");
   printf(" --out=path       Specify output file\n");
   printf(" --no-sound       Disable sound\n");
+  printf(" --kbd-file=path  Read keyboard input from the specified file\n");
 }
 
 static CLIArgs parseCLI(int argc, char **argv) {
@@ -553,6 +608,10 @@ static CLIArgs parseCLI(int argc, char **argv) {
       continue;
     }
     if (arg[0] == '-') {
+      if (strncmp(arg, "--kbd-file=", 11) == 0) {
+        cliArgs.kbdPath = arg + 11;
+        continue;
+      }
       fprintf(stderr, "Invalid option '%s'\n", arg);
       printHelp();
       exit(1);

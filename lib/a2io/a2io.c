@@ -300,10 +300,11 @@ void a2_io_done(a2_iostate_t *io) {
   memset(io, 0, sizeof(*io));
 }
 
-void a2_io_push_key(a2_iostate_t *io, uint8_t key) {
+bool a2_io_push_key(a2_iostate_t *io, uint8_t key) {
   if (io->keys_count == A2_KBD_QUEUE_SIZE)
-    return;
+    return false;
   io->keys[(io->keys_head + io->keys_count++) % A2_KBD_QUEUE_SIZE] = key;
+  return true;
 }
 
 static uint8_t kbd(a2_iostate_t *io) {
