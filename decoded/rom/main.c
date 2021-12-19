@@ -7,15 +7,14 @@
 
 #include "apple2tc/a2io.h"
 #include "apple2tc/apple2iodefs.h"
+#include "apple2tc/sokol/sokol_app.h"
+#include "apple2tc/sokol/sokol_audio.h"
+#include "apple2tc/sokol/sokol_gfx.h"
+#include "apple2tc/sokol/sokol_glue.h"
+#include "apple2tc/sokol/sokol_time.h"
 #include "apple2tc/system.h"
 
-#include "sokol_app.h"
-#include "sokol_audio.h"
-#include "sokol_gfx.h"
-#include "sokol_glue.h"
-#include "sokol_time.h"
-
-#include "blit.h"
+#include "apple2tc/sokol/blit.h"
 
 #include <ctype.h>
 #include <stdio.h>

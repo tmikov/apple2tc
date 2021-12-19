@@ -5,20 +5,20 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "apple2plus_rom.h"
 #include "apple2tc/DebugState6502.h"
 #include "apple2tc/a2io.h"
 #include "apple2tc/apple2.h"
+#include "apple2tc/sokol/sokol_app.h"
+#include "apple2tc/sokol/sokol_audio.h"
+#include "apple2tc/sokol/sokol_gfx.h"
+#include "apple2tc/sokol/sokol_glue.h"
+#include "apple2tc/sokol/sokol_time.h"
 #include "apple2tc/soundqueue.h"
 #include "apple2tc/support.h"
 
-#include "sokol_app.h"
-#include "sokol_audio.h"
-#include "sokol_gfx.h"
-#include "sokol_glue.h"
-#include "sokol_time.h"
+#include "apple2plus_rom.h"
+#include "apple2tc/sokol/blit.h"
 
-#include "blit.h"
 
 #include <algorithm>
 #include <cctype>
