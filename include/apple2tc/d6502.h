@@ -245,6 +245,7 @@ inline bool operandIsIndexed(CPUAddrMode am) {
   }
 }
 
+/// Is the instruction an explicit branch (excluding RTS and RTI!).
 inline bool instIsBranch(CPUInstKind kind, CPUAddrMode am) {
   switch (kind) {
   case CPUInstKind::BRK:

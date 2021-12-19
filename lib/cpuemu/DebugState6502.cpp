@@ -133,7 +133,7 @@ Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu, uint16_t pc) {
   if (debugBB_) {
     bool wasBranchTarget = branchTarget_;
     CPUOpcode opc = decodeOpcode(emu->ram_peek(pc));
-    branchTarget_ = instIsBranch(opc.kind, opc.addrMode);
+    branchTarget_ = instIsBranch(opc.kind, opc.addrMode) || opc.kind == CPUInstKind::RTS;
     // If the current instruction was not a branch, leave.
     if (!wasBranchTarget)
       return Emu6502::StopReason::None;
@@ -222,11 +222,20 @@ operandEA(const Emu6502 *emu, Emu6502::Regs regs, CPUAddrMode am, uint16_t opera
   }
 }
 
+static inline uint8_t stack_peek8(const Emu6502 *emu, unsigned sp) {
+  return emu->ram_peek(Emu6502::STACK_PAGE_ADDR + ((sp + 1) & 255));
+}
+static inline uint16_t stack_peek16(const Emu6502 *emu, uint8_t sp) {
+  return stack_peek8(emu, sp) + stack_peek8(emu, sp + 1) * 256;
+}
+
 Emu6502::StopReason DebugState6502::collectData(const Emu6502 *emu, uint16_t pc) {
   ThreeBytes b = ram_peek3(emu, pc);
   CPUInst inst = decodeInst(pc, b);
   Emu6502::Regs regs = emu->getRegs();
-  uint16_t ea = operandEA(emu, regs, inst.addrMode, inst.operand);
+  // Effective address.
+  uint16_t ea = inst.kind == CPUInstKind::RTS ? stack_peek16(emu, regs.sp) + 1
+                                              : operandEA(emu, regs, inst.addrMode, inst.operand);
 
   if (curMemWritten_.get(pc)) {
     // Are we executing an opcode that was modified in the current generation?
@@ -239,7 +248,7 @@ Emu6502::StopReason DebugState6502::collectData(const Emu6502 *emu, uint16_t pc)
     curMemExec_.setMulti(pc, pc + inst.size, true);
   }
 
-  if (instIsBranch(inst.kind, inst.addrMode)) {
+  if (instIsBranch(inst.kind, inst.addrMode) || inst.kind == CPUInstKind::RTS) {
     branchTargets_.insert(ea);
     if (limit_ && icount_ >= limit_)
       return Emu6502::StopReason::StopRequesed;
