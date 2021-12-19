@@ -139,8 +139,10 @@ A2Emu::A2Emu(CLIArgs &&cliArgs) : cliArgs_(std::move(cliArgs)) {
 
   if (cliArgs_.action != CLIArgs::Run) {
     curAction_ = cliArgs_.action;
-    // When tracing the ROM we don't want to miss anything.
-    dbg_.clearNonDebug();
+    if (cliArgs_.action != CLIArgs::Trace) {
+      // When collecting ROM data, we don't want to miss anything.
+      dbg_.clearNonDebug();
+    }
     cliCommandApply();
   }
 }
