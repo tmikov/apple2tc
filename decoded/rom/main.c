@@ -143,7 +143,7 @@ uint8_t io_peek(uint16_t addr) {
 
   default:
     fprintf(
-        stdout,
+        stderr,
         "[%u] pc=$%04X Unsupported IO location read $%04X\n",
         get_cycles(),
         get_regs().pc,
@@ -172,10 +172,34 @@ static void add_watch(uint16_t addr, uint8_t size) {
     s_watches[s_num_watches++] = (watch_t){.addr = addr, .size = size};
 }
 
+typedef struct {
+  uint16_t from;
+  uint16_t to;
+} range_t;
+
+enum { MAX_NONDEBUG = 32 };
+static range_t s_nondebug[MAX_NONDEBUG];
+static unsigned s_num_nondebug = 0;
+
+static void add_nondebug(uint16_t from, uint16_t to) {
+  if (s_num_nondebug < MAX_NONDEBUG)
+    s_nondebug[s_num_nondebug++] = (range_t){.from = from, .to = to};
+}
+
+static void add_default_nondebug(void) {
+  add_nondebug(0xFCA8, 0xFCB3); // MONWAIT
+  add_nondebug(0xFD0C, 0xFD3C); // Keyboard
+}
+
 static unsigned s_numDebugLines = 0;
 enum { MAX_DEBUG_LINES = 2000000 };
 
 void debug_asm(uint16_t pc) {
+  for (unsigned i = 0; i != s_num_nondebug; ++i) {
+    if (pc >= s_nondebug[i].from && pc <= s_nondebug[i].to)
+      return;
+  }
+
   if (g_debug & DebugCountBB) {
     if (++s_numDebugLines == MAX_DEBUG_LINES) {
       printf("Reached %u basic blocks\n", s_numDebugLines);
@@ -279,7 +303,8 @@ static void init_cb(void) {
   init_window();
   stm_setup();
 
-  g_debug = DebugIO2; //| DebugASM;
+  g_debug = DebugIO2;
+  add_default_nondebug();
   reset_regs();
   set_regs((regs_t){.pc = 0, .a = 0, .x = 0, .y = 0, .sp = 0xff, .status = STATUS_IGNORED});
 
