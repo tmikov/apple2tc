@@ -199,15 +199,14 @@ void Disas::detectMisalignedLabels() {
         unsigned size1 = cpuInstSize(opc1.addrMode);
         // Does it end exactly where the original instruction ends?
         bool simple = offset + size1 == size;
-        misalignedLabels_.try_emplace(
-            labelIt->first, MisalignedDesc{.simple = simple, .offset = offset});
 
-        printf(
-            "// Misaligned label (%s) at $%04X\n",
-            simple ? "simple" : "non-simple",
-            labelIt->first);
-        if (!simple)
-          fprintf(stderr, "Warning: non-simple misaligned label at $%04X\n", labelIt->first);
+        if (!simple) {
+          fprintf(stderr, "ERROR: non-simple misaligned label at $%04X\n", labelIt->first);
+          printf("// ERROR: Non-simple misaligned label at $%04X\n", labelIt->first);
+        } else {
+          misalignedLabels_.try_emplace(labelIt->first, MisalignedDesc{.offset = offset});
+          printf("// Simple misaligned label at $%04X\n", labelIt->first);
+        }
       }
 
       addr += size;
@@ -383,27 +382,20 @@ void Disas::printAsmCodeRange(Range r) {
       if (labelIt->first - addr >= inst.size)
         break;
       // addr < labelIt->first < addr + size.
-      printf(
-          "; WARNING: misaligned label (%s) at $%04X\n",
-          labelIt->second.simple ? "simple" : "non-simple",
-          labelIt->first);
+      printf("; WARNING: simple misaligned label at $%04X\n", labelIt->first);
       printf("/*%04X*/ ", addr);
-      if (labelIt->second.simple) {
-        printf("            DFB    ");
-        for (unsigned i = 0; addr + i != labelIt->first; ++i) {
-          if (i)
-            printf(", ");
-          printf("$%02X", bytes.d[i]);
-        }
-        printf("   ; %s", fmt.inst);
-        if (!fmt.operand.empty())
-          printf(" %s", fmt.operand.c_str());
-        printf("\n");
-        addr = labelIt->first;
-        goto continue_label;
-      } else {
-        printf("; ERROR: don't know how to handle non-simple misaligned label\n");
+      printf("            DFB    ");
+      for (unsigned i = 0; addr + i != labelIt->first; ++i) {
+        if (i)
+          printf(", ");
+        printf("$%02X", bytes.d[i]);
       }
+      printf("   ; %s", fmt.inst);
+      if (!fmt.operand.empty())
+        printf(" %s", fmt.operand.c_str());
+      printf("\n");
+      addr = labelIt->first;
+      goto continue_label;
     }
 
     printf("            %-3s", fmt.inst);

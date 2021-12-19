@@ -204,9 +204,6 @@ private:
   std::deque<uint16_t> work_{};
 
   struct MisalignedDesc {
-    /// If true, the misaligned label points to an instruction extending exactly
-    /// to the end of the "parent" instruction.
-    bool simple;
     /// Offset from the parent instruction.
     uint8_t offset;
   };
