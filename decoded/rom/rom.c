@@ -1426,7 +1426,7 @@ void run_emulated(unsigned run_cycles) {
       /* $DA2C LDA */ s_a = update_nz(peek_zpg(0x5e));
       /* $DA2E ADC */ tmp = peek_zpg(0x51), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $DA30 STA */ poke_zpg(0x51, s_a);
-      /* $DA32 ASL */ s_a = update_nzc(peek_zpg(0x50) << 1);
+      /* $DA32 ASL */ tmp16 = 0x50, poke_zpg(tmp16, update_nzc(peek_zpg(tmp16) << 1));
       /* $DA34 ROL */ tmp16 = 0x51, tmp = peek_zpg(tmp16), poke_zpg(tmp16, update_nz((tmp << 1) | (s_status & STATUS_C))), set_c_to_bit0(tmp >> 7);
       /* $DA36 LDA */ s_a = update_nz(peek_zpg(0x50));
       /* $DA38 ADC */ tmp = peek_zpg(0x0d), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
@@ -3379,7 +3379,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xe2c8: // [$E2C8..$E2CD]    6 bytes
       CYCLES(0xe2c8, 11);
-      /* $E2C8 ASL */ s_a = update_nzc(peek_zpg(0xad) << 1);
+      /* $E2C8 ASL */ tmp16 = 0xad, poke_zpg(tmp16, update_nzc(peek_zpg(tmp16) << 1));
       /* $E2CA ROL */ tmp16 = 0xae, tmp = peek_zpg(tmp16), poke_zpg(tmp16, update_nz((tmp << 1) | (s_status & STATUS_C))), set_c_to_bit0(tmp >> 7);
       /* $E2CC BCC */ s_pc = !(s_status & STATUS_C) ? 0xe2d9 : 0xe2ce;
       branchTarget = true;
@@ -4517,7 +4517,7 @@ void run_emulated(unsigned run_cycles) {
     case 0xe874: // [$E874..$E87F]   12 bytes
       CYCLES(0xe874, 21);
       /* $E874 ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
-      /* $E876 ASL */ s_a = update_nzc(peek_zpg(0xac) << 1);
+      /* $E876 ASL */ tmp16 = 0xac, poke_zpg(tmp16, update_nzc(peek_zpg(tmp16) << 1));
       /* $E878 ROL */ tmp16 = 0xa1, tmp = peek_zpg(tmp16), poke_zpg(tmp16, update_nz((tmp << 1) | (s_status & STATUS_C))), set_c_to_bit0(tmp >> 7);
       /* $E87A ROL */ tmp16 = 0xa0, tmp = peek_zpg(tmp16), poke_zpg(tmp16, update_nz((tmp << 1) | (s_status & STATUS_C))), set_c_to_bit0(tmp >> 7);
       /* $E87C ROL */ tmp16 = 0x9f, tmp = peek_zpg(tmp16), poke_zpg(tmp16, update_nz((tmp << 1) | (s_status & STATUS_C))), set_c_to_bit0(tmp >> 7);
@@ -4656,7 +4656,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xe8fd: // [$E8FD..$E900]    4 bytes
       CYCLES(0xe8fd, 7);
-      /* $E8FD ASL */ s_a = update_nzc(peek_zpg((uint8_t)(0x01 + s_x)) << 1);
+      /* $E8FD ASL */ tmp16 = (uint8_t)(0x01 + s_x), poke_zpg(tmp16, update_nzc(peek_zpg(tmp16) << 1));
       /* $E8FF BCC */ s_pc = !(s_status & STATUS_C) ? 0xe903 : 0xe901;
       branchTarget = true;
       break;
@@ -5025,7 +5025,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xeaa6: // [$EAA6..$EAAF]   10 bytes
       CYCLES(0xeaa6, 18);
-      /* $EAA6 ASL */ s_a = update_nzc(peek_zpg(0xa9) << 1);
+      /* $EAA6 ASL */ tmp16 = 0xa9, poke_zpg(tmp16, update_nzc(peek_zpg(tmp16) << 1));
       /* $EAA8 ROL */ tmp16 = 0xa8, tmp = peek_zpg(tmp16), poke_zpg(tmp16, update_nz((tmp << 1) | (s_status & STATUS_C))), set_c_to_bit0(tmp >> 7);
       /* $EAAA ROL */ tmp16 = 0xa7, tmp = peek_zpg(tmp16), poke_zpg(tmp16, update_nz((tmp << 1) | (s_status & STATUS_C))), set_c_to_bit0(tmp >> 7);
       /* $EAAC ROL */ tmp16 = 0xa6, tmp = peek_zpg(tmp16), poke_zpg(tmp16, update_nz((tmp << 1) | (s_status & STATUS_C))), set_c_to_bit0(tmp >> 7);
@@ -5209,7 +5209,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xeb76: // [$EB76..$EB79]    4 bytes
       CYCLES(0xeb76, 7);
-      /* $EB76 ASL */ s_a = update_nzc(peek_zpg(0xac) << 1);
+      /* $EB76 ASL */ tmp16 = 0xac, poke_zpg(tmp16, update_nzc(peek_zpg(tmp16) << 1));
       /* $EB78 BCC */ s_pc = !(s_status & STATUS_C) ? 0xeb71 : 0xeb7a;
       branchTarget = true;
       break;

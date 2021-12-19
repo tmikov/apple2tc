@@ -172,9 +172,6 @@ void Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
   case CPUInstKind::ORA:
     fprintf(f, "s_a = update_nz(s_a | %s);", simpleCRead(inst).c_str());
     break;
-  case CPUInstKind::ASL:
-    fprintf(f, "s_a = update_nzc(%s << 1);", simpleCRead(inst).c_str());
-    break;
   case CPUInstKind::BCC:
     fprintf(f, "s_pc = !(s_status & STATUS_C) ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
     fprintf(f, "      branchTarget = true;\n");
@@ -319,6 +316,18 @@ void Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
     fprintf(f, "s_y = update_nz(%s);", simpleCRead(inst).c_str());
     break;
 
+  case CPUInstKind::ASL:
+    if (inst.addrMode == CPUAddrMode::A) {
+      fprintf(f, "s_a = update_nzc(s_a << 1);");
+    } else {
+      fprintf(
+          f,
+          "tmp16 = %s, %s(tmp16, update_nzc(%s(tmp16) << 1));",
+          simpleCAddr(inst).c_str(),
+          simpleCWriteOp(inst),
+          simpleCReadOp(inst));
+    }
+    break;
   case CPUInstKind::LSR:
     if (inst.addrMode == CPUAddrMode::A) {
       fprintf(f, "set_c_to_bit0(s_a), s_a = update_nz(s_a >> 1);");
