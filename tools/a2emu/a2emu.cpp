@@ -157,12 +157,12 @@ A2Emu::A2Emu(CLIArgs &&cliArgs) : cliArgs_(std::move(cliArgs)) {
     drainKBDFile();
   }
 
-  if (cliArgs_.action != CLIArgs::Run) {
+  if (cliArgs_.action != CLIArgs::Trace)
+    // When collecting ROM data, we don't want to miss anything.
+    dbg_.clearNonDebug();
+
+  if (cliArgs_.runPath.empty() && cliArgs_.action != CLIArgs::Run) {
     curAction_ = cliArgs_.action;
-    if (cliArgs_.action != CLIArgs::Trace) {
-      // When collecting ROM data, we don't want to miss anything.
-      dbg_.clearNonDebug();
-    }
     cliCommandApply();
   }
 }
@@ -253,7 +253,7 @@ static std::optional<uint16_t> loadB33Buf(EmuApple2 *emu, const uint8_t *data, s
     uint16_t start = data[0] + data[1] * 256;
     if (len - 4 <= 0x10000 - start) {
       memcpy(emu->getMainRAMWritable() + start, data + 4, len - 4);
-      printf("Loaded %zu at $%04X (%u)\n", len - 4, start, start);
+      fprintf(stderr, "Loaded %zu at $%04X (%u)\n", len - 4, start, start);
       return start;
     }
   }
@@ -263,7 +263,7 @@ static std::optional<uint16_t> loadB33Buf(EmuApple2 *emu, const uint8_t *data, s
 
 /// Start executing from the specified address.
 static void setRegsForRun(EmuApple2 *emu, uint16_t addr) {
-  printf("Executing at $%04X!\n", addr);
+  fprintf(stderr, "Executing at $%04X!\n", addr);
   auto r = emu->getRegs();
   r.pc = addr;
   r.status = Emu6502::STATUS_IGNORED;
@@ -308,6 +308,7 @@ void A2Emu::onCLICommand() {
     return;
 
   setRegsForRun(&emu_, *addr);
+  cliCommandApply();
 }
 
 void A2Emu::cliCommandApply() {
