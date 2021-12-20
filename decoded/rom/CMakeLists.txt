@@ -7,10 +7,10 @@ if (EMSCRIPTEN)
   set(CMAKE_EXECUTABLE_SUFFIX ".html")
 endif ()
 
-link_libraries(a2io sokol)
+link_libraries(decapplib)
 
 add_executable(rom
-  main.c ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
+  ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   rom.c
   )
 

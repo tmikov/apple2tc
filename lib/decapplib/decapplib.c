@@ -59,7 +59,7 @@ enum { MAX_WATCHES = 32u };
 static watch_t s_watches[MAX_WATCHES];
 static unsigned s_num_watches = 0;
 
-static void add_watch(uint16_t addr, uint8_t size) {
+void add_watch(uint16_t addr, uint8_t size) {
   if (s_num_watches < MAX_WATCHES)
     s_watches[s_num_watches++] = (watch_t){.addr = addr, .size = size};
 }
@@ -73,12 +73,12 @@ enum { MAX_NONDEBUG = 32 };
 static range_t s_nondebug[MAX_NONDEBUG];
 static unsigned s_num_nondebug = 0;
 
-static void add_nondebug(uint16_t from, uint16_t to) {
+void add_nondebug(uint16_t from, uint16_t to) {
   if (s_num_nondebug < MAX_NONDEBUG)
     s_nondebug[s_num_nondebug++] = (range_t){.from = from, .to = to};
 }
 
-static void add_default_nondebug(void) {
+void add_default_nondebug(void) {
   add_nondebug(0xFCA8, 0xFCB3); // MONWAIT
   add_nondebug(0xFD0C, 0xFD3C); // Keyboard
 }
