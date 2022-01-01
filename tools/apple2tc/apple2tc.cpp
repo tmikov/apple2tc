@@ -56,6 +56,7 @@ static void printHelp() {
   fprintf(stderr, "  --asm               Generate asm listing (default)\n");
   fprintf(stderr, "  --simple-c          Generate simple C code\n");
   fprintf(stderr, "  --run-data=d.json   Load runtime data from specified file\n");
+  fprintf(stderr, "  --no-gen            Ignore runtime generations\n");
 }
 
 int main(int argc, char **argv) {
@@ -63,6 +64,7 @@ int main(int argc, char **argv) {
     GenAsm,
     GenSimpleC,
   };
+  bool noGenerations = false;
   Action action = Action::GenAsm;
   s_appPath = argc ? argv[0] : "apple2tc";
 
@@ -84,6 +86,10 @@ int main(int argc, char **argv) {
     }
     if (strncmp(argv[i], "--run-data=", 11) == 0) {
       runDataPath = argv[i] + 11;
+      continue;
+    }
+    if (strcmp(argv[i], "--no-gen") == 0) {
+      noGenerations = true;
       continue;
     }
     if (argv[i][0] == '-') {
@@ -119,7 +125,7 @@ int main(int argc, char **argv) {
       dis->loadBinary(start, binary.data(), binary.size());
       dis->setStart(start);
     }
-    dis->run();
+    dis->run(noGenerations);
     switch (action) {
     case Action::GenAsm:
       dis->printAsmListing();

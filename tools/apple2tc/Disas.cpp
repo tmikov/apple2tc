@@ -217,7 +217,7 @@ void Disas::identifyAsmBlocks() {
   }
 }
 
-void Disas::run() {
+void Disas::run(bool noGenerations) {
   if (!start_.has_value())
     throw std::logic_error("starting address not set");
   addWork(*start_, nullptr)->setName("START");
@@ -226,7 +226,7 @@ void Disas::run() {
     runData_ = RuntimeData::load(runDataPath_);
 
   // Just naively load all runtime data generations.
-  if (runData_) {
+  if (!noGenerations && runData_) {
     for (const auto &gen : runData_->generations) {
       for (const auto &seg : gen.code) {
         // FIXME: add memory and code ranges.

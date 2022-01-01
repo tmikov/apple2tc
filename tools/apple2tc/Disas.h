@@ -442,7 +442,7 @@ public:
     start_ = start;
   }
 
-  void run();
+  void run(bool noGenerations);
   void printAsmListing();
   void printSimpleC(FILE *f);
 
