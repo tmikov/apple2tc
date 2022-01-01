@@ -1,14 +1,161 @@
 // Loaded binary at [$10DD..$9FE2]
+// Loaded generation [$0CEE..$0D4E]
+// Loaded generation [$0DC0..$0DC0]
+// Loaded generation [$0E32..$0E32]
+// Loaded generation [$0EA4..$0EA4]
+// Loaded generation [$0F16..$0F16]
+// Loaded generation [$0F2B..$0F2B]
+// Loaded generation [$9FEB..$9FEB]
+// Loaded generation [$0E98..$0E98]
+// Loaded generation [$0E26..$0E26]
+// Loaded generation [$0F0A..$0F0A]
+// Loaded generation [$0DB4..$0DB4]
+// Loaded generation [$0E8C..$0E8C]
+// Loaded generation [$0E1A..$0E1A]
+// Loaded generation [$0EFE..$0EFE]
+// Loaded generation [$0DA8..$0DA8]
+// Loaded generation [$0E80..$0E80]
+// Loaded generation [$0E0E..$0E0E]
+// Loaded generation [$0EF2..$0EF2]
+// Loaded generation [$0D9C..$0D9C]
+// Loaded generation [$0E74..$0E74]
+// Loaded generation [$0E02..$0E02]
+// Loaded generation [$0EE6..$0EE6]
+// Loaded generation [$0D90..$0D90]
+// Loaded generation [$0E68..$0E68]
+// Loaded generation [$0DF6..$0DF6]
+// Loaded generation [$0EDA..$0EDA]
+// Loaded generation [$0D84..$0D84]
+// Loaded generation [$0E5C..$0E5C]
+// Loaded generation [$0DEA..$0DEA]
+// Loaded generation [$0ECE..$0ECE]
+// Loaded generation [$0D78..$0D78]
+// Loaded generation [$0E50..$0E50]
+// Loaded generation [$0DDE..$0DDE]
+// Loaded generation [$0EC2..$0EC2]
+// Loaded generation [$0D6C..$0D6C]
+// Loaded generation [$0E44..$0E44]
+// Loaded generation [$0DD2..$0DD2]
+// Loaded generation [$0EB6..$0EB6]
+// Loaded generation [$0F28..$0F28]
+// Loaded generation [$0D60..$0D60]
+// Loaded generation [$0E38..$0E38]
+// Loaded generation [$0DC6..$0DC6]
+// Loaded generation [$0EAA..$0EAA]
+// Loaded generation [$0F1C..$0F1C]
+// Loaded generation [$0D54..$0D54]
+// Loaded generation [$0E2C..$0E2C]
+// Loaded generation [$0DBA..$0DBA]
+// Loaded generation [$0E9E..$0E9E]
+// Loaded generation [$0F10..$0F10]
 // 244 new runtime blocks added
 // code labels: 1914
-// data labels: 429
+// data labels: 461
 
 #include "apple2tc/system-inc.h"
 
+static const uint8_t s_mem_0cee[0x0061];
+static const uint8_t s_mem_0d54[0x0001];
+static const uint8_t s_mem_0d60[0x0001];
+static const uint8_t s_mem_0d6c[0x0001];
+static const uint8_t s_mem_0d78[0x0001];
+static const uint8_t s_mem_0d84[0x0001];
+static const uint8_t s_mem_0d90[0x0001];
+static const uint8_t s_mem_0d9c[0x0001];
+static const uint8_t s_mem_0da8[0x0001];
+static const uint8_t s_mem_0db4[0x0001];
+static const uint8_t s_mem_0dba[0x0001];
+static const uint8_t s_mem_0dc0[0x0001];
+static const uint8_t s_mem_0dc6[0x0001];
+static const uint8_t s_mem_0dd2[0x0001];
+static const uint8_t s_mem_0dde[0x0001];
+static const uint8_t s_mem_0dea[0x0001];
+static const uint8_t s_mem_0df6[0x0001];
+static const uint8_t s_mem_0e02[0x0001];
+static const uint8_t s_mem_0e0e[0x0001];
+static const uint8_t s_mem_0e1a[0x0001];
+static const uint8_t s_mem_0e26[0x0001];
+static const uint8_t s_mem_0e2c[0x0001];
+static const uint8_t s_mem_0e32[0x0001];
+static const uint8_t s_mem_0e38[0x0001];
+static const uint8_t s_mem_0e44[0x0001];
+static const uint8_t s_mem_0e50[0x0001];
+static const uint8_t s_mem_0e5c[0x0001];
+static const uint8_t s_mem_0e68[0x0001];
+static const uint8_t s_mem_0e74[0x0001];
+static const uint8_t s_mem_0e80[0x0001];
+static const uint8_t s_mem_0e8c[0x0001];
+static const uint8_t s_mem_0e98[0x0001];
+static const uint8_t s_mem_0e9e[0x0001];
+static const uint8_t s_mem_0ea4[0x0001];
+static const uint8_t s_mem_0eaa[0x0001];
+static const uint8_t s_mem_0eb6[0x0001];
+static const uint8_t s_mem_0ec2[0x0001];
+static const uint8_t s_mem_0ece[0x0001];
+static const uint8_t s_mem_0eda[0x0001];
+static const uint8_t s_mem_0ee6[0x0001];
+static const uint8_t s_mem_0ef2[0x0001];
+static const uint8_t s_mem_0efe[0x0001];
+static const uint8_t s_mem_0f0a[0x0001];
+static const uint8_t s_mem_0f10[0x0001];
+static const uint8_t s_mem_0f16[0x0001];
+static const uint8_t s_mem_0f1c[0x0001];
+static const uint8_t s_mem_0f28[0x0001];
+static const uint8_t s_mem_0f2b[0x0001];
 static const uint8_t s_mem_10dd[0x8f06];
+static const uint8_t s_mem_9feb[0x0001];
 
 void init_emulated(void) {
+  memcpy(s_ram + 0x0cee, s_mem_0cee, 0x0061);
+  memcpy(s_ram + 0x0d54, s_mem_0d54, 0x0001);
+  memcpy(s_ram + 0x0d60, s_mem_0d60, 0x0001);
+  memcpy(s_ram + 0x0d6c, s_mem_0d6c, 0x0001);
+  memcpy(s_ram + 0x0d78, s_mem_0d78, 0x0001);
+  memcpy(s_ram + 0x0d84, s_mem_0d84, 0x0001);
+  memcpy(s_ram + 0x0d90, s_mem_0d90, 0x0001);
+  memcpy(s_ram + 0x0d9c, s_mem_0d9c, 0x0001);
+  memcpy(s_ram + 0x0da8, s_mem_0da8, 0x0001);
+  memcpy(s_ram + 0x0db4, s_mem_0db4, 0x0001);
+  memcpy(s_ram + 0x0dba, s_mem_0dba, 0x0001);
+  memcpy(s_ram + 0x0dc0, s_mem_0dc0, 0x0001);
+  memcpy(s_ram + 0x0dc6, s_mem_0dc6, 0x0001);
+  memcpy(s_ram + 0x0dd2, s_mem_0dd2, 0x0001);
+  memcpy(s_ram + 0x0dde, s_mem_0dde, 0x0001);
+  memcpy(s_ram + 0x0dea, s_mem_0dea, 0x0001);
+  memcpy(s_ram + 0x0df6, s_mem_0df6, 0x0001);
+  memcpy(s_ram + 0x0e02, s_mem_0e02, 0x0001);
+  memcpy(s_ram + 0x0e0e, s_mem_0e0e, 0x0001);
+  memcpy(s_ram + 0x0e1a, s_mem_0e1a, 0x0001);
+  memcpy(s_ram + 0x0e26, s_mem_0e26, 0x0001);
+  memcpy(s_ram + 0x0e2c, s_mem_0e2c, 0x0001);
+  memcpy(s_ram + 0x0e32, s_mem_0e32, 0x0001);
+  memcpy(s_ram + 0x0e38, s_mem_0e38, 0x0001);
+  memcpy(s_ram + 0x0e44, s_mem_0e44, 0x0001);
+  memcpy(s_ram + 0x0e50, s_mem_0e50, 0x0001);
+  memcpy(s_ram + 0x0e5c, s_mem_0e5c, 0x0001);
+  memcpy(s_ram + 0x0e68, s_mem_0e68, 0x0001);
+  memcpy(s_ram + 0x0e74, s_mem_0e74, 0x0001);
+  memcpy(s_ram + 0x0e80, s_mem_0e80, 0x0001);
+  memcpy(s_ram + 0x0e8c, s_mem_0e8c, 0x0001);
+  memcpy(s_ram + 0x0e98, s_mem_0e98, 0x0001);
+  memcpy(s_ram + 0x0e9e, s_mem_0e9e, 0x0001);
+  memcpy(s_ram + 0x0ea4, s_mem_0ea4, 0x0001);
+  memcpy(s_ram + 0x0eaa, s_mem_0eaa, 0x0001);
+  memcpy(s_ram + 0x0eb6, s_mem_0eb6, 0x0001);
+  memcpy(s_ram + 0x0ec2, s_mem_0ec2, 0x0001);
+  memcpy(s_ram + 0x0ece, s_mem_0ece, 0x0001);
+  memcpy(s_ram + 0x0eda, s_mem_0eda, 0x0001);
+  memcpy(s_ram + 0x0ee6, s_mem_0ee6, 0x0001);
+  memcpy(s_ram + 0x0ef2, s_mem_0ef2, 0x0001);
+  memcpy(s_ram + 0x0efe, s_mem_0efe, 0x0001);
+  memcpy(s_ram + 0x0f0a, s_mem_0f0a, 0x0001);
+  memcpy(s_ram + 0x0f10, s_mem_0f10, 0x0001);
+  memcpy(s_ram + 0x0f16, s_mem_0f16, 0x0001);
+  memcpy(s_ram + 0x0f1c, s_mem_0f1c, 0x0001);
+  memcpy(s_ram + 0x0f28, s_mem_0f28, 0x0001);
+  memcpy(s_ram + 0x0f2b, s_mem_0f2b, 0x0001);
   memcpy(s_ram + 0x10dd, s_mem_10dd, 0x8f06);
+  memcpy(s_ram + 0x9feb, s_mem_9feb, 0x0001);
   s_pc = 0x10dd;
 }
 
@@ -40,56 +187,61 @@ void run_emulated(unsigned run_cycles) {
       /* $0532 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0532);
                       error_handler(s_pc);
       break;
-    case 0x0cee: // [$0CEE..$0CEE]    1 bytes
-      CYCLES(0x0cee, 2);
-      /* $0CEE ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0cee);
-                      error_handler(s_pc);
-      break;
-    case 0x0cf7: // [$0CF7..$0CF7]    1 bytes
-      CYCLES(0x0cf7, 2);
-      /* $0CF7 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0cf7);
-                      error_handler(s_pc);
-      break;
-    case 0x0d03: // [$0D03..$0D03]    1 bytes
-      CYCLES(0x0d03, 2);
-      /* $0D03 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0d03);
-                      error_handler(s_pc);
-      break;
-    case 0x0d0f: // [$0D0F..$0D0F]    1 bytes
-      CYCLES(0x0d0f, 2);
-      /* $0D0F ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0d0f);
-                      error_handler(s_pc);
-      break;
-    case 0x0d1b: // [$0D1B..$0D1B]    1 bytes
-      CYCLES(0x0d1b, 2);
-      /* $0D1B ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0d1b);
-                      error_handler(s_pc);
-      break;
-    case 0x0d27: // [$0D27..$0D27]    1 bytes
-      CYCLES(0x0d27, 2);
-      /* $0D27 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0d27);
-                      error_handler(s_pc);
-      break;
-    case 0x0d33: // [$0D33..$0D33]    1 bytes
-      CYCLES(0x0d33, 2);
-      /* $0D33 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0d33);
-                      error_handler(s_pc);
-      break;
-    case 0x0d3f: // [$0D3F..$0D3F]    1 bytes
-      CYCLES(0x0d3f, 2);
-      /* $0D3F ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0d3f);
-                      error_handler(s_pc);
-      break;
-    case 0x0d45: // [$0D45..$0D45]    1 bytes
-      CYCLES(0x0d45, 2);
-      /* $0D45 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0d45);
-                      error_handler(s_pc);
-      break;
-    case 0x0d4b: // [$0D4B..$0D4B]    1 bytes
-      CYCLES(0x0d4b, 2);
-      /* $0D4B ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0d4b);
-                      error_handler(s_pc);
-      break;
+    case 0x0cee: // [$0CEE..$0CF6]    9 bytes
+      CYCLES(0x0cee, 16);
+      // WARNING: performs self modification.
+      /* $0CEE STA */ poke(0x2000 + s_x, s_a);
+      /* $0CF1 STA */ poke(0x2400 + s_x, s_a);
+      /* $0CF4 STA */ poke(0x2800 + s_x, s_a);
+    case 0x0cf7: // [$0CF7..$0D02]   12 bytes
+      CYCLES(0x0cf7, 21);
+      /* $0CF7 STA */ poke(0x2c00 + s_x, s_a);
+      /* $0CFA STA */ poke(0x3000 + s_x, s_a);
+      /* $0CFD STA */ poke(0x3400 + s_x, s_a);
+      /* $0D00 STA */ poke(0x3800 + s_x, s_a);
+    case 0x0d03: // [$0D03..$0D0E]   12 bytes
+      CYCLES(0x0d03, 21);
+      /* $0D03 STA */ poke(0x3c00 + s_x, s_a);
+      /* $0D06 STA */ poke(0x2080 + s_x, s_a);
+      /* $0D09 STA */ poke(0x2480 + s_x, s_a);
+      /* $0D0C STA */ poke(0x2880 + s_x, s_a);
+    case 0x0d0f: // [$0D0F..$0D1A]   12 bytes
+      CYCLES(0x0d0f, 21);
+      /* $0D0F STA */ poke(0x2c80 + s_x, s_a);
+      /* $0D12 STA */ poke(0x3080 + s_x, s_a);
+      /* $0D15 STA */ poke(0x3480 + s_x, s_a);
+      /* $0D18 STA */ poke(0x3880 + s_x, s_a);
+    case 0x0d1b: // [$0D1B..$0D26]   12 bytes
+      CYCLES(0x0d1b, 21);
+      /* $0D1B STA */ poke(0x3c80 + s_x, s_a);
+      /* $0D1E STA */ poke(0x2100 + s_x, s_a);
+      /* $0D21 STA */ poke(0x2500 + s_x, s_a);
+      /* $0D24 STA */ poke(0x2900 + s_x, s_a);
+    case 0x0d27: // [$0D27..$0D32]   12 bytes
+      CYCLES(0x0d27, 21);
+      /* $0D27 STA */ poke(0x2d00 + s_x, s_a);
+      /* $0D2A STA */ poke(0x3100 + s_x, s_a);
+      /* $0D2D STA */ poke(0x3500 + s_x, s_a);
+      /* $0D30 STA */ poke(0x3900 + s_x, s_a);
+    case 0x0d33: // [$0D33..$0D3E]   12 bytes
+      CYCLES(0x0d33, 21);
+      /* $0D33 STA */ poke(0x3d00 + s_x, s_a);
+      /* $0D36 STA */ poke(0x2180 + s_x, s_a);
+      /* $0D39 STA */ poke(0x2580 + s_x, s_a);
+      /* $0D3C STA */ poke(0x2980 + s_x, s_a);
+    case 0x0d3f: // [$0D3F..$0D44]    6 bytes
+      CYCLES(0x0d3f, 11);
+      /* $0D3F STA */ poke(0x2d80 + s_x, s_a);
+      /* $0D42 STA */ poke(0x3180 + s_x, s_a);
+    case 0x0d45: // [$0D45..$0D4A]    6 bytes
+      CYCLES(0x0d45, 11);
+      /* $0D45 STA */ poke(0x3580 + s_x, s_a);
+      /* $0D48 STA */ poke(0x3980 + s_x, s_a);
+    case 0x0d4b: // [$0D4B..$0D50]    6 bytes
+      CYCLES(0x0d4b, 11);
+      /* $0D4B STA */ poke(0x3d80 + s_x, s_a);
+      // WARNING: performs self modification.
+      /* $0D4E STA */ poke(0xffff + s_x, s_a);
     case 0x0d51: // [$0D51..$0D51]    1 bytes
       CYCLES(0x0d51, 2);
       /* $0D51 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0d51);
@@ -3522,6 +3674,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0x1fff: // [$1FFF..$2000]    2 bytes
       CYCLES(0x1fff, 4);
+      // WARNING: operand self modification.
       /* $1FFF BRK */ fprintf(stderr, "Warning: BRK at $%04X\n", 0x1fff);
                       push16(0x2001);
                       push8(s_status | STATUS_B);
@@ -13628,6 +13781,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xffff: // [$FFFF..$FFFF]    1 bytes
       CYCLES(0xffff, 2);
+      // ERROR: opcode self modification.
       /* $FFFF ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0xffff);
                       error_handler(s_pc);
       break;
@@ -13637,6 +13791,156 @@ void run_emulated(unsigned run_cycles) {
     }
   }
 }
+static const uint8_t s_mem_0cee[0x0061] = {
+  0x9D, 0x00, 0x20, 0x9D, 0x00, 0x24, 0x9D, 0x00, 0x28, 0x9D, 0x00, 0x2C, 0x9D, 0x00, 0x30, 0x9D,
+  0x00, 0x34, 0x9D, 0x00, 0x38, 0x9D, 0x00, 0x3C, 0x9D, 0x80, 0x20, 0x9D, 0x80, 0x24, 0x9D, 0x80,
+  0x28, 0x9D, 0x80, 0x2C, 0x9D, 0x80, 0x30, 0x9D, 0x80, 0x34, 0x9D, 0x80, 0x38, 0x9D, 0x80, 0x3C,
+  0x9D, 0x00, 0x21, 0x9D, 0x00, 0x25, 0x9D, 0x00, 0x29, 0x9D, 0x00, 0x2D, 0x9D, 0x00, 0x31, 0x9D,
+  0x00, 0x35, 0x9D, 0x00, 0x39, 0x9D, 0x00, 0x3D, 0x9D, 0x80, 0x21, 0x9D, 0x80, 0x25, 0x9D, 0x80,
+  0x29, 0x9D, 0x80, 0x2D, 0x9D, 0x80, 0x31, 0x9D, 0x80, 0x35, 0x9D, 0x80, 0x39, 0x9D, 0x80, 0x3D,
+  0x9D
+};
+static const uint8_t s_mem_0d54[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0d60[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0d6c[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0d78[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0d84[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0d90[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0d9c[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0da8[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0db4[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0dba[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0dc0[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0dc6[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0dd2[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0dde[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0dea[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0df6[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0e02[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0e0e[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0e1a[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0e26[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0e2c[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0e32[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0e38[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0e44[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0e50[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0e5c[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0e68[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0e74[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0e80[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0e8c[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0e98[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0e9e[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0ea4[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0eaa[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0eb6[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0ec2[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0ece[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0eda[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0ee6[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0ef2[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0efe[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0f0a[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0f10[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0f16[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0f1c[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0f28[0x0001] = {
+  0x9D
+};
+static const uint8_t s_mem_0f2b[0x0001] = {
+  0x9D
+};
 static const uint8_t s_mem_10dd[0x8f06] = {
   0xAD, 0x54, 0xC0, 0xAD, 0x52, 0xC0, 0xAD, 0x51, 0xC0, 0xAD, 0x57, 0xC0, 0xA0, 0x00, 0x8C, 0x21,
   0x17, 0x8C, 0x22, 0x17, 0x88, 0x84, 0x90, 0xA9, 0x5F, 0x85, 0x91, 0x84, 0x92, 0xA9, 0x3F, 0x85,
@@ -15927,4 +16231,7 @@ static const uint8_t s_mem_10dd[0x8f06] = {
   0x28, 0x43, 0x29, 0x20, 0x43, 0x4F, 0x50, 0x59, 0x52, 0x49, 0x47, 0x48, 0x54, 0x20, 0x31, 0x39,
   0x38, 0x32, 0x20, 0x42, 0x59, 0x20, 0x45, 0x4C, 0x56, 0x59, 0x4E, 0x20, 0x53, 0x4F, 0x46, 0x54,
   0x57, 0x41, 0x52, 0x45, 0x00, 0x00
+};
+static const uint8_t s_mem_9feb[0x0001] = {
+  0x9D
 };

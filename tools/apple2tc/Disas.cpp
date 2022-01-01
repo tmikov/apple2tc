@@ -81,7 +81,7 @@ void Disas::addMemRange(MemRange range) {
   // the previous range.
   if (it != memRanges_.begin()) {
     auto r = intersect(range, *(it - 1));
-    if (r.empty())
+    if (!r.empty())
       throw std::logic_error("MemRange overlap");
   }
 
@@ -229,7 +229,16 @@ void Disas::run(bool noGenerations) {
   if (!noGenerations && runData_) {
     for (const auto &gen : runData_->generations) {
       for (const auto &seg : gen.code) {
-        // FIXME: add memory and code ranges.
+        uint16_t from = seg.addr;
+        uint16_t to = seg.addr + seg.bytes.size() - 1;
+        try {
+          addMemRange(MemRange(from, to, true));
+        } catch (std::logic_error & e) {
+          //printf( "// SKIPPED generation [$%04X..$%04X]\n", from, to);
+          continue;
+        }
+
+        printf( "// Loaded generation [$%04X..$%04X]\n", from, to);
         memcpy(memory_ + seg.addr, seg.bytes.data(), seg.bytes.size());
       }
     }
