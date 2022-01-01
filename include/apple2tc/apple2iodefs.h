@@ -89,3 +89,7 @@
 /// register device behavior, etc, but for now this is sufficient.
 #define A2_IO_RANGE_START 0xC000
 #define A2_IO_RANGE_END 0xCFFF
+
+#define A2_NMI_VEC 0xFFFA
+#define A2_RESET_VEC 0xFFFC
+#define A2_IRQ_VEC 0xFFFE
