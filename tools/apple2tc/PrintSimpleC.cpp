@@ -10,6 +10,8 @@
 
 #include "Disas.h"
 
+#include "apple2tc/apple2iodefs.h"
+
 #include <cmath>
 
 void Disas::printSimpleCPrologue(FILE *f) {
@@ -58,39 +60,11 @@ void Disas::printSimpleC(FILE *f) {
   fprintf(f, "    uint8_t tmp;\n");
   fprintf(f, "    switch (s_pc) {\n");
 
-  for (Range cr : codeRanges_) {
-    uint32_t from = cr.from;
-    auto labelIt = misalignedLabels_.upper_bound(from);
-    while (from <= cr.to) {
-      // If there is no misaligned label in the remaining range, generate it
-      // normally and we are done.
-      if (labelIt == misalignedLabels_.end() || labelIt->first > cr.to) {
-        printSimpleCRange(f, Range(from, cr.to));
-        break;
-      }
-
-      // labelIt points to a misaligned label between from and cr.to.
-      // Calculate the previous instruction address and decode its size.
-      uint16_t prevAddr = labelIt->first - labelIt->second.offset;
-      unsigned prevSize = cpuInstSize(decodeOpcode(peek(prevAddr)).addrMode);
-      // Generate a range up to and including the previous instruction.
-      printSimpleCRange(f, Range(from, prevAddr + prevSize - 1));
-
-      // Branch over the misaligned instruction.
-      fprintf(f, "      s_pc = 0x%04x;\n", prevAddr + prevSize);
-      fprintf(f, "      break;\n");
-
-      // Generate the overlapped instruction.
-      fprintf(f, "    // WARNING: simple misaligned label\n");
-      printSimpleCRange(f, Range(labelIt->first, prevAddr + prevSize - 1));
-      // It also branches to the same point.
-      fprintf(f, "      s_pc = 0x%04x;\n", prevAddr + prevSize);
-      fprintf(f, "      break;\n");
-
-      from = prevAddr + prevSize;
-
-      ++labelIt;
-    }
+  for (auto it = asmBlocks_.begin(), end = asmBlocks_.end(); it != end;) {
+    const AsmBlock &block = it->second;
+    ++it;
+    const AsmBlock *nextBlock = it != end ? &it->second : nullptr;
+    printSimpleCRange(f, block, nextBlock);
   }
 
   fprintf(f, "    default:\n");
@@ -103,24 +77,33 @@ void Disas::printSimpleC(FILE *f) {
   printSimpleCEpilogue(f);
 }
 
-void Disas::printSimpleCRange(FILE *f, Range cr) {
-  for (uint16_t addr = cr.from; addr - 1 != cr.to;) {
-    if (addr == cr.from || codeLabels_.count(addr)) {
-      // Find the end of this BB in order to approximate execution cycles.
-      auto it = codeLabels_.upper_bound(addr);
-      uint16_t bbLast = it != codeLabels_.end() && it->first - 1 < cr.to ? it->first - 1 : cr.to;
-      printf(
-          "    case 0x%04x: // [$%04X..$%04X] %4u bytes\n", addr, addr, bbLast, bbLast - addr + 1);
-      printf("      CYCLES(0x%04x, %ld);\n", addr, lround((bbLast - addr + 1) * 1.7 + 0.5));
-    }
+void Disas::printSimpleCRange(FILE *f, const AsmBlock &block, const AsmBlock *nextBlock) {
+  if (block.misaligned())
+    printf("    // WARNING: misaligned block\n");
+  printf(
+      "    case 0x%04x: // [$%04X..$%04X] %4u bytes\n",
+      block.addr(),
+      block.addr(),
+      block.endAddr() - 1,
+      block.size());
+  printf("      CYCLES(0x%04x, %ld);\n", block.addr(), lround(block.size() * 1.7 + 0.5));
 
-    CPUInst inst = decodeInst(addr, peek3(addr));
-    printSimpleCInst(f, addr, inst);
-    addr += inst.size;
+  bool fall = false;
+  for (const auto [addr, inst] : block.instructions(this))
+    fall = printSimpleCInst(f, addr, inst);
+
+  if (fall) {
+    const AsmBlock *fallBlock = block.getFallBlock();
+    assert(fallBlock && "we fell, so there must be a fall block");
+    if (fallBlock != nextBlock) {
+      fprintf(f, "      s_pc = 0x%04x;\n", fallBlock->addr());
+      fprintf(f, "      break;\n");
+    }
   }
 }
 
-void Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
+bool Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
+  bool fall = true;
   scSelfModOperand_ = false;
   scPC_ = pc;
 
@@ -170,41 +153,49 @@ void Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
     fprintf(f, "s_pc = !(s_status & STATUS_C) ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
+    fall = false;
     break;
   case CPUInstKind::BCS:
     fprintf(f, "s_pc = s_status & STATUS_C ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
+    fall = false;
     break;
   case CPUInstKind::BEQ:
     fprintf(f, "s_pc = s_status & STATUS_Z ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
+    fall = false;
     break;
   case CPUInstKind::BNE:
     fprintf(f, "s_pc = !(s_status & STATUS_Z) ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
+    fall = false;
     break;
   case CPUInstKind::BMI:
     fprintf(f, "s_pc = s_status & STATUS_N ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
+    fall = false;
     break;
   case CPUInstKind::BPL:
     fprintf(f, "s_pc = !(s_status & STATUS_N) ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
+    fall = false;
     break;
   case CPUInstKind::BVC:
     fprintf(f, "s_pc = !(s_status & STATUS_V) ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
+    fall = false;
     break;
   case CPUInstKind::BVS:
     fprintf(f, "s_pc = s_status & STATUS_V ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
+    fall = false;
     break;
   case CPUInstKind::BIT:
     fprintf(
@@ -221,9 +212,10 @@ void Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
         pc);
     fprintf(f, "%21s push16(0x%04x);\n", "", (uint16_t)(pc + 2));
     fprintf(f, "%21s push8(s_status | STATUS_B);\n", "");
-    fprintf(f, "%21s s_pc = peek16(0xFFFE);\n", "");
+    fprintf(f, "%21s s_pc = 0x%04x;\n", "", peek16(A2_IRQ_VEC));
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
+    fall = false;
     break;
 
   case CPUInstKind::CLC:
@@ -293,11 +285,13 @@ void Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
     fprintf(f, "s_pc = %s;\n", simpleCAddr(inst).c_str());
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
+    fall = false;
     break;
   case CPUInstKind::JSR:
     fprintf(f, "push16(0x%04x), s_pc = %s;\n", pc + 2, simpleCAddr(inst).c_str());
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
+    fall = false;
     break;
 
   case CPUInstKind::LDA:
@@ -394,11 +388,13 @@ void Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
     fprintf(f, "s_status = pop8() & ~STATUS_B, s_pc = pop16();\n");
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
+    fall = false;
     break;
   case CPUInstKind::RTS:
     fprintf(f, "s_pc = pop16() + 1;\n");
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
+    fall = false;
     break;
 
   case CPUInstKind::STA:
@@ -430,15 +426,14 @@ void Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
     break;
 
   case CPUInstKind::INVALID:
-    fprintf(
-        f,
-        R"(fprintf(stderr, "Warning: INVALID at $%%04X\n", 0x%04x);)"
-        "\n",
-        pc);
-    fprintf(f, "%21s abort();\n", "");
+    fprintf(f, "fprintf(stderr, \"Warning: INVALID at $%%04X\\n\", 0x%04x);\n", pc);
+    fprintf(f, "%21s error_handler(s_pc);\n", "");
+    fprintf(f, "      break;");
+    fall = false;
     break;
   }
   fputc('\n', f);
+  return fall;
 }
 
 std::string Disas::simpleCRead(CPUInst inst) const {

@@ -7,8 +7,37 @@
 
 #include "Disas.h"
 
+#include "apple2tc/apple2iodefs.h"
+
 #include <stdexcept>
 #include <utility>
+
+void AsmBlock::splitInto(AsmBlock *nextBlock) {
+  assert(nextBlock != this);
+  assert(addrInside(nextBlock->addr()) && "Block to split into must overlap this one");
+  assert(nextBlock->addr() != addr() && "Block to split into must have a greater start addr");
+  assert(size() && "This block must have non-zero size (otherwise it wouldn't overlap anything)");
+  assert(!nextBlock->size() && "Block to split into must not have a size");
+
+  nextBlock->size_ = size_ + addr_ - nextBlock->addr_;
+  size_ = nextBlock->addr_ - addr_;
+
+  nextBlock->successors_.moveFrom(std::move(successors_));
+
+  // Set our only successor as the next block.
+  successors_.push_back(nextBlock);
+}
+
+AsmBlock::InstIterator::InstIterator(const Disas *disas, uint32_t addr)
+    : EndIterator(addr), disas_(disas) {
+  inst_ = std::make_pair((uint16_t)addr, decodeInst(addr, disas->peek3(addr)));
+}
+
+AsmBlock::InstIterator &AsmBlock::InstIterator::operator++() {
+  addr_ += inst_.second.size;
+  inst_ = std::make_pair((uint16_t)addr_, decodeInst(addr_, disas_->peek3(addr_)));
+  return *this;
+}
 
 Range intersect(const Range &a, const Range &b) {
   return {std::max(a.from, b.from), std::min(a.to, b.to)};
@@ -73,143 +102,119 @@ std::vector<MemRange>::const_iterator Disas::findMemRange(uint16_t addr) const {
   return memRanges_.end();
 }
 
-std::set<Range, CompareRange>::iterator Disas::findCodeRange(uint16_t addr) {
-  auto it = codeRanges_.upper_bound(addr);
-  // Check if the target overlaps the previous range.
-  if (it != codeRanges_.begin()) {
+AsmBlock *Disas::addWork(uint16_t addr, AsmBlock **curBlock) {
+  auto res = asmBlocks_.try_emplace(addr, addr);
+  AsmBlock *block = &res.first->second;
+  // Already exists? We are done.
+  if (!res.second)
+    return block;
+
+  // Iterate while the previous block overlaps addr.
+  for (auto it = res.first;;) {
+    if (it == asmBlocks_.begin())
+      break;
     --it;
-    if (it->inside(addr))
-      return it;
+    if (!it->second.addrInside(addr))
+      break;
+
+    AsmBlock *prevBlock = &it->second;
+    uint32_t iaddr = prevBlock->addr();
+    assert(iaddr < addr && "A previous block must start at smaller address");
+    do
+      iaddr += cpuInstSize(decodeOpcode(peek(iaddr)).addrMode);
+    while (iaddr < addr);
+
+    if (iaddr == addr) {
+      // addr matches an instruction start in prevBlock. So, we must split
+      // prevBlock in two at that point.
+      prevBlock->splitInto(block);
+      if (curBlock && *curBlock == prevBlock)
+        *curBlock = block;
+      return block;
+    }
+
+    // addr does not correspond to an instruction start in prevBlock. Nothing
+    // more we can do. Later when we finish `block`, we can try to see if they
+    // get back into alignment later (they often do after one instruction).
   }
-  return codeRanges_.end();
+
+  // We created a new block and it didn't split an existing one, so enqueue it
+  // for processing.
+  work_.push_back(block);
+  return block;
 }
 
-void Disas::addCodeRange(Range range) {
-  // FIXME: support overlapping ranges.
-  auto next = range.to != 0xFFFF ? findCodeRange(range.to + 1) : codeRanges_.end();
-  if (next != codeRanges_.end()) {
-    range |= *next;
-    codeRanges_.erase(next);
-  }
-  auto prev = range.from != 0 ? findCodeRange(range.from - 1) : codeRanges_.end();
-  if (prev != codeRanges_.end()) {
-    range |= *prev;
-    codeRanges_.erase(prev);
-  }
-
-  codeRanges_.insert(range);
-}
-
-// Add a branch target to the work queue, if it is new.
-bool Disas::addLabel(uint16_t target, std::optional<uint16_t> comingFrom, const char *name) {
-  auto res = codeLabels_.try_emplace(target);
-  if (comingFrom.has_value())
-    res.first->second.comingFrom.insert(*comingFrom);
-  if (name && !res.first->second.name[0])
-    snprintf(res.first->second.name, sizeof(res.first->second.name), "%s", name);
-  if (!res.second)
-    return false;
-  if (findCodeRange(target) != codeRanges_.end())
-    return false;
-  work_.push_back(target);
-  return true;
-};
-
-void Disas::addImplicitLabel(uint16_t addr) {
-  auto res = codeLabels_.try_emplace(addr);
-  if (!res.second)
-    return;
-}
-
-void Disas::identifyCodeRanges() {
+void Disas::identifyAsmBlocks() {
   while (!work_.empty()) {
-    uint16_t const target = work_.front();
+    AsmBlock *block = work_.front();
     work_.pop_front();
 
-    uint16_t addr = target;
+    uint32_t addr = block->addr();
     for (;;) {
-      if (findCodeRange(addr) != codeRanges_.end())
-        break;
       if (findMemRange(addr) == memRanges_.end()) {
-        fprintf(stderr, "accessing undefined memory at $%04X\n", addr);
+        fprintf(stderr, "warning: accessing undefined memory at $%04X\n", addr);
       }
+      // If we already started a basic block and encounter another one, we must
+      // terminate the current one and "fall" into the found one.
+      if (addr != block->addr()) {
+        if (auto *next = findAsmBlockAt(addr)) {
+          block->setEndAddress(addr);
+          block->finish(next, nullptr, next->invalid());
+          break;
+        }
+      }
+
       CPUInst inst = decodeInst(addr, peek3(addr));
+      addr += cpuInstSize(inst.addrMode);
       if (inst.isInvalid()) {
-        fprintf(stderr, "invalid instruction at $%04X\n", addr);
-        ++addr;
+        fprintf(stderr, "warning: invalid instruction at $%04X\n", addr - 1);
+        block->setEndAddress(addr);
+        block->finish(nullptr, nullptr, true);
         break;
       }
-      uint16_t curAddr = addr;
-      addr += cpuInstSize(inst.addrMode);
 
       if (inst.kind == CPUInstKind::JMP) {
-        if (inst.addrMode == CPUAddrMode::Abs)
-          addLabel(inst.operand, curAddr);
+        block->setEndAddress(addr);
+        AsmBlock *branch =
+            inst.addrMode == CPUAddrMode::Abs ? addWork(inst.operand, &block) : nullptr;
+        block->finish(nullptr, branch);
         break;
       } else if (inst.kind == CPUInstKind::JSR) {
-        addLabel(inst.operand, curAddr);
-        addImplicitLabel(addr);
+        block->setEndAddress(addr);
+        // Add the next address to the queue, but do not connect it as a "fall"
+        // target.
+        addWork(addr, nullptr);
+        AsmBlock *branch = addWork(inst.operand, &block);
+        block->finish(nullptr, branch);
+        break;
       } else if (inst.addrMode == CPUAddrMode::Rel) {
-        addLabel(inst.operand, curAddr);
-        addImplicitLabel(addr);
+        block->setEndAddress(addr);
+        AsmBlock *fall = addWork(addr, nullptr);
+        AsmBlock *branch = addWork(inst.operand, &block);
+        block->finish(fall, branch);
+        break;
       } else if (inst.kind == CPUInstKind::BRK) {
+        // BRK is technically two bytes.
         ++addr;
-        addImplicitLabel(addr);
+        block->setEndAddress(addr);
+        // Add the next address to the queue, but do not connect it as a "fall"
+        // target.
+        addWork(addr, nullptr);
+        AsmBlock *branch = addWork(peek16(A2_IRQ_VEC), &block);
+        block->finish(nullptr, branch, true);
         break;
       } else if (inst.kind == CPUInstKind::RTS || inst.kind == CPUInstKind::RTI) {
+        block->setEndAddress(addr);
+        block->finish(nullptr, nullptr);
         break;
       }
 
       // If we wrapped around.
-      if (addr < curAddr)
+      if (addr >= 0x10000) {
+        block->setEndAddress(0x10000);
+        block->finish(nullptr, nullptr, true);
         break;
-    }
-
-    if (addr != target)
-      addCodeRange(Range(target, addr - 1));
-  }
-}
-
-void Disas::detectMisalignedLabels() {
-  // This walks over labels in incremental address order.
-  auto labelIt = codeLabels_.begin();
-  if (labelIt == codeLabels_.end())
-    return;
-
-  for (const auto &r : codeRanges_) {
-    for (uint16_t addr = r.from; addr - 1 != r.to;) {
-      CPUOpcode opc = decodeOpcode(peek(addr));
-      if (opc.kind == CPUInstKind::INVALID) {
-        ++addr;
-        continue;
       }
-      unsigned size = cpuInstSize(opc.addrMode);
-
-      // Look for the first label after the instruction start.
-      while (labelIt->first <= addr) {
-        // If no more labels, we are done.
-        if (++labelIt == codeLabels_.end())
-          return;
-      }
-
-      if (labelIt->first - addr < size) {
-        // Decode the overlapped instruction.
-        uint8_t offset = labelIt->first - addr;
-        CPUOpcode opc1 = decodeOpcode(peek(labelIt->first));
-        unsigned size1 = cpuInstSize(opc1.addrMode);
-        // Does it end exactly where the original instruction ends?
-        bool simple = offset + size1 == size;
-
-        if (!simple) {
-          fprintf(stderr, "ERROR: non-simple misaligned label at $%04X\n", labelIt->first);
-          printf("// ERROR: Non-simple misaligned label at $%04X\n", labelIt->first);
-        } else {
-          misalignedLabels_.try_emplace(labelIt->first, MisalignedDesc{.offset = offset});
-          printf("// Simple misaligned label at $%04X\n", labelIt->first);
-        }
-      }
-
-      addr += size;
     }
   }
 }
@@ -217,7 +222,7 @@ void Disas::detectMisalignedLabels() {
 void Disas::run() {
   if (!start_.has_value())
     throw std::logic_error("starting address not set");
-  addLabel(*start_, *start_, "START");
+  addWork(*start_, nullptr)->setName("START");
 
   if (!runDataPath_.empty())
     runData_ = RuntimeData::load(runDataPath_);
@@ -232,63 +237,65 @@ void Disas::run() {
     }
   }
 
-  identifyCodeRanges();
+  identifyAsmBlocks();
 
   if (runData_) {
-    unsigned newLabelCount = 0;
+    unsigned newBlocks = 0;
     for (auto addr : runData_->branchTargets) {
-      newLabelCount += addLabel(addr, std::nullopt);
+      AsmBlock *block = addWork(addr, nullptr);
+      // Count how many unfinished blocks are created.
+      newBlocks += !block->size();
     }
-    if (newLabelCount)
-      printf("// %u new runtime labels added\n", newLabelCount);
-    // Identify additional code ranges.
-    identifyCodeRanges();
+    if (newBlocks)
+      printf("// %u new runtime blocks added\n", newBlocks);
+    // Identify additional asm blocks.
+    identifyAsmBlocks();
   }
 
-  detectMisalignedLabels();
+  // TODO: identify and coalesce misaligned blocks which come back in sync after
+  //       one instruction.
 
   // Collect all data labels.
-  for (auto r : codeRanges_) {
-    for (uint16_t addr = r.from; addr - 1 != r.to;) {
-      CPUInst inst = decodeInst(addr, peek3(addr));
+  for (const auto &block : asmBlocks_) {
+    for (auto [addr, inst] : block.second.instructions(this)) {
       if (instAccessesData(inst.addrMode)) {
         // Can we reason about the operand at all?
         if (operandIsEA(inst.addrMode)) {
           // Check for self-modifying code.
           if (instWritesMemNormal(inst.kind, inst.addrMode)) {
-            if (findCodeRange(inst.operand) != codeRanges_.end()) {
+            if (findAsmBlockContaining(inst.operand)) {
               selfModifers_.insert(addr);
               selfModified_[inst.operand] |= !operandIsIndexed(inst.addrMode);
             }
           }
         }
 
-        if (!(inst.operand >= 0xC000 && inst.operand <= 0xCFFF) &&
-            !codeLabels_.count(inst.operand)) {
+        if (!(inst.operand >= A2_IO_RANGE_START && inst.operand <= A2_IO_RANGE_END) &&
+            !asmBlocks_.count(inst.operand)) {
           dataLabels_[inst.operand].comingFrom.insert(addr);
         }
       }
-
-      addr += inst.size;
     }
   }
 
   fflush(stderr);
-  printf("// ranges: %zu\n", codeRanges_.size());
-  printf("// code labels: %zu\n", codeLabels_.size());
+  printf("// code labels: %zu\n", asmBlocks_.size());
   printf("// data labels: %zu\n", dataLabels_.size());
 }
 
 void Disas::printAsmListing() {
   // Name all labels by address.
   unsigned labelNumber = 0;
-  for (auto &l : codeLabels_) {
-    if (l.second.name[0])
+  for (auto &block : asmBlocks_) {
+    if (block.second.name()[0])
       continue;
+
+    char buf[AsmBlock::kNameSize];
     if (labelsByAddr_)
-      snprintf(l.second.name, sizeof(l.second.name), "L_%04X", l.first);
-    else if (!l.second.implicit())
-      snprintf(l.second.name, sizeof(l.second.name), "L_%04u", ++labelNumber);
+      snprintf(buf, sizeof(buf), "L_%04X", block.first);
+    else if (!block.second.implicit())
+      snprintf(buf, sizeof(buf), "L_%04u", ++labelNumber);
+    block.second.setName(buf);
   }
   labelNumber = 0;
   for (auto &l : dataLabels_) {
@@ -322,24 +329,37 @@ void Disas::printAsmListing() {
   }
 
   uint32_t nextData = 0;
-  for (auto r : codeRanges_) {
-    if (nextData < r.from)
-      printAsmDataRange(Range(nextData, r.from - 1));
-    printAsmCodeRange(r);
-    nextData = r.to + 1;
+  std::optional<uint32_t> lastAddr;
+  for (const auto &[_, block] : asmBlocks_) {
+    if (nextData < block.addr())
+      printAsmDataRange(Range(nextData, block.addr() - 1));
+    printAsmCodeRange(block, lastAddr);
+    nextData = block.endAddr();
   }
   if (nextData != 0x10000)
     printAsmDataRange(Range(nextData, 0xFFFF));
 }
 
-void Disas::printAsmCodeRange(Range r) {
-  printf("; Code range [$%04x-$%04X]\n", r.from, r.to);
+void Disas::printAsmCodeRange(const AsmBlock &block, std::optional<uint32_t> &lastAddr) {
+  if (!lastAddr || *lastAddr != block.addr()) {
+    printf("; Code range [$%04X-$%04X]\n", block.addr(), block.endAddr() - 1);
+    printf("/*%04X*/ ", block.addr());
+    printf("            org    $%04X\n", block.addr());
+  }
+  lastAddr = block.endAddr();
+  if (block.misaligned())
+    printf("; WARNING: misaligned\n");
 
-  auto labelIt = misalignedLabels_.upper_bound(r.from);
+  if (block.name()[0]) {
+    printf("/*%04X*/ ", block.addr());
+    printf("%s:                             ; xref", block.name());
+    for (const auto &node : block.userList()) {
+      printf(" %s", node.owner()->name());
+    }
+    printf("\n");
+  }
 
-  for (uint16_t addr = r.from; addr - 1 != r.to;) {
-    ThreeBytes bytes = peek3(addr);
-    CPUInst inst = decodeInst(addr, bytes);
+  for (auto const [addr, inst] : block.instructions(this)) {
     if (inst.isInvalid())
       printf("; ERROR: Invalid instruction\n");
 
@@ -353,21 +373,11 @@ void Disas::printAsmCodeRange(Range r) {
 
     printf("/*%04X*/ ", addr);
 
-    auto label = codeLabels_.find(addr);
-    if (label != codeLabels_.end() && !label->second.implicit()) {
-      printf("%s:                  ; xref", label->second.name);
-      for (auto from : label->second.comingFrom)
-        printf(" $%04X", from);
-      printf("\n");
-      printf("/*%04X*/ ", addr);
-    }
-
     // Prepare the disassembled instruction string.
-    FormattedInst fmt = formatInst(inst, bytes, [this](CPUInst inst) -> std::string {
+    FormattedInst fmt = formatInst(inst, peek3(addr), [this](CPUInst inst) -> std::string {
       if (inst.addrMode != CPUAddrMode::Imm) {
-        auto it = codeLabels_.find(inst.operand);
-        if (it != codeLabels_.end())
-          return it->second.name;
+        if (AsmBlock *block = findAsmBlockAt(inst.operand))
+          return block->name();
       }
       auto it = dataLabels_.find(inst.operand);
       if (it != dataLabels_.end())
@@ -375,38 +385,11 @@ void Disas::printAsmCodeRange(Range r) {
       return {};
     });
 
-    // Find a misaligned code label inside the instruction.
-    for (; labelIt != misalignedLabels_.end(); ++labelIt) {
-      if (labelIt->first <= addr)
-        continue;
-      if (labelIt->first - addr >= inst.size)
-        break;
-      // addr < labelIt->first < addr + size.
-      printf("; WARNING: simple misaligned label at $%04X\n", labelIt->first);
-      printf("/*%04X*/ ", addr);
-      printf("            DFB    ");
-      for (unsigned i = 0; addr + i != labelIt->first; ++i) {
-        if (i)
-          printf(", ");
-        printf("$%02X", bytes.d[i]);
-      }
-      printf("   ; %s", fmt.inst);
-      if (!fmt.operand.empty())
-        printf(" %s", fmt.operand.c_str());
-      printf("\n");
-      addr = labelIt->first;
-      goto continue_label;
-    }
-
     printf("            %-3s", fmt.inst);
     if (!fmt.operand.empty()) {
       printf("    %-16s ; $%04X", fmt.operand.c_str(), inst.operand);
     }
     putchar('\n');
-
-    addr += inst.size;
-
-  continue_label:;
   }
 }
 
