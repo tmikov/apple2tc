@@ -165,7 +165,7 @@ void Disas::identifyAsmBlocks() {
       }
 
       CPUInst inst = decodeInst(addr, peek3(addr));
-      addr += cpuInstSize(inst.addrMode);
+      addr += inst.size;
       if (inst.isInvalid()) {
         fprintf(stderr, "warning: invalid instruction at $%04X\n", addr - 1);
         block->setEndAddress(addr);
@@ -194,8 +194,6 @@ void Disas::identifyAsmBlocks() {
         block->finish(fall, branch);
         break;
       } else if (inst.kind == CPUInstKind::BRK) {
-        // BRK is technically two bytes.
-        ++addr;
         block->setEndAddress(addr);
         // Add the next address to the queue, but do not connect it as a "fall"
         // target.

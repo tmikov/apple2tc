@@ -1,5 +1,5 @@
 static const CPUOpcode s_opcodes[256] = {
-  /* $00 */ { CPUInstKind::BRK, CPUAddrMode::Implied },
+  /* $00 */ { CPUInstKind::BRK, CPUAddrMode::Imm },
   /* $01 */ { CPUInstKind::ORA, CPUAddrMode::X_Ind },
   /* $02 */ { CPUInstKind::INVALID, CPUAddrMode::_invalid },
   /* $03 */ { CPUInstKind::INVALID, CPUAddrMode::_invalid },
@@ -287,7 +287,7 @@ static const AsmEncoding s_encodings[] = {
   { { CPUInstKind::BMI, CPUAddrMode::Rel }, 0x30 },
   { { CPUInstKind::BNE, CPUAddrMode::Rel }, 0xD0 },
   { { CPUInstKind::BPL, CPUAddrMode::Rel }, 0x10 },
-  { { CPUInstKind::BRK, CPUAddrMode::Implied }, 0x00 },
+  { { CPUInstKind::BRK, CPUAddrMode::Imm }, 0x00 },
   { { CPUInstKind::BVC, CPUAddrMode::Rel }, 0x50 },
   { { CPUInstKind::BVS, CPUAddrMode::Rel }, 0x70 },
   { { CPUInstKind::CLC, CPUAddrMode::Implied }, 0x18 },

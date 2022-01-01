@@ -73,7 +73,7 @@ CPUOpcode decodeOpcodeSlow(uint8_t opcode) {
   };
 
   static const CPUOpcode ab_to_inst_c0[8][8] = {
-      { {CPUInstKind::BRK, CPUAddrMode::Implied}, {CPUInstKind::INVALID, CPUAddrMode::A},
+      { {CPUInstKind::BRK, CPUAddrMode::Imm}, {CPUInstKind::INVALID, CPUAddrMode::A},
           {CPUInstKind::PHP, CPUAddrMode::Implied}, {CPUInstKind::INVALID, CPUAddrMode::A},
           {CPUInstKind::BPL, CPUAddrMode::Rel}, {CPUInstKind::INVALID, CPUAddrMode::A},
           {CPUInstKind::CLC, CPUAddrMode::Implied}, {CPUInstKind::INVALID, CPUAddrMode::A} },

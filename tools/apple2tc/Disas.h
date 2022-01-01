@@ -319,6 +319,12 @@ public:
     explicit EndIterator(uint32_t addr) : addr_(addr) {}
 
   public:
+    bool operator<(const EndIterator &other) const {
+      return addr_ < other.addr_;
+    }
+    bool operator>(const EndIterator &other) const {
+      return addr_ > other.addr_;
+    }
     bool operator==(const EndIterator &other) const {
       return addr_ == other.addr_;
     }
