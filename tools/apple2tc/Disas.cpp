@@ -8,6 +8,7 @@
 #include "Disas.h"
 
 #include "apple2tc/apple2iodefs.h"
+#include "apple2tc/apple2plus_rom.h"
 
 #include <stdexcept>
 #include <utility>
@@ -108,6 +109,12 @@ AsmBlock *Disas::addWork(uint16_t addr, AsmBlock **curBlock) {
   // Already exists? We are done.
   if (!res.second)
     return block;
+
+  // Is this a ROM call, check if we need to install Apple II ROM
+  if (addr > A2_IO_RANGE_END && (memRanges_.empty() || memRanges_.back().to < addr)) {
+    loadROM(apple2plus_rom, apple2plus_rom_len);
+    fprintf(stderr, "Auto-loaded Apple II ROM\n");
+  }
 
   // Iterate while the previous block overlaps addr.
   for (auto it = res.first;;) {
@@ -229,18 +236,18 @@ void Disas::run(bool noGenerations) {
   if (!noGenerations && runData_) {
     unsigned genIndex = 0;
     for (const auto &gen : runData_->generations) {
-      //printf("// Generation %u\n", genIndex++);
+      // printf("// Generation %u\n", genIndex++);
       for (const auto &seg : gen.code) {
         uint16_t from = seg.addr;
         uint16_t to = seg.addr + seg.bytes.size() - 1;
         try {
           addMemRange(MemRange(from, to, true));
-        } catch (std::logic_error & e) {
-          //printf( "// SKIPPED segment [$%04X..$%04X]\n", from, to);
+        } catch (std::logic_error &e) {
+          // printf( "// SKIPPED segment [$%04X..$%04X]\n", from, to);
           continue;
         }
 
-        printf( "// Loaded segment [$%04X..$%04X]\n", from, to);
+        printf("// Loaded segment [$%04X..$%04X]\n", from, to);
         memcpy(memory_ + seg.addr, seg.bytes.data(), seg.bytes.size());
       }
     }
