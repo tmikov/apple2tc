@@ -227,18 +227,20 @@ void Disas::run(bool noGenerations) {
 
   // Just naively load all runtime data generations.
   if (!noGenerations && runData_) {
+    unsigned genIndex = 0;
     for (const auto &gen : runData_->generations) {
+      //printf("// Generation %u\n", genIndex++);
       for (const auto &seg : gen.code) {
         uint16_t from = seg.addr;
         uint16_t to = seg.addr + seg.bytes.size() - 1;
         try {
           addMemRange(MemRange(from, to, true));
         } catch (std::logic_error & e) {
-          //printf( "// SKIPPED generation [$%04X..$%04X]\n", from, to);
+          //printf( "// SKIPPED segment [$%04X..$%04X]\n", from, to);
           continue;
         }
 
-        printf( "// Loaded generation [$%04X..$%04X]\n", from, to);
+        printf( "// Loaded segment [$%04X..$%04X]\n", from, to);
         memcpy(memory_ + seg.addr, seg.bytes.data(), seg.bytes.size());
       }
     }
