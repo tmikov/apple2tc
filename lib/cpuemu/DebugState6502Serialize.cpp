@@ -12,7 +12,7 @@
 using json = nlohmann::json;
 
 void DebugState6502::finishCollection(const Emu6502 *emu, std::ostream &os) {
-  newGeneration(emu, emu->getRegs());
+  saveGeneration(emu, emu->getRegs());
   std::vector<uint16_t> branchTargets;
   branchTargets.reserve(branchTargets_.size());
   branchTargets.insert(branchTargets.begin(), branchTargets_.begin(), branchTargets_.end());

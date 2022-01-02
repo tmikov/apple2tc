@@ -99,7 +99,7 @@ private:
   void addRecord(const InstRecord &rec);
   Emu6502::StopReason debugState(Emu6502 *emu, uint16_t pc);
   Emu6502::StopReason collectData(const Emu6502 *emu, uint16_t pc);
-  void newGeneration(const Emu6502 *emu, Emu6502::Regs regs);
+  void saveGeneration(const Emu6502 *emu, Emu6502::Regs regs);
 
 private:
   /// Number of instruction to execute.
@@ -141,12 +141,13 @@ private:
   /// Collected branch targets.
   std::unordered_set<uint16_t> branchTargets_{};
 
-  /// Addresses that were written to in the previous generation.
-  BitSet prevMemWritten_{0x10000};
   /// Keep track of addresses that are written to in the current generation.
-  BitSet curMemWritten_{0x10000};
-  /// Addresses written in the previous generation and executed in the current.
-  BitSet curMemExec_{0x10000};
+  BitSet memWritten_{0x10000};
+  /// Starts of instructions written to and executed but not written again.
+  BitSet memExecStart_{0x10000};
+  /// The entire length of instructions written to and executed but not written
+  /// again.
+  BitSet memExecFull_{0x10000};
 
   /// A descriptor of a range of memory.
   struct MemDesc {

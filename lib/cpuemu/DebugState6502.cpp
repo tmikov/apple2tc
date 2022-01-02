@@ -181,9 +181,9 @@ Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu, uint16_t pc) {
 
 void DebugState6502::setCollect(Emu6502 *emu, bool on) {
   if (on && !collect_) {
-    curMemWritten_.clear();
-    prevMemWritten_.clear();
-    curMemExec_.clear();
+    memWritten_.clear();
+    memExecStart_.clear();
+    memExecFull_.clear();
     generations_.clear();
     generations_.emplace_back();
     generations_.back().regs = emu->getRegs();
@@ -237,15 +237,11 @@ Emu6502::StopReason DebugState6502::collectData(const Emu6502 *emu, uint16_t pc)
   uint16_t ea = inst.kind == CPUInstKind::RTS ? stack_peek16(emu, regs.sp) + 1
                                               : operandEA(emu, regs, inst.addrMode, inst.operand);
 
-  if (curMemWritten_.get(pc)) {
-    // Are we executing an opcode that was modified in the current generation?
-    // If so, start a new generation.
-    newGeneration(emu, regs);
-    curMemExec_.setMulti(pc, pc + inst.size, true);
-  } else if (prevMemWritten_.get(pc)) {
-    // We are executing something that was written in the previous generation.
-    // Record the range of the entire instruction.
-    curMemExec_.setMulti(pc, pc + inst.size, true);
+  if (memWritten_.get(pc)) {
+    // We are executing an instruction that we previously modified. Mark it as a
+    // generated instruction.
+    memExecStart_.set(pc, true);
+    memExecFull_.setMulti(pc, pc + inst.size, true);
   }
 
   if (instIsBranch(inst.kind, inst.addrMode) || inst.kind == CPUInstKind::RTS) {
@@ -254,30 +250,35 @@ Emu6502::StopReason DebugState6502::collectData(const Emu6502 *emu, uint16_t pc)
       return Emu6502::StopReason::StopRequesed;
     ++icount_;
   } else if (instWritesMemNormal(inst.kind, inst.addrMode)) {
-    curMemWritten_.set(ea, true);
+    if (memExecStart_.get(ea)) {
+      // We are modifying something that we executed. Save all previously generated instructions.
+      saveGeneration(emu, regs);
+    }
+    memWritten_.set(ea, true);
   }
   return Emu6502::StopReason::None;
 }
 
-void DebugState6502::newGeneration(const Emu6502 *emu, Emu6502::Regs regs) {
+void DebugState6502::saveGeneration(const Emu6502 *emu, Emu6502::Regs regs) {
+  fprintf(stderr, "Recording generation %zu\n", generations_.size());
   generations_.emplace_back();
   auto &gen = generations_.back();
   gen.regs = regs;
 
   unsigned from = 0;
-  while ((from = curMemExec_.findSetBit(from)) != curMemExec_.size()) {
-    unsigned to = curMemExec_.findClearBit(from + 1);
+  while ((from = memExecFull_.findSetBit(from)) != memExecFull_.size()) {
+    unsigned to = memExecFull_.findClearBit(from + 1);
+    fprintf(stderr, "  Segment [$%04X..$%04X]\n", from, to - 1);
+    branchTargets_.insert(from);
     gen.addRange(from, to - from, emu->getMainRAM() + from);
-    if (to == curMemExec_.size())
+    memWritten_.setMulti(from, to, false);
+    if (to == memExecFull_.size())
       break;
     from = to + 1;
   }
 
-  fprintf(stderr, "Saved %zu bytes to previous generation\n", gen.data.size());
-
-  curMemExec_.clear();
-  prevMemWritten_.swap(curMemWritten_);
-  curMemWritten_.clear();
+  memExecStart_.clear();
+  memExecFull_.clear();
 }
 
 void DebugState6502::resetCollectedData() {
