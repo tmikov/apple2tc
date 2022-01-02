@@ -205,7 +205,6 @@ static void init_cb(void) {
   init_window();
   stm_setup();
 
-  g_debug = 0;
   a2_sound_init(&sound_);
   a2_io_init(&io_);
   a2_io_set_spkr_cb(&io_, &sound_, speaker_cb);
@@ -222,7 +221,10 @@ static void init_cb(void) {
 
   add_default_nondebug();
   reset_regs();
-  set_regs((regs_t){.pc = 0, .a = 0, .x = 0, .y = 0, .sp = 0xff, .status = STATUS_IGNORED});
+  // SP is 0xF0 in BASIC.
+  regs_t r = get_regs();
+  r.sp = 0xF0;
+  set_regs(r);
 
   init_emulated();
 }
@@ -346,9 +348,57 @@ static void event_cb(const sapp_event *ev) {
   }
 }
 
+static const char *s_argv0 = "emu";
+
+static void print_help() {
+  printf("syntax: %s [options]\n", s_argv0);
+  printf(" --help           This help\n");
+  printf(" --no-sound       Disable sound\n");
+  printf(" --trace          Dump state at branch targets\n");
+  printf(" --count-bt       Count branch targets\n");
+}
+
+static void parse_args(int argc, char *argv[]) {
+  if (argc) {
+    // Scan backwards to a path separator.
+    const char *e = strchr(argv[0], 0);
+    while (e != argv[0] && e[-1] != '/' && e[-1] != '\\')
+      --e;
+    s_argv0 = e;
+  }
+
+  for (int i = 1; i < argc; ++i) {
+    const char *arg = argv[i];
+    if (strcmp(arg, "--help") == 0) {
+      print_help();
+      exit(0);
+    }
+    if (strcmp(arg, "--no-sound") == 0) {
+      sound_enabled_ = false;
+      continue;
+    }
+    if (strcmp(arg, "--trace") == 0) {
+      g_debug |= DebugASM;
+      continue;
+    }
+    if (strcmp(arg, "--debug-bt") == 0) {
+      g_debug |= DebugCountBB;
+      continue;
+    }
+
+    if (arg[0] == '-') {
+      fprintf(stderr, "Invalid option '%s'\n", arg);
+      print_help();
+      exit(1);
+    }
+    fprintf(stderr, "Extra command line argument '%s'\n", arg);
+    print_help();
+    exit(1);
+  }
+}
+
 sapp_desc sokol_main(int argc, char *argv[]) {
-  (void)argc;
-  (void)argv;
+  parse_args(argc, argv);
 
   return (sapp_desc){
       .init_cb = init_cb,
@@ -357,7 +407,7 @@ sapp_desc sokol_main(int argc, char *argv[]) {
       .event_cb = event_cb,
       .width = A2_SCREEN_W * 2,
       .height = A2_SCREEN_H * 2,
-      .window_title = "Rom",
+      .window_title = s_argv0,
       .icon.sokol_default = true,
   };
 }
