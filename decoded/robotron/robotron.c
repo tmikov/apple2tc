@@ -1,37 +1,13 @@
 // Loaded binary at [$2DFD..$8FFC]
-// Loaded generation [$0140..$014B]
-// Loaded generation [$0152..$015A]
-// Loaded generation [$028E..$0290]
-// Loaded generation [$034F..$0351]
-// Loaded generation [$03B4..$03B6]
-// Loaded generation [$04D3..$04FA]
-// Loaded generation [$0505..$054C]
-// Loaded generation [$0587..$0587]
-// 36 new runtime blocks added
-// code labels: 1934
-// data labels: 507
+// 17 new runtime blocks added
+// code labels: 1899
+// data labels: 502
 
 #include "apple2tc/system-inc.h"
 
-static const uint8_t s_mem_0140[0x000c];
-static const uint8_t s_mem_0152[0x0009];
-static const uint8_t s_mem_028e[0x0003];
-static const uint8_t s_mem_034f[0x0003];
-static const uint8_t s_mem_03b4[0x0003];
-static const uint8_t s_mem_04d3[0x0028];
-static const uint8_t s_mem_0505[0x0048];
-static const uint8_t s_mem_0587[0x0001];
 static const uint8_t s_mem_2dfd[0x6200];
 
 void init_emulated(void) {
-  memcpy(s_ram + 0x0140, s_mem_0140, 0x000c);
-  memcpy(s_ram + 0x0152, s_mem_0152, 0x0009);
-  memcpy(s_ram + 0x028e, s_mem_028e, 0x0003);
-  memcpy(s_ram + 0x034f, s_mem_034f, 0x0003);
-  memcpy(s_ram + 0x03b4, s_mem_03b4, 0x0003);
-  memcpy(s_ram + 0x04d3, s_mem_04d3, 0x0028);
-  memcpy(s_ram + 0x0505, s_mem_0505, 0x0048);
-  memcpy(s_ram + 0x0587, s_mem_0587, 0x0001);
   memcpy(s_ram + 0x2dfd, s_mem_2dfd, 0x6200);
   s_pc = 0x2dfd;
 }
@@ -42,25 +18,25 @@ void run_emulated(unsigned run_cycles) {
     uint16_t tmp16;
     uint8_t tmp;
     switch (s_pc) {
-    case 0x0140: // [$0140..$0142]    3 bytes
-      CYCLES(0x0140, 6);
-      /* $0140 JMP */ s_pc = 0x0158;
-      branchTarget = true;
+    case 0x0140: // [$0140..$0140]    1 bytes
+      CYCLES(0x0140, 2);
+      /* $0140 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0140);
+                      error_handler(s_pc);
       break;
-    case 0x0143: // [$0143..$0145]    3 bytes
-      CYCLES(0x0143, 6);
-      /* $0143 JMP */ s_pc = 0x034f;
-      branchTarget = true;
+    case 0x0143: // [$0143..$0143]    1 bytes
+      CYCLES(0x0143, 2);
+      /* $0143 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0143);
+                      error_handler(s_pc);
       break;
-    case 0x0146: // [$0146..$0148]    3 bytes
-      CYCLES(0x0146, 6);
-      /* $0146 JMP */ s_pc = 0x028e;
-      branchTarget = true;
+    case 0x0146: // [$0146..$0146]    1 bytes
+      CYCLES(0x0146, 2);
+      /* $0146 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0146);
+                      error_handler(s_pc);
       break;
-    case 0x0149: // [$0149..$014B]    3 bytes
-      CYCLES(0x0149, 6);
-      /* $0149 JMP */ s_pc = 0x03b4;
-      branchTarget = true;
+    case 0x0149: // [$0149..$0149]    1 bytes
+      CYCLES(0x0149, 2);
+      /* $0149 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0149);
+                      error_handler(s_pc);
       break;
     case 0x014c: // [$014C..$014C]    1 bytes
       CYCLES(0x014c, 2);
@@ -72,207 +48,15 @@ void run_emulated(unsigned run_cycles) {
       /* $014F ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x014f);
                       error_handler(s_pc);
       break;
-    case 0x0152: // [$0152..$0154]    3 bytes
-      CYCLES(0x0152, 6);
-      /* $0152 JMP */ s_pc = 0x04e9;
-      branchTarget = true;
-      break;
-    case 0x0155: // [$0155..$0157]    3 bytes
-      CYCLES(0x0155, 6);
-      /* $0155 JMP */ s_pc = 0x054a;
-      branchTarget = true;
-      break;
-    case 0x0158: // [$0158..$015A]    3 bytes
-      CYCLES(0x0158, 6);
-      /* $0158 JSR */ push16(0x015a), s_pc = 0x04d3;
-      branchTarget = true;
-      break;
-    case 0x015b: // [$015B..$015B]    1 bytes
-      CYCLES(0x015b, 2);
-      /* $015B ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x015b);
+    case 0x0152: // [$0152..$0152]    1 bytes
+      CYCLES(0x0152, 2);
+      /* $0152 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0152);
                       error_handler(s_pc);
       break;
-    case 0x028e: // [$028E..$0290]    3 bytes
-      CYCLES(0x028e, 6);
-      /* $028E JSR */ push16(0x0290), s_pc = 0x04d3;
-      branchTarget = true;
-      break;
-    case 0x0291: // [$0291..$0291]    1 bytes
-      CYCLES(0x0291, 2);
-      /* $0291 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0291);
+    case 0x0155: // [$0155..$0155]    1 bytes
+      CYCLES(0x0155, 2);
+      /* $0155 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0155);
                       error_handler(s_pc);
-      break;
-    case 0x034f: // [$034F..$0351]    3 bytes
-      CYCLES(0x034f, 6);
-      /* $034F JSR */ push16(0x0351), s_pc = 0x04d3;
-      branchTarget = true;
-      break;
-    case 0x0352: // [$0352..$0352]    1 bytes
-      CYCLES(0x0352, 2);
-      /* $0352 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0352);
-                      error_handler(s_pc);
-      break;
-    case 0x03b4: // [$03B4..$03B6]    3 bytes
-      CYCLES(0x03b4, 6);
-      /* $03B4 JSR */ push16(0x03b6), s_pc = 0x04d3;
-      branchTarget = true;
-      break;
-    case 0x03b7: // [$03B7..$03B7]    1 bytes
-      CYCLES(0x03b7, 2);
-      /* $03B7 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x03b7);
-                      error_handler(s_pc);
-      break;
-    case 0x04d3: // [$04D3..$04E7]   21 bytes
-      CYCLES(0x04d3, 36);
-      /* $04D3 PLA */ s_a = update_nz(pop8());
-      /* $04D4 STA */ poke_zpg(0x28, s_a);
-      /* $04D6 PLA */ s_a = update_nz(pop8());
-      /* $04D7 STA */ poke_zpg(0x29, s_a);
-      /* $04D9 LDA */ s_a = update_nz(0x00);
-      /* $04DB STA */ poke_zpg(0x2a, s_a);
-      /* $04DD LDA */ s_a = update_nz(0xff);
-      /* $04DF STA */ poke_zpg(0x2b, s_a);
-      /* $04E1 STA */ poke_zpg(0x2c, s_a);
-      /* $04E3 LDX */ s_x = update_nz(0x01);
-      /* $04E5 JSR */ push16(0x04e7), s_pc = 0x0540;
-      branchTarget = true;
-      break;
-    case 0x04e8: // [$04E8..$04E8]    1 bytes
-      CYCLES(0x04e8, 2);
-      /* $04E8 RTS */ s_pc = pop16() + 1;
-      branchTarget = true;
-      break;
-    case 0x04e9: // [$04E9..$04EE]    6 bytes
-      CYCLES(0x04e9, 11);
-      /* $04E9 LDY */ s_y = update_nz(0x00);
-      /* $04EB LDA */ s_a = update_nz(peek(peek16_zpg(0x28) + s_y));
-      /* $04ED BNE */ s_pc = !(s_status & STATUS_Z) ? 0x04f0 : 0x04ef;
-      branchTarget = true;
-      break;
-    case 0x04ef: // [$04EF..$04EF]    1 bytes
-      CYCLES(0x04ef, 2);
-      /* $04EF RTS */ s_pc = pop16() + 1;
-      branchTarget = true;
-      break;
-    case 0x04f0: // [$04F0..$04F3]    4 bytes
-      CYCLES(0x04f0, 7);
-      /* $04F0 LDX */ s_x = update_nz(peek_zpg(0x2a));
-      /* $04F2 BEQ */ s_pc = s_status & STATUS_Z ? 0x04f7 : 0x04f4;
-      branchTarget = true;
-      break;
-    case 0x04f4: // [$04F4..$04F6]    3 bytes
-      CYCLES(0x04f4, 6);
-      /* $04F4 DEC */ tmp16 = 0x2a, poke_zpg(tmp16, update_nz(peek_zpg(tmp16) - 1));
-      /* $04F6 RTS */ s_pc = pop16() + 1;
-      branchTarget = true;
-      break;
-    case 0x04f7: // [$04F7..$04FA]    4 bytes
-      CYCLES(0x04f7, 7);
-      /* $04F7 CMP */ update_nz_inv_c(s_a - 0x01);
-      /* $04F9 BNE */ s_pc = !(s_status & STATUS_Z) ? 0x0505 : 0x04fb;
-      branchTarget = true;
-      break;
-    case 0x04fb: // [$04FB..$04FB]    1 bytes
-      CYCLES(0x04fb, 2);
-      /* $04FB ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x04fb);
-                      error_handler(s_pc);
-      break;
-    case 0x0505: // [$0505..$0508]    4 bytes
-      CYCLES(0x0505, 7);
-      /* $0505 CMP */ update_nz_inv_c(s_a - 0x02);
-      /* $0507 BNE */ s_pc = !(s_status & STATUS_Z) ? 0x0513 : 0x0509;
-      branchTarget = true;
-      break;
-    case 0x0509: // [$0509..$0512]   10 bytes
-      CYCLES(0x0509, 18);
-      /* $0509 INY */ s_y = update_nz(s_y + 1);
-      /* $050A LDA */ s_a = update_nz(peek(peek16_zpg(0x28) + s_y));
-      /* $050C STA */ poke_zpg(0x2a, s_a);
-      /* $050E LDX */ s_x = update_nz(0x02);
-      /* $0510 JMP */ s_pc = 0x0540;
-      branchTarget = true;
-      break;
-    case 0x0513: // [$0513..$0516]    4 bytes
-      CYCLES(0x0513, 7);
-      /* $0513 CMP */ update_nz_inv_c(s_a - 0x0d);
-      /* $0515 BNE */ s_pc = !(s_status & STATUS_Z) ? 0x0526 : 0x0517;
-      branchTarget = true;
-      break;
-    case 0x0517: // [$0517..$0525]   15 bytes
-      CYCLES(0x0517, 26);
-      /* $0517 INY */ s_y = update_nz(s_y + 1);
-      /* $0518 LDA */ s_a = update_nz(peek(peek16_zpg(0x28) + s_y));
-      /* $051A STA */ poke_zpg(0x2d, s_a);
-      /* $051C INY */ s_y = update_nz(s_y + 1);
-      /* $051D LDA */ s_a = update_nz(peek(peek16_zpg(0x28) + s_y));
-      /* $051F STA */ poke_zpg(0x2e, s_a);
-      /* $0521 LDX */ s_x = update_nz(0x03);
-      /* $0523 JMP */ s_pc = 0x0540;
-      branchTarget = true;
-      break;
-    case 0x0526: // [$0526..$052D]    8 bytes
-      CYCLES(0x0526, 14);
-      /* $0526 LDX */ s_x = update_nz(peek_zpg(0x2d));
-      /* $0528 LDY */ s_y = update_nz(peek_zpg(0x2e));
-      /* $052A PHA */ push8(s_a);
-      /* $052B JSR */ push16(0x052d), s_pc = 0x5108;
-      branchTarget = true;
-      break;
-    case 0x052e: // [$052E..$0532]    5 bytes
-      CYCLES(0x052e, 9);
-      /* $052E PLA */ s_a = update_nz(pop8());
-      /* $052F CMP */ update_nz_inv_c(s_a - 0x20);
-      /* $0531 BEQ */ s_pc = s_status & STATUS_Z ? 0x053c : 0x0533;
-      branchTarget = true;
-      break;
-    case 0x0533: // [$0533..$0538]    6 bytes
-      CYCLES(0x0533, 11);
-      /* $0533 LDA */ s_a = update_nz(peek_zpg(0x2f));
-      /* $0535 CMP */ update_nz_inv_c(s_a - 0x60);
-      /* $0537 BEQ */ s_pc = s_status & STATUS_Z ? 0x053c : 0x0539;
-      branchTarget = true;
-      break;
-    case 0x0539: // [$0539..$053B]    3 bytes
-      CYCLES(0x0539, 6);
-      /* $0539 LDA */ s_a = update_nz(peek(0xc030));
-    case 0x053c: // [$053C..$053F]    4 bytes
-      CYCLES(0x053c, 7);
-      /* $053C INC */ tmp16 = 0x2d, poke_zpg(tmp16, update_nz(peek_zpg(tmp16) + 1));
-      /* $053E LDX */ s_x = update_nz(0x01);
-    case 0x0540: // [$0540..$0543]    4 bytes
-      CYCLES(0x0540, 7);
-      /* $0540 INC */ tmp16 = 0x28, poke_zpg(tmp16, update_nz(peek_zpg(tmp16) + 1));
-      /* $0542 BNE */ s_pc = !(s_status & STATUS_Z) ? 0x0546 : 0x0544;
-      branchTarget = true;
-      break;
-    case 0x0544: // [$0544..$0545]    2 bytes
-      CYCLES(0x0544, 4);
-      /* $0544 INC */ tmp16 = 0x29, poke_zpg(tmp16, update_nz(peek_zpg(tmp16) + 1));
-    case 0x0546: // [$0546..$0548]    3 bytes
-      CYCLES(0x0546, 6);
-      /* $0546 DEX */ s_x = update_nz(s_x - 1);
-      /* $0547 BNE */ s_pc = !(s_status & STATUS_Z) ? 0x0540 : 0x0549;
-      branchTarget = true;
-      break;
-    case 0x0549: // [$0549..$0549]    1 bytes
-      CYCLES(0x0549, 2);
-      /* $0549 RTS */ s_pc = pop16() + 1;
-      branchTarget = true;
-      break;
-    case 0x054a: // [$054A..$054C]    3 bytes
-      CYCLES(0x054a, 6);
-      /* $054A JSR */ push16(0x054c), s_pc = 0x51b8;
-      branchTarget = true;
-      break;
-    case 0x054d: // [$054D..$054D]    1 bytes
-      CYCLES(0x054d, 2);
-      /* $054D ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x054d);
-                      error_handler(s_pc);
-      break;
-    case 0x0587: // [$0587..$0587]    1 bytes
-      CYCLES(0x0587, 2);
-      /* $0587 RTS */ s_pc = pop16() + 1;
-      branchTarget = true;
       break;
     case 0x2dfd: // [$2DFD..$2DFF]    3 bytes
       CYCLES(0x2dfd, 6);
@@ -2037,11 +1821,6 @@ void run_emulated(unsigned run_cycles) {
       /* $466C ORA */ s_a = update_nz(s_a | peek(0x000d));
       /* $466F ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x466f);
                       error_handler(s_pc);
-      break;
-    case 0x467e: // [$467E..$467E]    1 bytes
-      CYCLES(0x467e, 2);
-      /* $467E RTS */ s_pc = pop16() + 1;
-      branchTarget = true;
       break;
     case 0x467f: // [$467F..$4681]    3 bytes
       CYCLES(0x467f, 6);
@@ -13488,52 +13267,12 @@ void run_emulated(unsigned run_cycles) {
       /* $FCA8 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0xfca8);
                       error_handler(s_pc);
       break;
-    case 0xfca9: // [$FCA9..$FCA9]    1 bytes
-      CYCLES(0xfca9, 2);
-      /* $FCA9 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0xfca9);
-                      error_handler(s_pc);
-      break;
-    case 0xfcaa: // [$FCAA..$FCAA]    1 bytes
-      CYCLES(0xfcaa, 2);
-      /* $FCAA ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0xfcaa);
-                      error_handler(s_pc);
-      break;
     default:
       fprintf(stderr, "Unknown code address: $%04X\n", s_pc);
       error_handler(s_pc);
     }
   }
 }
-static const uint8_t s_mem_0140[0x000c] = {
-  0x4C, 0x58, 0x01, 0x4C, 0x4F, 0x03, 0x4C, 0x8E, 0x02, 0x4C, 0xB4, 0x03
-};
-static const uint8_t s_mem_0152[0x0009] = {
-  0x4C, 0xE9, 0x04, 0x4C, 0x4A, 0x05, 0x20, 0xD3, 0x04
-};
-static const uint8_t s_mem_028e[0x0003] = {
-  0x20, 0xD3, 0x04
-};
-static const uint8_t s_mem_034f[0x0003] = {
-  0x20, 0xD3, 0x04
-};
-static const uint8_t s_mem_03b4[0x0003] = {
-  0x20, 0xD3, 0x04
-};
-static const uint8_t s_mem_04d3[0x0028] = {
-  0x68, 0x85, 0x28, 0x68, 0x85, 0x29, 0xA9, 0x00, 0x85, 0x2A, 0xA9, 0xFF, 0x85, 0x2B, 0x85, 0x2C,
-  0xA2, 0x01, 0x20, 0x40, 0x05, 0x60, 0xA0, 0x00, 0xB1, 0x28, 0xD0, 0x01, 0x60, 0xA6, 0x2A, 0xF0,
-  0x03, 0xC6, 0x2A, 0x60, 0xC9, 0x01, 0xD0, 0x0A
-};
-static const uint8_t s_mem_0505[0x0048] = {
-  0xC9, 0x02, 0xD0, 0x0A, 0xC8, 0xB1, 0x28, 0x85, 0x2A, 0xA2, 0x02, 0x4C, 0x40, 0x05, 0xC9, 0x0D,
-  0xD0, 0x0F, 0xC8, 0xB1, 0x28, 0x85, 0x2D, 0xC8, 0xB1, 0x28, 0x85, 0x2E, 0xA2, 0x03, 0x4C, 0x40,
-  0x05, 0xA6, 0x2D, 0xA4, 0x2E, 0x48, 0x20, 0x08, 0x51, 0x68, 0xC9, 0x20, 0xF0, 0x09, 0xA5, 0x2F,
-  0xC9, 0x60, 0xF0, 0x03, 0xAD, 0x30, 0xC0, 0xE6, 0x2D, 0xA2, 0x01, 0xE6, 0x28, 0xD0, 0x02, 0xE6,
-  0x29, 0xCA, 0xD0, 0xF7, 0x60, 0x20, 0xB8, 0x51
-};
-static const uint8_t s_mem_0587[0x0001] = {
-  0x60
-};
 static const uint8_t s_mem_2dfd[0x6200] = {
   0x4C, 0x00, 0x40, 0x00, 0x00, 0x10, 0x20, 0xFF, 0xFF, 0x30, 0x40, 0x50, 0x60, 0x10, 0x20, 0xFF,
   0xFF, 0x30, 0x40, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x50, 0x60, 0x10, 0x20, 0xFF,
