@@ -9,9 +9,18 @@
 
 #include "nlohmann/json.hpp"
 
+#include <stdexcept>
+
 using json = nlohmann::json;
 
 void DebugState6502::finishCollection(const Emu6502 *emu, std::ostream &os) {
+  if (mode_ == Mode::None)
+    return;
+  if (mode_ != Mode::Collect) {
+    throw std::logic_error("Not currently collecting");
+  }
+  mode_ = Mode::None;
+
   saveGeneration(emu, emu->getRegs());
   std::vector<uint16_t> branchTargets;
   branchTargets.reserve(branchTargets_.size());

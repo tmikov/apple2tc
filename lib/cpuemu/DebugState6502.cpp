@@ -9,23 +9,33 @@
 
 #include "apple2tc/a2symbols.h"
 
-/// Reset all debugging.
-void DebugState6502::reset() {
-  setCollect(nullptr, false);
-  setDebugBB(false);
-  setBuffering(false);
-  setLimit(0);
-  clearHistory();
-  clearWatches();
-  resetCollectedData();
+void DebugState6502::setModeNone() {
+  mode_ = Mode::None;
 }
 
-void DebugState6502::setBuffering(bool buffering) {
-  if (!buffering && buffering_) {
-    history_.clear();
-    history_.shrink_to_fit();
-  }
-  buffering_ = buffering;
+void DebugState6502::setModeCollect(Emu6502 *emu, unsigned int limit) {
+  mode_ = Mode::Collect;
+  limit_ = limit;
+  icount_ = 0;
+
+  memWritten_.clear();
+  memExecStart_.clear();
+  memExecFull_.clear();
+  generations_.clear();
+  generations_.emplace_back(emu->getRegs());
+}
+
+void DebugState6502::setModeTrace(unsigned int limit, bool btOnly) {
+  mode_ = Mode::Trace;
+  limit_ = limit;
+  icount_ = 0;
+  traceOnlyBT_ = btOnly;
+  // Next instruction is a branch target.
+  branchTarget_ = true;
+}
+
+void DebugState6502::enableHistory(bool on) {
+  buffering_ = on;
 }
 
 void DebugState6502::setMaxHistory(unsigned maxHistory) {
@@ -45,6 +55,11 @@ void DebugState6502::printHistory() {
     printRecord(rec, true);
     printf("\n");
   }
+}
+
+void DebugState6502::clearCollectedData() {
+  branchTargets_.clear();
+  generations_.clear();
 }
 
 void DebugState6502::addWatch(std::string name, uint16_t addr, uint8_t size) {
@@ -74,7 +89,7 @@ Emu6502::StopReason DebugState6502::debugStateCB(void *ctx, Emu6502 *emu, uint16
   return static_cast<DebugState6502 *>(ctx)->debugState(emu, pc);
 }
 
-void DebugState6502::printRecord(const InstRecord &rec, bool showInst) {
+void DebugState6502::printRecord(const InstRecord &rec, bool showInst) const {
   auto r = rec.regs;
   // Address.
   {
@@ -121,16 +136,25 @@ static inline ThreeBytes ram_peek3(const Emu6502 *emu, uint16_t addr) {
 }
 
 Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu, uint16_t pc) {
+  if (breakpointCB_ && breakpoints_.count(pc)) {
+    auto res = breakpointCB_(pc);
+    if (res != Emu6502::StopReason::None)
+      return res;
+  }
+
+  if (mode_ == Mode::None)
+    return Emu6502::StopReason::None;
+
   // Don't debug in areas that have been excluded.
   for (auto p : nonDebug_) {
     if (pc >= p.first && pc <= p.second)
       return Emu6502::StopReason::None;
   }
 
-  if (collect_)
+  if (mode_ == Mode::Collect)
     return collectData(emu, pc);
 
-  if (debugBB_) {
+  if (traceOnlyBT_) {
     bool wasBranchTarget = branchTarget_;
     CPUOpcode opc = decodeOpcode(emu->ram_peek(pc));
     branchTarget_ = instIsBranch(opc.kind, opc.addrMode) || opc.kind == CPUInstKind::RTS;
@@ -177,18 +201,6 @@ Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu, uint16_t pc) {
   putchar('\n');
 
   return Emu6502::StopReason::None;
-}
-
-void DebugState6502::setCollect(Emu6502 *emu, bool on) {
-  if (on && !collect_) {
-    memWritten_.clear();
-    memExecStart_.clear();
-    memExecFull_.clear();
-    generations_.clear();
-    generations_.emplace_back();
-    generations_.back().regs = emu->getRegs();
-  }
-  collect_ = on;
 }
 
 /// Calculate the effective address that would be operated on by the instruction.
@@ -261,9 +273,8 @@ Emu6502::StopReason DebugState6502::collectData(const Emu6502 *emu, uint16_t pc)
 
 void DebugState6502::saveGeneration(const Emu6502 *emu, Emu6502::Regs regs) {
   fprintf(stderr, "Recording generation %zu\n", generations_.size());
-  generations_.emplace_back();
+  generations_.emplace_back(regs);
   auto &gen = generations_.back();
-  gen.regs = regs;
 
   unsigned from = 0;
   while ((from = memExecFull_.findSetBit(from)) != memExecFull_.size()) {
@@ -279,9 +290,4 @@ void DebugState6502::saveGeneration(const Emu6502 *emu, Emu6502::Regs regs) {
 
   memExecStart_.clear();
   memExecFull_.clear();
-}
-
-void DebugState6502::resetCollectedData() {
-  branchTargets_.clear();
-  generations_.clear();
 }

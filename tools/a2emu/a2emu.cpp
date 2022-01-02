@@ -14,7 +14,6 @@
 #include "apple2tc/sokol/sokol_gfx.h"
 #include "apple2tc/sokol/sokol_glue.h"
 #include "apple2tc/sokol/sokol_time.h"
-#include "apple2tc/soundqueue.h"
 #include "apple2tc/support.h"
 
 #include "apple2tc/sokol/blit.h"
@@ -26,6 +25,20 @@
 #include <iostream>
 #include <optional>
 
+/// Load a DOS3.3 binary buffer into emulated RAM.
+/// Return the load address.
+static std::optional<uint16_t> loadB33Buf(EmuApple2 *emu, const uint8_t *data, size_t len);
+
+/// Start executing from the specified address.
+static void setRegsForRun(EmuApple2 *emu, uint16_t addr);
+
+/// Load a DOS3.3 binary into RAM and execute it.
+static void runB33(EmuApple2 *emu, const uint8_t *data, size_t len);
+
+/// Load a DOS3.3 binary file, where the first 4 bytes are start addr and
+/// length.
+static std::optional<uint16_t> loadB33File(EmuApple2 *emu, const char *path);
+
 struct CLIArgs {
   enum Action {
     // Just run the specified file.
@@ -36,6 +49,8 @@ struct CLIArgs {
     Collect,
   };
   Action action = Action::Run;
+  /// Start tracing/collecting from rom.
+  bool rom = false;
   bool soundEnabled = true;
   unsigned limit = 100000;
   unsigned clockFreq = Emu6502::CLOCK_FREQ;
@@ -66,6 +81,15 @@ private:
   /// Prepare the system window, init GFX.
   void initWindow();
 
+  /// Init the debugging/trace/collection state.
+  void initTraceCollect();
+
+  /// Invoked when the warm restart breakpoint is hit.
+  void onWarmRestartBP();
+
+  /// Open and start draining the keyboard file if specified.
+  void openKBDFile();
+
   /// While the KBD file is open, read as many characters from it as possible.
   /// Close the file of EOF is reached.
   void drainKBDFile();
@@ -79,17 +103,11 @@ private:
   /// Update the GFX image with data from the screen.
   void updateScreenImage();
 
-  /// The CLI command has been activated by pressing F3.
-  void onCLICommand();
-  /// Actually perform the command once the binary is in memory and regs are
-  /// setup.
-  void cliCommandApply();
   /// Invoked when the simulation returns that stop was requested.
   void simulationStop();
 
 private:
   CLIArgs cliArgs_;
-  std::optional<CLIArgs::Action> curAction_{};
 
   sg_bindings bind_ = {0};
   sg_pipeline pip_ = {0};
@@ -123,9 +141,6 @@ static A2Emu *s_a2emu = nullptr;
 A2Emu::A2Emu(CLIArgs &&cliArgs) : cliArgs_(std::move(cliArgs)) {
   initWindow();
 
-  dbg_.addDefaultNonDebug();
-  emu_.setDebugStateCB(&dbg_, DebugState6502::debugStateCB);
-
   a2_sound_init(&sound_);
 
   if (cliArgs_.soundEnabled) {
@@ -148,24 +163,102 @@ A2Emu::A2Emu(CLIArgs &&cliArgs) : cliArgs_(std::move(cliArgs)) {
 
   stm_setup();
 
-  if (!cliArgs_.kbdPath.empty()) {
-    if ((kbdFile_ = fopen(cliArgs_.kbdPath.c_str(), "rt")) == nullptr) {
-      perror(cliArgs_.kbdPath.c_str());
-      exit(2);
-    }
+  initTraceCollect();
+}
+
+void A2Emu::initTraceCollect() {
+  emu_.setDebugStateCB(&dbg_, DebugState6502::debugStateCB);
+
+  // Add the excluded regions unless we are collecting, when we need a complete
+  // picture.
+  if (cliArgs_.action != CLIArgs::Collect)
+    dbg_.addDefaultNonDebug();
+
+  // We don't want Apple II symbols to be printed in traces.
+  dbg_.setResolveApple2Symbols(false);
+
+  // Do we need to start collecting right after reset?
+  if (cliArgs_.rom && cliArgs_.action == CLIArgs::Action::Trace) {
+    emu_.addDebugFlags(Emu6502::DebugASM);
+    dbg_.setModeTrace(cliArgs_.limit, true);
+  } else if (cliArgs_.rom && cliArgs_.action == CLIArgs::Action::Collect) {
+    emu_.addDebugFlags(Emu6502::DebugASM);
+    dbg_.setModeCollect(&emu_, cliArgs_.limit);
+  }
+
+  // If we have a file to load, we place a breakpoint after initialization.
+  // As soon as we hit the breakpoint, we load the file and start it.
+  if (!cliArgs_.runPath.empty()) {
+    emu_.addDebugFlags(Emu6502::DebugASM);
+    dbg_.setBreakpoint(0xD43C); // Warm restart.
+    dbg_.setBreakpointCB([this](uint16_t addr) {
+      dbg_.clearBreakpoint(addr);
+      dbg_.setBreakpointCB({});
+
+      // If we are simply tracking breakpoints, disable emu debugging. If everything
+      // goes OK and it needs to be on, it will be re-enabled.
+      if (dbg_.getMode() == DebugState6502::Mode::None)
+        emu_.setDebugFlags(emu_.getDebugFlags() & ~Emu6502::DebugASM);
+
+      onWarmRestartBP();
+      return Emu6502::StopReason::None;
+    });
+  } else if (!cliArgs_.kbdPath.empty()) {
     // The first key pressed before initialization is lost, so just add a dummy keypress.
     a2_io_push_key(emu_.io(), '\r');
-    drainKBDFile();
+    openKBDFile();
+  }
+}
+
+void A2Emu::onWarmRestartBP() {
+  if (cliArgs_.runPath.empty()) {
+    // This should never happen, but why not check.
+    return;
+  }
+  auto addr = loadB33File(&emu_, cliArgs_.runPath.c_str());
+  if (!addr)
+    return;
+
+  if (cliArgs_.rom) {
+    // If we are tracing/collecting starting from ROM, invoke the program from BASIC.
+    char buf[32];
+    snprintf(buf, sizeof(buf), "CALL %u\r", *addr);
+    a2_io_push_str(emu_.io(), buf);
+  } else {
+    setRegsForRun(&emu_, *addr);
   }
 
-  if (cliArgs_.action != CLIArgs::Trace)
-    // When collecting ROM data, we don't want to miss anything.
-    dbg_.clearNonDebug();
+  openKBDFile();
 
-  if (cliArgs_.runPath.empty() && cliArgs_.action != CLIArgs::Run) {
-    curAction_ = cliArgs_.action;
-    cliCommandApply();
+  // If mode is already set, do nothing.
+  if (dbg_.getMode() != DebugState6502::Mode::None)
+    return;
+
+  switch (cliArgs_.action) {
+  case CLIArgs::Run:
+    break;
+  case CLIArgs::Trace:
+    emu_.addDebugFlags(Emu6502::DebugASM);
+    dbg_.setModeTrace(cliArgs_.limit, true);
+    break;
+  case CLIArgs::Collect:
+    emu_.addDebugFlags(Emu6502::DebugASM);
+    dbg_.setModeCollect(&emu_, cliArgs_.limit);
+    break;
   }
+}
+
+void A2Emu::openKBDFile() {
+  assert(!kbdFile_ && "openKBDFile() must not be called twice");
+  if (cliArgs_.kbdPath.empty())
+    return;
+
+  if ((kbdFile_ = fopen(cliArgs_.kbdPath.c_str(), "rt")) == nullptr) {
+    perror(cliArgs_.kbdPath.c_str());
+    exit(2);
+  }
+
+  drainKBDFile();
 }
 
 void A2Emu::initWindow() {
@@ -247,8 +340,6 @@ void A2Emu::drainKBDFile() {
   }
 }
 
-/// Load a DOS3.3 binary buffer into emulated RAM.
-/// Return the load address.
 static std::optional<uint16_t> loadB33Buf(EmuApple2 *emu, const uint8_t *data, size_t len) {
   if (len > 4) {
     uint16_t start = data[0] + data[1] * 256;
@@ -262,7 +353,6 @@ static std::optional<uint16_t> loadB33Buf(EmuApple2 *emu, const uint8_t *data, s
   return std::nullopt;
 }
 
-/// Start executing from the specified address.
 static void setRegsForRun(EmuApple2 *emu, uint16_t addr) {
   fprintf(stderr, "Executing at $%04X!\n", addr);
   auto r = emu->getRegs();
@@ -271,14 +361,11 @@ static void setRegsForRun(EmuApple2 *emu, uint16_t addr) {
   emu->setRegs(r);
 }
 
-/// Load a DOS3.3 binary into RAM and execute it.
 static void runB33(EmuApple2 *emu, const uint8_t *data, size_t len) {
   if (auto addr = loadB33Buf(emu, data, len))
     setRegsForRun(emu, *addr);
 }
 
-/// Load a DOS3.3 binary file, where the first 4 bytes are start addr and
-/// length.
 static std::optional<uint16_t> loadB33File(EmuApple2 *emu, const char *path) {
   if (FILE *f = fopen(path, "rb")) {
     auto b = readAll<std::vector<uint8_t>>(f);
@@ -290,60 +377,10 @@ static std::optional<uint16_t> loadB33File(EmuApple2 *emu, const char *path) {
   return std::nullopt;
 }
 
-/// Load and run a DOS3.3 binary file.
-static void runB33File(EmuApple2 *emu, const char *path) {
-  if (auto addr = loadB33File(emu, path))
-    setRegsForRun(emu, *addr);
-}
-
-void A2Emu::onCLICommand() {
-  if (curAction_.has_value())
-    return;
-
-  if (cliArgs_.runPath.empty()) {
-    fprintf(stderr, "A path was not supplied to the CLI\n");
-    return;
-  }
-  auto addr = loadB33File(&emu_, cliArgs_.runPath.c_str());
-  if (!addr)
-    return;
-
-  setRegsForRun(&emu_, *addr);
-  cliCommandApply();
-}
-
-void A2Emu::cliCommandApply() {
-  emu_.setDebugFlags(emu_.getDebugFlags() & ~Emu6502::DebugASM);
-  dbg_.reset();
-
-  switch (cliArgs_.action) {
-  case CLIArgs::Run:
-    break;
-  case CLIArgs::Trace:
-    emu_.addDebugFlags(Emu6502::DebugASM);
-    dbg_.setDebugBB(true);
-    dbg_.setLimit(cliArgs_.limit);
-    dbg_.setResolveApple2Symbols(false);
-    break;
-  case CLIArgs::Collect:
-    emu_.addDebugFlags(Emu6502::DebugASM);
-    dbg_.setCollect(&emu_, true);
-    dbg_.setLimit(cliArgs_.limit);
-    break;
-  }
-
-  curAction_ = cliArgs_.action;
-}
-
 void A2Emu::simulationStop() {
-  if (!curAction_.has_value()) {
-    // Not clear why and whether this might happen, but to be safe do nothing.
-    return;
-  }
-
   fprintf(stderr, "Command completed\n");
 
-  if (*curAction_ == CLIArgs::Action::Collect) {
+  if (dbg_.getMode() == DebugState6502::Mode::Collect) {
     fflush(stdout);
     std::ostream *os;
     std::ofstream of;
@@ -354,13 +391,12 @@ void A2Emu::simulationStop() {
       os = &std::cout;
     }
     dbg_.finishCollection(&emu_, *os);
+    dbg_.clearCollectedData();
     os->flush();
   }
 
   emu_.setDebugFlags(emu_.getDebugFlags() & ~Emu6502::DebugASM);
-  dbg_.reset();
-
-  curAction_.reset();
+  dbg_.setModeNone();
 }
 
 #include "bolo.h"
@@ -395,9 +431,6 @@ void A2Emu::event(const sapp_event *ev) {
       break;
     case SAPP_KEYCODE_F2:
       runB33(&emu_, robotron2084_bin, robotron2084_bin_len);
-      break;
-    case SAPP_KEYCODE_F3:
-      onCLICommand();
       break;
     case SAPP_KEYCODE_DELETE:
     case SAPP_KEYCODE_BACKSPACE:
@@ -563,6 +596,7 @@ static const char *s_argv0 = "a2emu";
 static void printHelp() {
   printf("syntax: %s [options] [inputFile]\n", s_argv0);
   printf(" --help           This help\n");
+  printf(" --rom            Start tracing from ROM\n");
   printf(" --run            Run the binary\n");
   printf(" --trace          Trace the binary\n");
   printf(" --collect        Collect data from running and write to outputFile or stdout\n");
@@ -581,6 +615,10 @@ static CLIArgs parseCLI(int argc, char **argv) {
     if (strcmp(arg, "--help") == 0) {
       printHelp();
       exit(0);
+    }
+    if (strcmp(arg, "--rom") == 0) {
+      cliArgs.rom = true;
+      continue;
     }
     if (strcmp(arg, "--run") == 0) {
       cliArgs.action = CLIArgs::Action::Run;

@@ -12,6 +12,7 @@
 #include "apple2tc/emu6502.h"
 
 #include <deque>
+#include <functional>
 #include <ostream>
 #include <string>
 #include <unordered_set>
@@ -24,37 +25,43 @@ public:
   /// passing the address of DebugState6502 as `ctx`.
   static Emu6502::StopReason debugStateCB(void *ctx, Emu6502 *emu, uint16_t pc);
 
+  enum class Mode {
+    /// Nothing but breakpoints.
+    None,
+    /// Collect runtime data for Apple2tc.
+    Collect,
+    /// Trace instructions.
+    Trace,
+  };
+
+  /// Set the callback to be invoked when a breakpoint is hit. Call with {} to
+  /// remove the callback and disable breakpoint checking.
+  void setBreakpointCB(std::function<Emu6502::StopReason(uint16_t)> cb) {
+    breakpointCB_ = std::move(cb);
+  }
+
   /// Whether to attempt to resolve operand addresses to well known AppleII symbols.
   void setResolveApple2Symbols(bool resolveApple2Symbols) {
     resolveApple2Symbols_ = resolveApple2Symbols;
   }
 
-  /// Reset all debugging.
-  void reset();
-
-  /// Reset all collected data.
-  void resetCollectedData();
-
-  /// Enable/disable data collection for disassembler.
-  void setCollect(Emu6502 *emu, bool on);
-
-  /// Record the collected data as JSON to a stream.
-  void finishCollection(const Emu6502 *emu, std::ostream &os);
-
-  /// Enable/disable basic block debugging, where only the instruction at the
-  /// start of every basic block is printed.
-  void setDebugBB(bool on) {
-    // When we turn basic block debugging on for the first time, treat the next
-    // instruction as a branch target so it will get printed.
-    if (!debugBB_ && on)
-      branchTarget_ = true;
-    debugBB_ = on;
+  void setModeNone();
+  void setModeCollect(Emu6502 *emu, unsigned limit);
+  void setModeTrace(unsigned limit, bool btOnly);
+  Mode getMode() const {
+    return mode_;
   }
 
-  void setBuffering(bool buffering);
+  void enableHistory(bool on);
   void setMaxHistory(unsigned maxHistory);
   void clearHistory();
   void printHistory();
+
+  /// Reset all collected data.
+  void clearCollectedData();
+
+  /// Record the collected data as JSON to a stream.
+  void finishCollection(const Emu6502 *emu, std::ostream &os);
 
   /// Add some well known regions of code to exclude from debugging.
   void addDefaultNonDebug() {
@@ -62,13 +69,23 @@ public:
     addNonDebug(0xFD0C, 0xFD3C); // Keyboard
   }
 
-  void clearNonDebug() {
+  /// Execution in the following area will not be debugged. The range is
+  /// inclusive.
+  void addNonDebug(uint16_t from, uint16_t to);
+
+  /// Clear all regions excluded from debugging.
+  void clearAllNonDebug() {
     nonDebug_.clear();
   }
 
-  /// Set maximum number of instructions to execute. 0 means unlimited.
-  void setLimit(unsigned limit) {
-    limit_ = limit;
+  void setBreakpoint(uint16_t addr) {
+    breakpoints_.insert(addr);
+  }
+  void clearBreakpoint(uint16_t addr) {
+    breakpoints_.erase(addr);
+  }
+  void clearAllBreakpoints() {
+    breakpoints_.clear();
   }
 
   /// Add a watch to be printed during debugging.
@@ -79,9 +96,6 @@ public:
   void clearWatches() {
     watches_.clear();
   }
-  /// Execution in the following area will not be debugged. The range is
-  /// inclusive.
-  void addNonDebug(uint16_t from, uint16_t to);
 
 private:
   struct InstRecord {
@@ -93,7 +107,7 @@ private:
 
   /// Print a single InstRecord.
   /// \param showInst - whether to show the instruction bytes and disassembly.
-  void printRecord(const InstRecord &rec, bool showInst);
+  void printRecord(const InstRecord &rec, bool showInst) const;
 
 private:
   void addRecord(const InstRecord &rec);
@@ -102,10 +116,28 @@ private:
   void saveGeneration(const Emu6502 *emu, Emu6502::Regs regs);
 
 private:
-  /// Number of instruction to execute.
+  /// Debugging mode.
+  Mode mode_ = Mode::None;
+
+  /// Whether to attempt to resolve operand addresses to well known AppleII symbols.
+  bool resolveApple2Symbols_ = true;
+
+  /// Number of instructions or branch targets to collect/trace.
   unsigned limit_ = 0;
   /// Current instruction number executing.
   unsigned icount_ = 0;
+
+  /// Whether to trace only branch targets.
+  bool traceOnlyBT_ = false;
+
+  /// Breakpoints.
+  std::unordered_set<uint16_t> breakpoints_;
+  /// Callback on breakpoint.
+  std::function<Emu6502::StopReason(uint16_t)> breakpointCB_{};
+
+  /// Memory areas where we don't print debugging info. The ranges are
+  /// inclusive.
+  std::vector<std::pair<uint16_t, uint16_t>> nonDebug_;
 
   /// A memory location to be printed during debugging.
   struct Watch {
@@ -119,24 +151,15 @@ private:
 
   /// All memory watches.
   std::vector<Watch> watches_;
-  /// Memory areas where we don't print debugging info. The ranges are
-  /// inclusive.
-  std::vector<std::pair<uint16_t, uint16_t>> nonDebug_;
 
+  /// Buffer instructions when tracing instead of printing them.
   bool buffering_ = false;
   unsigned maxHistory_ = 16384;
   std::deque<InstRecord> history_{};
-  /// Whether to attempt to resolve operand addresses to well known AppleII symbols.
-  bool resolveApple2Symbols_ = true;
 
-  /// When true, we print the instruction at the beginning of every basic block.
-  bool debugBB_ = false;
   /// Set by every branch instruction so the next one can be treated as a branch
   /// target.
   bool branchTarget_ = false;
-
-  /// When true, collect data for the disassembler.
-  bool collect_ = false;
 
   /// Collected branch targets.
   std::unordered_set<uint16_t> branchTargets_{};
@@ -160,7 +183,7 @@ private:
     /// Descriptors of memory stored in data.
     std::vector<MemDesc> descs{};
     std::vector<uint8_t> data{};
-    Generation() {}
+    explicit Generation(Emu6502::Regs regs) : regs(regs) {}
 
     void addRange(uint16_t addr, uint16_t len, const uint8_t *d) {
       this->descs.push_back(MemDesc{.addr = addr, .len = len});
