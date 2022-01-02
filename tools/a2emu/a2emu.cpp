@@ -38,6 +38,7 @@ struct CLIArgs {
   Action action = Action::Run;
   bool soundEnabled = true;
   unsigned limit = 100000;
+  unsigned clockFreq = Emu6502::CLOCK_FREQ;
   std::string runPath{};
   std::string outputPath{};
   /// Kbd input streamed from here.
@@ -459,7 +460,7 @@ void A2Emu::simulateFrame() {
       drainKBDFile();
 
     double elapsed = stm_sec(curFrameTick_ - lastRunTick_);
-    unsigned runCycles = (unsigned)(std::min(elapsed, 0.200) * EmuApple2::CLOCK_FREQ);
+    unsigned runCycles = (unsigned)(std::min(elapsed, 0.200) * cliArgs_.clockFreq);
     auto stopReason = emu_.runFor(runCycles);
     a2_sound_submit(&sound_, Emu6502::CLOCK_FREQ, saudio_sample_rate(), emu_.getCycles());
     if (stopReason == Emu6502::StopReason::StopRequesed)
@@ -568,6 +569,7 @@ static void printHelp() {
   printf(" --out=path       Specify output file\n");
   printf(" --no-sound       Disable sound\n");
   printf(" --kbd-file=path  Read keyboard input from the specified file\n");
+  printf(" --fast           Emulate a faster CPU\n");
 }
 
 static CLIArgs parseCLI(int argc, char **argv) {
@@ -608,11 +610,15 @@ static CLIArgs parseCLI(int argc, char **argv) {
       cliArgs.soundEnabled = false;
       continue;
     }
+    if (strncmp(arg, "--kbd-file=", 11) == 0) {
+      cliArgs.kbdPath = arg + 11;
+      continue;
+    }
+    if (strcmp(arg, "--fast") == 0) {
+      cliArgs.clockFreq = Emu6502::CLOCK_FREQ*10;
+      continue;
+    }
     if (arg[0] == '-') {
-      if (strncmp(arg, "--kbd-file=", 11) == 0) {
-        cliArgs.kbdPath = arg + 11;
-        continue;
-      }
       fprintf(stderr, "Invalid option '%s'\n", arg);
       printHelp();
       exit(1);
