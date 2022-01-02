@@ -323,6 +323,7 @@ void A2Emu::cliCommandApply() {
     emu_.addDebugFlags(Emu6502::DebugASM);
     dbg_.setDebugBB(true);
     dbg_.setLimit(cliArgs_.limit);
+    dbg_.setResolveApple2Symbols(false);
     break;
   case CLIArgs::Collect:
     emu_.addDebugFlags(Emu6502::DebugASM);
