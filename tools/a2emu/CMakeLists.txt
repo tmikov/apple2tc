@@ -11,7 +11,6 @@ link_libraries(d6502 cpuemu a2io support sokol)
 
 add_executable(a2emu a2emu.cpp
   bolo.h robotron2084.h
-  apple2plus_rom.cpp apple2plus_rom.h
   )
 
 if (EMSCRIPTEN)

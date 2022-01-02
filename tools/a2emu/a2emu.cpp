@@ -8,6 +8,7 @@
 #include "apple2tc/DebugState6502.h"
 #include "apple2tc/a2io.h"
 #include "apple2tc/apple2.h"
+#include "apple2tc/apple2plus_rom.h"
 #include "apple2tc/sokol/sokol_app.h"
 #include "apple2tc/sokol/sokol_audio.h"
 #include "apple2tc/sokol/sokol_gfx.h"
@@ -16,7 +17,6 @@
 #include "apple2tc/soundqueue.h"
 #include "apple2tc/support.h"
 
-#include "apple2plus_rom.h"
 #include "apple2tc/sokol/blit.h"
 
 #include <algorithm>
@@ -615,7 +615,7 @@ static CLIArgs parseCLI(int argc, char **argv) {
       continue;
     }
     if (strcmp(arg, "--fast") == 0) {
-      cliArgs.clockFreq = Emu6502::CLOCK_FREQ*10;
+      cliArgs.clockFreq = Emu6502::CLOCK_FREQ * 10;
       continue;
     }
     if (arg[0] == '-') {
