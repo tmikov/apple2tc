@@ -229,7 +229,7 @@ void Disas::run(bool noGenerations) {
     runData_ = RuntimeData::load(runDataPath_);
 
   // Load the start address from runtime data, if available.
-  if (!runData_->generations.empty())
+  if (runData_ && !runData_->generations.empty())
     start_ = runData_->generations.front().regs.pc;
 
   if (!start_.has_value())
