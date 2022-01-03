@@ -2,34 +2,55 @@
 
 Convert classic Apple II games to runnable C code.
 
-The goal of the project is to automatically convert classic Apple II games to
-modern C code, buildable and runnable on modern systems. While it may sound
-farfetched, I believe it is an achievable goal, if a few caveats are considered:
+Apple2TC aims to decompile original Apple II binaries, mostly games, into
+understandable and working modern C code, completely automatically by analyzing
+the runtime behavior of the original code via custom software emulation.
 
-- The generated C code is not expected to be fully readable.
-- The sound and graphics will be the *original Apple II* sound and graphics, but
-  emulated on top of modern libraries.
+The sound and graphics are the *original Apple II* sound and graphics,
+implemented on top of modern libraries. So, games don't magically get higher
+resolution or smoother frame rate. However, they run _natively_ (without
+emulation) in the new environment they are built for.
 
-The project (will) consist of several components:
+The following series of blog posts describes the work on the project, as it
+happens, in detail:
+
+[Apple2TC: an Apple II Binary to C Decompiler - Part 1](https://tmikov.blogspot.com/2021/12/apple2tc-apple-ii-binary-to-c.html)
+
+## Status
+
+At this stage we are focusing on generating merely _working C code_ instead of
+_readable C code_. The difference between the two is significant both in terms
+of technical challenges and in readability of the result. However, we need to
+learn to walk before we can fly: we need to prove that our system can extract
+sufficient information from the original binary in order to recreate its full
+functionality outside a CPU emulator.
+
+Some things we have been able to successfully decompile and run so far:
+
+- [Apple II BASIC](decoded/rom).
+- [Robotron 2084](decoded/robotron).
+- [Snake Byte](decoded/snake-byte).
+
+Here is a video of the decompiled Snake Byte in action.
+
+[![Decompiled Snake Byte](https://img.youtube.com/vi/5ALmzwyQjgM/0.jpg)](https://www.youtube.com/watch?v=5ALmzwyQjgM)
+
+## Project Overview
+
+The project consists of several components:
 
 - [a2emu](https://tmikov.github.io/apple2tc/): an Apple2 emulator for running
   the original game and for *extracting and recording runtime knowledge about it
   based on dynamic behavior*.
-- [a2io](lib/a2io) A library implementing Apple II sound and graphics. This
+- [a2io](lib/a2io): A library implementing Apple II sound and graphics. This
   library is used both by the emulator and by the generated C code.
-- [id](tools/id) An interactive disassembler for simple exploration of Apple II
-  binary files.
-- [a6502](tools/a6502) A 6502 symbolic assembler for easy experimentation. It
+- [id](tools/id): An interactive disassembler/binary editor for simple
+  exploration of Apple II binary files.
+- [a6502](tools/a6502): A 6502 symbolic assembler for easy experimentation. It
   can produce a bit accurate image of the Apple II ROM.
-- A jump tracing 6502 disassembler augmented with runtime code coverage data
-  from the emulator. For debugging purposes, we would like to be able to see the
-  assembly code we are working with.
-- A SSA based decompiler. Starting with the disassembled representation, we can
-  convert it to SSA and perform analysis and conversion passes. We can identify
-  subroutines, parameters, loops, and so on. We expect that this will be
-  incremental work, resulting in better and better quality of the generated C
-  code, but we should be able to produce working, albeit "ugly", C code from the
-  beginning.
+- [apple2tc](tools/apple2tc): The actual decompiler! It starts with a jump
+  tracing 6502 disassembler augmented with runtime code coverage data from the
+  emulator, an assembly listing generator, and the "Simple C" backend.
 
 ## a2emu: Apple II Emulator
 
@@ -40,15 +61,14 @@ The project (will) consist of several components:
 ![](images/a2emu-gr.png)
 ![](images/robo.jpg)
 
-The first version of the Apple II emulator is already up. It is portable and
-should work on MacOS, Linux, Windows and Web, although as of this writing only
-MacOS and Web have been tested.
+A2emu is portable and should work on MacOS, Linux, Windows and Web, although as
+of this writing only MacOS and Web have been tested.
 
-This is not intended to be a fancy all-powerful Apple II emulator, with bells
-and whistles, all possible emulated hardware support, super precise timing, etc.
-Our goal here is to generated runnable C code, not to emulate the Apple II.
-Plus, there are many existing Apple II emulators, and one more is not really
-that exciting or useful on its own.
+It is not intended to be a fancy all-powerful Apple II emulator, with bells and
+whistles, all possible emulated hardware support, super precise timing, etc. Our
+goal here is to generated runnable C code, not to emulate the Apple II. Plus,
+there are many existing Apple II emulators, and one more is not really that
+exciting or useful on its own.
 
 With that said, A2emu is very simple, extremely easily buildable (has no
 external dependencies!), and portable across many platforms, which puts it in a
@@ -56,19 +76,21 @@ fairly unique space.
 
 Status:
 
-- Two test games (Bolo and Robotron 2084) work and can be executed with F1/F2.
-- Text, GR and HGR modes implemented
-- Keyboard support implemented
-- Diskless games seem to work.
-- Sound works (but on web the user needs to interact with the page first due to https://developer.chrome.com/blog/autoplay/).
+- All tested non-disk games work. For convenience, two games, Bolo and Robotron
+  2084, are packaged in the emulator and can be executed with F1/F2. Other games
+  can be loaded by passing to the emulator on the command line.
 - Applesoft Basic works.
+- Text, GR and HGR, keyboard working.
+- Sound works (but on web the user needs to interact with the page first due
+  to https://developer.chrome.com/blog/autoplay/).
+- Elaborate runtime data collection for Apple2TC.
 
 Missing:
 
 - Colors in HiRes mode need some improvement.
 - The emulator code is not super flexible in how it handles IO, since this is
   not supposed to be a very powerful emulator.
-- Tape support (we may be add it soon, because it seems simple and may be a
+- Tape support (we may add it soon, because it seems simple and may be a
   convenient way to save restore).
 - Disk support. No plans to add it for now, since it appears to be a non-trivial
   amount of work and does not seem to be strictly necessary for the project. Who
@@ -89,8 +111,8 @@ knows about builtin Apple II symbols.
 
 [tools/a6502](tools/a6502)
 
-`a6502` is a simple two pass assembler written in an evening. No effort to
-optimize it has been made, specifically it creates lots of `std::string`
+`a6502` is a simple two pass assembler. No effort to optimize it has been made,
+specifically it creates lots of `std::string`
 instances. Should have probably used `std::string_view` instead, but I forgot
 that I was building with C++17 and it was available.
 
