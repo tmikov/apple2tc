@@ -300,10 +300,24 @@ void a2_io_done(a2_iostate_t *io) {
   memset(io, 0, sizeof(*io));
 }
 
+/// \return number of available entries in the keyboard queue.
+static inline unsigned a2_io_kbd_space(a2_iostate_t *io) {
+  return A2_KBD_QUEUE_SIZE - io->keys_count;
+}
+
 bool a2_io_push_key(a2_iostate_t *io, uint8_t key) {
-  if (io->keys_count == A2_KBD_QUEUE_SIZE)
+  if (a2_io_kbd_space(io) == 0)
     return false;
   io->keys[(io->keys_head + io->keys_count++) % A2_KBD_QUEUE_SIZE] = key;
+  return true;
+}
+
+bool a2_io_push_str(a2_iostate_t *io, const char *str) {
+  size_t len = strlen(str);
+  if (a2_io_kbd_space(io) < len)
+    return false;
+  while (*str)
+    a2_io_push_key(io, *str++);
   return true;
 }
 

@@ -133,6 +133,8 @@ static inline void a2_io_set_spkr_cb(
 }
 /// Return false if the keyboard queue was full.
 bool a2_io_push_key(a2_iostate_t *io, uint8_t key);
+/// Push either the entire string or nothing. Return true on success.
+bool a2_io_push_str(a2_iostate_t *io, const char *str);
 /// Return the number of keys that can be pushed onto the keyboard queue.
 static inline unsigned a2_io_keys_expect(const a2_iostate_t *io) {
   return A2_KBD_QUEUE_SIZE - io->keys_count;
