@@ -157,6 +157,28 @@ private:
   unsigned maxHistory_ = 16384;
   std::deque<InstRecord> history_{};
 
+  /// Miscellaneous collected data.
+  struct Collected {
+    /// Registers when start of collecting.
+    Emu6502::Regs startRegs = {};
+    /// Was any instruction executed with the D flag set.
+    bool decimalSet = false;
+    /// Was ADC ever executed with D flag set.
+    bool decimalADC = false;
+    /// Was SBC ever executed with D flag set.
+    bool decimalSBC = false;
+    /// Did the stack ever overflow?
+    bool stackOverflow = false;
+    /// Did the stack ever underflow?
+    bool stackUnderflow = false;
+  };
+
+  /// Miscellaneous collected data.
+  Collected collected_ = {};
+
+  /// When collecting, record the "unwrapped" value of the SP.
+  int virtualSP_ = 0;
+
   /// Set by every branch instruction so the next one can be treated as a branch
   /// target.
   bool branchTarget_ = false;

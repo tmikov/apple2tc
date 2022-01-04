@@ -18,6 +18,9 @@ void DebugState6502::setModeCollect(Emu6502 *emu, unsigned int limit) {
   limit_ = limit;
   icount_ = 0;
 
+  collected_ = Collected{};
+  collected_.startRegs = emu->getRegs();
+  virtualSP_ = emu->getRegs().sp;
   memWritten_.clear();
   memExecStart_.clear();
   memExecFull_.clear();
@@ -241,6 +244,28 @@ static inline uint16_t stack_peek16(const Emu6502 *emu, uint8_t sp) {
   return stack_peek8(emu, sp) + stack_peek8(emu, sp + 1) * 256;
 }
 
+/// Calculate the stack change an instruction will effect.
+static inline int getStackChange(CPUInstKind kind) {
+  switch (kind) {
+  case CPUInstKind::JSR:
+    return -2;
+  case CPUInstKind::RTS:
+    return +2;
+  case CPUInstKind::BRK:
+    return -3;
+  case CPUInstKind::RTI:
+    return +3;
+  case CPUInstKind::PHA:
+  case CPUInstKind::PHP:
+    return -1;
+  case CPUInstKind::PLA:
+  case CPUInstKind::PLP:
+    return +1;
+  default:
+    return 0;
+  }
+}
+
 Emu6502::StopReason DebugState6502::collectData(const Emu6502 *emu, uint16_t pc) {
   ThreeBytes b = ram_peek3(emu, pc);
   CPUInst inst = decodeInst(pc, b);
@@ -248,6 +273,39 @@ Emu6502::StopReason DebugState6502::collectData(const Emu6502 *emu, uint16_t pc)
   // Effective address.
   uint16_t ea = inst.kind == CPUInstKind::RTS ? stack_peek16(emu, regs.sp) + 1
                                               : operandEA(emu, regs, inst.addrMode, inst.operand);
+
+  // Track whether D was ever set and used as set.
+  if (regs.status & Emu6502::STATUS_D) {
+    collected_.decimalSet = true;
+    if (inst.kind == CPUInstKind::ADC)
+      collected_.decimalADC = true;
+    if (inst.kind == CPUInstKind::SBC)
+      collected_.decimalSBC = true;
+  }
+
+  // Check for stack over/under flow.
+  if (inst.kind == CPUInstKind::TXS) {
+    virtualSP_ = regs.sp;
+  } else if (int stackChange = getStackChange(inst.kind)) {
+    // The real stack may have been updated explicitly with setRegs().
+    if ((virtualSP_ & 255) != regs.sp)
+      virtualSP_ = regs.sp;
+
+    int newSP = virtualSP_ + stackChange;
+    if (newSP < -1) {
+      // SP is the next address to push to, so -1 is fine, but if we went smaller
+      // than -1, then we underflowed.
+      fprintf(stderr, "STACK UNDERFLOW from %d to %d at PC $%04X\n", virtualSP_, newSP, pc);
+      collected_.stackUnderflow = true;
+      virtualSP_ = newSP & 0xFF;
+    } else if (newSP > 255) {
+      fprintf(stderr, "STACK OVERFLOW from %d to %d at PC $%04X\n", virtualSP_, newSP, pc);
+      collected_.stackOverflow = true;
+      virtualSP_ = newSP & 0xFF;
+    } else {
+      virtualSP_ = newSP;
+    }
+  }
 
   if (memWritten_.get(pc)) {
     // We are executing an instruction that we previously modified. Mark it as a

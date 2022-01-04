@@ -13,6 +13,17 @@
 
 using json = nlohmann::json;
 
+static json saveRegs(const Emu6502::Regs &regs) {
+  json jsonRegs;
+  jsonRegs["pc"] = regs.pc;
+  jsonRegs["a"] = regs.a;
+  jsonRegs["x"] = regs.x;
+  jsonRegs["y"] = regs.y;
+  jsonRegs["status"] = regs.status;
+  jsonRegs["sp"] = regs.sp;
+  return jsonRegs;
+}
+
 void DebugState6502::finishCollection(const Emu6502 *emu, std::ostream &os) {
   if (mode_ == Mode::None)
     return;
@@ -28,21 +39,23 @@ void DebugState6502::finishCollection(const Emu6502 *emu, std::ostream &os) {
   std::sort(branchTargets.begin(), branchTargets.end());
 
   json root;
-  root["limit"] = limit_;
+
+  json stats;
+  stats["limit"] = limit_;
+  stats["startRegs"] = saveRegs(collected_.startRegs);
+  stats["decimalSet"] = collected_.decimalSet;
+  stats["decimalADC"] = collected_.decimalADC;
+  stats["decimalSBC"] = collected_.decimalSBC;
+  stats["stackOverflow"] = collected_.stackOverflow;
+  stats["stackUnderflow"] = collected_.stackUnderflow;
+
+  root["BaseStats"] = stats;
   root["BranchTargets"] = json(branchTargets);
 
   json jsonGens;
   for (const auto &gen : generations_) {
-    json jsonRegs;
-    jsonRegs["pc"] = gen.regs.pc;
-    jsonRegs["a"] = gen.regs.a;
-    jsonRegs["x"] = gen.regs.x;
-    jsonRegs["y"] = gen.regs.y;
-    jsonRegs["status"] = gen.regs.status;
-    jsonRegs["sp"] = gen.regs.sp;
-
     json jsonGen;
-    jsonGen["regs"] = jsonRegs;
+    jsonGen["regs"] = saveRegs(gen.regs);
 
     json jsonCode = json::array();
     auto dataIt = gen.data.begin();
