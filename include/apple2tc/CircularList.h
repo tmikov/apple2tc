@@ -221,7 +221,8 @@ public:
     }
   }
 
-  class iterator_base : public std::iterator<std::bidirectional_iterator_tag, T> {
+  template <bool FWD>
+  class iterator_base {
   public:
     bool operator==(const iterator_base &it) const {
       return m_p == it.m_p;
@@ -234,32 +235,41 @@ public:
     }
 
   protected:
-    ListEntry *m_p;
-
     explicit iterator_base(ListEntry *p) {
       m_p = p;
     }
+
+    ListEntry *getPrev() const {
+      return FWD ? m_p->prev : m_p->next;
+    }
+    ListEntry *getNext() const {
+      return FWD ? m_p->next : m_p->prev;
+    }
+
+    ListEntry *m_p;
   };
 
-  class iterator : public iterator_base {
+  template <bool FWD>
+  class iterator_impl : public iterator_base<FWD> {
     friend class CircularList;
+    using Super = iterator_base<FWD>;
 
   public:
-    iterator() : iterator_base(nullptr) {}
-    explicit iterator(ListEntry *p) : iterator_base(p) {}
-    explicit iterator(T *item) : iterator_base(Accessor::toListEntry(item)) {}
-    iterator(const iterator &it) : iterator_base(it.m_p) {}
+    iterator_impl() : Super(nullptr) {}
+    explicit iterator_impl(ListEntry *p) : Super(p) {}
+    explicit iterator_impl(T *item) : Super(Accessor::toListEntry(item)) {}
+    iterator_impl(const iterator_impl<FWD> &it) : Super(it.m_p) {}
 
-    iterator &operator=(const iterator &it) {
-      iterator_base::m_p = it.m_p;
+    iterator_impl &operator=(const iterator_impl &it) {
+      Super::m_p = it.m_p;
       return *this;
     }
 
     ListEntry *entry() const {
-      return iterator_base::m_p;
+      return Super::m_p;
     }
     T *ptr() const {
-      return Accessor::fromListEntry(iterator_base::m_p);
+      return Accessor::fromListEntry(Super::m_p);
     }
     T *operator->() const {
       return ptr();
@@ -268,45 +278,47 @@ public:
       return *ptr();
     }
 
-    iterator &operator++() {
-      iterator_base::m_p = iterator_base::m_p->next;
+    iterator_impl &operator++() {
+      Super::m_p = Super::getNext();
       return *this;
     }
-    iterator &operator--() {
-      iterator_base::m_p = iterator_base::m_p->prev;
+    iterator_impl &operator--() {
+      Super::m_p = Super::getPrev();
       return *this;
     }
-    iterator operator++(int) {
-      ListEntry *tmp = iterator_base::m_p;
-      iterator_base::m_p = iterator_base::m_p->next;
-      return iterator(tmp);
+    iterator_impl operator++(int) {
+      ListEntry *tmp = Super::m_p;
+      Super::m_p = Super::getNext();
+      return iterator_impl(tmp);
     }
-    iterator operator--(int) {
-      ListEntry *tmp = iterator_base::m_p;
-      iterator_base::m_p = iterator_base::m_p->prev;
-      return iterator(tmp);
+    iterator_impl operator--(int) {
+      ListEntry *tmp = Super::m_p;
+      Super::m_p = Super::getPrev();
+      return iterator_impl(tmp);
     }
   };
 
-  class const_iterator : public iterator_base {
+  template <bool FWD>
+  class const_iterator_impl : public iterator_base<FWD> {
     friend class CircularList;
+    using Super = iterator_base<FWD>;
 
   public:
-    const_iterator() : iterator_base(nullptr) {}
-    explicit const_iterator(const ListEntry *p) : iterator_base(const_cast<ListEntry *>(p)) {}
-    explicit const_iterator(const T *item) : iterator_base(Accessor::toListEntry(item)) {}
-    const_iterator(const iterator_base &it) : iterator_base(it.m_p) {}
+    const_iterator_impl() : Super(nullptr) {}
+    explicit const_iterator_impl(const ListEntry *p) : Super(const_cast<ListEntry *>(p)) {}
+    explicit const_iterator_impl(const T *item) : Super(Accessor::toListEntry(item)) {}
+    const_iterator_impl(const Super &it) : Super(it.m_p) {} // NOLINT(google-explicit-constructor)
 
-    const_iterator &operator=(const iterator_base &it) {
-      iterator_base::m_p = it.m_p;
+    const_iterator_impl &operator=(const Super &it) {
+      Super::m_p = it.m_p;
       return *this;
     }
 
     const ListEntry *entry() const {
-      return iterator_base::m_p;
+      return Super::m_p;
     }
     const T *ptr() const {
-      return Accessor::fromListEntry(iterator_base::m_p);
+      return Accessor::fromListEntry(Super::m_p);
     }
     const T *operator->() const {
       return ptr();
@@ -315,25 +327,31 @@ public:
       return *ptr();
     }
 
-    const_iterator &operator++() {
-      iterator_base::m_p = iterator_base::m_p->next;
+    const_iterator_impl &operator++() {
+      Super::m_p = Super::getNext();
       return *this;
     }
-    const_iterator &operator--() {
-      iterator_base::m_p = iterator_base::m_p->prev;
+    const_iterator_impl &operator--() {
+      Super::m_p = Super::getPrev();
       return *this;
     }
-    const_iterator operator++(int) {
-      ListEntry *tmp = iterator_base::m_p;
-      iterator_base::m_p = iterator_base::m_p->next;
-      return const_iterator(tmp);
+    const_iterator_impl operator++(int) {
+      ListEntry *tmp = Super::m_p;
+      Super::m_p = Super::getNext();
+      return const_iterator_impl(tmp);
     }
-    const_iterator operator--(int) {
-      ListEntry *tmp = iterator_base::m_p;
-      iterator_base::m_p = iterator_base::m_p->prev;
-      return const_iterator(tmp);
+    const_iterator_impl operator--(int) {
+      ListEntry *tmp = Super::m_p;
+      Super::m_p = Super::getPrev();
+      return const_iterator_impl(tmp);
     }
   };
+
+  using iterator = iterator_impl<true>;
+  using const_iterator = const_iterator_impl<true>;
+
+  using reverse_iterator = iterator_impl<false>;
+  using const_reverse_iterator = const_iterator_impl<false>;
 
   iterator begin() {
     return iterator(m_root.next);
@@ -345,6 +363,18 @@ public:
     return const_iterator(m_root.next);
   }
   const_iterator end() const {
+    return const_iterator(const_cast<ListEntry *>(&m_root)); // TODO
+  }
+  reverse_iterator rbegin() {
+    return reverse_iterator(m_root.prev);
+  }
+  reverse_iterator rend() {
+    return reverse_iterator(&m_root);
+  }
+  const_reverse_iterator rbegin() const {
+    return const_iterator(m_root.prev);
+  }
+  const_reverse_iterator rend() const {
     return const_iterator(const_cast<ListEntry *>(&m_root)); // TODO
   }
 
