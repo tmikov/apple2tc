@@ -9,5 +9,8 @@ link_libraries(d6502)
 add_executable(apple2tc
   apple2tc.cpp
   Disas.cpp RuntimeData.cpp Disas.h
+  GenIR.cpp GenIR.h PubIR.h
   PrintSimpleC.cpp
+  ir/IR.cpp ir/ValueList.h ir/IR.h
+  ir/IRDump.cpp ir/IRDump.h
   )

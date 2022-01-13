@@ -7,12 +7,14 @@
 
 #pragma once
 
-#include "apple2tc/CircularList.h"
+#include "ir/ValueList.h"
+
 #include "apple2tc/IteratorRange.h"
 #include "apple2tc/d6502.h"
 
 #include <deque>
 #include <map>
+#include <optional>
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
@@ -65,169 +67,6 @@ struct CompareRange {
   }
 };
 
-template <class ValueT, class OwnerT, unsigned SMALL_CAP = 2>
-class ValueList {
-public:
-  using ValueType = ValueT;
-  using OwnerType = OwnerT;
-
-  class UseNode : public ListEntry {
-  public:
-    explicit UseNode(ValueType *value, OwnerType *owner) : value_(value), owner_(owner) {}
-    [[nodiscard]] OwnerType *owner() const {
-      return owner_;
-    }
-    [[nodiscard]] ValueType *value() const {
-      return value_;
-    }
-
-  private:
-    friend class ValueList;
-    ValueType *value_;
-    // TODO: we should remove this and use bit tricks.
-    OwnerType *owner_;
-  };
-
-  using UserListType = CircularList<UseNode>;
-
-  ValueList(const ValueList &) = delete;
-  void operator=(const ValueList &) = delete;
-
-  explicit ValueList(OwnerType *owner) : owner_(owner) {
-    initToSmall();
-  }
-
-  ~ValueList() {
-    clear();
-    deallocate();
-  }
-
-  void clear() {
-    // Destroy in reverse order.
-    for (UseNode *e = data_ + size_, *s = data_; e != s; --e) {
-      auto *cur = e - 1;
-      if (cur->value_)
-        cur->value_->userList_.remove(cur);
-      cur->~UseNode();
-    }
-    size_ = 0;
-  }
-
-  /// Move all values from the specified list onto our list, resetting the owner.
-  void moveFrom(ValueList &&other) {
-    // If the other object is not in small mode and we are empty, we can just
-    // "steal" its data.
-    if (!other.isSmall() && empty()) {
-      // Free our buffer.
-      deallocate();
-      // Steal the other buffer.
-      data_ = other.data_;
-      size_ = other.size_;
-      capacity_ = other.capacity_;
-      // Reset the other to empty.
-      other.initToSmall();
-
-      // Reset the owner of the stolen items.
-      for (UseNode *cur = data_, *e = data_ + size_; cur != e; ++cur)
-        cur->owner_ = owner_;
-
-      return;
-    }
-
-    // Slow path - just copy all nodes and reset the other.
-    for (const auto &node : other)
-      push_back(node.value());
-
-    other.clear();
-  }
-
-  [[nodiscard]] bool empty() const {
-    return size_ == 0;
-  }
-  [[nodiscard]] size_t size() const {
-    return size_;
-  }
-
-  [[nodiscard]] const UseNode &operator[](size_t index) const {
-    assert(index < size_);
-    return data_[index];
-  }
-  [[nodiscard]] const UseNode *begin() const {
-    return data_;
-  }
-  [[nodiscard]] const UseNode *end() const {
-    return data_ + size_;
-  }
-
-  void push_back(ValueType *value) {
-    if (size_ == capacity_)
-      grow();
-    auto *n = new (data_ + size_++) UseNode(value, owner_);
-    if (value)
-      value->userList_.push_back(n);
-  }
-
-private:
-  bool isSmall() const {
-    return (void *)data_ == small_;
-  }
-
-  /// Init the fields to small mode, without any allocation/deallocation.
-  void initToSmall() {
-    data_ = reinterpret_cast<UseNode *>(small_);
-    size_ = 0;
-    capacity_ = SMALL_CAP;
-  }
-
-  /// Deallocate the buffer, if not small.
-  void deallocate() {
-    if (!isSmall())
-      std::allocator<UseNode>().deallocate(data_, capacity_);
-  }
-
-  void grow() {
-    // Calculate new capacity, with overflow checking.
-    size_t newCap;
-    // Capacity can't be zero, since we always start with kSmallCap.
-    assert(capacity_ != 0);
-    if (capacity_ <= SIZE_T_MAX / 2)
-      newCap = capacity_ * 2;
-    else if (capacity_ != SIZE_T_MAX)
-      newCap = SIZE_T_MAX;
-    else
-      throw std::bad_array_new_length();
-
-    // Allocate new buffer.
-    UseNode *newData = std::allocator<UseNode>().allocate(newCap);
-
-    // Move the nodes.
-    moveNodes(data_, data_ + size_, newData, owner_);
-
-    // Deallocate the old buffer.
-    deallocate();
-    data_ = newData;
-    capacity_ = newCap;
-  }
-
-  /// Copy the nodes, removing the old ones from the list and adding the new ones.
-  static void moveNodes(UseNode *from, UseNode *end, UseNode *dest, OwnerType *newOwner) {
-    for (; from != end; ++dest, ++from) {
-      auto *value = from->value_;
-      new (dest) UseNode(value, newOwner);
-      if (value)
-        value->userList_.replace(from, dest);
-    }
-  }
-
-private:
-  UseNode *data_;
-  unsigned size_;
-  unsigned capacity_;
-  OwnerType *owner_;
-
-  alignas(UseNode) char small_[sizeof(UseNode) * SMALL_CAP];
-};
-
 /// A "Basic Block" of 6502 Assembler instructions. It contains a maximum of one
 /// "terminator instruction" - a branch, subroutine call, return, BRK, or invalid
 /// instruction - which, if present, must be last.
@@ -236,7 +75,7 @@ private:
 /// instruction.
 class AsmBlock {
 public:
-  using BlockList = ValueList<AsmBlock, AsmBlock>;
+  using BlockList = ir::ValueList<AsmBlock, AsmBlock>;
   static constexpr unsigned kNameSize = 8;
 
   explicit AsmBlock(uint16_t addr) : addr_(addr), successors_(this) {
@@ -363,7 +202,7 @@ public:
   }
 
 private:
-  friend class ValueList<AsmBlock, AsmBlock>;
+  friend class ir::ValueListBase<AsmBlock, AsmBlock>;
 
   BlockList::UserListType userList_{};
   uint32_t addr_;
@@ -430,7 +269,13 @@ struct RuntimeData {
 
 class Disas {
 public:
+  enum class SelfModifiedKind : uint8_t {
+    Indexed,
+    Certain,
+  };
+
   explicit Disas(std::string runDataPath);
+  ~Disas();
 
   void loadBinary(uint16_t addr, const uint8_t *data, size_t len);
   void loadROM(const uint8_t *data, size_t len);
@@ -440,6 +285,35 @@ public:
   }
   void setStart(uint16_t start) {
     start_ = start;
+  }
+
+  const RuntimeData *getRunData() const {
+    return runData_.get();
+  }
+
+  auto asmBlocks() const {
+    return makeIteratorRange(asmBlocks_.cbegin(), asmBlocks_.cend());
+  }
+  const AsmBlock *cfindAsmBlockContaining(uint16_t addr) const {
+    auto it = asmBlocks_.upper_bound(addr);
+    // Check if the target overlaps the previous range.
+    if (it != asmBlocks_.begin()) {
+      --it;
+      if (it->second.addrInside(addr))
+        return &it->second;
+    }
+    return nullptr;
+  }
+  const AsmBlock *cfindAsmBlockAt(uint16_t addr) const {
+    auto it = asmBlocks_.find(addr);
+    return it != asmBlocks_.end() ? &it->second : nullptr;
+  }
+
+  std::optional<SelfModifiedKind> checkSelfModified(uint16_t addr) const {
+    auto it = selfModified_.find(addr);
+    if (it != selfModified_.end())
+      return it->second;
+    return std::nullopt;
   }
 
   void run(bool noGenerations);
@@ -475,7 +349,6 @@ private:
     auto it = asmBlocks_.find(addr);
     return it != asmBlocks_.end() ? &it->second : nullptr;
   }
-
   /// If an AsmBlock for the specified address doesn't exist, create a new one
   /// and add it to the work queue. If the address is in the middle of an existing
   /// block and it aligns with an existing instruction, the existing block is
@@ -514,7 +387,7 @@ private:
   /// Optional path to a JSON file with runtime data.
   std::string runDataPath_;
 
-  /// Optional runtimt execution data.
+  /// Optional runtime execution data.
   std::unique_ptr<RuntimeData> runData_;
 
   /// Whether to name labels by their address or their order of definition.
@@ -544,9 +417,8 @@ private:
 
   /// Instructions that modify code.
   std::unordered_set<uint16_t> selfModifers_{};
-  /// Code addresses that are being modified. The value indicates whether it is
-  /// certain (true), or is indexed (false).
-  std::unordered_map<uint16_t, bool> selfModified_{};
+  /// Code addresses that are being modified.
+  std::unordered_map<uint16_t, SelfModifiedKind> selfModified_{};
 
   uint8_t memory_[0x10000];
 };

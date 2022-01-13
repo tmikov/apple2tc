@@ -6,6 +6,7 @@
  */
 
 #include "Disas.h"
+#include "PubIR.h"
 
 #include "apple2tc/support.h"
 
@@ -55,6 +56,7 @@ static void printHelp() {
   fprintf(stderr, "  --rom               Input file is a ROM\n");
   fprintf(stderr, "  --asm               Generate asm listing (default)\n");
   fprintf(stderr, "  --simple-c          Generate simple C code\n");
+  fprintf(stderr, "  --ir                Generate IR\n");
   fprintf(stderr, "  --run-data=d.json   Load runtime data from specified file\n");
   fprintf(stderr, "  --no-gen            Ignore runtime generations\n");
 }
@@ -63,6 +65,7 @@ int main(int argc, char **argv) {
   enum class Action {
     GenAsm,
     GenSimpleC,
+    GenIR,
   };
   bool noGenerations = false;
   Action action = Action::GenAsm;
@@ -82,6 +85,10 @@ int main(int argc, char **argv) {
     }
     if (strcmp(argv[i], "--simple-c") == 0) {
       action = Action::GenSimpleC;
+      continue;
+    }
+    if (strcmp(argv[i], "--ir") == 0) {
+      action = Action::GenIR;
       continue;
     }
     if (strncmp(argv[i], "--run-data=", 11) == 0) {
@@ -133,6 +140,12 @@ int main(int argc, char **argv) {
     case Action::GenSimpleC:
       dis->printSimpleC(stdout);
       break;
+    case Action::GenIR: {
+      auto irCtx = newIRContext();
+      auto *mod = genIR(*dis, *irCtx);
+      dumpModule(mod);
+      break;
+    }
     }
   } catch (std::exception &ex) {
     fprintf(stderr, "*** FATAL: %s\n", ex.what());

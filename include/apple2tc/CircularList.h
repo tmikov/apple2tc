@@ -27,6 +27,14 @@ struct ListEntry {
 #endif
   }
 
+  static void insertBeforeEntry(ListEntry *before, ListEntry *entry) {
+    assert(!entry->prev && !entry->next);
+    assert(before->prev && before->next);
+    entry->prev = before->prev;
+    entry->next = before;
+    before->prev->next = entry;
+    before->prev = entry;
+  }
   static void insertAfterEntry(ListEntry *after, ListEntry *entry) {
     assert(!entry->prev && !entry->next);
     assert(after->prev && after->next);
@@ -134,6 +142,11 @@ public:
     m_root.prev = m_root.next = &m_root;
   }
 
+  void destroyAll() {
+    while (!empty())
+      delete pop_back_val();
+  }
+
   T *fromListEntry(ListEntry *entry) {
     return Accessor::fromListEntry(entry);
   }
@@ -154,55 +167,53 @@ public:
     return m_root.next == &m_root;
   }
 
+  T &front() {
+    assert(!empty());
+    return *fromListEntry(m_root.next);
+  }
+  const T &front() const {
+    assert(!empty());
+    return *fromListEntry(m_root.next);
+  }
+  T &back() {
+    assert(!empty());
+    return *fromListEntry(m_root.prev);
+  }
+  const T &back() const {
+    assert(!empty());
+    return *fromListEntry(m_root.prev);
+  }
+
   void push_back(T *item) {
     ListEntry::insertAfterEntry(m_root.prev, Accessor::toListEntry(item));
-  }
-
-  void insertAfter(T *after, T *toInsert) {
-    ListEntry::insertAfterEntry(Accessor::toListEntry(after), Accessor::toListEntry(toInsert));
-  }
-
-  void remove(T *item) {
-    ListEntry::removeEntry(Accessor::toListEntry(item));
   }
 
   void replace(T *old, T *newEntry) {
     ListEntry::replaceEntry(Accessor::toListEntry(old), Accessor::toListEntry(newEntry));
   }
 
-  T *first() {
-    return Accessor::fromListEntry(m_root.next);
+  void pop_back() {
+    assert(!empty());
+    ListEntry::removeEntry(m_root.prev);
+  }
+  void pop_front() {
+    assert(!empty());
+    ListEntry::removeEntry(m_root.next);
+  }
+  T *pop_back_val() {
+    assert(!empty());
+    auto *res = m_root.prev;
+    ListEntry::removeEntry(res);
+    return Accessor::fromListEntry(res);
+  }
+  T *pop_front_val() {
+    assert(!empty());
+    auto *res = m_root.next;
+    ListEntry::removeEntry(res);
+    return Accessor::fromListEntry(res);
   }
 
-  T *last() {
-    return Accessor::fromListEntry(m_root.prev);
-  }
-
-  T *next(T *item) {
-    return Accessor::fromListEntry(Accessor::toListEntry(item)->next);
-  }
-
-  T *prev(T *item) {
-    return Accessor::fromListEntry(Accessor::toListEntry(item)->prev);
-  }
-
-  const T *first() const {
-    return Accessor::fromListEntry(m_root.next);
-  }
-
-  const T *last() const {
-    return Accessor::fromListEntry(m_root.prev);
-  }
-
-  const T *next(const T *item) const {
-    return Accessor::fromListEntry(Accessor::toListEntry(item)->next);
-  }
-
-  const T *prev(const T *item) const {
-    return Accessor::fromListEntry(Accessor::toListEntry(item)->prev);
-  }
-
-  void destructiveAppend(CircularList<T, Accessor> &lst) {
+  void destructiveAppend(CircularList<T, Accessor> &&lst) {
     if (!lst.empty()) {
       // insertAfterEntry( last(), lst.first(), lst.last() );
       ListEntry::insertAfterEntry(m_root.prev, lst.m_root.next, lst.m_root.prev);
@@ -218,12 +229,8 @@ public:
     bool operator!=(const iterator_base &it) const {
       return m_p != it.m_p;
     }
-
-    const T *operator->() const {
-      return Accessor::fromListEntry(m_p);
-    }
-    const T &operator*() const {
-      return *Accessor::fromListEntry(m_p);
+    explicit operator bool() const {
+      return m_p;
     }
 
   protected:
@@ -235,7 +242,12 @@ public:
   };
 
   class iterator : public iterator_base {
+    friend class CircularList;
+
   public:
+    iterator() : iterator_base(nullptr) {}
+    explicit iterator(ListEntry *p) : iterator_base(p) {}
+    explicit iterator(T *item) : iterator_base(Accessor::toListEntry(item)) {}
     iterator(const iterator &it) : iterator_base(it.m_p) {}
 
     iterator &operator=(const iterator &it) {
@@ -243,11 +255,17 @@ public:
       return *this;
     }
 
-    T *operator->() const {
+    ListEntry *entry() const {
+      return iterator_base::m_p;
+    }
+    T *ptr() const {
       return Accessor::fromListEntry(iterator_base::m_p);
     }
+    T *operator->() const {
+      return ptr();
+    }
     T &operator*() const {
-      return *Accessor::fromListEntry(iterator_base::m_p);
+      return *ptr();
     }
 
     iterator &operator++() {
@@ -268,20 +286,33 @@ public:
       iterator_base::m_p = iterator_base::m_p->prev;
       return iterator(tmp);
     }
-
-  protected:
-    explicit iterator(ListEntry *p) : iterator_base(p) {}
-
-    friend class CircularList;
   };
 
   class const_iterator : public iterator_base {
+    friend class CircularList;
+
   public:
+    const_iterator() : iterator_base(nullptr) {}
+    explicit const_iterator(const ListEntry *p) : iterator_base(const_cast<ListEntry *>(p)) {}
+    explicit const_iterator(const T *item) : iterator_base(Accessor::toListEntry(item)) {}
     const_iterator(const iterator_base &it) : iterator_base(it.m_p) {}
 
     const_iterator &operator=(const iterator_base &it) {
       iterator_base::m_p = it.m_p;
       return *this;
+    }
+
+    const ListEntry *entry() const {
+      return iterator_base::m_p;
+    }
+    const T *ptr() const {
+      return Accessor::fromListEntry(iterator_base::m_p);
+    }
+    const T *operator->() const {
+      return ptr();
+    }
+    const T &operator*() const {
+      return *ptr();
     }
 
     const_iterator &operator++() {
@@ -302,11 +333,6 @@ public:
       iterator_base::m_p = iterator_base::m_p->prev;
       return const_iterator(tmp);
     }
-
-  protected:
-    explicit const_iterator(ListEntry *p) : iterator_base(p) {}
-
-    friend class CircularList;
   };
 
   iterator begin() {
@@ -320,6 +346,27 @@ public:
   }
   const_iterator end() const {
     return const_iterator(const_cast<ListEntry *>(&m_root)); // TODO
+  }
+
+  /// Insert the specified item after the insertion point.
+  void insertAfter(iterator after, T *item) {
+    ListEntry::insertAfterEntry(after.entry(), Accessor::toListEntry(item));
+  }
+  void insertAfter(T *after, T *item) {
+    ListEntry::insertAfterEntry(Accessor::toListEntry(after), Accessor::toListEntry(item));
+  }
+  void insertBefore(iterator before, T *item) {
+    ListEntry::insertBeforeEntry(before.entry(), Accessor::toListEntry(item));
+  }
+  void insertBefore(T *before, T *item) {
+    ListEntry::insertBeforeEntry(Accessor::toListEntry(before), Accessor::toListEntry(item));
+  }
+
+  void remove(iterator it) {
+    ListEntry::removeEntry(it.entry());
+  }
+  void remove(T *item) {
+    ListEntry::removeEntry(Accessor::toListEntry(item));
   }
 
 private:

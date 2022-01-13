@@ -29,6 +29,7 @@ void Disas::printSimpleCPrologue(FILE *f) {
   }
 
   // Generation 0 saves the registers on start. If it is present, use it.
+  // FIXME: use startup regs.
   if (runData_ && !runData_->generations.empty()) {
     const auto &regs = runData_->generations.front().regs;
     fprintf(f, "  s_pc = 0x%04x;\n", regs.pc);
@@ -122,9 +123,8 @@ bool Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
   if (selfModifers_.count(pc))
     fprintf(f, "      // WARNING: performs self modification.\n");
 
-  for (unsigned i = 0, e = cpuInstSize(inst.addrMode); i != e; ++i) {
-    auto it = selfModified_.find((uint16_t)(pc + i));
-    if (it == selfModified_.end())
+  for (unsigned i = 0, e = inst.size; i != e; ++i) {
+    if (!checkSelfModified((uint16_t)(pc + i)))
       continue;
     if (i == 0) {
       fprintf(f, "      // ERROR: opcode self modification.\n");
@@ -161,50 +161,53 @@ bool Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
   case CPUInstKind::ORA:
     fprintf(f, "s_a = update_nz(s_a | %s);", simpleCRead(inst).c_str());
     break;
+  case CPUInstKind::EOR:
+    fprintf(f, "s_a = update_nz(s_a ^ %s);", simpleCRead(inst).c_str());
+    break;
   case CPUInstKind::BCC:
-    fprintf(f, "s_pc = !(s_status & STATUS_C) ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
+    fprintf(f, "s_pc = !(s_status & STATUS_C) ? %s : 0x%04x;\n", simpleCAddr(inst).c_str(), pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
     fall = false;
     break;
   case CPUInstKind::BCS:
-    fprintf(f, "s_pc = s_status & STATUS_C ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
+    fprintf(f, "s_pc = s_status & STATUS_C ? %s : 0x%04x;\n", simpleCAddr(inst).c_str(), pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
     fall = false;
     break;
   case CPUInstKind::BEQ:
-    fprintf(f, "s_pc = s_status & STATUS_Z ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
+    fprintf(f, "s_pc = s_status & STATUS_Z ? %s : 0x%04x;\n", simpleCAddr(inst).c_str(), pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
     fall = false;
     break;
   case CPUInstKind::BNE:
-    fprintf(f, "s_pc = !(s_status & STATUS_Z) ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
+    fprintf(f, "s_pc = !(s_status & STATUS_Z) ? %s : 0x%04x;\n", simpleCAddr(inst).c_str(), pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
     fall = false;
     break;
   case CPUInstKind::BMI:
-    fprintf(f, "s_pc = s_status & STATUS_N ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
+    fprintf(f, "s_pc = s_status & STATUS_N ? %s : 0x%04x;\n", simpleCAddr(inst).c_str(), pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
     fall = false;
     break;
   case CPUInstKind::BPL:
-    fprintf(f, "s_pc = !(s_status & STATUS_N) ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
+    fprintf(f, "s_pc = !(s_status & STATUS_N) ? %s : 0x%04x;\n", simpleCAddr(inst).c_str(), pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
     fall = false;
     break;
   case CPUInstKind::BVC:
-    fprintf(f, "s_pc = !(s_status & STATUS_V) ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
+    fprintf(f, "s_pc = !(s_status & STATUS_V) ? %s : 0x%04x;\n", simpleCAddr(inst).c_str(), pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
     fall = false;
     break;
   case CPUInstKind::BVS:
-    fprintf(f, "s_pc = s_status & STATUS_V ? 0x%04x : 0x%04x;\n", inst.operand, pc + 2);
+    fprintf(f, "s_pc = s_status & STATUS_V ? %s : 0x%04x;\n", simpleCAddr(inst).c_str(), pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
     fall = false;
@@ -288,9 +291,6 @@ bool Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
     break;
   case CPUInstKind::INY:
     fprintf(f, "s_y = update_nz(s_y + 1);");
-    break;
-  case CPUInstKind::EOR:
-    fprintf(f, "s_a = update_nz(s_a ^ %s);", simpleCRead(inst).c_str());
     break;
 
   case CPUInstKind::JMP:

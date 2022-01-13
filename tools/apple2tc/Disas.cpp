@@ -48,6 +48,8 @@ Disas::Disas(std::string runDataPath) : runDataPath_(std::move(runDataPath)) {
   memset(memory_, 0xFF, sizeof(memory_));
 }
 
+Disas::~Disas() = default;
+
 void Disas::loadBinary(uint16_t addr, const uint8_t *data, size_t len) {
   if (len == 0)
     return;
@@ -285,7 +287,12 @@ void Disas::run(bool noGenerations) {
           if (instWritesMemNormal(inst.kind, inst.addrMode)) {
             if (findAsmBlockContaining(inst.operand)) {
               selfModifers_.insert(addr);
-              selfModified_[inst.operand] |= !operandIsIndexed(inst.addrMode);
+
+              auto smKind = operandIsIndexed(inst.addrMode) ? SelfModifiedKind::Indexed
+                                                            : SelfModifiedKind::Certain;
+              auto res = selfModified_.try_emplace(inst.operand, smKind);
+              if (!res.second && smKind == SelfModifiedKind::Certain)
+                res.first->second = SelfModifiedKind::Certain;
             }
           }
         }
@@ -388,7 +395,10 @@ void Disas::printAsmCodeRange(const AsmBlock &block, std::optional<uint32_t> &la
     for (unsigned i = 0, e = cpuInstSize(inst.addrMode); i != e; ++i) {
       auto it = selfModified_.find((uint16_t)(addr + i));
       if (it != selfModified_.end())
-        printf("; WARNING: Instruction byte %u %s modified\n", i, it->second ? "is" : "may be");
+        printf(
+            "; WARNING: Instruction byte %u %s modified\n",
+            i,
+            it->second == SelfModifiedKind::Certain ? "is" : "may be");
     }
 
     printf("/*%04X*/ ", addr);

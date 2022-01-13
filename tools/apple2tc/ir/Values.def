@@ -1,0 +1,189 @@
+/*
+* Copyright (c) Tzvetan Mikov.
+*
+* This source code is licensed under the MIT license found in the
+* LICENSE file in the root directory of this source tree.
+*/
+
+#ifndef IR_TYPE
+#define IR_TYPE(name)
+#endif
+
+#ifndef IR_CPUREG
+#define IR_CPUREG(name, type)
+#endif
+
+#ifndef IR_VALUE
+#define IR_VALUE(name, type)
+#endif
+
+#ifndef IR_RANGE
+#define IR_RANGE(name, first, last)
+#endif
+
+#ifndef IR_INST0
+#define IR_INST0(name, type) IR_VALUE(name, type)
+#endif
+#ifndef IR_INST1
+#define IR_INST1(name, type, op1type) IR_VALUE(name, type)
+#endif
+#ifndef IR_INST2
+#define IR_INST2(name, type, op1type, op2type) IR_VALUE(name, type)
+#endif
+#ifndef IR_INST3
+#define IR_INST3(name, type, op1type, op2type, op3type) IR_VALUE(name, type)
+#endif
+
+IR_TYPE(Void)
+IR_TYPE(BasicBlock)
+IR_TYPE(IndBasicBlock)
+IR_TYPE(CPUReg8)
+IR_TYPE(CPUReg16)
+IR_TYPE(U8)
+IR_TYPE(U16)
+IR_TYPE(U32)
+
+IR_CPUREG(A, CPUReg8)
+IR_CPUREG(X, CPUReg8)
+IR_CPUREG(Y, CPUReg8)
+IR_CPUREG(SP, CPUReg8)
+/// Negative.
+IR_CPUREG(STATUS_N, CPUReg8)
+/// Overflow.
+IR_CPUREG(STATUS_V, CPUReg8)
+/// Break.
+IR_CPUREG(STATUS_B, CPUReg8)
+/// Decimal.
+IR_CPUREG(STATUS_D, CPUReg8)
+/// Interrupt.
+IR_CPUREG(STATUS_I, CPUReg8)
+/// Zero.
+IR_CPUREG(STATUS_NotZ, CPUReg8)
+/// Carry.
+IR_CPUREG(STATUS_C, CPUReg8)
+
+IR_VALUE(Module, Void)
+IR_VALUE(Function, Void)
+IR_VALUE(BasicBlock, BasicBlock)
+
+IR_VALUE(LiteralU8, U8)
+IR_VALUE(LiteralU16, U16)
+IR_VALUE(LiteralU32, U32)
+IR_RANGE(LiteralNumber, LiteralU8, LiteralU32)
+
+IR_VALUE(CPUReg8, CPUReg8)
+IR_VALUE(CPUReg16, CPUReg16)
+IR_RANGE(CPUReg, CPUReg8, CPUReg16)
+
+IR_INST1(LoadR8, U8, CPUReg8)
+IR_INST2(StoreR8, Void, CPUReg8, U8)
+
+IR_INST1(Peek8, U8, U16)
+IR_INST2(Poke8, Void, U16, U8)
+IR_INST1(RamPeek8, U8, U16)
+IR_INST2(RamPoke8, Void, U16, U8)
+
+/// peek16 from an aligned address.
+IR_INST1(Peek16al, U16, U16)
+/// peek16 from a potentially unaligned address.
+IR_INST1(Peek16un, U16, U16)
+/// peek16 from an aligned address not in ROM or IO.
+IR_INST1(RamPeek16al, U16, U16)
+/// peek16 from a potentially unaligned address not in ROM or IO.
+IR_INST1(RamPeek16un, U16, U16)
+
+IR_INST1(SExt8t16, U16, U8)
+IR_INST1(ZExt8t16, U16, U8)
+IR_INST1(Trunc16t8, U8, U16)
+IR_INST1(High8, U8, U16)
+/// Make16(lo, hi)
+IR_INST2(Make16, U16, U8, U8)
+
+IR_INST2(Shl8, U8, U8, U8)
+IR_INST2(Shl16, U16, U16, U8)
+IR_INST2(Shr8, U8, U8, U8)
+IR_INST2(Shr16, U16, U16, U8)
+IR_INST2(And8, U8, U8, U8)
+IR_INST2(And16, U16, U16, U16)
+IR_INST2(Or8, U8, U8, U8)
+IR_INST2(Or16, U16, U16, U16)
+IR_INST2(Xor8, U8, U8, U8)
+IR_INST2(Xor16, U16, U16, U16)
+IR_INST2(Add8, U8, U8, U8)
+IR_INST2(Add16, U16, U16, U16)
+IR_INST2(Sub8, U8, U8, U8)
+IR_INST2(Sub16, U16, U16, U16)
+/// Ovf8(a, b, c)
+/// Return 0x80 if signed overflow, otherwise 0.
+/// (~(a ^ b) & (a ^ c)) & 0x80.
+IR_INST3(Ovf8, U8, U16, U16, U16)
+/// AdcDec(a, b, STATUS_C)
+/// Perform a decimal addition and return a 16-bit result, where the low 8 bits
+/// are the addition results, and the high 8 bits are the flags:
+/// 0: STATUS_C
+/// 1: STATUS_NotZ
+/// 6: STATUS_V
+/// 7: STATUS_N
+IR_INST3(AdcDec16, U16, U8, U8, U8)
+IR_INST3(SbcDec16, U16, U8, U8, U8)
+
+IR_INST2(Cmp8eq, U8, U8, U8)
+IR_INST2(Cmp8ne, U8, U8, U8)
+/// Signed less than.
+IR_INST2(Cmp8lt, U8, U8, U8)
+/// Signed greater or equal.
+IR_INST2(Cmp8ge, U8, U8, U8)
+/// Unsigned above or equal.
+IR_INST2(Cmp8ae, U8, U8, U8)
+
+IR_INST1(AddCycles, Void, U32)
+IR_INST0(Cycles, U32)
+
+IR_INST1(Push8, Void, U8)
+IR_INST0(Pop8, U8)
+/// Encode the flags into an opaque byte representation.
+/// Operand 1 is STATUS_NotZ.
+/// Operand 2 is:
+/// 0: STATUS_C
+/// 2: STATUS_I
+/// 3: STATUS_D
+/// 4: STATUS_B
+/// 6: STATUS_V
+/// 7: STATUS_N
+IR_INST2(EncodeFlags, U8, U8, U8)
+/// Decode the flags from an opaque format on the stack into:
+/// Operand 1:
+/// 0: STATUS_C
+/// 1: STATUS_NotZ
+/// 2: STATUS_I
+/// 3: STATUS_D
+/// 4: STATUS_B
+/// 6: STATUS_V
+/// 7: STATUS_N
+/// Operand 2: if set, abort if STATUS_D is set.
+IR_INST2(DecodeFlags, U8, U8, U8)
+
+/// Convert a CPU address to an "indirect basic block".
+IR_INST1(CPUAddr2BB, IndBasicBlock, U16)
+
+IR_INST1(Jmp, Void, BasicBlock)
+IR_INST1(JmpInd, Void, IndBasicBlock)
+IR_INST3(JTrue, Void, U8, BasicBlock, BasicBlock)
+IR_INST3(JFalse, Void, U8, BasicBlock, BasicBlock)
+IR_INST2(JSR, Void, BasicBlock, BasicBlock)
+IR_INST2(JSRInd, Void, IndBasicBlock, BasicBlock)
+IR_INST0(RTS, Void)
+/// Abort(pc, target_pc, reason)
+IR_INST3(Abort, Void, U16, U16, U8)
+IR_RANGE(Terminator, Jmp, Abort)
+
+IR_RANGE(Instruction, LoadR8, Abort)
+
+#undef IR_TYPE
+#undef IR_CPUREG
+#undef IR_VALUE
+#undef IR_RANGE
+#undef IR_INST0
+#undef IR_INST1
+#undef IR_INST2
+#undef IR_INST3

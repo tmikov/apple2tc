@@ -7,7 +7,7 @@
 
 #pragma once
 
-template <class A, class B>
+template <class A, class B = A>
 class IteratorRange {
   A begin_;
   B end_;
@@ -19,6 +19,9 @@ public:
   }
   const B &end() const {
     return end_;
+  }
+  bool empty() const {
+    return begin_ == end_;
   }
 };
 
