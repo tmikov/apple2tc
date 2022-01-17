@@ -227,12 +227,14 @@ void Disas::identifyAsmBlocks() {
 }
 
 void Disas::run(bool noGenerations) {
+  // Load the start address from runtime data, if available.
   if (!runDataPath_.empty())
     runData_ = RuntimeData::load(runDataPath_);
 
-  // Load the start address from runtime data, if available.
-  if (runData_ && !runData_->generations.empty())
-    start_ = runData_->generations.front().regs.pc;
+  if (runData_) {
+    if (auto *regs = runData_->getStartRegs())
+      start_ = regs->pc;
+  }
 
   if (!start_.has_value())
     throw std::logic_error("starting address not set");

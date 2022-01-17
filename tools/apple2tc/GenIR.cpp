@@ -45,10 +45,10 @@ Module *GenIR::run() {
 
   // FIXME: use startup regs.
   uint16_t startAddr;
-  if (runData_ && !runData_->generations.empty()) {
-    const auto &regs = runData_->generations.front().regs;
-    initRegs(regs);
-    startAddr = regs.pc;
+  const Regs *startRegs = runData_ ? runData_->getStartRegs() : nullptr;
+  if (startRegs) {
+    initRegs(*startRegs);
+    startAddr = startRegs->pc;
   } else {
     initRegs((Regs){.sp = 0xff});
     startAddr = dis_->getStart().value();

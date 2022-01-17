@@ -30,14 +30,14 @@ void Disas::printSimpleCPrologue(FILE *f) {
 
   // Generation 0 saves the registers on start. If it is present, use it.
   // FIXME: use startup regs.
-  if (runData_ && !runData_->generations.empty()) {
-    const auto &regs = runData_->generations.front().regs;
-    fprintf(f, "  s_pc = 0x%04x;\n", regs.pc);
-    fprintf(f, "  s_a = 0x%02x;\n", regs.a);
-    fprintf(f, "  s_x = 0x%02x;\n", regs.x);
-    fprintf(f, "  s_y = 0x%02x;\n", regs.y);
-    fprintf(f, "  s_status = 0x%02x;\n", regs.status);
-    fprintf(f, "  s_sp = 0x%02x;\n", regs.sp);
+  const Regs *regs = runData_ ? runData_->getStartRegs() : nullptr;
+  if (regs) {
+    fprintf(f, "  s_pc = 0x%04x;\n", regs->pc);
+    fprintf(f, "  s_a = 0x%02x;\n", regs->a);
+    fprintf(f, "  s_x = 0x%02x;\n", regs->x);
+    fprintf(f, "  s_y = 0x%02x;\n", regs->y);
+    fprintf(f, "  s_status = 0x%02x;\n", regs->status);
+    fprintf(f, "  s_sp = 0x%02x;\n", regs->sp);
   } else {
     fprintf(f, "  s_pc = 0x%04x;\n", *start_);
   }
