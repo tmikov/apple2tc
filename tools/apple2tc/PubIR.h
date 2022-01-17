@@ -19,3 +19,6 @@ class Disas;
 std::shared_ptr<ir::IRContext> newIRContext();
 ir::Module *genIR(Disas &disas, ir::IRContext &ctx);
 void dumpModule(ir::Module *mod);
+
+bool mem2reg(ir::Module *mod);
+bool dce(ir::Module *mod);

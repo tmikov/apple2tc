@@ -108,10 +108,14 @@ void IRDumper::dump(Instruction *inst) {
     fprintf(os_, "         ");
   }
 
-  if (inst->getType()->getKind() != TypeKind::Void)
-    fprintf(os_, " %-*s = ", perFunction_.instNameWidth, name(inst).c_str());
-  else
+  if (inst->getType()->getKind() != TypeKind::Void) {
+    if (inst->hasUsers())
+      fprintf(os_, " %-*s = ", perFunction_.instNameWidth, name(inst).c_str());
+    else
+      fprintf(os_, " %-*s = ", perFunction_.instNameWidth, "%_");
+  } else {
     fprintf(os_, " %-*s   ", perFunction_.instNameWidth, "");
+  }
   fprintf(os_, "%-10s", getValueKindName(inst->getKind()));
   unsigned index = 0;
   for (auto &operand : inst->operands()) {

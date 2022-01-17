@@ -11,6 +11,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+#add_compile_options(-fsanitize=address,undefined)
+#add_link_options(-fsanitize=address,undefined)
+#add_compile_options(-fsanitize=address)
+#add_link_options(-fsanitize=address)
+
 set(APPLE2TC_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(APPLE2TC_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 # This is used for easy reference of dependency includes.

@@ -57,6 +57,7 @@ static void printHelp() {
   fprintf(stderr, "  --asm               Generate asm listing (default)\n");
   fprintf(stderr, "  --simple-c          Generate simple C code\n");
   fprintf(stderr, "  --ir                Generate IR\n");
+  fprintf(stderr, "  -O<number>          Optimization level (default 0)\n");
   fprintf(stderr, "  --run-data=d.json   Load runtime data from specified file\n");
   fprintf(stderr, "  --no-gen            Ignore runtime generations\n");
 }
@@ -69,6 +70,7 @@ int main(int argc, char **argv) {
   };
   bool noGenerations = false;
   Action action = Action::GenAsm;
+  unsigned optLevel = 0;
   s_appPath = argc ? argv[0] : "apple2tc";
 
   std::string inputPath;
@@ -89,6 +91,10 @@ int main(int argc, char **argv) {
     }
     if (strcmp(argv[i], "--ir") == 0) {
       action = Action::GenIR;
+      continue;
+    }
+    if (strncmp(argv[i], "-O", 2) == 0 && strlen(argv[i]) == 3 && isdigit(argv[i][2])) {
+      optLevel = argv[i][2] - '0';
       continue;
     }
     if (strncmp(argv[i], "--run-data=", 11) == 0) {
@@ -143,6 +149,10 @@ int main(int argc, char **argv) {
     case Action::GenIR: {
       auto irCtx = newIRContext();
       auto *mod = genIR(*dis, *irCtx);
+      if (optLevel > 0)
+        mem2reg(mod);
+      if (optLevel > 1)
+        dce(mod);
       dumpModule(mod);
       break;
     }

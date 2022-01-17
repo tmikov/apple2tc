@@ -22,6 +22,7 @@ class Instruction;
 class BasicBlock;
 class Function;
 class Module;
+class InstDestroyer;
 
 template <class T, class B>
 bool isa(const B *b) {
@@ -154,9 +155,15 @@ public:
     return type_;
   }
 
+  bool hasUsers() const {
+    return !userList_.empty();
+  }
+
   auto users() {
     return makeIteratorRange(userList_.begin(), userList_.end());
   }
+
+  void replaceAllUsesWith(Value *v);
 
 #define IR_RANGE(name, first, last)                                        \
   bool is##name() const {                                                  \
@@ -201,6 +208,8 @@ private:
 };
 
 class Instruction : public Value {
+  friend InstDestroyer;
+
 protected:
   explicit Instruction(ValueKind kind, Type *type, BasicBlock *block)
       : Value(kind, type), basicBlock_(block) {
@@ -214,10 +223,16 @@ protected:
   inline OperandList &getOperands();
   inline const OperandList &getOperands() const;
 
+  /// Clear all operands. This should only be done when the instruction is about to be
+  /// destroyed, because it puts it in an inconsistent state.
+  void clearOperands();
+
 public:
   static bool classof(const Value *v) {
     return v->isInstruction();
   }
+
+  void eraseFromBasicBlock();
 
   void setAddress(uint32_t address) {
     address_ = address;
@@ -276,6 +291,12 @@ public:
   }
 
 private:
+  void setBasicBlock(BasicBlock *block) {
+    basicBlock_ = block;
+  }
+
+private:
+  friend BasicBlock;
   BasicBlock *basicBlock_;
   std::optional<uint32_t> address_{};
 };
@@ -342,6 +363,8 @@ public:
     return v->getKind() == ValueKind::BasicBlock;
   }
 
+  void dump();
+
   Function *getFunction() const {
     return function_;
   }
@@ -355,6 +378,17 @@ public:
 
   auto instructions() {
     return makeIteratorRange(instList_.begin(), instList_.end());
+  }
+  auto reverse_instructions() {
+    return makeIteratorRange(instList_.rbegin(), instList_.rend());
+  }
+
+  void eraseInstruction(Instruction *inst) {
+    assert(inst->getBasicBlock() == this && "Erased instruction must belong to block");
+    assert(!inst->hasUsers() && "Instruction with users cannot be erased");
+    instList_.remove(inst);
+    inst->setBasicBlock(nullptr);
+    delete inst;
   }
 
   std::optional<uint32_t> const &getAddress() const {
@@ -521,6 +555,25 @@ public:
 private:
   IRContext *context_ = nullptr;
   CircularList<Function> functionList_{};
+};
+
+class InstDestroyer {
+  std::vector<Instruction *> toDestroy_{};
+
+public:
+  InstDestroyer(const InstDestroyer &) = delete;
+  void operator=(const InstDestroyer &) = delete;
+
+  InstDestroyer();
+  ~InstDestroyer();
+
+  /// Record the instruction for destruction. This operation cannot be undone.
+  /// The instruction's operand list is cleared, so it is removed as a dependant
+  /// on its operands.
+  void add(Instruction *inst) {
+    inst->clearOperands();
+    toDestroy_.push_back(inst);
+  }
 };
 
 class IRBuilder {

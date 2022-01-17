@@ -465,7 +465,7 @@ void GenIR::emitDecodeFlags(Value *value8) {
 void GenIR::emitADC(const CPUInst &inst) {
   auto *normalBB = createBB(pc_);
   auto *decimalBB = createBB(pc_);
-  auto *nextBB = createBB(pc_);
+  auto *nextBB = createBB(pc_ + inst.size);
 
   builder_.createJTrue(emitLoadReg8(CPURegKind::STATUS_D), decimalBB, normalBB);
 
@@ -505,7 +505,7 @@ void GenIR::emitADC(const CPUInst &inst) {
 void GenIR::emitSBC(const CPUInst &inst) {
   auto *normalBB = createBB(pc_);
   auto *decimalBB = createBB(pc_);
-  auto *nextBB = createBB(pc_);
+  auto *nextBB = createBB(pc_ + inst.size);
 
   builder_.createJTrue(emitLoadReg8(CPURegKind::STATUS_D), decimalBB, normalBB);
 

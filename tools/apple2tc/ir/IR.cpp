@@ -65,8 +65,26 @@ LiteralU32 *IRContext::getLiteralU32(uint32_t v) {
 
 Value::~Value() = default;
 
+void Value::replaceAllUsesWith(Value *v) {
+  while (!userList_.empty())
+    userList_.back().setValue(v);
+}
+
+void Instruction::clearOperands() {
+  getOperands().clear();
+}
+
+void Instruction::eraseFromBasicBlock() {
+  basicBlock_->eraseInstruction(this);
+}
+
 BasicBlock::~BasicBlock() {
   instList_.destroyAll();
+}
+
+void BasicBlock::dump() {
+  IRDumper d(stdout);
+  d.dump(this);
 }
 
 Instruction *BasicBlock::getTerminator() {
@@ -131,6 +149,13 @@ IRBuilder::SaveStateRAII::~SaveStateRAII() {
   bld_->block_ = block_;
   bld_->insertionPoint_ = insertionPoint_;
   bld_->address_ = address_;
+}
+
+InstDestroyer::InstDestroyer() = default;
+
+InstDestroyer::~InstDestroyer() {
+  for (auto *inst : toDestroy_)
+    inst->eraseFromBasicBlock();
 }
 
 void IRBuilder::insert(Instruction *inst) {
