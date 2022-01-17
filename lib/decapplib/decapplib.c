@@ -21,6 +21,8 @@
 #include <stdlib.h>
 
 static bool sound_enabled_ = true;
+/// If set, a file to read keyboard input from.
+static FILE *kbd_file_ = NULL;
 
 static sg_bindings bind_;
 static sg_pipeline pip_;
@@ -201,6 +203,26 @@ static void stream_userdata_cb(float *buffer, int num_frames, int num_channels, 
   a2_sound_cb((a2_sound_t *)user_data, buffer, num_frames, num_channels);
 }
 
+/// While the KBD file is open, read as many characters from it as possible.
+/// Close the file of EOF is reached.
+static void drain_kbd_file() {
+  if (!kbd_file_)
+    return;
+  while (a2_io_keys_expect(&io_)) {
+    int ch = getc(kbd_file_);
+    if (ch == EOF) {
+      fclose(kbd_file_);
+      kbd_file_ = NULL;
+      break;
+    }
+    if (ch == '\r')
+      continue;
+    if (ch == '\n')
+      ch = '\r';
+    a2_io_push_key(&io_, (uint8_t)ch);
+  }
+}
+
 static void init_cb(void) {
   init_window();
   stm_setup();
@@ -227,6 +249,12 @@ static void init_cb(void) {
   set_regs(r);
 
   init_emulated();
+
+  if (kbd_file_) {
+    // The first key pressed before initialization is lost, so just add a dummy keypress.
+    a2_io_push_key(&io_, '\r');
+    drain_kbd_file();
+  }
 }
 
 static void cleanup_cb(void) {
@@ -242,6 +270,9 @@ static void simulate_frame(void) {
     firstFrame_ = false;
     firstFrameTick_ = curFrameTick_;
   } else {
+    if (kbd_file_)
+      drain_kbd_file();
+
     double elapsed = stm_sec(curFrameTick_ - lastRunTick_);
     unsigned runCycles = (unsigned)((elapsed < 0.200 ? elapsed : 0.200) * A2_CLOCK_FREQ);
     run_emulated(runCycles);
@@ -318,6 +349,11 @@ static void event_cb(const sapp_event *ev) {
   int toIgnore = ignoreNextCh_;
   ignoreNextCh_ = -1;
 
+  // If we are reading from a file, just ensure that the keyboard queue us full,
+  // so events here will have no effect.
+  if (kbd_file_)
+    drain_kbd_file();
+
   if (ev->type == SAPP_EVENTTYPE_CHAR && ev->char_code < 128) {
     int k = (int)ev->char_code;
     if (k == 127) // Del
@@ -354,6 +390,7 @@ static void print_help() {
   printf("syntax: %s [options]\n", s_argv0);
   printf(" --help           This help\n");
   printf(" --no-sound       Disable sound\n");
+  printf(" --kbd-file=path  Read keyboard input from the specified file\n");
   printf(" --trace          Dump state at branch targets\n");
   printf(" --count-bt       Count branch targets\n");
 }
@@ -383,6 +420,14 @@ static void parse_args(int argc, char *argv[]) {
     }
     if (strcmp(arg, "--debug-bt") == 0) {
       g_debug |= DebugCountBB;
+      continue;
+    }
+    if (strncmp(arg, "--kbd-file=", 11) == 0) {
+      const char *path = arg + 11;
+      if ((kbd_file_ = fopen(path, "rt")) == NULL) {
+        perror(path);
+        exit(2);
+      }
       continue;
     }
 
