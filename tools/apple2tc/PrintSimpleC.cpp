@@ -127,12 +127,12 @@ bool Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
     if (!checkSelfModified((uint16_t)(pc + i)))
       continue;
     if (i == 0) {
-      fprintf(f, "      // ERROR: opcode self modification.\n");
+      fprintf(f, "      // WARNING: opcode self modification.\n");
+    } else {
+      fprintf(f, "      // WARNING: operand self modification.\n");
+      scSelfModOperand_ = true;
       break;
     }
-    fprintf(f, "      // WARNING: operand self modification.\n");
-    scSelfModOperand_ = true;
-    break;
   }
 
   fprintf(f, "      /* $%04X %s */ ", pc, cpuInstName(inst.kind));
