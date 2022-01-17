@@ -55,14 +55,21 @@ unsigned get_cycles(void) {
   return s_cycles;
 }
 
-const uint8_t * get_ram(void) {
+const uint8_t *get_ram(void) {
   return s_ram;
+}
+void ram_poke(uint16_t addr, uint8_t value) {
+  s_ram[addr] = value;
 }
 uint8_t ram_peek(uint16_t addr) {
   return s_ram[addr];
 }
 uint16_t ram_peek16(uint16_t addr) {
   return ram_peek(addr) + ram_peek(addr + 1) * 256;
+}
+uint16_t ram_peek16al(uint16_t addr) {
+  assert(!(addr & 1) && "ram_peek16al() address must be word aligned");
+  return *(uint16_t *)(s_ram + addr);
 }
 
 static inline uint8_t peek_zpg(uint8_t addr) {
@@ -90,6 +97,10 @@ static inline void poke(uint16_t addr, uint8_t value) {
   }
 }
 static uint16_t peek16(uint16_t addr) {
+  return peek(addr) + (peek(addr + 1) << 8);
+}
+static uint16_t peek16al(uint16_t addr) {
+  assert(!(addr & 1) && "peek16al() address must be word aligned");
   return peek(addr) + (peek(addr + 1) << 8);
 }
 

@@ -54,6 +54,7 @@ void set_regs(regs_t r);
 regs_t get_regs(void);
 unsigned get_cycles(void);
 const uint8_t * get_ram(void);
+void ram_poke(uint16_t addr, uint8_t value);
 uint8_t ram_peek(uint16_t addr);
 uint16_t ram_peek16(uint16_t addr);
 
