@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <iterator>
+
 template <class A, class B = A>
 class IteratorRange {
   A begin_;
@@ -28,4 +30,12 @@ public:
 template <class A, class B>
 IteratorRange<A, B> makeIteratorRange(A a, B b) {
   return {std::move(a), std::move(b)};
+}
+template <class T>
+auto makeIteratorRange(T &t) {
+  return makeIteratorRange(std::begin(t), std::end(t));
+}
+template <class T>
+auto makeReverseRange(T &t) {
+  return makeIteratorRange(std::rbegin(t), std::rend(t));
 }
