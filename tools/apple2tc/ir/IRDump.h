@@ -30,9 +30,14 @@ private:
   void dumpImpl(BasicBlock *bb);
   void printOperand(Value *operand);
 
-private:
+protected:
+  virtual void preBasicBlock(BasicBlock *bb);
+  virtual void postBasicBlock(BasicBlock *bb);
+
+protected:
   FILE *os_;
 
+private:
   struct PerFunction {
     std::unordered_map<Value *, std::string> names{};
     int instNameWidth = 0;

@@ -81,9 +81,14 @@ void IRDumper::dumpImpl(BasicBlock *bb) {
   if (bb->getAddress())
     fprintf(os_, "  // $%04X", *bb->getAddress());
   fprintf(os_, "\n");
+  preBasicBlock(bb);
   for (auto &inst : bb->instructions())
     dump(&inst);
+  postBasicBlock(bb);
 }
+
+void IRDumper::preBasicBlock(BasicBlock *bb) {}
+void IRDumper::postBasicBlock(BasicBlock *bb) {}
 
 void IRDumper::dump(Instruction *inst) {
   if (inst->getAddress() && *inst->getAddress() != perFunction_.lastAddr) {
