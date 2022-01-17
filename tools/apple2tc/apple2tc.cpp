@@ -157,7 +157,7 @@ int main(int argc, char **argv) {
       auto irCtx = newIRContext();
       auto *mod = genIR(dis, *irCtx);
       if (optLevel > 0)
-        mem2reg(mod);
+        localCPURegSSA(mod);
       if (optLevel > 1)
         dce(mod);
       if (optLevel > 2) {

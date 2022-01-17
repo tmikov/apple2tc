@@ -21,7 +21,8 @@ std::shared_ptr<ir::IRContext> newIRContext();
 ir::Module *genIR(const std::shared_ptr<Disas> &disas, ir::IRContext &ctx);
 void dumpModule(ir::Module *mod);
 
-bool mem2reg(ir::Module *mod);
+/// SSA conversion of LoadR8/StoreR8 within individual basic blocks.
+bool localCPURegSSA(ir::Module *mod);
 bool dce(ir::Module *mod);
 bool simplify(ir::Module *mod);
 

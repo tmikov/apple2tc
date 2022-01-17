@@ -65,7 +65,7 @@ static bool removeRegStores(BasicBlock *bb) {
   return changed;
 }
 
-bool mem2reg(Module *mod) {
+bool localCPURegSSA(Module *mod) {
   bool changed = false;
   for (auto &func : mod->functions()) {
     for (auto &bb : func.basicBlocks()) {
