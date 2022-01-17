@@ -23,6 +23,8 @@
 static bool sound_enabled_ = true;
 /// If set, a file to read keyboard input from.
 static FILE *kbd_file_ = NULL;
+/// Assumed clock frequency. Can be used for "overclocking".
+static unsigned clock_freq_ = A2_CLOCK_FREQ;
 
 static sg_bindings bind_;
 static sg_pipeline pip_;
@@ -274,7 +276,7 @@ static void simulate_frame(void) {
       drain_kbd_file();
 
     double elapsed = stm_sec(curFrameTick_ - lastRunTick_);
-    unsigned runCycles = (unsigned)((elapsed < 0.200 ? elapsed : 0.200) * A2_CLOCK_FREQ);
+    unsigned runCycles = (unsigned)((elapsed < 0.200 ? elapsed : 0.200) * clock_freq_);
     run_emulated(runCycles);
     a2_sound_submit(&sound_, A2_CLOCK_FREQ, saudio_sample_rate(), get_cycles());
   }
@@ -391,6 +393,7 @@ static void print_help() {
   printf(" --help           This help\n");
   printf(" --no-sound       Disable sound\n");
   printf(" --kbd-file=path  Read keyboard input from the specified file\n");
+  printf(" --fast           Emulate a faster CPU\n");
   printf(" --trace          Dump state at branch targets\n");
   printf(" --count-bt       Count branch targets\n");
 }
@@ -428,6 +431,10 @@ static void parse_args(int argc, char *argv[]) {
         perror(path);
         exit(2);
       }
+      continue;
+    }
+    if (strcmp(arg, "--fast") == 0) {
+      clock_freq_ = A2_CLOCK_FREQ * 5;
       continue;
     }
 
