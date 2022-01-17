@@ -116,7 +116,7 @@ void IRDumper::dump(Instruction *inst) {
   } else {
     fprintf(os_, " %-*s   ", perFunction_.instNameWidth, "");
   }
-  fprintf(os_, "%-10s", getValueKindName(inst->getKind()));
+  fprintf(os_, "%-*s", inst->getNumOperands() ? 10 : 0, getValueKindName(inst->getKind()));
   unsigned index = 0;
   for (auto &operand : inst->operands()) {
     if (index++ == 0)

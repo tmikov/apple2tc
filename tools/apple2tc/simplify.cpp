@@ -45,7 +45,6 @@ static Value *simplifyInst(IRBuilder &builder, Instruction *inst) {
     // (ZExt8t16 (Trunc16t8 x)) => (And16 x 0x00FF)
     if (inst->getOperand(0)->getKind() == ValueKind::Trunc16t8) {
       builder.setInsertionPointAfter(inst);
-      builder.setAddress(inst->getAddress());
       return builder.createAnd16(
           cast<Instruction>(inst->getOperand(0))->getOperand(0), builder.getLiteralU16(0x00FF));
     }
@@ -91,8 +90,16 @@ static Value *simplifyInst(IRBuilder &builder, Instruction *inst) {
   case ValueKind::Shr16:
     break;
   case ValueKind::And8:
+    // (And8 const1 const2)
+    if (auto *left = dyn_cast<LiteralU8>(inst->getOperand(0)))
+      if (auto *right = dyn_cast<LiteralU8>(inst->getOperand(1)))
+        return builder.getLiteralU8(left->getValue() & right->getValue());
     break;
   case ValueKind::And16:
+    // (And16 const1 const2)
+    if (auto *left = dyn_cast<LiteralU16>(inst->getOperand(0)))
+      if (auto *right = dyn_cast<LiteralU16>(inst->getOperand(1)))
+        return builder.getLiteralU16(left->getValue() & right->getValue());
     break;
   case ValueKind::Or8:
     break;
@@ -109,6 +116,10 @@ static Value *simplifyInst(IRBuilder &builder, Instruction *inst) {
     // (Add8 x 0) => x
     if (isLiteral<LiteralU8>(inst->getOperand(1), 0))
       return inst->getOperand(0);
+    // (Add8 const1 const2)
+    if (auto *left = dyn_cast<LiteralU8>(inst->getOperand(0)))
+      if (auto *right = dyn_cast<LiteralU8>(inst->getOperand(1)))
+        return builder.getLiteralU8(left->getValue() + right->getValue());
     break;
   case ValueKind::Add16:
     // (Add16 0 x) => x
@@ -117,10 +128,28 @@ static Value *simplifyInst(IRBuilder &builder, Instruction *inst) {
     // (Add16 x 0) => x
     if (isLiteral<LiteralU16>(inst->getOperand(1), 0))
       return inst->getOperand(0);
+    // (Add16 const1 const2)
+    if (auto *left = dyn_cast<LiteralU16>(inst->getOperand(0)))
+      if (auto *right = dyn_cast<LiteralU16>(inst->getOperand(1)))
+        return builder.getLiteralU16(left->getValue() + right->getValue());
     break;
   case ValueKind::Sub8:
+    // (Sub8 x 0) => x
+    if (isLiteral<LiteralU8>(inst->getOperand(1), 0))
+      return inst->getOperand(0);
+    // (Sub8 const1 const2)
+    if (auto *left = dyn_cast<LiteralU8>(inst->getOperand(0)))
+      if (auto *right = dyn_cast<LiteralU8>(inst->getOperand(1)))
+        return builder.getLiteralU8(left->getValue() - right->getValue());
     break;
   case ValueKind::Sub16:
+    // (Sub16 x 0) => x
+    if (isLiteral<LiteralU16>(inst->getOperand(1), 0))
+      return inst->getOperand(0);
+    // (Sub16 const1 const2)
+    if (auto *left = dyn_cast<LiteralU16>(inst->getOperand(0)))
+      if (auto *right = dyn_cast<LiteralU16>(inst->getOperand(1)))
+        return builder.getLiteralU16(left->getValue() - right->getValue());
     break;
   case ValueKind::Ovf8:
     break;
@@ -139,8 +168,18 @@ static Value *simplifyInst(IRBuilder &builder, Instruction *inst) {
   case ValueKind::DecodeFlags:
     break;
   case ValueKind::JTrue:
+    // jtrue const, label1, label2 => jmp
+    if (auto *u8 = dyn_cast<LiteralU8>(inst->getOperand(0))) {
+      builder.setInsertionPointAfter(inst);
+      return builder.createJmp(u8->getValue() ? inst->getOperand(1) : inst->getOperand(2));
+    }
     break;
   case ValueKind::JFalse:
+    // jfalse const, label1, label2 => jmp
+    if (auto *u8 = dyn_cast<LiteralU8>(inst->getOperand(0))) {
+      builder.setInsertionPointAfter(inst);
+      return builder.createJmp(!u8->getValue() ? inst->getOperand(1) : inst->getOperand(2));
+    }
     break;
 
   default:
@@ -161,6 +200,7 @@ bool simplify(Module *mod) {
         InstDestroyer destroyer;
         for (auto &iRef : bb.instructions()) {
           auto *inst = &iRef;
+          builder.setAddress(inst->getAddress());
           if (auto *replacement = simplifyInst(builder, inst)) {
             inst->replaceAllUsesWith(replacement);
             destroyer.add(inst);
