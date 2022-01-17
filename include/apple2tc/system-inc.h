@@ -159,20 +159,20 @@ static inline void set_c_to_bit0(uint8_t value) {
 }
 
 /// Perform A + B + Carry in decimal mode and update the flags.
-static uint8_t adc_decimal(uint8_t b) {
+static uint8_t adc_decimal(uint8_t a, uint8_t b) {
   uint8_t c = s_status & STATUS_C;
-  uint8_t al = (s_a & 15) + (b & 15) + c;
+  uint8_t al = (a & 15) + (b & 15) + c;
   if (al >= 10)
     al += 6;
-  uint8_t ah = (s_a >> 4) + (b >> 4) + (al > 15);
+  uint8_t ah = (a >> 4) + (b >> 4) + (al > 15);
 
   s_status &= ~(STATUS_N | STATUS_V | STATUS_Z | STATUS_C);
-  if (!(uint8_t)(s_a + b + c))
+  if (!(uint8_t)(a + b + c))
     s_status |= STATUS_Z;
   else if (ah & 8)
     s_status |= STATUS_N;
 
-  if (~(s_a ^ b) & (s_a ^ (ah << 4)) & 0x80)
+  if (~(a ^ b) & (a ^ (ah << 4)) & 0x80)
     s_status |= STATUS_V;
 
   if (ah >= 10)
@@ -184,21 +184,21 @@ static uint8_t adc_decimal(uint8_t b) {
 }
 
 /// Perform A - B - Carry in decimal mode and update the flags.
-static uint8_t sbc_decimal(uint8_t b) {
+static uint8_t sbc_decimal(uint8_t a, uint8_t b) {
   uint8_t c = ~s_status & STATUS_C;
-  uint8_t al = (s_a & 15) - (b & 15) - c;
+  uint8_t al = (a & 15) - (b & 15) - c;
   if ((int8_t)(al) < 0)
     al -= 6;
-  uint8_t ah = (s_a >> 4) - (b >> 4) - ((int8_t)(al) < 0);
+  uint8_t ah = (a >> 4) - (b >> 4) - ((int8_t)(al) < 0);
 
   s_status &= ~(STATUS_N | STATUS_V | STATUS_Z | STATUS_C);
-  uint16_t diff = s_a - b - c;
+  uint16_t diff = a - b - c;
   if (!(uint8_t)diff)
     s_status |= STATUS_Z;
   else if (diff & 0x80)
     s_status |= STATUS_N;
 
-  if ((s_a ^ b) & (s_a ^ diff) & 0x80)
+  if ((a ^ b) & (a ^ diff) & 0x80)
     s_status |= STATUS_V;
   if (!(diff & 0xff00))
     s_status |= STATUS_C;

@@ -142,7 +142,7 @@ bool Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
         f,
         "tmp = %s, s_a = "
         "s_status & STATUS_D"
-        " ? adc_decimal(tmp)"
+        " ? adc_decimal(s_a, tmp)"
         " : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);",
         simpleCRead(inst).c_str());
     break;
@@ -151,7 +151,7 @@ bool Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
         f,
         "tmp = %s, s_a = "
         "s_status & STATUS_D"
-        " ? sbc_decimal(tmp)"
+        " ? sbc_decimal(s_a, tmp)"
         " : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);",
         simpleCRead(inst).c_str());
     break;
