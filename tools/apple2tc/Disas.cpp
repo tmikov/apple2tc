@@ -190,11 +190,9 @@ void Disas::identifyAsmBlocks() {
         break;
       } else if (inst.kind == CPUInstKind::JSR) {
         block->setEndAddress(addr);
-        // Add the next address to the queue, but do not connect it as a "fall"
-        // target.
-        addWork(addr, nullptr);
+        AsmBlock *fall = addWork(addr, nullptr);
         AsmBlock *branch = addWork(inst.operand, &block);
-        block->finish(nullptr, branch);
+        block->finish(fall, branch);
         break;
       } else if (inst.addrMode == CPUAddrMode::Rel) {
         block->setEndAddress(addr);
