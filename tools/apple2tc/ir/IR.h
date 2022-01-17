@@ -56,6 +56,9 @@ public:
   TypeKind getKind() const {
     return kind_;
   }
+  bool isVoid() const {
+    return kind_ == TypeKind::Void;
+  }
 
 private:
   TypeKind const kind_;
@@ -461,13 +464,13 @@ public:
     return *this;
   }
 
-  Instruction *operator->() const {
+  BasicBlock *operator->() const {
     assert(begin_ != end_ && "deref of end iterator");
-    return begin_->owner();
+    return begin_->owner()->getBasicBlock();
   }
-  Instruction &operator*() const {
+  BasicBlock &operator*() const {
     assert(begin_ != end_ && "deref of end iterator");
-    return *begin_->owner();
+    return *begin_->owner()->getBasicBlock();
   }
 
 private:
@@ -546,6 +549,11 @@ public:
   }
 
   BasicBlock *createBasicBlock();
+
+  BasicBlock *getEntryBlock() {
+    assert(!bbList_.empty() && "getEntryPoint() can only be invoked on non-empty block");
+    return &bbList_.front();
+  }
 
   auto basicBlocks() {
     return makeIteratorRange(bbList_.begin(), bbList_.end());
