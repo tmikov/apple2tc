@@ -15,7 +15,11 @@
 using namespace ir;
 
 GenIR::GenIR(Disas *disas, IRContext *ctx)
-    : dis_(disas), runData_(disas->getRunData()), ctx_(ctx), builder_(ctx) {}
+    : dis_(disas),
+      runData_(disas->getRunData()),
+      baseStats_(runData_ ? runData_->baseStats.get() : nullptr),
+      ctx_(ctx),
+      builder_(ctx) {}
 
 GenIR::~GenIR() = default;
 
@@ -463,13 +467,20 @@ void GenIR::emitDecodeFlags(Value *value8) {
 }
 
 void GenIR::emitADC(const CPUInst &inst) {
-  auto *normalBB = createBB(pc_);
-  auto *decimalBB = createBB(pc_);
-  auto *nextBB = createBB(pc_ + inst.size);
+  const bool simpleADC = baseStats_ && !baseStats_->decimalSet;
 
-  builder_.createJTrue(emitLoadReg8(CPURegKind::STATUS_D), decimalBB, normalBB);
+  BasicBlock *normalBB = nullptr;
+  BasicBlock *decimalBB = nullptr;
+  BasicBlock *nextBB = nullptr;
 
-  builder_.setInsertionBlock(normalBB);
+  if (!simpleADC) {
+    normalBB = createBB(pc_);
+    decimalBB = createBB(pc_);
+    nextBB = createBB(pc_ + inst.size);
+
+    builder_.createJTrue(emitLoadReg8(CPURegKind::STATUS_D), decimalBB, normalBB);
+    builder_.setInsertionBlock(normalBB);
+  }
   {
     auto *op1 = builder_.createZExt8t16(emitLoadReg8(CPURegKind::A));
     auto *op2 = builder_.createZExt8t16(genRead(inst));
@@ -482,6 +493,8 @@ void GenIR::emitADC(const CPUInst &inst) {
     emitUpdateNZ(res);
     emitStoreReg8(CPURegKind::A, res);
   }
+  if (simpleADC)
+    return;
   builder_.createJmp(nextBB);
 
   builder_.setInsertionBlock(decimalBB);
@@ -503,13 +516,20 @@ void GenIR::emitADC(const CPUInst &inst) {
 }
 
 void GenIR::emitSBC(const CPUInst &inst) {
-  auto *normalBB = createBB(pc_);
-  auto *decimalBB = createBB(pc_);
-  auto *nextBB = createBB(pc_ + inst.size);
+  const bool simpleSBC = baseStats_ && !baseStats_->decimalSet;
 
-  builder_.createJTrue(emitLoadReg8(CPURegKind::STATUS_D), decimalBB, normalBB);
+  BasicBlock *normalBB = nullptr;
+  BasicBlock *decimalBB = nullptr;
+  BasicBlock *nextBB = nullptr;
 
-  builder_.setInsertionBlock(normalBB);
+  if (!simpleSBC) {
+    normalBB = createBB(pc_);
+    decimalBB = createBB(pc_);
+    nextBB = createBB(pc_ + inst.size);
+
+    builder_.createJTrue(emitLoadReg8(CPURegKind::STATUS_D), decimalBB, normalBB);
+    builder_.setInsertionBlock(normalBB);
+  }
   {
     auto *op1 = builder_.createZExt8t16(emitLoadReg8(CPURegKind::A));
     auto *op2 = builder_.createZExt8t16(genRead(inst));
@@ -529,6 +549,8 @@ void GenIR::emitSBC(const CPUInst &inst) {
     emitUpdateNZ(res);
     emitStoreReg8(CPURegKind::A, res);
   }
+  if (simpleSBC)
+    return;
   builder_.createJmp(nextBB);
 
   builder_.setInsertionBlock(decimalBB);

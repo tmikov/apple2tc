@@ -17,6 +17,7 @@ using namespace ir;
 class GenIR {
   Disas *const dis_;
   const RuntimeData *const runData_;
+  const RuntimeData::BaseStats * const baseStats_;
   IRContext *const ctx_;
   IRBuilder builder_;
 
