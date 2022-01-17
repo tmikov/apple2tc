@@ -16,7 +16,7 @@ std::string vformat(const char *msg, va_list ap) {
   if (len < 0)
     return "";
   std::string res(len, ' ');
-  vsnprintf(res.data(), res.size()+1, msg, ap);
+  vsnprintf(res.data(), res.size() + 1, msg, ap);
   return res;
 }
 
@@ -26,6 +26,16 @@ std::string format(const char *msg, ...) {
   auto res = vformat(msg, ap);
   va_end(ap);
   return res;
+}
+
+void panicAbort(const char *msg, ...) {
+  fprintf(stderr, "panic: ");
+  va_list ap;
+  va_start(ap, msg);
+  vfprintf(stderr, msg, ap);
+  va_end(ap);
+  fprintf(stderr, "\n");
+  abort();
 }
 
 bool eqci(const char *a, const char *b) {
@@ -39,6 +49,6 @@ bool eqci(const char *a, const char *b) {
 }
 
 void upcaseStr(std::string &s) {
-  for(char & ch : s)
+  for (char &ch : s)
     ch = (char)toupper(ch);
 }
