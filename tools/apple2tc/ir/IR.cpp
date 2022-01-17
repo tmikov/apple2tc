@@ -78,6 +78,22 @@ void Instruction::eraseFromBasicBlock() {
   basicBlock_->eraseInstruction(this);
 }
 
+bool Instruction::hasSideEffects() const {
+  // Void type instructions have side effects by definition.
+  if (getType()->getKind() == TypeKind::Void)
+    return true;
+  // Check for side effects;
+  switch (getKind()) {
+  case ValueKind::Peek8:
+  case ValueKind::Peek16al:
+  case ValueKind::Peek16un:
+  case ValueKind::Pop8:
+    return true;
+  default:
+    return false;
+  }
+}
+
 BasicBlock::~BasicBlock() {
   instList_.destroyAll();
 }

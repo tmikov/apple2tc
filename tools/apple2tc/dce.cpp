@@ -17,19 +17,10 @@ static bool dceBlock(BasicBlock *bb) {
   for (auto &iRef : bb->reverse_instructions()) {
     Instruction *inst = &iRef;
 
-    if (inst->getType()->getKind() == TypeKind::Void)
-      continue;
     if (inst->hasUsers())
       continue;
-    // Check for side effects;
-    switch (inst->getKind()) {
-    case ValueKind::Peek8:
-    case ValueKind::Peek16al:
-    case ValueKind::Peek16un:
+    if (inst->hasSideEffects())
       continue;
-    default:
-      break;
-    }
 
     destroyer.add(inst);
     changed = true;

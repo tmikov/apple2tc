@@ -245,6 +245,8 @@ public:
     return basicBlock_;
   }
 
+  bool hasSideEffects() const;
+
   unsigned getNumOperands() const {
     return getOperands().size();
   }
