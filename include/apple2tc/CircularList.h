@@ -167,6 +167,14 @@ public:
     return m_root.next == &m_root;
   }
 
+  /// Count and return the number of elements. This method is O(n).
+  [[nodiscard]] size_t countElements() const {
+    size_t size = 0;
+    for (const ListEntry *cur = m_root.next, *end = &m_root; cur != end; cur = cur->next)
+      ++size;
+    return size;
+  }
+
   T &front() {
     assert(!empty());
     return *fromListEntry(m_root.next);
