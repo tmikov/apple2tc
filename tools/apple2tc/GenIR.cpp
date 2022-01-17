@@ -14,7 +14,7 @@
 
 using namespace ir;
 
-GenIR::GenIR(Disas *disas, IRContext *ctx)
+GenIR::GenIR(const std::shared_ptr<Disas> &disas, IRContext *ctx)
     : dis_(disas),
       runData_(disas->getRunData()),
       baseStats_(runData_ ? runData_->baseStats.get() : nullptr),
@@ -24,7 +24,7 @@ GenIR::GenIR(Disas *disas, IRContext *ctx)
 GenIR::~GenIR() = default;
 
 Module *GenIR::run() {
-  Module *mod = ctx_->createModule();
+  Module *mod = ctx_->createModule(dis_);
   Function *func = mod->createFunction();
 
   builder_.setInsertionBlock(func->createBasicBlock());
@@ -71,7 +71,7 @@ void GenIR::genAsmBlock(const AsmBlock &asmBlock) {
   builder_.setAddress(asmBlock.addr());
   builder_.createAddCycles(builder_.getLiteralU32(lround(asmBlock.size() * 1.7 + 0.5)));
 
-  for (auto [addr, inst] : asmBlock.instructions(dis_)) {
+  for (auto [addr, inst] : asmBlock.instructions(dis_.get())) {
     builder_.setAddress(addr);
     genInst(addr, inst, asmBlock);
   }
@@ -224,7 +224,7 @@ void GenIR::genInst(uint16_t pc, const CPUInst &inst, const AsmBlock &asmBlock) 
     if (!brkBB_) {
       // Lazily create the break BB the first time it is used.
       auto save = builder_.saveState();
-      brkBB_ = createBB(0x10100);
+      brkBB_ = createBB(0x10100, false);
       builder_.setInsertionBlock(brkBB_);
       builder_.createPush8(emitEncodeFlags());
       builder_.createJmp(resolveBranch(dis_->peek16(A2_IRQ_VEC)));
@@ -260,12 +260,12 @@ void GenIR::genInst(uint16_t pc, const CPUInst &inst, const AsmBlock &asmBlock) 
     if (inst.addrMode == CPUAddrMode::A) {
       tmp2 = emitLoadReg8(CPURegKind::A);
       emitStoreReg8(CPURegKind::STATUS_C, builder_.createAnd8(tmp2, builder_.getLiteralU8(0x01)));
-      emitStoreReg8(CPURegKind::A, builder_.createShr8(tmp2, builder_.getLiteralU8(1)));
+      emitStoreReg8(CPURegKind::A, emitUpdateNZ(builder_.createShr8(tmp2, builder_.getLiteralU8(1))));
     } else {
       tmp1 = genAddr(inst);
       tmp2 = emitAutoPeek8(tmp1);
       emitStoreReg8(CPURegKind::STATUS_C, builder_.createAnd8(tmp2, builder_.getLiteralU8(0x01)));
-      emitAutoPoke8(tmp1, builder_.createShr8(tmp2, builder_.getLiteralU8(1)));
+      emitAutoPoke8(tmp1, emitUpdateNZ(builder_.createShr8(tmp2, builder_.getLiteralU8(1))));
     }
     break;
   case CPUInstKind::ROL:
@@ -382,15 +382,15 @@ void GenIR::genInst(uint16_t pc, const CPUInst &inst, const AsmBlock &asmBlock) 
   }
 }
 
-BasicBlock *GenIR::createBB(uint32_t addr) {
+BasicBlock *GenIR::createBB(uint32_t addr, bool real) {
   auto *res = builder_.getCurBasicBlock()->getFunction()->createBasicBlock();
-  res->setAddress(addr);
+  res->setAddress(addr, real);
   return res;
 }
 
 BasicBlock *GenIR::createAbortBlock(uint16_t target, uint8_t reason) {
   auto save = builder_.saveState();
-  auto *abortBlock = createBB(target);
+  auto *abortBlock = createBB(target, false);
   builder_.setInsertionBlock(abortBlock);
   builder_.setAddress(target);
   builder_.createAbort(
@@ -402,7 +402,7 @@ BasicBlock *GenIR::basicBlockFor(const AsmBlock *asmBlock) {
   assert(asmBlock && "asmBlock must not be null");
   auto &entry = asmBlockMap_[asmBlock];
   if (!entry)
-    entry = createBB(asmBlock->addr());
+    entry = createBB(asmBlock->addr(), true);
   return entry;
 }
 
@@ -434,39 +434,27 @@ Value *GenIR::emitUpdateNZC(Value *value16) {
 }
 
 Value *GenIR::emitEncodeFlags() {
-  auto *nz = emitLoadReg8(CPURegKind::STATUS_NotZ);
-  auto *tmp = emitLoadReg8(CPURegKind::STATUS_C);
-  tmp = builder_.createOr8(
-      tmp, builder_.createShl8(emitLoadReg8(CPURegKind::STATUS_I), builder_.getLiteralU8(2)));
-  tmp = builder_.createOr8(
-      tmp, builder_.createShl8(emitLoadReg8(CPURegKind::STATUS_D), builder_.getLiteralU8(3)));
-  tmp = builder_.createOr8(tmp, builder_.getLiteralU8(0x10)); // B is always set.
-  tmp = builder_.createOr8(
-      tmp, builder_.createShl8(emitLoadReg8(CPURegKind::STATUS_V), builder_.getLiteralU8(6)));
-  tmp = builder_.createOr8(tmp, emitLoadReg8(CPURegKind::STATUS_N));
-  return builder_.createEncodeFlags(nz, tmp);
+  return builder_.createEncodeFlags_6op({
+      emitLoadReg8(CPURegKind::STATUS_C),
+      emitLoadReg8(CPURegKind::STATUS_NotZ),
+      emitLoadReg8(CPURegKind::STATUS_I),
+      emitLoadReg8(CPURegKind::STATUS_D),
+      emitLoadReg8(CPURegKind::STATUS_V),
+      emitLoadReg8(CPURegKind::STATUS_N),
+  });
 }
 
 void GenIR::emitDecodeFlags(Value *value8) {
   assert(value8->getType()->getKind() == TypeKind::U8);
-  auto *dec = builder_.createDecodeFlags(value8, builder_.getLiteralU8(0));
 
-  emitStoreReg8(CPURegKind::STATUS_C, builder_.createAnd8(dec, builder_.getLiteralU8(0x01)));
-  emitStoreReg8(CPURegKind::STATUS_NotZ, builder_.createAnd8(dec, builder_.getLiteralU8(0x02)));
+  emitStoreReg8(CPURegKind::STATUS_C, builder_.createDecodeFlag(value8, builder_.getLiteralU8(0)));
   emitStoreReg8(
-      CPURegKind::STATUS_I,
-      builder_.createAnd8(
-          builder_.createShr8(dec, builder_.getLiteralU8(2)), builder_.getLiteralU8(0x1)));
-  emitStoreReg8(
-      CPURegKind::STATUS_D,
-      builder_.createAnd8(
-          builder_.createShr8(dec, builder_.getLiteralU8(3)), builder_.getLiteralU8(0x1)));
+      CPURegKind::STATUS_NotZ, builder_.createDecodeFlag(value8, builder_.getLiteralU8(1)));
+  emitStoreReg8(CPURegKind::STATUS_I, builder_.createDecodeFlag(value8, builder_.getLiteralU8(2)));
+  emitStoreReg8(CPURegKind::STATUS_D, builder_.createDecodeFlag(value8, builder_.getLiteralU8(3)));
   emitStoreReg8(CPURegKind::STATUS_B, builder_.getLiteralU8(0));
-  emitStoreReg8(
-      CPURegKind::STATUS_V,
-      builder_.createAnd8(
-          builder_.createShr8(dec, builder_.getLiteralU8(6)), builder_.getLiteralU8(0x1)));
-  emitStoreReg8(CPURegKind::STATUS_N, builder_.createAnd8(dec, builder_.getLiteralU8(0x80)));
+  emitStoreReg8(CPURegKind::STATUS_V, builder_.createDecodeFlag(value8, builder_.getLiteralU8(6)));
+  emitStoreReg8(CPURegKind::STATUS_N, builder_.createDecodeFlag(value8, builder_.getLiteralU8(7)));
 }
 
 void GenIR::emitADC(const CPUInst &inst) {
@@ -477,9 +465,9 @@ void GenIR::emitADC(const CPUInst &inst) {
   BasicBlock *nextBB = nullptr;
 
   if (!simpleADC) {
-    normalBB = createBB(pc_);
-    decimalBB = createBB(pc_);
-    nextBB = createBB(pc_ + inst.size);
+    normalBB = createBB(pc_, false);
+    decimalBB = createBB(pc_, false);
+    nextBB = createBB(pc_ + inst.size, false);
 
     builder_.createJTrue(emitLoadReg8(CPURegKind::STATUS_D), decimalBB, normalBB);
     builder_.setInsertionBlock(normalBB);
@@ -491,7 +479,7 @@ void GenIR::emitADC(const CPUInst &inst) {
     auto *op3 = builder_.createZExt8t16(emitLoadReg8(CPURegKind::STATUS_C));
     auto *add2 = builder_.createAdd16(add1, op3);
     emitStoreReg8(CPURegKind::STATUS_C, builder_.createHigh8(add2));
-    emitStoreReg8(CPURegKind::STATUS_V, builder_.createOvf8(op1, op2, add2));
+    emitStoreReg8(CPURegKind::STATUS_V, builder_.createOvf8(add2, op1, op2));
     auto *res = builder_.createTrunc16t8(add2);
     emitUpdateNZ(res);
     emitStoreReg8(CPURegKind::A, res);
@@ -508,10 +496,11 @@ void GenIR::emitADC(const CPUInst &inst) {
     auto *res16 = builder_.createAdcDec16(op1, op2, op3);
     emitStoreReg8(CPURegKind::A, builder_.createTrunc16t8(res16));
     auto *flags = builder_.createHigh8(res16);
-    emitStoreReg8(CPURegKind::STATUS_C, builder_.createAnd8(flags, builder_.getLiteralU8(0x01)));
-    emitStoreReg8(CPURegKind::STATUS_NotZ, builder_.createAnd8(flags, builder_.getLiteralU8(0x02)));
-    emitStoreReg8(CPURegKind::STATUS_V, builder_.createAnd8(flags, builder_.getLiteralU8(0x40)));
-    emitStoreReg8(CPURegKind::STATUS_N, builder_.createAnd8(flags, builder_.getLiteralU8(0x80)));
+    emitStoreReg8(CPURegKind::STATUS_C, builder_.createDecodeFlag(flags, builder_.getLiteralU8(1)));
+    emitStoreReg8(
+        CPURegKind::STATUS_NotZ, builder_.createDecodeFlag(flags, builder_.getLiteralU8(2)));
+    emitStoreReg8(CPURegKind::STATUS_V, builder_.createDecodeFlag(flags, builder_.getLiteralU8(6)));
+    emitStoreReg8(CPURegKind::STATUS_N, builder_.createDecodeFlag(flags, builder_.getLiteralU8(7)));
   }
   builder_.createJmp(nextBB);
 
@@ -526,9 +515,9 @@ void GenIR::emitSBC(const CPUInst &inst) {
   BasicBlock *nextBB = nullptr;
 
   if (!simpleSBC) {
-    normalBB = createBB(pc_);
-    decimalBB = createBB(pc_);
-    nextBB = createBB(pc_ + inst.size);
+    normalBB = createBB(pc_, false);
+    decimalBB = createBB(pc_, false);
+    nextBB = createBB(pc_ + inst.size, false);
 
     builder_.createJTrue(emitLoadReg8(CPURegKind::STATUS_D), decimalBB, normalBB);
     builder_.setInsertionBlock(normalBB);
@@ -547,7 +536,7 @@ void GenIR::emitSBC(const CPUInst &inst) {
     emitStoreReg8(CPURegKind::STATUS_C, builder_.createSub8(builder_.getLiteralU8(1), borrow));
     // Note that a subsequent SBC a2, b2 will evaluate like this:
     //    a2 - b2 - (1 - c) <=> a2 - b2 - (1 - (1 - borrow)) <=> a2 - b2 - borrow.
-    emitStoreReg8(CPURegKind::STATUS_V, builder_.createOvf8(op1, op2, sub2));
+    emitStoreReg8(CPURegKind::STATUS_V, builder_.createOvf8(sub2, op1, builder_.createNot16(op2)));
     auto *res = builder_.createTrunc16t8(sub2);
     emitUpdateNZ(res);
     emitStoreReg8(CPURegKind::A, res);
@@ -604,7 +593,7 @@ void GenIR::emitJCond(bool jTrue, const CPUInst &inst, Value *cond, const AsmBlo
   }
 
   // A self modified conditional branch target.
-  BasicBlock *indBranchBlock = createBB(pc_);
+  BasicBlock *indBranchBlock = createBB(pc_, false);
 
   // Jmp over the indirect branch to the fall block if the condition is false.
   if (jTrue)
@@ -953,8 +942,8 @@ std::shared_ptr<ir::IRContext> newIRContext() {
   return std::make_shared<IRContext>();
 }
 
-Module *genIR(Disas &disas, ir::IRContext &ctx) {
-  GenIR genIR(&disas, &ctx);
+Module *genIR(const std::shared_ptr<Disas> &disas, ir::IRContext &ctx) {
+  GenIR genIR(disas, &ctx);
   return genIR.run();
 }
 

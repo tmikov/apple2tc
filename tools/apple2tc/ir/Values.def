@@ -21,17 +21,26 @@
 #define IR_RANGE(name, first, last)
 #endif
 
+#ifndef IR_INST
+#define IR_INST(name, type) IR_VALUE(name, type)
+#endif
 #ifndef IR_INST0
-#define IR_INST0(name, type) IR_VALUE(name, type)
+#define IR_INST0(name, type) IR_INST(name, type)
 #endif
 #ifndef IR_INST1
-#define IR_INST1(name, type, op1type) IR_VALUE(name, type)
+#define IR_INST1(name, type, op1type) IR_INST(name, type)
 #endif
 #ifndef IR_INST2
-#define IR_INST2(name, type, op1type, op2type) IR_VALUE(name, type)
+#define IR_INST2(name, type, op1type, op2type) IR_INST(name, type)
 #endif
 #ifndef IR_INST3
-#define IR_INST3(name, type, op1type, op2type, op3type) IR_VALUE(name, type)
+#define IR_INST3(name, type, op1type, op2type, op3type) IR_INST(name, type)
+#endif
+#ifndef IR_INST3
+#define IR_INST3(name, type, op1type, op2type, op3type) IR_INST(name, type)
+#endif
+#ifndef IR_INST_N
+#define IR_INST_N(name, type, opcount, optype) IR_INST(name, type)
 #endif
 
 IR_TYPE(Void)
@@ -113,17 +122,14 @@ IR_INST2(Add8, U8, U8, U8)
 IR_INST2(Add16, U16, U16, U16)
 IR_INST2(Sub8, U8, U8, U8)
 IR_INST2(Sub16, U16, U16, U16)
-/// Ovf8(a, b, c)
+/// Ovf8(res, a, b)
 /// Return 0x80 if signed overflow, otherwise 0.
-/// (~(a ^ b) & (a ^ c)) & 0x80.
+/// (~(a ^ b) & (a ^ res)) & 0x80.
 IR_INST3(Ovf8, U8, U16, U16, U16)
 /// AdcDec(a, b, STATUS_C)
 /// Perform a decimal addition and return a 16-bit result, where the low 8 bits
-/// are the addition results, and the high 8 bits are the flags:
-/// 0: STATUS_C
-/// 1: STATUS_NotZ
-/// 6: STATUS_V
-/// 7: STATUS_N
+/// are the addition results, and the high 8 bits are the flags C, NotZ, V, N,
+/// as if encoded by EncodeFlags.
 IR_INST3(AdcDec16, U16, U8, U8, U8)
 IR_INST3(SbcDec16, U16, U8, U8, U8)
 
@@ -136,32 +142,27 @@ IR_INST2(Cmp8ge, U8, U8, U8)
 /// Unsigned above or equal.
 IR_INST2(Cmp8ae, U8, U8, U8)
 
+IR_INST1(Not16, U16, U16)
+
 IR_INST1(AddCycles, Void, U32)
 IR_INST0(Cycles, U32)
 
 IR_INST1(Push8, Void, U8)
 IR_INST0(Pop8, U8)
-/// Encode the flags into an opaque byte representation.
-/// Operand 1 is STATUS_NotZ.
-/// Operand 2 is:
-/// 0: STATUS_C
-/// 2: STATUS_I
-/// 3: STATUS_D
-/// 4: STATUS_B
-/// 6: STATUS_V
-/// 7: STATUS_N
-IR_INST2(EncodeFlags, U8, U8, U8)
-/// Decode the flags from an opaque format on the stack into:
-/// Operand 1:
-/// 0: STATUS_C
-/// 1: STATUS_NotZ
-/// 2: STATUS_I
-/// 3: STATUS_D
-/// 4: STATUS_B
-/// 6: STATUS_V
-/// 7: STATUS_N
-/// Operand 2: if set, abort if STATUS_D is set.
-IR_INST2(DecodeFlags, U8, U8, U8)
+/// Encode the flags into an opaque byte representation. B is always set.
+/// (EncodeFlags C NotZ I D V N)
+IR_INST_N(EncodeFlags, U8, 6, U8)
+/// (DecodeFlag opaque flagIndex)
+/// Decode a flag from an opaque value previously encoded by EncodeFlags.
+/// Flag indices:
+/// C = 0
+/// NotZ = 1
+/// I = 2
+/// D = 3
+/// B = 4 is always cleared.
+/// V = 6
+/// N = 7
+IR_INST2(DecodeFlag, U8, U8, U8)
 
 /// Convert a CPU address to an "indirect basic block".
 IR_INST1(CPUAddr2BB, IndBasicBlock, U16)
@@ -183,7 +184,9 @@ IR_RANGE(Instruction, LoadR8, Abort)
 #undef IR_CPUREG
 #undef IR_VALUE
 #undef IR_RANGE
+#undef IR_INST
 #undef IR_INST0
 #undef IR_INST1
 #undef IR_INST2
 #undef IR_INST3
+#undef IR_INST_N

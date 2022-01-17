@@ -47,8 +47,8 @@ IRContext::~IRContext() {
   moduleList_.destroyAll();
 }
 
-Module *IRContext::createModule() {
-  auto *res = new Module(this);
+Module *IRContext::createModule(const std::shared_ptr<Disas> &disas) {
+  auto *res = new Module(this, disas);
   moduleList_.push_back(res);
   return res;
 }
@@ -211,6 +211,17 @@ void IRBuilder::insert(Instruction *inst) {
     auto *res = new Inst3(ValueKind::name, ctx_->getType(TypeKind::type), block_, op1, op2, op3); \
     insert(res);                                                                                  \
     return res;                                                                                   \
+  }
+#define IR_INST_N(name, type, opcount, optype)                                                \
+  InstN<opcount> *IRBuilder::create##name##_##opcount##op(ArrayRef<Value *> operands) {       \
+    assert(operands.size() == opcount);                                                       \
+    assert(std::all_of(operands.begin(), operands.end(), [](auto *p) {                        \
+      return p->getType()->getKind() == TypeKind::optype;                                     \
+    }));                                                                                      \
+    auto *res =                                                                               \
+        new InstN<opcount>(ValueKind::name, ctx_->getType(TypeKind::type), block_, operands); \
+    insert(res);                                                                              \
+    return res;                                                                               \
   }
 #include "Values.def"
 

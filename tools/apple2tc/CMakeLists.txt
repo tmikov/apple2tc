@@ -5,12 +5,13 @@
 
 include_directories(${APPLE2TC_ROOT_DIR}/external/json/include)
 
-link_libraries(d6502)
+link_libraries(d6502 support)
 add_executable(apple2tc
   apple2tc.cpp
   Disas.cpp RuntimeData.cpp Disas.h
   GenIR.cpp GenIR.h PubIR.h
   SSA.cpp dce.cpp simplify.cpp
+  IRC1.cpp IRC1.h
   PrintSimpleC.cpp
   ir/IR.cpp ir/ValueList.h ir/IR.h
   ir/IRDump.cpp ir/IRDump.h

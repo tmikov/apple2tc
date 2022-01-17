@@ -9,11 +9,14 @@
 
 #include "ValueList.h"
 
+#include "apple2tc/ArrayRef.h"
 #include "apple2tc/IteratorRange.h"
 
 #include <optional>
 #include <unordered_map>
 #include <vector>
+
+class Disas;
 
 namespace ir {
 
@@ -94,7 +97,7 @@ public:
   IRContext();
   ~IRContext();
 
-  Module *createModule();
+  Module *createModule(const std::shared_ptr<Disas> &disas);
 
   Type *getType(TypeKind kind) {
     assert(kind < TypeKind::_last);
@@ -157,6 +160,10 @@ public:
 
   bool hasUsers() const {
     return !userList_.empty();
+  }
+  /// Count and return the number of users. This method is O(number-of-users)!
+  size_t countUsers() const {
+    return userList_.countElements();
   }
 
   auto users() {
@@ -350,6 +357,15 @@ class Inst3 : public InstructionBase<3> {
     pushOperand(v3);
   }
 };
+template <unsigned CAP>
+class InstN : public InstructionBase<CAP> {
+  friend class IRBuilder;
+  InstN(ValueKind kind, Type *type, BasicBlock *block, ArrayRef<Value *> operands)
+      : InstructionBase<CAP>(kind, type, block) {
+    for (auto *op : operands)
+      InstructionBase<CAP>::pushOperand(op);
+  }
+};
 
 class BasicBlock : public Value {
   friend class Function;
@@ -396,8 +412,15 @@ public:
   std::optional<uint32_t> const &getAddress() const {
     return address_;
   }
-  void setAddress(uint32_t address) {
+  /// Associate a CPU address with this block.
+  /// \param address the address
+  /// \param real whether the address is "real" or synthesized for sorting purposes.
+  void setAddress(uint32_t address, bool real) {
     address_ = address;
+    realAddress_ = real;
+  }
+  bool isRealAddress() const {
+    return realAddress_;
   }
 
 private:
@@ -409,6 +432,8 @@ private:
   Function *function_;
   CircularList<Instruction> instList_{};
   std::optional<uint32_t> address_{};
+  /// Whether the address is "real" or it was synthesized just for informational purposes.
+  bool realAddress_ = false;
 };
 
 /// Iterator over the terminator instructions that are predecessors of this basic block.
@@ -531,9 +556,35 @@ private:
   CircularList<BasicBlock> bbList_{};
 };
 
+/// Sort a sequence of blocks using their addresses, when available. Block 0
+/// is assumed to be the entry point and is not sorted.
+template <class R>
+std::vector<BasicBlock *> sortBasicBlocksByAddress(R range) {
+  std::vector<BasicBlock *> sortedBlocks{};
+
+  // Sort the blocks by starting address using a stable sort.
+  for (auto &bb : range)
+    sortedBlocks.push_back(&bb);
+
+  // Note that we are not sorting the entry block.
+  if (sortedBlocks.size() > 2) {
+    std::stable_sort(
+        sortedBlocks.begin() + 1, sortedBlocks.end(), [](BasicBlock *a, BasicBlock *b) -> bool {
+          // No address is less than address.
+          if (!a->getAddress())
+            return b->getAddress().has_value();
+          if (!b->getAddress())
+            return false;
+          return a->getAddress() < b->getAddress();
+        });
+  }
+  return sortedBlocks;
+}
+
 class Module : public Value {
   friend class IRContext;
-  explicit Module(IRContext *ctx) : Value(ValueKind::Module, ctx->getVoidType()), context_(ctx) {}
+  explicit Module(IRContext *ctx, const std::shared_ptr<Disas> &disas)
+      : Value(ValueKind::Module, ctx->getVoidType()), context_(ctx), disas_(disas) {}
 
 public:
   ~Module();
@@ -542,6 +593,10 @@ public:
 
   IRContext *getContext() const {
     return context_;
+  }
+
+  Disas *getDisas() const {
+    return disas_.get();
   }
 
   Function *createFunction() {
@@ -556,6 +611,7 @@ public:
 
 private:
   IRContext *context_ = nullptr;
+  std::shared_ptr<Disas> disas_;
   CircularList<Function> functionList_{};
 };
 
@@ -588,7 +644,7 @@ public:
   void setAddress(uint32_t addr) {
     address_ = addr;
   }
-  void setAddress(const std::optional<uint32_t> & addr) {
+  void setAddress(const std::optional<uint32_t> &addr) {
     address_ = addr;
   }
   void clearAddress() {
@@ -637,6 +693,8 @@ public:
 #define IR_INST2(name, type, op1type, op2type) Inst2 *create##name(Value *op1, Value *op2);
 #define IR_INST3(name, type, op1type, op2type, op3type) \
   Inst3 *create##name(Value *op1, Value *op2, Value *op3);
+#define IR_INST_N(name, type, opcount, optype) \
+  InstN<opcount> *create##name##_##opcount##op(ArrayRef<Value *> operands);
 #include "Values.def"
 
 private:

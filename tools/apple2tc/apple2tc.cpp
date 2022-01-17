@@ -57,6 +57,7 @@ static void printHelp() {
   fprintf(stderr, "  --asm               Generate asm listing (default)\n");
   fprintf(stderr, "  --simple-c          Generate simple C code\n");
   fprintf(stderr, "  --ir                Generate IR\n");
+  fprintf(stderr, "  --irc1              Generate C1 representation of the IR\n");
   fprintf(stderr, "  -O<number>          Optimization level (default 0)\n");
   fprintf(stderr, "  --run-data=d.json   Load runtime data from specified file\n");
   fprintf(stderr, "  --no-gen            Ignore runtime generations\n");
@@ -67,6 +68,7 @@ int main(int argc, char **argv) {
     GenAsm,
     GenSimpleC,
     GenIR,
+    GenIRC1,
   };
   bool noGenerations = false;
   Action action = Action::GenAsm;
@@ -91,6 +93,10 @@ int main(int argc, char **argv) {
     }
     if (strcmp(argv[i], "--ir") == 0) {
       action = Action::GenIR;
+      continue;
+    }
+    if (strcmp(argv[i], "--irc1") == 0) {
+      action = Action::GenIRC1;
       continue;
     }
     if (strncmp(argv[i], "-O", 2) == 0 && strlen(argv[i]) == 3 && isdigit(argv[i][2])) {
@@ -130,7 +136,7 @@ int main(int argc, char **argv) {
   auto [binary, start] = loadInputBinary(inputPath.c_str(), rom);
 
   try {
-    auto dis = std::make_unique<Disas>(runDataPath);
+    auto dis = std::make_shared<Disas>(runDataPath);
     if (rom) {
       dis->loadROM(binary.data(), binary.size());
       dis->setStart(dis->peek16(0xFFFC));
@@ -146,9 +152,10 @@ int main(int argc, char **argv) {
     case Action::GenSimpleC:
       dis->printSimpleC(stdout);
       break;
-    case Action::GenIR: {
+    case Action::GenIR:
+    case Action::GenIRC1: {
       auto irCtx = newIRContext();
-      auto *mod = genIR(*dis, *irCtx);
+      auto *mod = genIR(dis, *irCtx);
       if (optLevel > 0)
         mem2reg(mod);
       if (optLevel > 1)
@@ -157,7 +164,10 @@ int main(int argc, char **argv) {
         if (simplify(mod))
           dce(mod);
       }
-      dumpModule(mod);
+      if (action == Action::GenIR)
+        dumpModule(mod);
+      else
+        printIRC1(mod, stdout);
       break;
     }
     }

@@ -54,23 +54,8 @@ void IRDumper::dump(Module *mod) {
 }
 
 void IRDumper::dump(Function *func) {
-  std::vector<BasicBlock *> sortedBlocks{};
-
-  // Sort the blocks by starting address using a stable sort.
-  for (auto &bb : func->basicBlocks())
-    sortedBlocks.push_back(&bb);
-
-  // Note that we are not sorting the entry block.
-  std::stable_sort(
-      sortedBlocks.begin() + 1, sortedBlocks.end(), [](BasicBlock *a, BasicBlock *b) -> bool {
-        // No address is less than address.
-        if (!a->getAddress())
-          return b->getAddress().has_value();
-        if (!b->getAddress())
-          return false;
-        return a->getAddress() < b->getAddress();
-      });
-
+  auto sortedBlocks = sortBasicBlocksByAddress(func->basicBlocks());
+  
   // Name all basic blocks and instructions consistently first.
   for (auto *bb : sortedBlocks) {
     name(bb);

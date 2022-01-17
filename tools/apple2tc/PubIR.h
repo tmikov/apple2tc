@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <cstdio>
 #include <memory>
 
 namespace ir {
@@ -17,9 +18,11 @@ class Module;
 class Disas;
 
 std::shared_ptr<ir::IRContext> newIRContext();
-ir::Module *genIR(Disas &disas, ir::IRContext &ctx);
+ir::Module *genIR(const std::shared_ptr<Disas> &disas, ir::IRContext &ctx);
 void dumpModule(ir::Module *mod);
 
 bool mem2reg(ir::Module *mod);
 bool dce(ir::Module *mod);
 bool simplify(ir::Module *mod);
+
+void printIRC1(ir::Module *mod, FILE *os);

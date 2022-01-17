@@ -351,6 +351,11 @@ public:
     return {{peek(addr), peek(addr + 1), peek(addr + 2)}};
   }
 
+  /// Return a view of the memory ranges.
+  auto memRanges() {
+    return makeIteratorRange(memRanges_.cbegin(), memRanges_.cend());
+  }
+
 private:
   void addMemRange(MemRange range);
   /// Return an iterator to the memory range containing the specified address.

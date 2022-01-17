@@ -163,9 +163,17 @@ static Value *simplifyInst(IRBuilder &builder, Instruction *inst) {
     break;
   case ValueKind::Cmp8ae:
     break;
+  case ValueKind::Not16:
+    // (Not16 literal)
+    if (auto u16 = dyn_cast<LiteralU16>(inst->getOperand(0)))
+      return builder.getLiteralU16(~u16->getValue());
+    // (Not16 (Not16 x)) => x
+    if (inst->getOperand(0)->getKind() == ValueKind::Not16)
+      return cast<Instruction>(inst->getOperand(0))->getOperand(0);
+    break;
   case ValueKind::EncodeFlags:
     break;
-  case ValueKind::DecodeFlags:
+  case ValueKind::DecodeFlag:
     break;
   case ValueKind::JTrue:
     // jtrue const, label1, label2 => jmp

@@ -13,6 +13,10 @@ add_executable(rom
   ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   rom.c
   )
+#add_executable(romc1
+#  ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
+#  romc1.c
+#  )
 
 if (EMSCRIPTEN)
   target_link_options(rom PRIVATE --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/shell.html)
