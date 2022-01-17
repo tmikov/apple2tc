@@ -337,73 +337,73 @@ uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
   switch (addr & 0xCFF0) {
   case A2_KBD:
     if (io->debug & A2_DEBUG_IO1)
-      fprintf(stdout, "[%u] KBD\n", cycles);
+      fprintf(stderr, "[%u] KBD\n", cycles);
     return kbd(io);
   case A2_KBDSTRB:
     if (io->debug & A2_DEBUG_IO2)
-      fprintf(stdout, "[%u] KBDSTRB\n", cycles);
+      fprintf(stderr, "[%u] KBDSTRB\n", cycles);
     kbdstrb(io);
     break;
   case A2_TAPEOUT:
     if (io->debug & A2_DEBUG_IO1)
-      fprintf(stdout, "[%u] TAPEOUT\n", cycles);
+      fprintf(stderr, "[%u] TAPEOUT\n", cycles);
     break;
   case A2_SPKR:
     if (io->debug & A2_DEBUG_IO1)
-      fprintf(stdout, "[%u] SPKR\n", cycles);
+      fprintf(stderr, "[%u] SPKR\n", cycles);
     if (io->spkr_cb)
       io->spkr_cb(io->spkr_cb_ctx, cycles);
     break;
   case A2_STROBE:
     if (io->debug & A2_DEBUG_IO1)
-      fprintf(stdout, "[%u] STROBE\n", cycles);
+      fprintf(stderr, "[%u] STROBE\n", cycles);
     break;
 
   case A2_TXTCLR:
     switch (addr) {
     case A2_TXTCLR:
       if (io->debug & A2_DEBUG_IO1)
-        fprintf(stdout, "[%u] TXTCLR\n", cycles);
+        fprintf(stderr, "[%u] TXTCLR\n", cycles);
       io->vid_control &= ~A2_VC_TEXT;
       break;
     case A2_TXTSET:
       if (io->debug & A2_DEBUG_IO1)
-        fprintf(stdout, "[%u] TXTSET\n", cycles);
+        fprintf(stderr, "[%u] TXTSET\n", cycles);
       io->vid_control |= A2_VC_TEXT;
       break;
     case A2_MIXCLR:
       if (io->debug & A2_DEBUG_IO1)
-        fprintf(stdout, "[%u] MIXCLR\n", cycles);
+        fprintf(stderr, "[%u] MIXCLR\n", cycles);
       io->vid_control &= ~A2_VC_MIXED;
       break;
     case A2_MIXSET:
       if (io->debug & A2_DEBUG_IO1)
-        fprintf(stdout, "[%u] MIXSET\n", cycles);
+        fprintf(stderr, "[%u] MIXSET\n", cycles);
       io->vid_control |= A2_VC_MIXED;
       break;
     case A2_LOWSCR:
       if (io->debug & A2_DEBUG_IO1)
-        fprintf(stdout, "[%u] LOWSCR\n", cycles);
+        fprintf(stderr, "[%u] LOWSCR\n", cycles);
       io->vid_control &= ~A2_VC_PAGE2;
       break;
     case A2_HISCR:
       if (io->debug & A2_DEBUG_IO1)
-        fprintf(stdout, "[%u] HISCR\n", cycles);
+        fprintf(stderr, "[%u] HISCR\n", cycles);
       io->vid_control |= A2_VC_PAGE2;
       break;
     case A2_LORES:
       if (io->debug & A2_DEBUG_IO1)
-        fprintf(stdout, "[%u] LORES\n", cycles);
+        fprintf(stderr, "[%u] LORES\n", cycles);
       io->vid_control &= ~A2_VC_HIRES;
       break;
     case A2_HIRES:
       if (io->debug & A2_DEBUG_IO1)
-        fprintf(stdout, "[%u] HIRES\n", cycles);
+        fprintf(stderr, "[%u] HIRES\n", cycles);
       io->vid_control |= A2_VC_HIRES;
       break;
     default:
       if (io->debug & A2_DEBUG_IO1)
-        fprintf(stdout, "[%u] ANNUNCIATORS $%04X\n", cycles, addr);
+        fprintf(stderr, "[%u] ANNUNCIATORS $%04X\n", cycles, addr);
       break;
     }
     break;
