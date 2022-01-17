@@ -1,3 +1,5 @@
+// Loaded segment [$0090..$0092]
+// Loaded segment [$00B1..$00C8]
 // 355 new runtime blocks added
 // code labels: 1718
 // data labels: 243
@@ -115,8 +117,6 @@ M_8B          EQU    $008B ; xref $E34F $E357 $E367 $E39F $E48E $E54C $E562
 M_8C          EQU    $008C ; xref $DAA8 $DAB7 $DAC0 $DAC5 $DACA $E3D9 $E5BD
 M_8D          EQU    $008D ; xref $DAAA $DAB9 $E3DB $E5BF
 M_8F          EQU    $008F ; xref $E4AB $E4C8 $E54E $E552 $F166
-M_91          EQU    $0091 ; xref $DF42 $E550 $E566 $E56C $E585
-M_92          EQU    $0092 ; xref $DF47 $E7C8 $E7E4 $E809 $E855
 M_93          EQU    $0093 ; xref $D3F2
 M_94          EQU    $0094 ; xref $D3B7 $D3BB $D3C5 $D3CC $D4C8 $E0B2 $E0B9 $E0F9...
 M_95          EQU    $0095 ; xref $D3BF $D3D0 $D4D1 $E0B4 $E0BB $E0FB $E20B $E20F...
@@ -146,8 +146,6 @@ M_AD          EQU    $00AD ; xref $D590 $D5CB $E1DE $E201 $E225 $E251 $E272 $E28
 M_AE          EQU    $00AE ; xref $E1CA $E203 $E223 $E230 $E253 $E270 $E289 $E2CA...
 M_AF          EQU    $00AF ; xref $D45C $D506 $D65B
 M_B0          EQU    $00B0 ; xref $D460 $D50A $D663 $F155
-M_B8          EQU    $00B8 ; xref $00B1 $D444 $D559 $D59F $D5F9 $D617 $D69C $D783...
-M_B9          EQU    $00B9 ; xref $00B5 $D446 $D613 $D6A2 $D786 $D7DA $D803 $D875...
 M_D0          EQU    $00D0 ; xref $F555 $F56F $F5A8 $F613 $F633 $F66F $F68F
 M_D1          EQU    $00D1 ; xref $F49D $F4B4 $F4C8 $F550 $F574 $F5AE $F626 $F64B...
 M_D2          EQU    $00D2 ; xref $F568 $F583 $F61C $F63F $F678 $F69B
