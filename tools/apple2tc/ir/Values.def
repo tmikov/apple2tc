@@ -172,12 +172,15 @@ IR_INST2(DecodeFlag, U8, U8, U8)
 IR_INST1(CPUAddr2BB, IndBasicBlock, U16)
 
 IR_INST1(Jmp, Void, BasicBlock)
-IR_INST1(JmpInd, Void, IndBasicBlock)
 IR_INST3(JTrue, Void, U8, BasicBlock, BasicBlock)
 IR_INST3(JFalse, Void, U8, BasicBlock, BasicBlock)
 IR_INST2(JSR, Void, BasicBlock, BasicBlock)
+
+IR_INST1(JmpInd, Void, IndBasicBlock)
 IR_INST2(JSRInd, Void, IndBasicBlock, BasicBlock)
 IR_INST0(RTS, Void)
+IR_RANGE(IndirectBranch, JmpInd, RTS)
+
 /// Abort(pc, target_pc, reason)
 IR_INST3(Abort, Void, U16, U16, U8)
 IR_RANGE(Terminator, Jmp, Abort)
