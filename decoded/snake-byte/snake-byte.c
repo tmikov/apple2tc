@@ -30,7 +30,7 @@ void run_emulated(unsigned run_cycles) {
     switch (s_pc) {
     case 0x0090: // [$0090..$0090]    1 bytes
       CYCLES(0x0090, 2);
-      // ERROR: opcode self modification.
+      // WARNING: opcode self modification.
       /* $0090 ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x0090);
                       error_handler(s_pc);
       break;
@@ -57,15 +57,15 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0x00be, 7);
       /* $00BE CMP */ update_nz_inv_c(s_a - 0x20);
       // WARNING: operand self modification.
-      /* $00C0 BEQ */ s_pc = s_status & STATUS_Z ? 0x00b1 : 0x00c2;
+      /* $00C0 BEQ */ s_pc = s_status & STATUS_Z ? (uint16_t)(0x00c2 + (int8_t)ram_peek(0x00c1)) : 0x00c2;
       branchTarget = true;
       break;
     case 0x00c2: // [$00C2..$00C7]    6 bytes
       CYCLES(0x00c2, 11);
       /* $00C2 SEC */ s_status |= STATUS_C;
-      /* $00C3 SBC */ tmp = 0x30, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $00C3 SBC */ tmp = 0x30, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $00C5 SEC */ s_status |= STATUS_C;
-      /* $00C6 SBC */ tmp = 0xd0, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $00C6 SBC */ tmp = 0xd0, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
     case 0x00c8: // [$00C8..$00C8]    1 bytes
       CYCLES(0x00c8, 2);
       /* $00C8 RTS */ s_pc = pop16() + 1;
@@ -156,7 +156,7 @@ void run_emulated(unsigned run_cycles) {
       /* $6119 INC */ tmp16 = 0x07, poke_zpg(tmp16, update_nz(peek_zpg(tmp16) + 1));
       /* $611B LDA */ s_a = update_nz(peek_zpg(0x05));
       /* $611D CLC */ s_status &= ~STATUS_C;
-      /* $611E ADC */ tmp = 0x04, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $611E ADC */ tmp = 0x04, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $6120 STA */ poke_zpg(0x05, s_a);
       /* $6122 CPX */ update_nz_inv_c(s_x - 0x04);
       /* $6124 BNE */ s_pc = !(s_status & STATUS_Z) ? 0x60f7 : 0x6126;
@@ -351,7 +351,7 @@ void run_emulated(unsigned run_cycles) {
       /* $629C LDA */ s_a = update_nz(peek(0x624e));
       /* $629F DEC */ tmp16 = 0x624e, poke(tmp16, update_nz(peek(tmp16) - 1));
       /* $62A2 CLC */ s_status &= ~STATUS_C;
-      /* $62A3 ADC */ tmp = 0x10, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $62A3 ADC */ tmp = 0x10, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
     case 0x62a5: // [$62A5..$62B7]   19 bytes
       CYCLES(0x62a5, 33);
       /* $62A5 STA */ poke_zpg(0x00, s_a);
@@ -389,11 +389,11 @@ void run_emulated(unsigned run_cycles) {
       /* $62D1 LDX */ s_x = update_nz(peek(0x624e));
       /* $62D4 LDA */ s_a = update_nz(peek(0x624f));
       /* $62D7 CLC */ s_status &= ~STATUS_C;
-      /* $62D8 ADC */ tmp = peek(0x6232 + s_x), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $62D8 ADC */ tmp = peek(0x6232 + s_x), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $62DB STA */ poke(0x624f, s_a);
       /* $62DE LDA */ s_a = update_nz(peek(0x6250));
       /* $62E1 CLC */ s_status &= ~STATUS_C;
-      /* $62E2 ADC */ tmp = peek(0x6237 + s_x), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $62E2 ADC */ tmp = peek(0x6237 + s_x), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $62E5 STA */ poke(0x6250, s_a);
       /* $62E8 LDY */ s_y = update_nz(peek(0x624f));
       /* $62EB JSR */ push16(0x62ed), s_pc = 0xf871;
@@ -448,7 +448,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0x6315, 16);
       /* $6315 LDA */ s_a = update_nz(peek(0x624e));
       /* $6318 CLC */ s_status &= ~STATUS_C;
-      /* $6319 ADC */ tmp = 0x08, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $6319 ADC */ tmp = 0x08, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $631B JMP */ s_pc = 0x62a5;
       branchTarget = true;
       break;
@@ -463,7 +463,7 @@ void run_emulated(unsigned run_cycles) {
       /* $6322 LDA */ s_a = update_nz(peek(0x624e));
       /* $6325 INC */ tmp16 = 0x624e, poke(tmp16, update_nz(peek(tmp16) + 1));
       /* $6328 CLC */ s_status &= ~STATUS_C;
-      /* $6329 ADC */ tmp = 0x04, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $6329 ADC */ tmp = 0x04, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $632B JMP */ s_pc = 0x62a5;
       branchTarget = true;
       break;
@@ -625,11 +625,11 @@ void run_emulated(unsigned run_cycles) {
       /* $63DB TAX */ s_x = update_nz(s_a);
       /* $63DC LDA */ s_a = update_nz(peek(0x6251));
       /* $63DF CLC */ s_status &= ~STATUS_C;
-      /* $63E0 ADC */ tmp = peek(0x6232 + s_x), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $63E0 ADC */ tmp = peek(0x6232 + s_x), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $63E3 STA */ poke(0x6251, s_a);
       /* $63E6 LDA */ s_a = update_nz(peek(0x6252));
       /* $63E9 CLC */ s_status &= ~STATUS_C;
-      /* $63EA ADC */ tmp = peek(0x6237 + s_x), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $63EA ADC */ tmp = peek(0x6237 + s_x), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $63ED STA */ poke(0x6252, s_a);
       /* $63F0 LDY */ s_y = update_nz(peek(0x6251));
       /* $63F3 JSR */ push16(0x63f5), s_pc = 0xf871;
@@ -638,7 +638,7 @@ void run_emulated(unsigned run_cycles) {
     case 0x63f6: // [$63F6..$640B]   22 bytes
       CYCLES(0x63f6, 38);
       /* $63F6 CLC */ s_status &= ~STATUS_C;
-      /* $63F7 ADC */ tmp = 0x0c, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $63F7 ADC */ tmp = 0x0c, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $63F9 STA */ poke_zpg(0x00, s_a);
       /* $63FB LDA */ s_a = update_nz(0x0c);
       /* $63FD STA */ poke_zpg(0x01, s_a);
@@ -878,11 +878,11 @@ void run_emulated(unsigned run_cycles) {
     case 0x64d3: // [$64D3..$64EA]   24 bytes
       CYCLES(0x64d3, 41);
       /* $64D3 CLC */ s_status &= ~STATUS_C;
-      /* $64D4 ADC */ tmp = peek(0x6636), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $64D4 ADC */ tmp = peek(0x6636), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $64D7 STA */ poke(0x6638, s_a);
       /* $64DA LDA */ s_a = update_nz(peek(0x6633));
       /* $64DD CLC */ s_status &= ~STATUS_C;
-      /* $64DE ADC */ tmp = peek(0x6635), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $64DE ADC */ tmp = peek(0x6635), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $64E1 STA */ poke(0x6637, s_a);
       /* $64E4 TAY */ s_y = update_nz(s_a);
       /* $64E5 LDA */ s_a = update_nz(peek(0x6638));
@@ -1393,11 +1393,11 @@ void run_emulated(unsigned run_cycles) {
       /* $6AB8 LDX */ s_x = update_nz(peek(0x6b38));
       /* $6ABB LDA */ s_a = update_nz(peek(0x6232 + s_x));
       /* $6ABE CLC */ s_status &= ~STATUS_C;
-      /* $6ABF ADC */ tmp = peek(0x624f), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $6ABF ADC */ tmp = peek(0x624f), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $6AC2 STA */ poke(0x6637, s_a);
       /* $6AC5 LDA */ s_a = update_nz(peek(0x6237 + s_x));
       /* $6AC8 CLC */ s_status &= ~STATUS_C;
-      /* $6AC9 ADC */ tmp = peek(0x6250), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $6AC9 ADC */ tmp = peek(0x6250), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $6ACC STA */ poke(0x6638, s_a);
       /* $6ACF LDY */ s_y = update_nz(peek(0x6637));
       /* $6AD2 JSR */ push16(0x6ad4), s_pc = 0xf871;
@@ -1467,7 +1467,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0x6b07, 21);
       /* $6B07 LDA */ s_a = update_nz(peek(0x6638));
       /* $6B0A CLC */ s_status &= ~STATUS_C;
-      /* $6B0B ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $6B0B ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $6B0D LDY */ s_y = update_nz(peek(0x6637));
       /* $6B10 JSR */ push16(0x6b12), s_pc = 0xf871;
       branchTarget = true;
@@ -1485,7 +1485,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0x6b1a, 21);
       /* $6B1A LDA */ s_a = update_nz(peek(0x6638));
       /* $6B1D SEC */ s_status |= STATUS_C;
-      /* $6B1E SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $6B1E SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $6B20 LDY */ s_y = update_nz(peek(0x6637));
       /* $6B23 JSR */ push16(0x6b25), s_pc = 0xf871;
       branchTarget = true;
@@ -1626,7 +1626,7 @@ void run_emulated(unsigned run_cycles) {
       /* $6BCC INC */ tmp16 = 0x07, poke_zpg(tmp16, update_nz(peek_zpg(tmp16) + 1));
       /* $6BCE LDA */ s_a = update_nz(peek_zpg(0x05));
       /* $6BD0 CLC */ s_status &= ~STATUS_C;
-      /* $6BD1 ADC */ tmp = 0x04, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $6BD1 ADC */ tmp = 0x04, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $6BD3 STA */ poke_zpg(0x05, s_a);
       /* $6BD5 CPX */ update_nz_inv_c(s_x - 0x04);
       /* $6BD7 BNE */ s_pc = !(s_status & STATUS_Z) ? 0x6ba6 : 0x6bd9;
@@ -2469,10 +2469,10 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0x71dc, 36);
       /* $71DC LDA */ s_a = update_nz(peek(0x71c8 + s_x));
       /* $71DF CLC */ s_status &= ~STATUS_C;
-      /* $71E0 ADC */ tmp = peek(0x71cb), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $71E0 ADC */ tmp = peek(0x71cb), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $71E3 STA */ poke(0x71cb, s_a);
       /* $71E6 LDA */ s_a = update_nz(peek(0x71cc));
-      /* $71E9 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $71E9 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $71EB STA */ poke(0x71cc, s_a);
       /* $71EE DEY */ s_y = update_nz(s_y - 1);
       /* $71EF BNE */ s_pc = !(s_status & STATUS_Z) ? 0x71dc : 0x71f1;
@@ -2515,7 +2515,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0x7207, 12);
       /* $7207 PLA */ s_a = update_nz(pop8());
       /* $7208 CLC */ s_status &= ~STATUS_C;
-      /* $7209 ADC */ tmp = 0xb0, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $7209 ADC */ tmp = 0xb0, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $720B JSR */ push16(0x720d), s_pc = 0xfded;
       branchTarget = true;
       break;
@@ -2547,7 +2547,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0x721e, 12);
       /* $721E PLA */ s_a = update_nz(pop8());
       /* $721F CLC */ s_status &= ~STATUS_C;
-      /* $7220 ADC */ tmp = 0xb0, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $7220 ADC */ tmp = 0xb0, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $7222 JSR */ push16(0x7224), s_pc = 0xfded;
       branchTarget = true;
       break;
@@ -2622,16 +2622,16 @@ void run_emulated(unsigned run_cycles) {
       /* $7267 SED */ s_status |= STATUS_D;
       /* $7268 LDA */ s_a = update_nz(peek(0x71cb));
       /* $726B CLC */ s_status &= ~STATUS_C;
-      /* $726C ADC */ tmp = peek(0x7252), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $726C ADC */ tmp = peek(0x7252), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $726F STA */ poke(0x7252, s_a);
       /* $7272 LDA */ s_a = update_nz(peek(0x71cc));
-      /* $7275 ADC */ tmp = peek(0x7253), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $7275 ADC */ tmp = peek(0x7253), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $7278 STA */ poke(0x7253, s_a);
       /* $727B LDA */ s_a = update_nz(peek(0x7254));
-      /* $727E ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $727E ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $7280 STA */ poke(0x7254, s_a);
       /* $7283 LDA */ s_a = update_nz(peek(0x7255));
-      /* $7286 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $7286 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $7288 STA */ poke(0x7255, s_a);
       /* $728B CLD */ s_status &= ~STATUS_D;
       /* $728C RTS */ s_pc = pop16() + 1;
@@ -2882,7 +2882,7 @@ void run_emulated(unsigned run_cycles) {
     case 0x7378: // [$7378..$737D]    6 bytes
       CYCLES(0x7378, 11);
       /* $7378 BIT */ tmp = peek(0xccad), s_status = (s_status & ~(0xC0 | STATUS_Z)) | (tmp & 0xC0) | (s_a & tmp ? 0 : STATUS_Z);
-      /* $737B ADC */ tmp = peek(peek16_zpg(0x20) + s_y), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $737B ADC */ tmp = peek(peek16_zpg(0x20) + s_y), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $737D ??? */ fprintf(stderr, "Warning: INVALID at $%04X\n", 0x737d);
                       error_handler(s_pc);
       break;
@@ -3127,7 +3127,7 @@ void run_emulated(unsigned run_cycles) {
     case 0x7470: // [$7470..$747E]   15 bytes
       CYCLES(0x7470, 26);
       /* $7470 SEC */ s_status |= STATUS_C;
-      /* $7471 SBC */ tmp = 0xb0, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $7471 SBC */ tmp = 0xb0, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $7473 STA */ poke(0x0301, s_a);
       /* $7476 LDA */ s_a = update_nz(0x00);
       /* $7478 STA */ poke(0x0302, s_a);
@@ -3167,7 +3167,7 @@ void run_emulated(unsigned run_cycles) {
       /* $7633 SED */ s_status |= STATUS_D;
       /* $7634 LDA */ s_a = update_nz(peek(0x725e));
       /* $7637 CLC */ s_status &= ~STATUS_C;
-      /* $7638 ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $7638 ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $763A STA */ poke(0x725e, s_a);
       /* $763D CLD */ s_status &= ~STATUS_D;
       /* $763E JSR */ push16(0x7640), s_pc = 0x64a9;
@@ -3229,10 +3229,10 @@ void run_emulated(unsigned run_cycles) {
       /* $766C SED */ s_status |= STATUS_D;
       /* $766D LDA */ s_a = update_nz(peek(0x725f));
       /* $7670 CLC */ s_status &= ~STATUS_C;
-      /* $7671 ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $7671 ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $7673 STA */ poke(0x725f, s_a);
       /* $7676 LDA */ s_a = update_nz(peek(0x7260));
-      /* $7679 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $7679 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $767B STA */ poke(0x7260, s_a);
       /* $767E CLD */ s_status &= ~STATUS_D;
       /* $767F RTS */ s_pc = pop16() + 1;
@@ -3359,7 +3359,7 @@ void run_emulated(unsigned run_cycles) {
     case 0x7730: // [$7730..$7735]    6 bytes
       CYCLES(0x7730, 11);
       /* $7730 SEC */ s_status |= STATUS_C;
-      /* $7731 SBC */ tmp = 0x02, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $7731 SBC */ tmp = 0x02, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $7733 STA */ poke(0x0300, s_a);
     case 0x7736: // [$7736..$7738]    3 bytes
       CYCLES(0x7736, 6);
@@ -3383,24 +3383,24 @@ void run_emulated(unsigned run_cycles) {
       /* $7743 SED */ s_status |= STATUS_D;
       /* $7744 LDA */ s_a = update_nz(peek(0x725f));
       /* $7747 SEC */ s_status |= STATUS_C;
-      /* $7748 SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $7748 SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $774A STA */ poke(0x725f, s_a);
       /* $774D LDA */ s_a = update_nz(peek(0x7260));
-      /* $7750 SBC */ tmp = 0x00, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $7750 SBC */ tmp = 0x00, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $7752 STA */ poke(0x7260, s_a);
       /* $7755 LDA */ s_a = update_nz(peek(0x725a));
       /* $7758 SEC */ s_status |= STATUS_C;
-      /* $7759 SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $7759 SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $775B STA */ poke(0x725a, s_a);
       /* $775E LDA */ s_a = update_nz(peek(0x725b));
-      /* $7761 SBC */ tmp = 0x00, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $7761 SBC */ tmp = 0x00, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $7763 STA */ poke(0x725b, s_a);
       /* $7766 LDA */ s_a = update_nz(peek(0x7261));
       /* $7769 CLC */ s_status &= ~STATUS_C;
-      /* $776A ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $776A ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $776C STA */ poke(0x7261, s_a);
       /* $776F LDA */ s_a = update_nz(peek(0x7262));
-      /* $7772 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $7772 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $7774 STA */ poke(0x7262, s_a);
       /* $7777 CLD */ s_status &= ~STATUS_D;
       /* $7778 LDA */ s_a = update_nz(peek(0x7262));
@@ -3423,7 +3423,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0x7787, 24);
       /* $7787 LDA */ s_a = update_nz(peek(0x6254));
       /* $778A CLC */ s_status &= ~STATUS_C;
-      /* $778B ADC */ tmp = 0x0a, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $778B ADC */ tmp = 0x0a, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $778D STA */ poke(0x6254, s_a);
       /* $7790 LDA */ s_a = update_nz(peek(0x725a));
       /* $7793 BNE */ s_pc = !(s_status & STATUS_Z) ? 0x77d0 : 0x7795;
@@ -3522,7 +3522,7 @@ void run_emulated(unsigned run_cycles) {
       /* $77EA SED */ s_status |= STATUS_D;
       /* $77EB CLC */ s_status &= ~STATUS_C;
       /* $77EC LDA */ s_a = update_nz(peek(0x7265));
-      /* $77EF ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $77EF ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $77F1 STA */ poke(0x7265, s_a);
       /* $77F4 CLD */ s_status &= ~STATUS_D;
       /* $77F5 INC */ tmp16 = 0x0303, poke(tmp16, update_nz(peek(tmp16) + 1));
@@ -3569,17 +3569,17 @@ void run_emulated(unsigned run_cycles) {
       /* $7817 SED */ s_status |= STATUS_D;
       /* $7818 LDA */ s_a = update_nz(peek(0x7263));
       /* $781B CLC */ s_status &= ~STATUS_C;
-      /* $781C ADC */ tmp = 0x03, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $781C ADC */ tmp = 0x03, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $781E STA */ poke(0x7263, s_a);
       /* $7821 LDA */ s_a = update_nz(peek(0x7264));
-      /* $7824 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $7824 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $7826 STA */ poke(0x7264, s_a);
       /* $7829 LDA */ s_a = update_nz(peek(0x725a));
       /* $782C CLC */ s_status &= ~STATUS_C;
-      /* $782D ADC */ tmp = 0x03, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $782D ADC */ tmp = 0x03, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $782F STA */ poke(0x725a, s_a);
       /* $7832 LDA */ s_a = update_nz(peek(0x725b));
-      /* $7835 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $7835 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $7837 STA */ poke(0x725b, s_a);
       /* $783A CLD */ s_status &= ~STATUS_D;
       /* $783B JSR */ push16(0x783d), s_pc = 0x7642;
@@ -3681,7 +3681,7 @@ void run_emulated(unsigned run_cycles) {
       /* $78A2 SED */ s_status |= STATUS_D;
       /* $78A3 LDA */ s_a = update_nz(peek(0x725e));
       /* $78A6 SEC */ s_status |= STATUS_C;
-      /* $78A7 SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $78A7 SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $78A9 STA */ poke(0x725e, s_a);
       /* $78AC CLD */ s_status &= ~STATUS_D;
       /* $78AD JMP */ s_pc = 0x76c7;
@@ -3692,10 +3692,10 @@ void run_emulated(unsigned run_cycles) {
       /* $78B3 SED */ s_status |= STATUS_D;
       /* $78B4 CLC */ s_status &= ~STATUS_C;
       /* $78B5 LDA */ s_a = update_nz(peek(0x71cb));
-      /* $78B8 ADC */ tmp = peek(0x71cb), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $78B8 ADC */ tmp = peek(0x71cb), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $78BB STA */ poke(0x78b0, s_a);
       /* $78BE LDA */ s_a = update_nz(peek(0x71cc));
-      /* $78C1 ADC */ tmp = peek(0x71cc), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $78C1 ADC */ tmp = peek(0x71cc), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $78C4 STA */ poke(0x78b1, s_a);
       /* $78C7 CLD */ s_status &= ~STATUS_D;
       /* $78C8 JSR */ push16(0x78ca), s_pc = 0x7267;
@@ -3849,11 +3849,11 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xd39a, 29);
       /* $D39A SEC */ s_status |= STATUS_C;
       /* $D39B LDA */ s_a = update_nz(peek_zpg(0x96));
-      /* $D39D SBC */ tmp = peek_zpg(0x9b), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $D39D SBC */ tmp = peek_zpg(0x9b), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $D39F STA */ poke_zpg(0x5e, s_a);
       /* $D3A1 TAY */ s_y = update_nz(s_a);
       /* $D3A2 LDA */ s_a = update_nz(peek_zpg(0x97));
-      /* $D3A4 SBC */ tmp = peek_zpg(0x9c), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $D3A4 SBC */ tmp = peek_zpg(0x9c), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $D3A6 TAX */ s_x = update_nz(s_a);
       /* $D3A7 INX */ s_x = update_nz(s_x + 1);
       /* $D3A8 TYA */ s_a = update_nz(s_y);
@@ -3864,7 +3864,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xd3ab, 16);
       /* $D3AB LDA */ s_a = update_nz(peek_zpg(0x96));
       /* $D3AD SEC */ s_status |= STATUS_C;
-      /* $D3AE SBC */ tmp = peek_zpg(0x5e), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $D3AE SBC */ tmp = peek_zpg(0x5e), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $D3B0 STA */ poke_zpg(0x96, s_a);
       /* $D3B2 BCS */ s_pc = s_status & STATUS_C ? 0xd3b7 : 0xd3b4;
       branchTarget = true;
@@ -3876,7 +3876,7 @@ void run_emulated(unsigned run_cycles) {
     case 0xd3b7: // [$D3B7..$D3BE]    8 bytes
       CYCLES(0xd3b7, 14);
       /* $D3B7 LDA */ s_a = update_nz(peek_zpg(0x94));
-      /* $D3B9 SBC */ tmp = peek_zpg(0x5e), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $D3B9 SBC */ tmp = peek_zpg(0x5e), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $D3BB STA */ poke_zpg(0x94, s_a);
       /* $D3BD BCS */ s_pc = s_status & STATUS_C ? 0xd3c7 : 0xd3bf;
       branchTarget = true;
@@ -3917,7 +3917,7 @@ void run_emulated(unsigned run_cycles) {
     case 0xd3d6: // [$D3D6..$D3DA]    5 bytes
       CYCLES(0xd3d6, 9);
       /* $D3D6 ASL */ s_a = update_nzc(s_a << 1);
-      /* $D3D7 ADC */ tmp = 0x36, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $D3D7 ADC */ tmp = 0x36, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $D3D9 BCS */ s_pc = s_status & STATUS_C ? 0xd410 : 0xd3db;
       branchTarget = true;
       break;
@@ -4149,19 +4149,19 @@ void run_emulated(unsigned run_cycles) {
       /* $D47D STA */ poke_zpg(0x61, s_a);
       /* $D47F LDA */ s_a = update_nz(peek_zpg(0x9b));
       /* $D481 DEY */ s_y = update_nz(s_y - 1);
-      /* $D482 SBC */ tmp = peek(peek16_zpg(0x9b) + s_y), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $D482 SBC */ tmp = peek(peek16_zpg(0x9b) + s_y), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $D484 CLC */ s_status &= ~STATUS_C;
-      /* $D485 ADC */ tmp = peek_zpg(0x69), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $D485 ADC */ tmp = peek_zpg(0x69), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $D487 STA */ poke_zpg(0x69, s_a);
       /* $D489 STA */ poke_zpg(0x60, s_a);
       /* $D48B LDA */ s_a = update_nz(peek_zpg(0x6a));
-      /* $D48D ADC */ tmp = 0xff, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $D48D ADC */ tmp = 0xff, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $D48F STA */ poke_zpg(0x6a, s_a);
-      /* $D491 SBC */ tmp = peek_zpg(0x9c), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $D491 SBC */ tmp = peek_zpg(0x9c), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $D493 TAX */ s_x = update_nz(s_a);
       /* $D494 SEC */ s_status |= STATUS_C;
       /* $D495 LDA */ s_a = update_nz(peek_zpg(0x9b));
-      /* $D497 SBC */ tmp = peek_zpg(0x69), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $D497 SBC */ tmp = peek_zpg(0x69), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $D499 TAY */ s_y = update_nz(s_a);
       /* $D49A BCS */ s_pc = s_status & STATUS_C ? 0xd49f : 0xd49c;
       branchTarget = true;
@@ -4173,7 +4173,7 @@ void run_emulated(unsigned run_cycles) {
     case 0xd49f: // [$D49F..$D4A3]    5 bytes
       CYCLES(0xd49f, 9);
       /* $D49F CLC */ s_status &= ~STATUS_C;
-      /* $D4A0 ADC */ tmp = peek_zpg(0x5e), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $D4A0 ADC */ tmp = peek_zpg(0x5e), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $D4A2 BCC */ s_pc = !(s_status & STATUS_C) ? 0xd4a7 : 0xd4a4;
       branchTarget = true;
       break;
@@ -4211,7 +4211,7 @@ void run_emulated(unsigned run_cycles) {
       /* $D4C0 STY */ poke_zpg(0x70, s_y);
       /* $D4C2 LDA */ s_a = update_nz(peek_zpg(0x69));
       /* $D4C4 STA */ poke_zpg(0x96, s_a);
-      /* $D4C6 ADC */ tmp = peek_zpg(0x0f), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $D4C6 ADC */ tmp = peek_zpg(0x0f), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $D4C8 STA */ poke_zpg(0x94, s_a);
       /* $D4CA LDY */ s_y = update_nz(peek_zpg(0x6a));
       /* $D4CC STY */ poke_zpg(0x97, s_y);
@@ -4288,12 +4288,12 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xd516, 38);
       /* $D516 INY */ s_y = update_nz(s_y + 1);
       /* $D517 TYA */ s_a = update_nz(s_y);
-      /* $D518 ADC */ tmp = peek_zpg(0x5e), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $D518 ADC */ tmp = peek_zpg(0x5e), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $D51A TAX */ s_x = update_nz(s_a);
       /* $D51B LDY */ s_y = update_nz(0x00);
       /* $D51D STA */ poke(peek16_zpg(0x5e) + s_y, s_a);
       /* $D51F LDA */ s_a = update_nz(peek_zpg(0x5f));
-      /* $D521 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $D521 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $D523 INY */ s_y = update_nz(s_y + 1);
       /* $D524 STA */ poke(peek16_zpg(0x5e) + s_y, s_a);
       /* $D526 STX */ poke_zpg(0x5e, s_x);
@@ -4464,7 +4464,7 @@ void run_emulated(unsigned run_cycles) {
     case 0xd5af: // [$D5AF..$D5B3]    5 bytes
       CYCLES(0xd5af, 9);
       /* $D5AF SEC */ s_status |= STATUS_C;
-      /* $D5B0 SBC */ tmp = peek(peek16_zpg(0x9d) + s_y), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $D5B0 SBC */ tmp = peek(peek16_zpg(0x9d) + s_y), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $D5B2 BEQ */ s_pc = s_status & STATUS_Z ? 0xd5a2 : 0xd5b4;
       branchTarget = true;
       break;
@@ -4512,7 +4512,7 @@ void run_emulated(unsigned run_cycles) {
     case 0xd5d7: // [$D5D7..$D5DB]    5 bytes
       CYCLES(0xd5d7, 9);
       /* $D5D7 SEC */ s_status |= STATUS_C;
-      /* $D5D8 SBC */ tmp = 0x3a, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $D5D8 SBC */ tmp = 0x3a, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $D5DA BEQ */ s_pc = s_status & STATUS_Z ? 0xd5e0 : 0xd5dc;
       branchTarget = true;
       break;
@@ -4528,7 +4528,7 @@ void run_emulated(unsigned run_cycles) {
     case 0xd5e2: // [$D5E2..$D5E6]    5 bytes
       CYCLES(0xd5e2, 9);
       /* $D5E2 SEC */ s_status |= STATUS_C;
-      /* $D5E3 SBC */ tmp = 0x78, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $D5E3 SBC */ tmp = 0x78, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $D5E5 BNE */ s_pc = !(s_status & STATUS_Z) ? 0xd56d : 0xd5e7;
       branchTarget = true;
       break;
@@ -4671,11 +4671,11 @@ void run_emulated(unsigned run_cycles) {
       /* $D652 INY */ s_y = update_nz(s_y + 1);
       /* $D653 STA */ poke(peek16_zpg(0x67) + s_y, s_a);
       /* $D655 LDA */ s_a = update_nz(peek_zpg(0x67));
-      /* $D657 ADC */ tmp = 0x02, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $D657 ADC */ tmp = 0x02, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $D659 STA */ poke_zpg(0x69, s_a);
       /* $D65B STA */ poke_zpg(0xaf, s_a);
       /* $D65D LDA */ s_a = update_nz(peek_zpg(0x68));
-      /* $D65F ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $D65F ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $D661 STA */ poke_zpg(0x6a, s_a);
       /* $D663 STA */ poke_zpg(0xb0, s_a);
     case 0xd665: // [$D665..$D667]    3 bytes
@@ -4728,11 +4728,11 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xd697, 24);
       /* $D697 CLC */ s_status &= ~STATUS_C;
       /* $D698 LDA */ s_a = update_nz(peek_zpg(0x67));
-      /* $D69A ADC */ tmp = 0xff, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $D69A ADC */ tmp = 0xff, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       // WARNING: performs self modification.
       /* $D69C STA */ poke_zpg(0xb8, s_a);
       /* $D69E LDA */ s_a = update_nz(peek_zpg(0x68));
-      /* $D6A0 ADC */ tmp = 0xff, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $D6A0 ADC */ tmp = 0xff, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       // WARNING: performs self modification.
       /* $D6A2 STA */ poke_zpg(0xb9, s_a);
       /* $D6A4 RTS */ s_pc = pop16() + 1;
@@ -4782,7 +4782,7 @@ void run_emulated(unsigned run_cycles) {
       /* $D7F8 LDA */ s_a = update_nz(peek(peek16_zpg(0xb8) + s_y));
       /* $D7FA STA */ poke_zpg(0x76, s_a);
       /* $D7FC TYA */ s_a = update_nz(s_y);
-      /* $D7FD ADC */ tmp = peek_zpg(0xb8), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $D7FD ADC */ tmp = peek_zpg(0xb8), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       // WARNING: performs self modification.
       /* $D7FF STA */ poke_zpg(0xb8, s_a);
       /* $D801 BCC */ s_pc = !(s_status & STATUS_C) ? 0xd805 : 0xd803;
@@ -4850,7 +4850,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xd82a: // [$D82A..$D82D]    4 bytes
       CYCLES(0xd82a, 7);
-      /* $D82A SBC */ tmp = 0x80, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $D82A SBC */ tmp = 0x80, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $D82C BCC */ s_pc = !(s_status & STATUS_C) ? 0xd83f : 0xd82e;
       branchTarget = true;
       break;
@@ -4891,7 +4891,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xd849, 16);
       /* $D849 SEC */ s_status |= STATUS_C;
       /* $D84A LDA */ s_a = update_nz(peek_zpg(0x67));
-      /* $D84C SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $D84C SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $D84E LDY */ s_y = update_nz(peek_zpg(0x68));
       /* $D850 BCS */ s_pc = s_status & STATUS_C ? 0xd853 : 0xd852;
       branchTarget = true;
@@ -5015,7 +5015,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xd94a, 14);
       /* $D94A TYA */ s_a = update_nz(s_y);
       /* $D94B SEC */ s_status |= STATUS_C;
-      /* $D94C ADC */ tmp = peek_zpg(0xb8), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $D94C ADC */ tmp = peek_zpg(0xb8), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $D94E LDX */ s_x = update_nz(peek_zpg(0xb9));
       /* $D950 BCC */ s_pc = !(s_status & STATUS_C) ? 0xd959 : 0xd952;
       branchTarget = true;
@@ -5043,11 +5043,11 @@ void run_emulated(unsigned run_cycles) {
     case 0xd95e: // [$D95E..$D96A]   13 bytes
       CYCLES(0xd95e, 23);
       /* $D95E LDA */ s_a = update_nz(peek_zpg(0x9b));
-      /* $D960 SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $D960 SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       // WARNING: performs self modification.
       /* $D962 STA */ poke_zpg(0xb8, s_a);
       /* $D964 LDA */ s_a = update_nz(peek_zpg(0x9c));
-      /* $D966 SBC */ tmp = 0x00, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $D966 SBC */ tmp = 0x00, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       // WARNING: performs self modification.
       /* $D968 STA */ poke_zpg(0xb9, s_a);
       /* $D96A RTS */ s_pc = pop16() + 1;
@@ -5167,7 +5167,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xda14: // [$DA14..$DA1F]   12 bytes
       CYCLES(0xda14, 21);
-      /* $DA14 SBC */ tmp = 0x2f, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $DA14 SBC */ tmp = 0x2f, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $DA16 STA */ poke_zpg(0x0d, s_a);
       /* $DA18 LDA */ s_a = update_nz(peek_zpg(0x51));
       /* $DA1A STA */ poke_zpg(0x5e, s_a);
@@ -5182,15 +5182,15 @@ void run_emulated(unsigned run_cycles) {
       /* $DA23 ROL */ tmp16 = 0x5e, tmp = peek_zpg(tmp16), poke_zpg(tmp16, update_nz((tmp << 1) | (s_status & STATUS_C))), set_c_to_bit0(tmp >> 7);
       /* $DA25 ASL */ s_a = update_nzc(s_a << 1);
       /* $DA26 ROL */ tmp16 = 0x5e, tmp = peek_zpg(tmp16), poke_zpg(tmp16, update_nz((tmp << 1) | (s_status & STATUS_C))), set_c_to_bit0(tmp >> 7);
-      /* $DA28 ADC */ tmp = peek_zpg(0x50), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $DA28 ADC */ tmp = peek_zpg(0x50), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $DA2A STA */ poke_zpg(0x50, s_a);
       /* $DA2C LDA */ s_a = update_nz(peek_zpg(0x5e));
-      /* $DA2E ADC */ tmp = peek_zpg(0x51), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $DA2E ADC */ tmp = peek_zpg(0x51), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $DA30 STA */ poke_zpg(0x51, s_a);
       /* $DA32 ASL */ tmp16 = 0x50, poke_zpg(tmp16, update_nzc(peek_zpg(tmp16) << 1));
       /* $DA34 ROL */ tmp16 = 0x51, tmp = peek_zpg(tmp16), poke_zpg(tmp16, update_nz((tmp << 1) | (s_status & STATUS_C))), set_c_to_bit0(tmp >> 7);
       /* $DA36 LDA */ s_a = update_nz(peek_zpg(0x50));
-      /* $DA38 ADC */ tmp = peek_zpg(0x0d), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $DA38 ADC */ tmp = peek_zpg(0x0d), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $DA3A STA */ poke_zpg(0x50, s_a);
       /* $DA3C BCC */ s_pc = !(s_status & STATUS_C) ? 0xda40 : 0xda3e;
       branchTarget = true;
@@ -5548,7 +5548,7 @@ void run_emulated(unsigned run_cycles) {
     case 0xdd98: // [$DD98..$DD9C]    5 bytes
       CYCLES(0xdd98, 9);
       /* $DD98 SEC */ s_status |= STATUS_C;
-      /* $DD99 SBC */ tmp = 0xcf, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $DD99 SBC */ tmp = 0xcf, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $DD9B BCC */ s_pc = !(s_status & STATUS_C) ? 0xddb4 : 0xdd9d;
       branchTarget = true;
       break;
@@ -5592,13 +5592,13 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xddba: // [$DDBA..$DDBD]    4 bytes
       CYCLES(0xddba, 7);
-      /* $DDBA ADC */ tmp = 0x07, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $DDBA ADC */ tmp = 0x07, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $DDBC BCC */ s_pc = !(s_status & STATUS_C) ? 0xde35 : 0xddbe;
       branchTarget = true;
       break;
     case 0xddbe: // [$DDBE..$DDC1]    4 bytes
       CYCLES(0xddbe, 7);
-      /* $DDBE ADC */ tmp = peek_zpg(0x11), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $DDBE ADC */ tmp = peek_zpg(0x11), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $DDC0 BNE */ s_pc = !(s_status & STATUS_Z) ? 0xddc5 : 0xddc2;
       branchTarget = true;
       break;
@@ -5609,10 +5609,10 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xddc5: // [$DDC5..$DDCC]    8 bytes
       CYCLES(0xddc5, 14);
-      /* $DDC5 ADC */ tmp = 0xff, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $DDC5 ADC */ tmp = 0xff, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $DDC7 STA */ poke_zpg(0x5e, s_a);
       /* $DDC9 ASL */ s_a = update_nzc(s_a << 1);
-      /* $DDCA ADC */ tmp = peek_zpg(0x5e), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $DDCA ADC */ tmp = peek_zpg(0x5e), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $DDCC TAY */ s_y = update_nz(s_a);
     case 0xddcd: // [$DDCD..$DDD2]    6 bytes
       CYCLES(0xddcd, 11);
@@ -5840,7 +5840,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xde81, 14);
       /* $DE81 LDA */ s_a = update_nz(peek_zpg(0xb8));
       /* $DE83 LDY */ s_y = update_nz(peek_zpg(0xb9));
-      /* $DE85 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $DE85 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $DE87 BCC */ s_pc = !(s_status & STATUS_C) ? 0xde8a : 0xde89;
       branchTarget = true;
       break;
@@ -6250,7 +6250,7 @@ void run_emulated(unsigned run_cycles) {
       /* $E03D STX */ poke_zpg(0x82, s_x);
       /* $E03F SEC */ s_status |= STATUS_C;
       /* $E040 ORA */ s_a = update_nz(s_a | peek_zpg(0x14));
-      /* $E042 SBC */ tmp = 0x28, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $E042 SBC */ tmp = 0x28, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $E044 BNE */ s_pc = !(s_status & STATUS_Z) ? 0xe049 : 0xe046;
       branchTarget = true;
       break;
@@ -6315,7 +6315,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xe073, 12);
       /* $E073 CLC */ s_status &= ~STATUS_C;
       /* $E074 LDA */ s_a = update_nz(peek_zpg(0x9b));
-      /* $E076 ADC */ tmp = 0x07, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E076 ADC */ tmp = 0x07, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E078 BCC */ s_pc = !(s_status & STATUS_C) ? 0xe05b : 0xe07a;
       branchTarget = true;
       break;
@@ -6333,9 +6333,9 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xe081: // [$E081..$E085]    5 bytes
       CYCLES(0xe081, 9);
-      /* $E081 SBC */ tmp = 0x5b, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $E081 SBC */ tmp = 0x5b, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $E083 SEC */ s_status |= STATUS_C;
-      /* $E084 SBC */ tmp = 0xa5, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $E084 SBC */ tmp = 0xa5, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
     case 0xe086: // [$E086..$E086]    1 bytes
       CYCLES(0xe086, 2);
       /* $E086 RTS */ s_pc = pop16() + 1;
@@ -6375,7 +6375,7 @@ void run_emulated(unsigned run_cycles) {
       /* $E0A8 STA */ poke_zpg(0x96, s_a);
       /* $E0AA STY */ poke_zpg(0x97, s_y);
       /* $E0AC CLC */ s_status &= ~STATUS_C;
-      /* $E0AD ADC */ tmp = 0x07, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E0AD ADC */ tmp = 0x07, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E0AF BCC */ s_pc = !(s_status & STATUS_C) ? 0xe0b2 : 0xe0b1;
       branchTarget = true;
       break;
@@ -6417,7 +6417,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xe0de, 16);
       /* $E0DE LDA */ s_a = update_nz(peek_zpg(0x9b));
       /* $E0E0 CLC */ s_status &= ~STATUS_C;
-      /* $E0E1 ADC */ tmp = 0x02, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E0E1 ADC */ tmp = 0x02, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E0E3 LDY */ s_y = update_nz(peek_zpg(0x9c));
       /* $E0E5 BCC */ s_pc = !(s_status & STATUS_C) ? 0xe0e8 : 0xe0e7;
       branchTarget = true;
@@ -6436,8 +6436,8 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xe0ed, 19);
       /* $E0ED LDA */ s_a = update_nz(peek_zpg(0x0f));
       /* $E0EF ASL */ s_a = update_nzc(s_a << 1);
-      /* $E0F0 ADC */ tmp = 0x05, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
-      /* $E0F2 ADC */ tmp = peek_zpg(0x9b), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E0F0 ADC */ tmp = 0x05, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E0F2 ADC */ tmp = peek_zpg(0x9b), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E0F4 LDY */ s_y = update_nz(peek_zpg(0x9c));
       /* $E0F6 BCC */ s_pc = !(s_status & STATUS_C) ? 0xe0f9 : 0xe0f8;
       branchTarget = true;
@@ -6597,11 +6597,11 @@ void run_emulated(unsigned run_cycles) {
       /* $E188 INY */ s_y = update_nz(s_y + 1);
       /* $E189 LDA */ s_a = update_nz(peek(peek16_zpg(0x9b) + s_y));
       /* $E18B CLC */ s_status &= ~STATUS_C;
-      /* $E18C ADC */ tmp = peek_zpg(0x9b), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E18C ADC */ tmp = peek_zpg(0x9b), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E18E TAX */ s_x = update_nz(s_a);
       /* $E18F INY */ s_y = update_nz(s_y + 1);
       /* $E190 LDA */ s_a = update_nz(peek(peek16_zpg(0x9b) + s_y));
-      /* $E192 ADC */ tmp = peek_zpg(0x9c), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E192 ADC */ tmp = peek_zpg(0x9c), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E194 BCC */ s_pc = !(s_status & STATUS_C) ? 0xe16d : 0xe196;
       branchTarget = true;
       break;
@@ -6724,10 +6724,10 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xe1ef, 14);
       /* $E1EF PLA */ s_a = update_nz(pop8());
       /* $E1F0 CLC */ s_status &= ~STATUS_C;
-      /* $E1F1 ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E1F1 ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E1F3 TAX */ s_x = update_nz(s_a);
       /* $E1F4 PLA */ s_a = update_nz(pop8());
-      /* $E1F5 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E1F5 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
     case 0xe1f7: // [$E1F7..$E200]   10 bytes
       CYCLES(0xe1f7, 18);
       /* $E1F7 INY */ s_y = update_nz(s_y + 1);
@@ -6749,7 +6749,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xe20b: // [$E20B..$E20E]    4 bytes
       CYCLES(0xe20b, 7);
-      /* $E20B ADC */ tmp = peek_zpg(0x95), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E20B ADC */ tmp = peek_zpg(0x95), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E20D BCS */ s_pc = s_status & STATUS_C ? 0xe26c : 0xe20f;
       branchTarget = true;
       break;
@@ -6758,7 +6758,7 @@ void run_emulated(unsigned run_cycles) {
       /* $E20F STA */ poke_zpg(0x95, s_a);
       /* $E211 TAY */ s_y = update_nz(s_a);
       /* $E212 TXA */ s_a = update_nz(s_x);
-      /* $E213 ADC */ tmp = peek_zpg(0x94), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E213 ADC */ tmp = peek_zpg(0x94), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E215 BCC */ s_pc = !(s_status & STATUS_C) ? 0xe21a : 0xe217;
       branchTarget = true;
       break;
@@ -6802,12 +6802,12 @@ void run_emulated(unsigned run_cycles) {
       /* $E234 INC */ tmp16 = 0x95, poke_zpg(tmp16, update_nz(peek_zpg(tmp16) + 1));
       /* $E236 SEC */ s_status |= STATUS_C;
       /* $E237 LDA */ s_a = update_nz(peek_zpg(0x6d));
-      /* $E239 SBC */ tmp = peek_zpg(0x9b), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $E239 SBC */ tmp = peek_zpg(0x9b), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $E23B LDY */ s_y = update_nz(0x02);
       /* $E23D STA */ poke(peek16_zpg(0x9b) + s_y, s_a);
       /* $E23F LDA */ s_a = update_nz(peek_zpg(0x6e));
       /* $E241 INY */ s_y = update_nz(s_y + 1);
-      /* $E242 SBC */ tmp = peek_zpg(0x9c), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $E242 SBC */ tmp = peek_zpg(0x9c), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $E244 STA */ poke(peek16_zpg(0x9b) + s_y, s_a);
       /* $E246 LDA */ s_a = update_nz(peek_zpg(0x10));
       /* $E248 BNE */ s_pc = !(s_status & STATUS_Z) ? 0xe2ac : 0xe24a;
@@ -6877,13 +6877,13 @@ void run_emulated(unsigned run_cycles) {
     case 0xe27a: // [$E27A..$E280]    7 bytes
       CYCLES(0xe27a, 12);
       /* $E27A TXA */ s_a = update_nz(s_x);
-      /* $E27B ADC */ tmp = peek_zpg(0xa0), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E27B ADC */ tmp = peek_zpg(0xa0), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E27D TAX */ s_x = update_nz(s_a);
       /* $E27E TYA */ s_a = update_nz(s_y);
       /* $E27F LDY */ s_y = update_nz(peek_zpg(0x5e));
     case 0xe281: // [$E281..$E288]    8 bytes
       CYCLES(0xe281, 14);
-      /* $E281 ADC */ tmp = peek_zpg(0xa1), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E281 ADC */ tmp = peek_zpg(0xa1), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E283 STX */ poke_zpg(0xad, s_x);
       /* $E285 DEC */ tmp16 = 0x0f, poke_zpg(tmp16, update_nz(peek_zpg(tmp16) - 1));
       /* $E287 BNE */ s_pc = !(s_status & STATUS_Z) ? 0xe253 : 0xe289;
@@ -6920,10 +6920,10 @@ void run_emulated(unsigned run_cycles) {
     case 0xe29f: // [$E29F..$E2AB]   13 bytes
       CYCLES(0xe29f, 23);
       /* $E29F TXA */ s_a = update_nz(s_x);
-      /* $E2A0 ADC */ tmp = peek_zpg(0x94), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E2A0 ADC */ tmp = peek_zpg(0x94), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E2A2 STA */ poke_zpg(0x83, s_a);
       /* $E2A4 TYA */ s_a = update_nz(s_y);
-      /* $E2A5 ADC */ tmp = peek_zpg(0x95), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E2A5 ADC */ tmp = peek_zpg(0x95), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E2A7 STA */ poke_zpg(0x84, s_a);
       /* $E2A9 TAY */ s_y = update_nz(s_a);
       /* $E2AA LDA */ s_a = update_nz(peek_zpg(0x83));
@@ -6968,10 +6968,10 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xe2ce, 19);
       /* $E2CE CLC */ s_status &= ~STATUS_C;
       /* $E2CF TXA */ s_a = update_nz(s_x);
-      /* $E2D0 ADC */ tmp = peek_zpg(0x64), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E2D0 ADC */ tmp = peek_zpg(0x64), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E2D2 TAX */ s_x = update_nz(s_a);
       /* $E2D3 TYA */ s_a = update_nz(s_y);
-      /* $E2D4 ADC */ tmp = peek_zpg(0x65), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E2D4 ADC */ tmp = peek_zpg(0x65), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E2D6 TAY */ s_y = update_nz(s_a);
       /* $E2D7 BCS */ s_pc = s_status & STATUS_C ? 0xe26c : 0xe2d9;
       branchTarget = true;
@@ -7220,7 +7220,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xe409, 19);
       /* $E409 STY */ poke_zpg(0x9d, s_y);
       /* $E40B TYA */ s_a = update_nz(s_y);
-      /* $E40C ADC */ tmp = peek_zpg(0xab), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E40C ADC */ tmp = peek_zpg(0xab), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E40E STA */ poke_zpg(0xad, s_a);
       /* $E410 LDX */ s_x = update_nz(peek_zpg(0xac));
       /* $E412 BCC */ s_pc = !(s_status & STATUS_C) ? 0xe415 : 0xe414;
@@ -7299,7 +7299,7 @@ void run_emulated(unsigned run_cycles) {
       /* $E454 PHA */ push8(s_a);
       /* $E455 EOR */ s_a = update_nz(s_a ^ 0xff);
       /* $E457 SEC */ s_status |= STATUS_C;
-      /* $E458 ADC */ tmp = peek_zpg(0x6f), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E458 ADC */ tmp = peek_zpg(0x6f), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E45A LDY */ s_y = update_nz(peek_zpg(0x70));
       /* $E45C BCS */ s_pc = s_status & STATUS_C ? 0xe45f : 0xe45e;
       branchTarget = true;
@@ -7458,11 +7458,11 @@ void run_emulated(unsigned run_cycles) {
       /* $E4E5 PHP */ push8(s_status | STATUS_B);
       /* $E4E6 INY */ s_y = update_nz(s_y + 1);
       /* $E4E7 LDA */ s_a = update_nz(peek(peek16_zpg(0x5e) + s_y));
-      /* $E4E9 ADC */ tmp = peek_zpg(0x94), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E4E9 ADC */ tmp = peek_zpg(0x94), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E4EB STA */ poke_zpg(0x94, s_a);
       /* $E4ED INY */ s_y = update_nz(s_y + 1);
       /* $E4EE LDA */ s_a = update_nz(peek(peek16_zpg(0x5e) + s_y));
-      /* $E4F0 ADC */ tmp = peek_zpg(0x95), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E4F0 ADC */ tmp = peek_zpg(0x95), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E4F2 STA */ poke_zpg(0x95, s_a);
       /* $E4F4 PLP */ s_status = pop8() & ~STATUS_B;
       /* $E4F5 BPL */ s_pc = !(s_status & STATUS_N) ? 0xe4ca : 0xe4f7;
@@ -7480,8 +7480,8 @@ void run_emulated(unsigned run_cycles) {
       /* $E4FB LDA */ s_a = update_nz(peek(peek16_zpg(0x5e) + s_y));
       /* $E4FD LDY */ s_y = update_nz(0x00);
       /* $E4FF ASL */ s_a = update_nzc(s_a << 1);
-      /* $E500 ADC */ tmp = 0x05, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
-      /* $E502 ADC */ tmp = peek_zpg(0x5e), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E500 ADC */ tmp = 0x05, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E502 ADC */ tmp = peek_zpg(0x5e), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E504 STA */ poke_zpg(0x5e, s_a);
       /* $E506 BCC */ s_pc = !(s_status & STATUS_C) ? 0xe50a : 0xe508;
       branchTarget = true;
@@ -7589,7 +7589,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xe552, 16);
       /* $E552 LDA */ s_a = update_nz(peek_zpg(0x8f));
       /* $E554 CLC */ s_status &= ~STATUS_C;
-      /* $E555 ADC */ tmp = peek_zpg(0x5e), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E555 ADC */ tmp = peek_zpg(0x5e), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E557 STA */ poke_zpg(0x5e, s_a);
       /* $E559 BCC */ s_pc = !(s_status & STATUS_C) ? 0xe55d : 0xe55b;
       branchTarget = true;
@@ -7618,10 +7618,10 @@ void run_emulated(unsigned run_cycles) {
       /* $E56B TAY */ s_y = update_nz(s_a);
       /* $E56C STA */ poke_zpg(0x91, s_a);
       /* $E56E LDA */ s_a = update_nz(peek(peek16_zpg(0x8a) + s_y));
-      /* $E570 ADC */ tmp = peek_zpg(0x9b), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E570 ADC */ tmp = peek_zpg(0x9b), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E572 STA */ poke_zpg(0x96, s_a);
       /* $E574 LDA */ s_a = update_nz(peek_zpg(0x9c));
-      /* $E576 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E576 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E578 STA */ poke_zpg(0x97, s_a);
       /* $E57A LDA */ s_a = update_nz(peek_zpg(0x6f));
       /* $E57C LDX */ s_x = update_nz(peek_zpg(0x70));
@@ -7667,7 +7667,7 @@ void run_emulated(unsigned run_cycles) {
       /* $E5A9 LDY */ s_y = update_nz(0x00);
       /* $E5AB LDA */ s_a = update_nz(peek(peek16_zpg(0xab) + s_y));
       /* $E5AD CLC */ s_status &= ~STATUS_C;
-      /* $E5AE ADC */ tmp = peek(peek16_zpg(0xa0) + s_y), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E5AE ADC */ tmp = peek(peek16_zpg(0xa0) + s_y), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E5B0 BCC */ s_pc = !(s_status & STATUS_C) ? 0xe5b7 : 0xe5b2;
       branchTarget = true;
       break;
@@ -7756,7 +7756,7 @@ void run_emulated(unsigned run_cycles) {
     case 0xe5f3: // [$E5F3..$E5F9]    7 bytes
       CYCLES(0xe5f3, 12);
       /* $E5F3 CLC */ s_status &= ~STATUS_C;
-      /* $E5F4 ADC */ tmp = peek_zpg(0x71), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E5F4 ADC */ tmp = peek_zpg(0x71), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E5F6 STA */ poke_zpg(0x71, s_a);
       /* $E5F8 BCC */ s_pc = !(s_status & STATUS_C) ? 0xe5fc : 0xe5fa;
       branchTarget = true;
@@ -7813,7 +7813,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xe625, 14);
       /* $E625 PHA */ push8(s_a);
       /* $E626 CLC */ s_status &= ~STATUS_C;
-      /* $E627 ADC */ tmp = peek_zpg(0x6f), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E627 ADC */ tmp = peek_zpg(0x6f), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E629 STA */ poke_zpg(0x6f, s_a);
       /* $E62B BCC */ s_pc = !(s_status & STATUS_C) ? 0xe62f : 0xe62d;
       branchTarget = true;
@@ -7846,7 +7846,7 @@ void run_emulated(unsigned run_cycles) {
     case 0xe63d: // [$E63D..$E644]    8 bytes
       CYCLES(0xe63d, 14);
       /* $E63D STA */ poke_zpg(0x52, s_a);
-      /* $E63F SBC */ tmp = 0x03, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $E63F SBC */ tmp = 0x03, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $E641 STA */ poke_zpg(0x53, s_a);
       /* $E643 LDY */ s_y = update_nz(0x00);
     case 0xe645: // [$E645..$E645]    1 bytes
@@ -7965,7 +7965,7 @@ void run_emulated(unsigned run_cycles) {
     case 0xe7d1: // [$E7D1..$E7D5]    5 bytes
       CYCLES(0xe7d1, 9);
       /* $E7D1 SEC */ s_status |= STATUS_C;
-      /* $E7D2 SBC */ tmp = peek_zpg(0x9d), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $E7D2 SBC */ tmp = peek_zpg(0x9d), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $E7D4 BEQ */ s_pc = s_status & STATUS_Z ? 0xe7fa : 0xe7d6;
       branchTarget = true;
       break;
@@ -7980,7 +7980,7 @@ void run_emulated(unsigned run_cycles) {
       /* $E7DA LDY */ s_y = update_nz(peek_zpg(0xaa));
       /* $E7DC STY */ poke_zpg(0xa2, s_y);
       /* $E7DE EOR */ s_a = update_nz(s_a ^ 0xff);
-      /* $E7E0 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E7E0 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E7E2 LDY */ s_y = update_nz(0x00);
       /* $E7E4 STY */ poke_zpg(0x92, s_y);
       /* $E7E6 LDX */ s_x = update_nz(0x9d);
@@ -8025,19 +8025,19 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xe806, 60);
       /* $E806 SEC */ s_status |= STATUS_C;
       /* $E807 EOR */ s_a = update_nz(s_a ^ 0xff);
-      /* $E809 ADC */ tmp = peek_zpg(0x92), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E809 ADC */ tmp = peek_zpg(0x92), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E80B STA */ poke_zpg(0xac, s_a);
       /* $E80D LDA */ s_a = update_nz(peek(0x0004 + s_y));
-      /* $E810 SBC */ tmp = peek_zpg((uint8_t)(0x04 + s_x)), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $E810 SBC */ tmp = peek_zpg((uint8_t)(0x04 + s_x)), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $E812 STA */ poke_zpg(0xa1, s_a);
       /* $E814 LDA */ s_a = update_nz(peek(0x0003 + s_y));
-      /* $E817 SBC */ tmp = peek_zpg((uint8_t)(0x03 + s_x)), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $E817 SBC */ tmp = peek_zpg((uint8_t)(0x03 + s_x)), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $E819 STA */ poke_zpg(0xa0, s_a);
       /* $E81B LDA */ s_a = update_nz(peek(0x0002 + s_y));
-      /* $E81E SBC */ tmp = peek_zpg((uint8_t)(0x02 + s_x)), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $E81E SBC */ tmp = peek_zpg((uint8_t)(0x02 + s_x)), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $E820 STA */ poke_zpg(0x9f, s_a);
       /* $E822 LDA */ s_a = update_nz(peek(0x0001 + s_y));
-      /* $E825 SBC */ tmp = peek_zpg((uint8_t)(0x01 + s_x)), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $E825 SBC */ tmp = peek_zpg((uint8_t)(0x01 + s_x)), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $E827 STA */ poke_zpg(0x9e, s_a);
     case 0xe829: // [$E829..$E82A]    2 bytes
       CYCLES(0xe829, 4);
@@ -8071,7 +8071,7 @@ void run_emulated(unsigned run_cycles) {
       /* $E842 LDX */ s_x = update_nz(peek_zpg(0xac));
       /* $E844 STX */ poke_zpg(0xa1, s_x);
       /* $E846 STY */ poke_zpg(0xac, s_y);
-      /* $E848 ADC */ tmp = 0x08, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E848 ADC */ tmp = 0x08, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E84A CMP */ update_nz_inv_c(s_a - 0x20);
       /* $E84C BNE */ s_pc = !(s_status & STATUS_Z) ? 0xe832 : 0xe84e;
       branchTarget = true;
@@ -8088,26 +8088,26 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xe855: // [$E855..$E873]   31 bytes
       CYCLES(0xe855, 53);
-      /* $E855 ADC */ tmp = peek_zpg(0x92), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E855 ADC */ tmp = peek_zpg(0x92), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E857 STA */ poke_zpg(0xac, s_a);
       /* $E859 LDA */ s_a = update_nz(peek_zpg(0xa1));
-      /* $E85B ADC */ tmp = peek_zpg(0xa9), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E85B ADC */ tmp = peek_zpg(0xa9), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E85D STA */ poke_zpg(0xa1, s_a);
       /* $E85F LDA */ s_a = update_nz(peek_zpg(0xa0));
-      /* $E861 ADC */ tmp = peek_zpg(0xa8), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E861 ADC */ tmp = peek_zpg(0xa8), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E863 STA */ poke_zpg(0xa0, s_a);
       /* $E865 LDA */ s_a = update_nz(peek_zpg(0x9f));
-      /* $E867 ADC */ tmp = peek_zpg(0xa7), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E867 ADC */ tmp = peek_zpg(0xa7), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E869 STA */ poke_zpg(0x9f, s_a);
       /* $E86B LDA */ s_a = update_nz(peek_zpg(0x9e));
-      /* $E86D ADC */ tmp = peek_zpg(0xa6), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E86D ADC */ tmp = peek_zpg(0xa6), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E86F STA */ poke_zpg(0x9e, s_a);
       /* $E871 JMP */ s_pc = 0xe88d;
       branchTarget = true;
       break;
     case 0xe874: // [$E874..$E87F]   12 bytes
       CYCLES(0xe874, 21);
-      /* $E874 ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E874 ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E876 ASL */ tmp16 = 0xac, poke_zpg(tmp16, update_nzc(peek_zpg(tmp16) << 1));
       /* $E878 ROL */ tmp16 = 0xa1, tmp = peek_zpg(tmp16), poke_zpg(tmp16, update_nz((tmp << 1) | (s_status & STATUS_C))), set_c_to_bit0(tmp >> 7);
       /* $E87A ROL */ tmp16 = 0xa0, tmp = peek_zpg(tmp16), poke_zpg(tmp16, update_nz((tmp << 1) | (s_status & STATUS_C))), set_c_to_bit0(tmp >> 7);
@@ -8121,14 +8121,14 @@ void run_emulated(unsigned run_cycles) {
     case 0xe882: // [$E882..$E886]    5 bytes
       CYCLES(0xe882, 9);
       /* $E882 SEC */ s_status |= STATUS_C;
-      /* $E883 SBC */ tmp = peek_zpg(0x9d), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $E883 SBC */ tmp = peek_zpg(0x9d), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $E885 BCS */ s_pc = s_status & STATUS_C ? 0xe84e : 0xe887;
       branchTarget = true;
       break;
     case 0xe887: // [$E887..$E88C]    6 bytes
       CYCLES(0xe887, 11);
       /* $E887 EOR */ s_a = update_nz(s_a ^ 0xff);
-      /* $E889 ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E889 ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E88B STA */ poke_zpg(0x9d, s_a);
     case 0xe88d: // [$E88D..$E88E]    2 bytes
       CYCLES(0xe88d, 4);
@@ -8228,7 +8228,7 @@ void run_emulated(unsigned run_cycles) {
       /* $E8EE STY */ poke_zpg((uint8_t)(0x01 + s_x), s_y);
     case 0xe8f0: // [$E8F0..$E8F3]    4 bytes
       CYCLES(0xe8f0, 7);
-      /* $E8F0 ADC */ tmp = 0x08, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E8F0 ADC */ tmp = 0x08, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E8F2 BMI */ s_pc = s_status & STATUS_N ? 0xe8dc : 0xe8f4;
       branchTarget = true;
       break;
@@ -8239,7 +8239,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xe8f6: // [$E8F6..$E8FC]    7 bytes
       CYCLES(0xe8f6, 12);
-      /* $E8F6 SBC */ tmp = 0x08, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $E8F6 SBC */ tmp = 0x08, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $E8F8 TAY */ s_y = update_nz(s_a);
       /* $E8F9 LDA */ s_a = update_nz(peek_zpg(0xac));
       /* $E8FB BCS */ s_pc = s_status & STATUS_C ? 0xe911 : 0xe8fd;
@@ -8358,16 +8358,16 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xe9bb, 43);
       /* $E9BB CLC */ s_status &= ~STATUS_C;
       /* $E9BC LDA */ s_a = update_nz(peek_zpg(0x65));
-      /* $E9BE ADC */ tmp = peek_zpg(0xa9), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E9BE ADC */ tmp = peek_zpg(0xa9), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E9C0 STA */ poke_zpg(0x65, s_a);
       /* $E9C2 LDA */ s_a = update_nz(peek_zpg(0x64));
-      /* $E9C4 ADC */ tmp = peek_zpg(0xa8), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E9C4 ADC */ tmp = peek_zpg(0xa8), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E9C6 STA */ poke_zpg(0x64, s_a);
       /* $E9C8 LDA */ s_a = update_nz(peek_zpg(0x63));
-      /* $E9CA ADC */ tmp = peek_zpg(0xa7), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E9CA ADC */ tmp = peek_zpg(0xa7), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E9CC STA */ poke_zpg(0x63, s_a);
       /* $E9CE LDA */ s_a = update_nz(peek_zpg(0x62));
-      /* $E9D0 ADC */ tmp = peek_zpg(0xa6), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $E9D0 ADC */ tmp = peek_zpg(0xa6), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $E9D2 STA */ poke_zpg(0x62, s_a);
     case 0xe9d4: // [$E9D4..$E9E1]   14 bytes
       CYCLES(0xe9d4, 24);
@@ -8423,7 +8423,7 @@ void run_emulated(unsigned run_cycles) {
     case 0xea12: // [$EA12..$EA16]    5 bytes
       CYCLES(0xea12, 9);
       /* $EA12 CLC */ s_status &= ~STATUS_C;
-      /* $EA13 ADC */ tmp = peek_zpg(0x9d), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $EA13 ADC */ tmp = peek_zpg(0x9d), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $EA15 BCC */ s_pc = !(s_status & STATUS_C) ? 0xea1b : 0xea17;
       branchTarget = true;
       break;
@@ -8445,7 +8445,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xea1d: // [$EA1D..$EA22]    6 bytes
       CYCLES(0xea1d, 11);
-      /* $EA1D ADC */ tmp = 0x80, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $EA1D ADC */ tmp = 0x80, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $EA1F STA */ poke_zpg(0x9d, s_a);
       /* $EA21 BNE */ s_pc = !(s_status & STATUS_Z) ? 0xea26 : 0xea23;
       branchTarget = true;
@@ -8488,7 +8488,7 @@ void run_emulated(unsigned run_cycles) {
     case 0xea3f: // [$EA3F..$EA43]    5 bytes
       CYCLES(0xea3f, 9);
       /* $EA3F CLC */ s_status &= ~STATUS_C;
-      /* $EA40 ADC */ tmp = 0x02, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $EA40 ADC */ tmp = 0x02, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $EA42 BCS */ s_pc = s_status & STATUS_C ? 0xea36 : 0xea44;
       branchTarget = true;
       break;
@@ -8543,7 +8543,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xea6e, 18);
       /* $EA6E LDA */ s_a = update_nz(0x00);
       /* $EA70 SEC */ s_status |= STATUS_C;
-      /* $EA71 SBC */ tmp = peek_zpg(0x9d), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $EA71 SBC */ tmp = peek_zpg(0x9d), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $EA73 STA */ poke_zpg(0x9d, s_a);
       /* $EA75 JSR */ push16(0xea77), s_pc = 0xea0e;
       branchTarget = true;
@@ -8634,16 +8634,16 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xeab4, 50);
       /* $EAB4 TAY */ s_y = update_nz(s_a);
       /* $EAB5 LDA */ s_a = update_nz(peek_zpg(0xa9));
-      /* $EAB7 SBC */ tmp = peek_zpg(0xa1), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $EAB7 SBC */ tmp = peek_zpg(0xa1), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $EAB9 STA */ poke_zpg(0xa9, s_a);
       /* $EABB LDA */ s_a = update_nz(peek_zpg(0xa8));
-      /* $EABD SBC */ tmp = peek_zpg(0xa0), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $EABD SBC */ tmp = peek_zpg(0xa0), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $EABF STA */ poke_zpg(0xa8, s_a);
       /* $EAC1 LDA */ s_a = update_nz(peek_zpg(0xa7));
-      /* $EAC3 SBC */ tmp = peek_zpg(0x9f), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $EAC3 SBC */ tmp = peek_zpg(0x9f), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $EAC5 STA */ poke_zpg(0xa7, s_a);
       /* $EAC7 LDA */ s_a = update_nz(peek_zpg(0xa6));
-      /* $EAC9 SBC */ tmp = peek_zpg(0x9e), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $EAC9 SBC */ tmp = peek_zpg(0x9e), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $EACB STA */ poke_zpg(0xa6, s_a);
       /* $EACD TYA */ s_a = update_nz(s_y);
       /* $EACE JMP */ s_pc = 0xeaa6;
@@ -8916,7 +8916,7 @@ void run_emulated(unsigned run_cycles) {
       /* $EBDF LDA */ s_a = update_nz(0x7f);
       /* $EBE1 CMP */ update_nz_inv_c(s_a - peek_zpg(0xac));
       /* $EBE3 LDA */ s_a = update_nz(peek(peek16_zpg(0x60) + s_y));
-      /* $EBE5 SBC */ tmp = peek_zpg(0xa1), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $EBE5 SBC */ tmp = peek_zpg(0xa1), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $EBE7 BEQ */ s_pc = s_status & STATUS_Z ? 0xec11 : 0xebe9;
       branchTarget = true;
       break;
@@ -8943,7 +8943,7 @@ void run_emulated(unsigned run_cycles) {
     case 0xebf6: // [$EBF6..$EBFC]    7 bytes
       CYCLES(0xebf6, 12);
       /* $EBF6 SEC */ s_status |= STATUS_C;
-      /* $EBF7 SBC */ tmp = 0xa0, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $EBF7 SBC */ tmp = 0xa0, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $EBF9 BIT */ tmp = peek_zpg(0xa2), s_status = (s_status & ~(0xC0 | STATUS_Z)) | (tmp & 0xC0) | (s_a & tmp ? 0 : STATUS_Z);
       /* $EBFB BPL */ s_pc = !(s_status & STATUS_N) ? 0xec06 : 0xebfd;
       branchTarget = true;
@@ -9124,7 +9124,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xec90, 14);
       /* $EC90 LDA */ s_a = update_nz(0x00);
       /* $EC92 SEC */ s_status |= STATUS_C;
-      /* $EC93 SBC */ tmp = peek_zpg(0x9a), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $EC93 SBC */ tmp = peek_zpg(0x9a), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $EC95 JMP */ s_pc = 0xeca0;
       branchTarget = true;
       break;
@@ -9141,7 +9141,7 @@ void run_emulated(unsigned run_cycles) {
     case 0xeca0: // [$ECA0..$ECA6]    7 bytes
       CYCLES(0xeca0, 12);
       /* $ECA0 SEC */ s_status |= STATUS_C;
-      /* $ECA1 SBC */ tmp = peek_zpg(0x99), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $ECA1 SBC */ tmp = peek_zpg(0x99), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $ECA3 STA */ poke_zpg(0x9a, s_a);
       /* $ECA5 BEQ */ s_pc = s_status & STATUS_Z ? 0xecb9 : 0xeca7;
       branchTarget = true;
@@ -9213,7 +9213,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xeccb, 12);
       /* $ECCB PLA */ s_a = update_nz(pop8());
       /* $ECCC SEC */ s_status |= STATUS_C;
-      /* $ECCD SBC */ tmp = 0x30, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $ECCD SBC */ tmp = 0x30, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $ECCF JSR */ push16(0xecd1), s_pc = 0xecd5;
       branchTarget = true;
       break;
@@ -9267,13 +9267,13 @@ void run_emulated(unsigned run_cycles) {
       /* $ECF7 ASL */ s_a = update_nzc(s_a << 1);
       /* $ECF8 ASL */ s_a = update_nzc(s_a << 1);
       /* $ECF9 CLC */ s_status &= ~STATUS_C;
-      /* $ECFA ADC */ tmp = peek_zpg(0x9a), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $ECFA ADC */ tmp = peek_zpg(0x9a), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $ECFC ASL */ s_a = update_nzc(s_a << 1);
       /* $ECFD CLC */ s_status &= ~STATUS_C;
       /* $ECFE LDY */ s_y = update_nz(0x00);
-      /* $ED00 ADC */ tmp = peek(peek16_zpg(0xb8) + s_y), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $ED00 ADC */ tmp = peek(peek16_zpg(0xb8) + s_y), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $ED02 SEC */ s_status |= STATUS_C;
-      /* $ED03 SBC */ tmp = 0x30, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $ED03 SBC */ tmp = 0x30, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
     case 0xed05: // [$ED05..$ED09]    5 bytes
       CYCLES(0xed05, 9);
       /* $ED05 STA */ poke_zpg(0x9a, s_a);
@@ -9434,7 +9434,7 @@ void run_emulated(unsigned run_cycles) {
       /* $ED8C LDX */ s_x = update_nz(0x01);
       /* $ED8E LDA */ s_a = update_nz(peek_zpg(0x99));
       /* $ED90 CLC */ s_status &= ~STATUS_C;
-      /* $ED91 ADC */ tmp = 0x0a, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $ED91 ADC */ tmp = 0x0a, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $ED93 BMI */ s_pc = s_status & STATUS_N ? 0xed9e : 0xed95;
       branchTarget = true;
       break;
@@ -9446,7 +9446,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xed99: // [$ED99..$ED9D]    5 bytes
       CYCLES(0xed99, 9);
-      /* $ED99 ADC */ tmp = 0xff, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $ED99 ADC */ tmp = 0xff, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $ED9B TAX */ s_x = update_nz(s_a);
       /* $ED9C LDA */ s_a = update_nz(0x02);
     case 0xed9e: // [$ED9E..$ED9E]    1 bytes
@@ -9454,7 +9454,7 @@ void run_emulated(unsigned run_cycles) {
       /* $ED9E SEC */ s_status |= STATUS_C;
     case 0xed9f: // [$ED9F..$EDA7]    9 bytes
       CYCLES(0xed9f, 16);
-      /* $ED9F SBC */ tmp = 0x02, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $ED9F SBC */ tmp = 0x02, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $EDA1 STA */ poke_zpg(0x9a, s_a);
       /* $EDA3 STX */ poke_zpg(0x99, s_x);
       /* $EDA5 TXA */ s_a = update_nz(s_x);
@@ -9492,16 +9492,16 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xedc1, 55);
       /* $EDC1 LDA */ s_a = update_nz(peek_zpg(0xa1));
       /* $EDC3 CLC */ s_status &= ~STATUS_C;
-      /* $EDC4 ADC */ tmp = peek(0xee6c + s_y), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $EDC4 ADC */ tmp = peek(0xee6c + s_y), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $EDC7 STA */ poke_zpg(0xa1, s_a);
       /* $EDC9 LDA */ s_a = update_nz(peek_zpg(0xa0));
-      /* $EDCB ADC */ tmp = peek(0xee6b + s_y), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $EDCB ADC */ tmp = peek(0xee6b + s_y), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $EDCE STA */ poke_zpg(0xa0, s_a);
       /* $EDD0 LDA */ s_a = update_nz(peek_zpg(0x9f));
-      /* $EDD2 ADC */ tmp = peek(0xee6a + s_y), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $EDD2 ADC */ tmp = peek(0xee6a + s_y), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $EDD5 STA */ poke_zpg(0x9f, s_a);
       /* $EDD7 LDA */ s_a = update_nz(peek_zpg(0x9e));
-      /* $EDD9 ADC */ tmp = peek(0xee69 + s_y), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $EDD9 ADC */ tmp = peek(0xee69 + s_y), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $EDDC STA */ poke_zpg(0x9e, s_a);
       /* $EDDE INX */ s_x = update_nz(s_x + 1);
       /* $EDDF BCS */ s_pc = s_status & STATUS_C ? 0xede5 : 0xede1;
@@ -9531,10 +9531,10 @@ void run_emulated(unsigned run_cycles) {
     case 0xedea: // [$EDEA..$EDED]    4 bytes
       CYCLES(0xedea, 7);
       /* $EDEA EOR */ s_a = update_nz(s_a ^ 0xff);
-      /* $EDEC ADC */ tmp = 0x0a, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $EDEC ADC */ tmp = 0x0a, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
     case 0xedee: // [$EDEE..$EE02]   21 bytes
       CYCLES(0xedee, 36);
-      /* $EDEE ADC */ tmp = 0x2f, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $EDEE ADC */ tmp = 0x2f, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $EDF0 INY */ s_y = update_nz(s_y + 1);
       /* $EDF1 INY */ s_y = update_nz(s_y + 1);
       /* $EDF2 INY */ s_y = update_nz(s_y + 1);
@@ -9602,7 +9602,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xee2e, 14);
       /* $EE2E LDA */ s_a = update_nz(0x00);
       /* $EE30 SEC */ s_status |= STATUS_C;
-      /* $EE31 SBC */ tmp = peek_zpg(0x9a), s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $EE31 SBC */ tmp = peek_zpg(0x9a), s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $EE33 TAX */ s_x = update_nz(s_a);
       /* $EE34 LDA */ s_a = update_nz(0x2d);
     case 0xee36: // [$EE36..$EE41]   12 bytes
@@ -9616,13 +9616,13 @@ void run_emulated(unsigned run_cycles) {
     case 0xee42: // [$EE42..$EE46]    5 bytes
       CYCLES(0xee42, 9);
       /* $EE42 INX */ s_x = update_nz(s_x + 1);
-      /* $EE43 SBC */ tmp = 0x0a, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $EE43 SBC */ tmp = 0x0a, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $EE45 BCS */ s_pc = s_status & STATUS_C ? 0xee42 : 0xee47;
       branchTarget = true;
       break;
     case 0xee47: // [$EE47..$EE56]   16 bytes
       CYCLES(0xee47, 28);
-      /* $EE47 ADC */ tmp = 0x3a, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $EE47 ADC */ tmp = 0x3a, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $EE49 STA */ poke(0x0103 + s_y, s_a);
       /* $EE4C TXA */ s_a = update_nz(s_x);
       /* $EE4D STA */ poke(0x0102 + s_y, s_a);
@@ -9914,7 +9914,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xf80a: // [$F80A..$F80B]    2 bytes
       CYCLES(0xf80a, 4);
-      /* $F80A ADC */ tmp = 0xe0, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $F80A ADC */ tmp = 0xe0, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
     case 0xf80c: // [$F80C..$F80D]    2 bytes
       CYCLES(0xf80c, 4);
       /* $F80C STA */ poke_zpg(0x2e, s_a);
@@ -9952,7 +9952,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xf826: // [$F826..$F827]    2 bytes
       CYCLES(0xf826, 4);
-      /* $F826 ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $F826 ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
     case 0xf828: // [$F828..$F82B]    4 bytes
       CYCLES(0xf828, 7);
       /* $F828 PHA */ push8(s_a);
@@ -10008,7 +10008,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xf854: // [$F854..$F855]    2 bytes
       CYCLES(0xf854, 4);
-      /* $F854 ADC */ tmp = 0x7f, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $F854 ADC */ tmp = 0x7f, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
     case 0xf856: // [$F856..$F85E]    9 bytes
       CYCLES(0xf856, 16);
       /* $F856 STA */ poke_zpg(0x26, s_a);
@@ -10387,7 +10387,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xfbce: // [$FBCE..$FBCF]    2 bytes
       CYCLES(0xfbce, 4);
-      /* $FBCE ADC */ tmp = 0x7f, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $FBCE ADC */ tmp = 0x7f, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
     case 0xfbd0: // [$FBD0..$FBD8]    9 bytes
       CYCLES(0xfbd0, 16);
       /* $FBD0 STA */ poke_zpg(0x28, s_a);
@@ -10509,7 +10509,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xfc27: // [$FC27..$FC2A]    4 bytes
       CYCLES(0xfc27, 7);
-      /* $FC27 ADC */ tmp = peek_zpg(0x20), s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $FC27 ADC */ tmp = peek_zpg(0x20), s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $FC29 STA */ poke_zpg(0x28, s_a);
     case 0xfc2b: // [$FC2B..$FC2B]    1 bytes
       CYCLES(0xfc2b, 2);
@@ -10524,7 +10524,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xfc30: // [$FC30..$FC33]    4 bytes
       CYCLES(0xfc30, 7);
-      /* $FC30 ADC */ tmp = 0xfd, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $FC30 ADC */ tmp = 0xfd, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $FC32 BCC */ s_pc = !(s_status & STATUS_C) ? 0xfbf4 : 0xfc34;
       branchTarget = true;
       break;
@@ -10535,7 +10535,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xfc36: // [$FC36..$FC39]    4 bytes
       CYCLES(0xfc36, 7);
-      /* $FC36 ADC */ tmp = 0xfd, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $FC36 ADC */ tmp = 0xfd, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $FC38 BCC */ s_pc = !(s_status & STATUS_C) ? 0xfc66 : 0xfc3a;
       branchTarget = true;
       break;
@@ -10546,7 +10546,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xfc3c: // [$FC3C..$FC3F]    4 bytes
       CYCLES(0xfc3c, 7);
-      /* $FC3C ADC */ tmp = 0xfd, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $FC3C ADC */ tmp = 0xfd, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $FC3E BCC */ s_pc = !(s_status & STATUS_C) ? 0xfc9c : 0xfc40;
       branchTarget = true;
       break;
@@ -10574,7 +10574,7 @@ void run_emulated(unsigned run_cycles) {
       CYCLES(0xfc4d, 16);
       /* $FC4D LDY */ s_y = update_nz(0x00);
       /* $FC4F PLA */ s_a = update_nz(pop8());
-      /* $FC50 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $FC50 ADC */ tmp = 0x00, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $FC52 CMP */ update_nz_inv_c(s_a - peek_zpg(0x23));
       /* $FC54 BCC */ s_pc = !(s_status & STATUS_C) ? 0xfc46 : 0xfc56;
       branchTarget = true;
@@ -10624,7 +10624,7 @@ void run_emulated(unsigned run_cycles) {
       /* $FC7E LDY */ s_y = update_nz(peek_zpg(0x21));
       /* $FC80 DEY */ s_y = update_nz(s_y - 1);
       /* $FC81 PLA */ s_a = update_nz(pop8());
-      /* $FC82 ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $FC82 ADC */ tmp = 0x01, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
       /* $FC84 CMP */ update_nz_inv_c(s_a - peek_zpg(0x23));
       /* $FC86 BCS */ s_pc = s_status & STATUS_C ? 0xfc95 : 0xfc88;
       branchTarget = true;
@@ -10686,14 +10686,14 @@ void run_emulated(unsigned run_cycles) {
       /* $FCA9 PHA */ push8(s_a);
     case 0xfcaa: // [$FCAA..$FCAD]    4 bytes
       CYCLES(0xfcaa, 7);
-      /* $FCAA SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $FCAA SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $FCAC BNE */ s_pc = !(s_status & STATUS_Z) ? 0xfcaa : 0xfcae;
       branchTarget = true;
       break;
     case 0xfcae: // [$FCAE..$FCB2]    5 bytes
       CYCLES(0xfcae, 9);
       /* $FCAE PLA */ s_a = update_nz(pop8());
-      /* $FCAF SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
+      /* $FCAF SBC */ tmp = 0x01, s_a = s_status & STATUS_D ? sbc_decimal(s_a, tmp) : update_nzv_inv_c(s_a - tmp - (~s_status & STATUS_C), s_a, ~tmp);
       /* $FCB1 BNE */ s_pc = !(s_status & STATUS_Z) ? 0xfca9 : 0xfcb3;
       branchTarget = true;
       break;
@@ -10917,7 +10917,7 @@ void run_emulated(unsigned run_cycles) {
       break;
     case 0xfdeb: // [$FDEB..$FDEC]    2 bytes
       CYCLES(0xfdeb, 4);
-      /* $FDEB ADC */ tmp = 0x06, s_a = s_status & STATUS_D ? adc_decimal(tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
+      /* $FDEB ADC */ tmp = 0x06, s_a = s_status & STATUS_D ? adc_decimal(s_a, tmp) : update_nzvc(s_a + tmp + (s_status & STATUS_C), s_a, tmp);
     case 0xfded: // [$FDED..$FDEF]    3 bytes
       CYCLES(0xfded, 6);
       /* $FDED JMP */ s_pc = peek16(0x0036);
