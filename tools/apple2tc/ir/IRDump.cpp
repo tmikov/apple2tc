@@ -55,7 +55,7 @@ void IRDumper::dump(Module *mod) {
 
 void IRDumper::dump(Function *func) {
   auto sortedBlocks = sortBasicBlocksByAddress(func->basicBlocks());
-  
+
   // Name all basic blocks and instructions consistently first.
   for (auto *bb : sortedBlocks) {
     name(bb);
@@ -77,9 +77,31 @@ void IRDumper::dump(BasicBlock *bb) {
 }
 
 void IRDumper::dumpImpl(BasicBlock *bb) {
-  fprintf(os_, "%s:", name(bb).c_str());
+  fprintf(os_, "%s:  // ", name(bb).c_str());
   if (bb->getAddress())
-    fprintf(os_, "  // $%04X", *bb->getAddress());
+    fprintf(os_, "[$%04X] ", *bb->getAddress());
+  // Predecessors and successors.
+  {
+    unsigned i;
+
+    fprintf(os_, "Pred(");
+    i = 0;
+    for(auto &pred : predecessors(*bb)) {
+      if (i++)
+        fprintf(os_, ", ");
+      fprintf(os_, "%s", name(&pred).c_str());
+    }
+    fprintf(os_, ") ");
+    fprintf(os_, "Succ(");
+    i = 0;
+    for(auto &succ : successors(*bb)) {
+      if (i++)
+        fprintf(os_, ", ");
+      fprintf(os_, "%s", name(&succ).c_str());
+    }
+    fprintf(os_, ")");
+  }
+
   fprintf(os_, "\n");
   preBasicBlock(bb);
   for (auto &inst : bb->instructions())
