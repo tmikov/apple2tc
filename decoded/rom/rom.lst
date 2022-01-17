@@ -1155,7 +1155,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D392*/             RTS
 /*D393*/ L_D393:                             ; xref L_D4D1 L_E0B2
 /*D393*/             JSR    L_D3E3           ; $D3E3
-/*D396*/ L_D396:                             ; xref
+/*D396*/ L_D396:                             ; xref L_D393
 /*D396*/             STA    M_6D             ; $006D
 /*D398*/             STY    M_6E             ; $006E
 /*D39A*/ L_D39A:                             ; xref L_E566 L_D396
@@ -1233,7 +1233,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D3F5*/             BPL    L_D3F1           ; $D3F1
 /*D3F7*/ L_D3F7:                             ; xref L_D3F1
 /*D3F7*/             JSR    L_E484           ; $E484
-/*D3FA*/ L_D3FA:                             ; xref
+/*D3FA*/ L_D3FA:                             ; xref L_D3F7
 /*D3FA*/             LDX    #M_F7            ; $00F7
 /*D3FC*/ L_D3FC:                             ; xref L_D3FA L_D3FC
 /*D3FC*/             PLA
@@ -1262,42 +1262,42 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D416*/             JMP    L_F2E9           ; $F2E9
 /*D419*/ L_D419:                             ; xref L_D412
 /*D419*/             JSR    L_DAFB           ; $DAFB
-/*D41C*/ L_D41C:                             ; xref
+/*D41C*/ L_D41C:                             ; xref L_D419
 /*D41C*/             JSR    L_DB5A           ; $DB5A
-/*D41F*/ L_D41F:                             ; xref L_D426
+/*D41F*/ L_D41F:                             ; xref L_D41C L_D426
 /*D41F*/             LDA    M_D260,X         ; $D260
 /*D422*/             PHA
 /*D423*/             JSR    L_DB5C           ; $DB5C
-/*D426*/ L_D426:                             ; xref
+/*D426*/ L_D426:                             ; xref L_D41F
 /*D426*/             INX
 /*D427*/             PLA
 /*D428*/             BPL    L_D41F           ; $D41F
 /*D42A*/ L_D42A:                             ; xref L_D426
 /*D42A*/             JSR    L_D683           ; $D683
-/*D42D*/ L_D42D:                             ; xref
+/*D42D*/ L_D42D:                             ; xref L_D42A
 /*D42D*/             LDA    #M_50            ; $0050
 /*D42F*/             LDY    #M_D3            ; $00D3
 /*D431*/ L_D431:                             ; xref L_D42D L_D890
 /*D431*/             JSR    L_DB3A           ; $DB3A
-/*D434*/ L_D434:                             ; xref
+/*D434*/ L_D434:                             ; xref L_D431
 /*D434*/             LDY    M_76             ; $0076
 /*D436*/             INY
 /*D437*/             BEQ    L_D43C           ; $D43C
 /*D439*/ L_D439:                             ; xref L_D434
 /*D439*/             JSR    L_ED19           ; $ED19
-/*D43C*/ L_D43C:                             ; xref L_D434 L_D893 L_D44D L_D504 L_E003
+/*D43C*/ L_D43C:                             ; xref L_D434 L_D439 L_D893 L_D44D L_D504 L_E003
 /*D43C*/             JSR    L_DAFB           ; $DAFB
-/*D43F*/ L_D43F:                             ; xref
+/*D43F*/ L_D43F:                             ; xref L_D43C
 /*D43F*/             LDX    #M_DD            ; $00DD
 /*D441*/             JSR    L_D52E           ; $D52E
-/*D444*/ L_D444:                             ; xref
+/*D444*/ L_D444:                             ; xref L_D43F
 ; WARNING: Instruction performs code modification
 /*D444*/             STX    M_B8             ; $00B8
 ; WARNING: Instruction performs code modification
 /*D446*/             STY    M_B9             ; $00B9
 /*D448*/             LSR    M_D8             ; $00D8
 /*D44A*/             JSR    L_00B1           ; $00B1
-/*D44D*/ L_D44D:                             ; xref
+/*D44D*/ L_D44D:                             ; xref L_D444
 /*D44D*/             TAX
 /*D44E*/             BEQ    L_D43C           ; $D43C
 /*D450*/ L_D450:                             ; xref L_D44D
@@ -1306,7 +1306,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D454*/             BCC    L_D45C           ; $D45C
 /*D456*/ L_D456:                             ; xref L_D450
 /*D456*/             JSR    L_D559           ; $D559
-/*D459*/ L_D459:                             ; xref
+/*D459*/ L_D459:                             ; xref L_D456
 /*D459*/             JMP    L_D805           ; $D805
 /*D45C*/ L_D45C:                             ; xref L_D450
 /*D45C*/             LDX    M_AF             ; $00AF
@@ -1314,12 +1314,12 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D460*/             LDX    M_B0             ; $00B0
 /*D462*/             STX    M_6A             ; $006A
 /*D464*/             JSR    L_DA0C           ; $DA0C
-/*D467*/ L_D467:                             ; xref
+/*D467*/ L_D467:                             ; xref L_D45C
 /*D467*/             JSR    L_D559           ; $D559
-/*D46A*/ L_D46A:                             ; xref
+/*D46A*/ L_D46A:                             ; xref L_D467
 /*D46A*/             STY    M_0F             ; $000F
 /*D46C*/             JSR    L_D61A           ; $D61A
-/*D46F*/ L_D46F:                             ; xref
+/*D46F*/ L_D46F:                             ; xref L_D46A
 /*D46F*/             BCC    L_D4B5           ; $D4B5
 /*D471*/ L_D471:                             ; xref L_D46F
 /*D471*/             LDY    #M_01            ; $0001
@@ -1386,7 +1386,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D4D1*/ L_D4D1:                             ; xref L_D4BA L_D4D0
 /*D4D1*/             STY    M_95             ; $0095
 /*D4D3*/             JSR    L_D393           ; $D393
-/*D4D6*/ L_D4D6:                             ; xref
+/*D4D6*/ L_D4D6:                             ; xref L_D4D1
 /*D4D6*/             LDA    M_50             ; $0050
 /*D4D8*/             LDY    M_51             ; $0051
 /*D4DA*/             STA    M_01FE           ; $01FE
@@ -1403,7 +1403,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D4F0*/             BNE    L_D4EA           ; $D4EA
 /*D4F2*/ L_D4F2:                             ; xref L_D4B5 L_D4EA
 /*D4F2*/             JSR    L_D665           ; $D665
-/*D4F5*/ L_D4F5:                             ; xref
+/*D4F5*/ L_D4F5:                             ; xref L_D4F2
 /*D4F5*/             LDA    M_67             ; $0067
 /*D4F7*/             LDY    M_68             ; $0068
 /*D4F9*/             STA    M_5E             ; $005E
@@ -1444,7 +1444,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D52E*/ L_D52E:                             ; xref L_D43F L_D52C
 /*D52E*/             STX    M_33             ; $0033
 /*D530*/             JSR    L_FD6A           ; $FD6A
-/*D533*/ L_D533:                             ; xref
+/*D533*/ L_D533:                             ; xref L_D52E
 /*D533*/             CPX    #$EF             ; $00EF
 /*D535*/             BCC    L_D539           ; $D539
 /*D537*/ L_D537:                             ; xref L_D533
@@ -1467,7 +1467,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D552*/             RTS
 /*D553*/ L_D553:                             ; xref L_D860
 /*D553*/             JSR    L_FD0C           ; $FD0C
-/*D556*/ L_D556:                             ; xref
+/*D556*/ L_D556:                             ; xref L_D553
 /*D556*/             AND    #M_7F            ; $007F
 /*D558*/             RTS
 /*D559*/ L_D559:                             ; xref L_D456 L_D467
@@ -1481,7 +1481,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D564*/             PLA
 /*D565*/             PLA
 /*D566*/             JSR    L_D665           ; $D665
-/*D569*/ L_D569:                             ; xref
+/*D569*/ L_D569:                             ; xref L_D564
 /*D569*/             JMP    L_D7D2           ; $D7D2
 /*D56C*/ L_D56C:                             ; xref L_D559 L_D574
 /*D56C*/             INX
@@ -1670,7 +1670,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D663*/             STA    M_B0             ; $00B0
 /*D665*/ L_D665:                             ; xref L_D64B L_D564 L_D4F2 L_D918
 /*D665*/             JSR    L_D697           ; $D697
-/*D668*/ L_D668:                             ; xref
+/*D668*/ L_D668:                             ; xref L_D665
 /*D668*/             LDA    #M_00            ; $0000
 /*D66A*/ L_D66A:                             ; xref L_D668
 /*D66A*/             BNE    L_D696           ; $D696
@@ -1686,7 +1686,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D67C*/             STA    M_6D             ; $006D
 /*D67E*/             STY    M_6E             ; $006E
 /*D680*/             JSR    L_D849           ; $D849
-/*D683*/ L_D683:                             ; xref L_D42A
+/*D683*/ L_D683:                             ; xref L_D66C L_D42A
 /*D683*/             LDX    #$55             ; $0055
 /*D685*/             STX    M_52             ; $0052
 /*D687*/             PLA
@@ -1725,11 +1725,11 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D6AF*/             BNE    L_D696           ; $D696
 /*D6B1*/ L_D6B1:                             ; xref L_D6A5 L_D6A7 L_D6A9 L_D6AD
 /*D6B1*/             JSR    L_DA0C           ; $DA0C
-/*D6B4*/ L_D6B4:                             ; xref
+/*D6B4*/ L_D6B4:                             ; xref L_D6B1
 /*D6B4*/             JSR    L_D61A           ; $D61A
-/*D6B7*/ L_D6B7:                             ; xref
+/*D6B7*/ L_D6B7:                             ; xref L_D6B4
 /*D6B7*/             JSR    L_00B7           ; $00B7
-/*D6BA*/ L_D6BA:                             ; xref
+/*D6BA*/ L_D6BA:                             ; xref L_D6B7
 /*D6BA*/             BEQ    L_D6CC           ; $D6CC
 /*D6BC*/ L_D6BC:                             ; xref L_D6BA
 /*D6BC*/             CMP    #$C9             ; $00C9
@@ -1739,9 +1739,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D6C2*/             BNE    L_D648           ; $D648
 /*D6C4*/ L_D6C4:                             ; xref L_D6BC L_D6C0
 /*D6C4*/             JSR    L_00B1           ; $00B1
-/*D6C7*/ L_D6C7:                             ; xref
+/*D6C7*/ L_D6C7:                             ; xref L_D6C4
 /*D6C7*/             JSR    L_DA0C           ; $DA0C
-/*D6CA*/ L_D6CA:                             ; xref
+/*D6CA*/ L_D6CA:                             ; xref L_D6C7
 /*D6CA*/             BNE    L_D696           ; $D696
 /*D6CC*/ L_D6CC:                             ; xref L_D6BA L_D6CA
 /*D6CC*/             PLA
@@ -1759,9 +1759,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D6DE*/             BEQ    L_D724           ; $D724
 /*D6E0*/ L_D6E0:                             ; xref L_D6DA
 /*D6E0*/             JSR    L_D858           ; $D858
-/*D6E3*/ L_D6E3:                             ; xref
+/*D6E3*/ L_D6E3:                             ; xref L_D6E0
 /*D6E3*/             JSR    L_DAFB           ; $DAFB
-/*D6E6*/ L_D6E6:                             ; xref
+/*D6E6*/ L_D6E6:                             ; xref L_D6E3
 /*D6E6*/             INY
 /*D6E7*/             LDA    (M_9B),Y         ; $009B
 /*D6E9*/             TAX
@@ -1777,20 +1777,20 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D6F7*/ L_D6F7:                             ; xref L_D6F1 L_D6F5
 /*D6F7*/             STY    M_85             ; $0085
 /*D6F9*/             JSR    L_ED24           ; $ED24
-/*D6FC*/ L_D6FC:                             ; xref
+/*D6FC*/ L_D6FC:                             ; xref L_D6F7
 /*D6FC*/             LDA    #M_20            ; $0020
 /*D6FE*/ L_D6FE:                             ; xref L_D6FC L_D762
 /*D6FE*/             LDY    M_85             ; $0085
 /*D700*/             AND    #M_7F            ; $007F
 /*D702*/ L_D702:                             ; xref L_D734 L_D6FE
 /*D702*/             JSR    L_DB5C           ; $DB5C
-/*D705*/ L_D705:                             ; xref
+/*D705*/ L_D705:                             ; xref L_D702
 /*D705*/             LDA    M_24             ; $0024
 /*D707*/             CMP    #M_21            ; $0021
 /*D709*/             BCC    L_D712           ; $D712
 /*D70B*/ L_D70B:                             ; xref L_D705
 /*D70B*/             JSR    L_DAFB           ; $DAFB
-/*D70E*/ L_D70E:                             ; xref
+/*D70E*/ L_D70E:                             ; xref L_D70B
 /*D70E*/             LDA    #M_05            ; $0005
 /*D710*/             STA    M_24             ; $0024
 /*D712*/ L_D712:                             ; xref L_D705 L_D70E
@@ -1809,7 +1809,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D724*/ L_D724:                             ; xref L_D6DA L_D6F5 L_D717
 /*D724*/             LDA    #M_0D            ; $000D
 /*D726*/             JSR    L_DB5C           ; $DB5C
-/*D729*/ L_D729:                             ; xref
+/*D729*/ L_D729:                             ; xref L_D724
 /*D729*/             JMP    L_D7D2           ; $D7D2
 /*D72C*/ L_D72C:                             ; xref L_D749 L_D755
 /*D72C*/             INY
@@ -1836,33 +1836,33 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D747*/             BEQ    L_D750           ; $D750
 /*D749*/ L_D749:                             ; xref L_D74C L_D746
 /*D749*/             JSR    L_D72C           ; $D72C
-/*D74C*/ L_D74C:                             ; xref
+/*D74C*/ L_D74C:                             ; xref L_D749
 /*D74C*/             BPL    L_D749           ; $D749
 /*D74E*/ L_D74E:                             ; xref L_D74C
 /*D74E*/             BMI    L_D746           ; $D746
 /*D750*/ L_D750:                             ; xref L_D746 L_D74E
 /*D750*/             LDA    #M_20            ; $0020
 /*D752*/             JSR    L_DB5C           ; $DB5C
-/*D755*/ L_D755:                             ; xref L_D75D
+/*D755*/ L_D755:                             ; xref L_D750 L_D75D
 /*D755*/             JSR    L_D72C           ; $D72C
-/*D758*/ L_D758:                             ; xref
+/*D758*/ L_D758:                             ; xref L_D755
 /*D758*/             BMI    L_D75F           ; $D75F
 /*D75A*/ L_D75A:                             ; xref L_D758
 /*D75A*/             JSR    L_DB5C           ; $DB5C
-/*D75D*/ L_D75D:                             ; xref
+/*D75D*/ L_D75D:                             ; xref L_D75A
 /*D75D*/             BNE    L_D755           ; $D755
 /*D75F*/ L_D75F:                             ; xref L_D758 L_D75D
 /*D75F*/             JSR    L_DB5C           ; $DB5C
-/*D762*/ L_D762:                             ; xref
+/*D762*/ L_D762:                             ; xref L_D75F
 /*D762*/             LDA    #M_20            ; $0020
 /*D764*/             BNE    L_D6FE           ; $D6FE
 /*D766*/ L_D766:                             ; xref L_D762
 /*D766*/             LDA    #M_80            ; $0080
 /*D768*/             STA    M_14             ; $0014
 /*D76A*/             JSR    L_DA46           ; $DA46
-/*D76D*/ L_D76D:                             ; xref
+/*D76D*/ L_D76D:                             ; xref L_D766
 /*D76D*/             JSR    L_D365           ; $D365
-/*D770*/ L_D770:                             ; xref
+/*D770*/ L_D770:                             ; xref L_D76D
 /*D770*/             BNE    L_D777           ; $D777
 /*D772*/ L_D772:                             ; xref L_D770
 /*D772*/             TXA
@@ -1874,9 +1874,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D778*/             PLA
 /*D779*/             LDA    #$09             ; $0009
 /*D77B*/             JSR    L_D3D6           ; $D3D6
-/*D77E*/ L_D77E:                             ; xref
+/*D77E*/ L_D77E:                             ; xref L_D777
 /*D77E*/             JSR    L_D9A3           ; $D9A3
-/*D781*/ L_D781:                             ; xref
+/*D781*/ L_D781:                             ; xref L_D77E
 /*D781*/             CLC
 /*D782*/             TYA
 /*D783*/             ADC    M_B8             ; $00B8
@@ -1890,11 +1890,11 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D790*/             PHA
 /*D791*/             LDA    #$C1             ; $00C1
 /*D793*/             JSR    L_DEC0           ; $DEC0
-/*D796*/ L_D796:                             ; xref
+/*D796*/ L_D796:                             ; xref L_D781
 /*D796*/             JSR    L_DD6A           ; $DD6A
-/*D799*/ L_D799:                             ; xref
+/*D799*/ L_D799:                             ; xref L_D796
 /*D799*/             JSR    L_DD67           ; $DD67
-/*D79C*/ L_D79C:                             ; xref
+/*D79C*/ L_D79C:                             ; xref L_D799
 /*D79C*/             LDA    M_A2             ; $00A2
 /*D79E*/             ORA    #M_7F            ; $007F
 /*D7A0*/             AND    M_9E             ; $009E
@@ -1908,20 +1908,20 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D7AF*/             LDA    #M_13            ; $0013
 /*D7B1*/             LDY    #M_E9            ; $00E9
 /*D7B3*/             JSR    L_EAF9           ; $EAF9
-/*D7B6*/ L_D7B6:                             ; xref
+/*D7B6*/ L_D7B6:                             ; xref L_D7AF
 /*D7B6*/             JSR    L_00B7           ; $00B7
-/*D7B9*/ L_D7B9:                             ; xref
+/*D7B9*/ L_D7B9:                             ; xref L_D7B6
 /*D7B9*/             CMP    #$C7             ; $00C7
 /*D7BB*/             BNE    L_D7C3           ; $D7C3
 /*D7BD*/ L_D7BD:                             ; xref L_D7B9
 /*D7BD*/             JSR    L_00B1           ; $00B1
-/*D7C0*/ L_D7C0:                             ; xref
+/*D7C0*/ L_D7C0:                             ; xref L_D7BD
 /*D7C0*/             JSR    L_DD67           ; $DD67
-/*D7C3*/ L_D7C3:                             ; xref L_D7B9
+/*D7C3*/ L_D7C3:                             ; xref L_D7B9 L_D7C0
 /*D7C3*/             JSR    L_EB82           ; $EB82
-/*D7C6*/ L_D7C6:                             ; xref
+/*D7C6*/ L_D7C6:                             ; xref L_D7C3
 /*D7C6*/             JSR    L_DE15           ; $DE15
-/*D7C9*/ L_D7C9:                             ; xref
+/*D7C9*/ L_D7C9:                             ; xref L_D7C6
 /*D7C9*/             LDA    M_86             ; $0086
 /*D7CB*/             PHA
 /*D7CC*/             LDA    M_85             ; $0085
@@ -1932,7 +1932,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D7D2*/             TSX
 /*D7D3*/             STX    M_F8             ; $00F8
 /*D7D5*/             JSR    L_D858           ; $D858
-/*D7D8*/ L_D7D8:                             ; xref
+/*D7D8*/ L_D7D8:                             ; xref L_D7D2
 /*D7D8*/             LDA    M_B8             ; $00B8
 /*D7DA*/             LDY    M_B9             ; $00B9
 /*D7DC*/             LDX    M_76             ; $0076
@@ -1975,17 +1975,17 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D80E*/ L_D80E:                             ; xref L_D809
 /*D80E*/             LDA    #M_23            ; $0023
 /*D810*/             JSR    L_DB5C           ; $DB5C
-/*D813*/ L_D813:                             ; xref
+/*D813*/ L_D813:                             ; xref L_D80E
 /*D813*/             LDX    M_75             ; $0075
 /*D815*/             LDA    M_76             ; $0076
 /*D817*/             JSR    L_ED24           ; $ED24
-/*D81A*/ L_D81A:                             ; xref
+/*D81A*/ L_D81A:                             ; xref L_D813
 /*D81A*/             JSR    L_DB57           ; $DB57
-/*D81D*/ L_D81D:                             ; xref L_D805 L_D809
+/*D81D*/ L_D81D:                             ; xref L_D805 L_D809 L_D81A
 /*D81D*/             JSR    L_00B1           ; $00B1
-/*D820*/ L_D820:                             ; xref
+/*D820*/ L_D820:                             ; xref L_D81D
 /*D820*/             JSR    L_D828           ; $D828
-/*D823*/ L_D823:                             ; xref
+/*D823*/ L_D823:                             ; xref L_D820
 /*D823*/             JMP    L_D7D2           ; $D7D2
 /*D826*/ L_D826:                             ; xref L_D7EB
 /*D826*/             BEQ    L_D88A           ; $D88A
@@ -2033,7 +2033,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D85F*/             RTS
 /*D860*/ L_D860:                             ; xref L_D858
 /*D860*/             JSR    L_D553           ; $D553
-/*D863*/ L_D863:                             ; xref L_DBD9
+/*D863*/ L_D863:                             ; xref L_D860 L_DBD9
 /*D863*/             LDX    #M_FF            ; $00FF
 /*D865*/             BIT    M_D8             ; $00D8
 /*D867*/             BPL    L_D86C           ; $D86C
@@ -2210,12 +2210,12 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D918*/             JMP    L_D665           ; $D665
 /*D91B*/ L_D91B:                             ; xref L_D912
 /*D91B*/             JSR    L_D66C           ; $D66C
-/*D91E*/ L_D91E:                             ; xref
+/*D91E*/ L_D91E:                             ; xref L_D91B
 /*D91E*/             JMP    L_D935           ; $D935
 /*D921*/ L_D921:                             ; xref
 /*D921*/             LDA    #M_03            ; $0003
 /*D923*/             JSR    L_D3D6           ; $D3D6
-/*D926*/ L_D926:                             ; xref
+/*D926*/ L_D926:                             ; xref L_D921
 /*D926*/             LDA    M_B9             ; $00B9
 /*D928*/             PHA
 /*D929*/             LDA    M_B8             ; $00B8
@@ -2228,15 +2228,15 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D934*/             PHA
 /*D935*/ L_D935:                             ; xref L_D926 L_D91E
 /*D935*/             JSR    L_00B7           ; $00B7
-/*D938*/ L_D938:                             ; xref
+/*D938*/ L_D938:                             ; xref L_D935
 /*D938*/             JSR    L_D93E           ; $D93E
-/*D93B*/ L_D93B:                             ; xref
+/*D93B*/ L_D93B:                             ; xref L_D938
 /*D93B*/             JMP    L_D7D2           ; $D7D2
 /*D93E*/ L_D93E:                             ; xref L_F312 L_D938 L_D9E6
 /*D93E*/             JSR    L_DA0C           ; $DA0C
-/*D941*/ L_D941:                             ; xref
+/*D941*/ L_D941:                             ; xref L_D93E
 /*D941*/             JSR    L_D9A6           ; $D9A6
-/*D944*/ L_D944:                             ; xref
+/*D944*/ L_D944:                             ; xref L_D941
 /*D944*/             LDA    M_76             ; $0076
 /*D946*/             CMP    M_51             ; $0051
 /*D948*/             BCS    L_D955           ; $D955
@@ -2254,7 +2254,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D957*/             LDX    M_68             ; $0068
 /*D959*/ L_D959:                             ; xref L_D94A L_D955 L_D952
 /*D959*/             JSR    L_D61E           ; $D61E
-/*D95C*/ L_D95C:                             ; xref
+/*D95C*/ L_D95C:                             ; xref L_D959
 /*D95C*/             BCC    L_D97C           ; $D97C
 /*D95E*/ L_D95E:                             ; xref L_D95C
 /*D95E*/             LDA    M_9B             ; $009B
@@ -2273,7 +2273,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D96D*/             LDA    #M_FF            ; $00FF
 /*D96F*/             STA    M_85             ; $0085
 /*D971*/             JSR    L_D365           ; $D365
-/*D974*/ L_D974:                             ; xref
+/*D974*/ L_D974:                             ; xref L_D96D
 /*D974*/             TXS
 /*D975*/             CMP    #M_B0            ; $00B0
 /*D977*/             BEQ    L_D984           ; $D984
@@ -2305,7 +2305,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D993*/             STA    M_B9             ; $00B9
 /*D995*/ L_D995:                             ; xref L_D98A
 /*D995*/             JSR    L_D9A3           ; $D9A3
-/*D998*/ L_D998:                             ; xref L_D9DF L_DCB9 L_F2E6
+/*D998*/ L_D998:                             ; xref L_D995 L_D9DF L_DCB9 L_F2E6
 /*D998*/             TYA
 /*D999*/             CLC
 /*D99A*/             ADC    M_B8             ; $00B8
@@ -2354,24 +2354,24 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D9C8*/             RTS
 /*D9C9*/ L_D9C9:                             ; xref
 /*D9C9*/             JSR    L_DD7B           ; $DD7B
-/*D9CC*/ L_D9CC:                             ; xref
+/*D9CC*/ L_D9CC:                             ; xref L_D9C9
 /*D9CC*/             JSR    L_00B7           ; $00B7
-/*D9CF*/ L_D9CF:                             ; xref
+/*D9CF*/ L_D9CF:                             ; xref L_D9CC
 /*D9CF*/             CMP    #M_AB            ; $00AB
 /*D9D1*/             BEQ    L_D9D8           ; $D9D8
 /*D9D3*/ L_D9D3:                             ; xref L_D9CF
 /*D9D3*/             LDA    #$C4             ; $00C4
 /*D9D5*/             JSR    L_DEC0           ; $DEC0
-/*D9D8*/ L_D9D8:                             ; xref L_D9CF
+/*D9D8*/ L_D9D8:                             ; xref L_D9CF L_D9D3
 /*D9D8*/             LDA    M_9D             ; $009D
 /*D9DA*/             BNE    L_D9E1           ; $D9E1
 /*D9DC*/ L_D9DC:                             ; xref L_D9D8
 /*D9DC*/             JSR    L_D9A6           ; $D9A6
-/*D9DF*/ L_D9DF:                             ; xref
+/*D9DF*/ L_D9DF:                             ; xref L_D9DC
 /*D9DF*/             BEQ    L_D998           ; $D998
 /*D9E1*/ L_D9E1:                             ; xref L_D9D8 L_D9DF
 /*D9E1*/             JSR    L_00B7           ; $00B7
-/*D9E4*/ L_D9E4:                             ; xref
+/*D9E4*/ L_D9E4:                             ; xref L_D9E1
 /*D9E4*/             BCS    L_D9E9           ; $D9E9
 /*D9E6*/ L_D9E6:                             ; xref L_D9E4
 /*D9E6*/             JMP    L_D93E           ; $D93E
@@ -2379,7 +2379,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D9E9*/             JMP    L_D828           ; $D828
 /*D9EC*/ L_D9EC:                             ; xref
 /*D9EC*/             JSR    L_E6F8           ; $E6F8
-/*D9EF*/ L_D9EF:                             ; xref
+/*D9EF*/ L_D9EF:                             ; xref L_D9EC
 /*D9EF*/             PHA
 /*D9F0*/             CMP    #M_B0            ; $00B0
 /*D9F2*/             BEQ    L_D9F8           ; $D9F8
@@ -2394,9 +2394,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*D9FD*/             JMP    L_D82A           ; $D82A
 /*DA00*/ L_DA00:                             ; xref L_D9F8
 /*DA00*/             JSR    L_00B1           ; $00B1
-/*DA03*/ L_DA03:                             ; xref
+/*DA03*/ L_DA03:                             ; xref L_DA00
 /*DA03*/             JSR    L_DA0C           ; $DA0C
-/*DA06*/ L_DA06:                             ; xref
+/*DA06*/ L_DA06:                             ; xref L_DA03
 /*DA06*/             CMP    #M_2C            ; $002C
 /*DA08*/             BEQ    L_D9F8           ; $D9F8
 /*DA0A*/ L_DA0A:                             ; xref L_DA06
@@ -2437,26 +2437,26 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DA3E*/             INC    M_51             ; $0051
 /*DA40*/ L_DA40:                             ; xref L_DA20 L_DA3E
 /*DA40*/             JSR    L_00B1           ; $00B1
-/*DA43*/ L_DA43:                             ; xref
+/*DA43*/ L_DA43:                             ; xref L_DA40
 /*DA43*/             JMP    L_DA12           ; $DA12
 /*DA46*/ L_DA46:                             ; xref L_D83F L_D766
 /*DA46*/             JSR    L_DFE3           ; $DFE3
-/*DA49*/ L_DA49:                             ; xref
+/*DA49*/ L_DA49:                             ; xref L_DA46
 /*DA49*/             STA    M_85             ; $0085
 /*DA4B*/             STY    M_86             ; $0086
 /*DA4D*/             LDA    #M_D0            ; $00D0
 /*DA4F*/             JSR    L_DEC0           ; $DEC0
-/*DA52*/ L_DA52:                             ; xref
+/*DA52*/ L_DA52:                             ; xref L_DA49
 /*DA52*/             LDA    M_12             ; $0012
 /*DA54*/             PHA
 /*DA55*/             LDA    M_11             ; $0011
 /*DA57*/             PHA
 /*DA58*/             JSR    L_DD7B           ; $DD7B
-/*DA5B*/ L_DA5B:                             ; xref
+/*DA5B*/ L_DA5B:                             ; xref L_DA52
 /*DA5B*/             PLA
 /*DA5C*/             ROL    A                ; $0000
 /*DA5D*/             JSR    L_DD6D           ; $DD6D
-/*DA60*/ L_DA60:                             ; xref
+/*DA60*/ L_DA60:                             ; xref L_DA5B
 /*DA60*/             BNE    L_DA7A           ; $DA7A
 /*DA62*/ L_DA62:                             ; xref L_DA60
 /*DA62*/             PLA
@@ -2464,9 +2464,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DA63*/             BPL    L_DA77           ; $DA77
 /*DA65*/ L_DA65:                             ; xref L_DA63
 /*DA65*/             JSR    L_EB72           ; $EB72
-/*DA68*/ L_DA68:                             ; xref
+/*DA68*/ L_DA68:                             ; xref L_DA65
 /*DA68*/             JSR    L_E10C           ; $E10C
-/*DA6B*/ L_DA6B:                             ; xref
+/*DA6B*/ L_DA6B:                             ; xref L_DA68
 /*DA6B*/             LDY    #M_00            ; $0000
 /*DA6D*/             LDA    M_A0             ; $00A0
 /*DA6F*/             STA    (M_85),Y         ; $0085
@@ -2508,20 +2508,20 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DAA1*/             LDY    #M_00            ; $0000
 /*DAA3*/             LDA    (M_A0),Y         ; $00A0
 /*DAA5*/             JSR    L_E3D5           ; $E3D5
-/*DAA8*/ L_DAA8:                             ; xref
+/*DAA8*/ L_DAA8:                             ; xref L_DAA1
 /*DAA8*/             LDA    M_8C             ; $008C
 /*DAAA*/             LDY    M_8D             ; $008D
 /*DAAC*/             STA    M_AB             ; $00AB
 /*DAAE*/             STY    M_AC             ; $00AC
 /*DAB0*/             JSR    L_E5D4           ; $E5D4
-/*DAB3*/ L_DAB3:                             ; xref
+/*DAB3*/ L_DAB3:                             ; xref L_DAA8
 /*DAB3*/             LDA    #M_9D            ; $009D
 /*DAB5*/             LDY    #M_00            ; $0000
 /*DAB7*/ L_DAB7:                             ; xref L_DA9A L_DAB3
 /*DAB7*/             STA    M_8C             ; $008C
 /*DAB9*/             STY    M_8D             ; $008D
 /*DABB*/             JSR    L_E635           ; $E635
-/*DABE*/ L_DABE:                             ; xref
+/*DABE*/ L_DABE:                             ; xref L_DAB7
 /*DABE*/             LDY    #M_00            ; $0000
 /*DAC0*/             LDA    (M_8C),Y         ; $008C
 /*DAC2*/             STA    (M_85),Y         ; $0085
@@ -2534,9 +2534,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DACE*/             RTS
 /*DACF*/ L_DACF:                             ; xref L_DAEE L_DAF8
 /*DACF*/             JSR    L_DB3D           ; $DB3D
-/*DAD2*/ L_DAD2:                             ; xref
+/*DAD2*/ L_DAD2:                             ; xref L_DACF
 /*DAD2*/             JSR    L_00B7           ; $00B7
-/*DAD5*/ L_DAD5:                             ; xref
+/*DAD5*/ L_DAD5:                             ; xref L_DAD2
 /*DAD5*/             BEQ    L_DAFB           ; $DAFB
 /*DAD7*/ L_DAD7:                             ; xref L_DAD5 L_DB32
 /*DAD7*/             BEQ    L_DB02           ; $DB02
@@ -2556,19 +2556,19 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DAE9*/             BEQ    L_DB2F           ; $DB2F
 /*DAEB*/ L_DAEB:                             ; xref L_DAE7
 /*DAEB*/             JSR    L_DD7B           ; $DD7B
-/*DAEE*/ L_DAEE:                             ; xref
+/*DAEE*/ L_DAEE:                             ; xref L_DAEB
 /*DAEE*/             BIT    M_11             ; $0011
 /*DAF0*/             BMI    L_DACF           ; $DACF
 /*DAF2*/ L_DAF2:                             ; xref L_DAEE
 /*DAF2*/             JSR    L_ED34           ; $ED34
-/*DAF5*/ L_DAF5:                             ; xref
+/*DAF5*/ L_DAF5:                             ; xref L_DAF2
 /*DAF5*/             JSR    L_E3E7           ; $E3E7
-/*DAF8*/ L_DAF8:                             ; xref
+/*DAF8*/ L_DAF8:                             ; xref L_DAF5
 /*DAF8*/             JMP    L_DACF           ; $DACF
 /*DAFB*/ L_DAFB:                             ; xref L_F15C L_D419 L_D43C L_DAD5 L_DB09 L_F7F0 L_D6E3 L_D70B
 /*DAFB*/             LDA    #M_0D            ; $000D
 /*DAFD*/             JSR    L_DB5C           ; $DB5C
-/*DB00*/ L_DB00:                             ; xref L_DB51
+/*DB00*/ L_DB00:                             ; xref L_DAFB L_DB51
 /*DB00*/             EOR    #M_FF            ; $00FF
 /*DB02*/ L_DB02:                             ; xref L_DB00 L_DB44 L_DAD7
 /*DB02*/             RTS
@@ -2578,7 +2578,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DB07*/             BCC    L_DB0E           ; $DB0E
 /*DB09*/ L_DB09:                             ; xref L_DB03
 /*DB09*/             JSR    L_DAFB           ; $DAFB
-/*DB0C*/ L_DB0C:                             ; xref
+/*DB0C*/ L_DB0C:                             ; xref L_DB09
 /*DB0C*/             BNE    L_DB2F           ; $DB2F
 /*DB0E*/ L_DB0E:                             ; xref L_DB03 L_DB0C
 /*DB0E*/             ADC    #M_10            ; $0010
@@ -2588,7 +2588,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DB16*/ L_DB16:                             ; xref L_DAD9 L_DB0E L_DADD
 /*DB16*/             PHP
 /*DB17*/             JSR    L_E6F5           ; $E6F5
-/*DB1A*/ L_DB1A:                             ; xref
+/*DB1A*/ L_DB1A:                             ; xref L_DB16
 /*DB1A*/             CMP    #M_29            ; $0029
 /*DB1C*/             BEQ    L_DB21           ; $DB21
 /*DB1E*/ L_DB1E:                             ; xref L_DB1A
@@ -2610,17 +2610,17 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DB2D*/             BNE    L_DB35           ; $DB35
 /*DB2F*/ L_DB2F:                             ; xref L_DB0E L_DB0C L_DB24 L_DAE7 L_DB2C
 /*DB2F*/             JSR    L_00B1           ; $00B1
-/*DB32*/ L_DB32:                             ; xref
+/*DB32*/ L_DB32:                             ; xref L_DB2F
 /*DB32*/             JMP    L_DAD7           ; $DAD7
 /*DB35*/ L_DB35:                             ; xref L_DB2C
 /*DB35*/             JSR    L_DB57           ; $DB57
-/*DB38*/ L_DB38:                             ; xref
+/*DB38*/ L_DB38:                             ; xref L_DB35
 /*DB38*/             BNE    L_DB2C           ; $DB2C
 /*DB3A*/ L_DB3A:                             ; xref L_ED31 L_D431 L_DCD7 L_DB90 L_DB38
 /*DB3A*/             JSR    L_E3E7           ; $E3E7
-/*DB3D*/ L_DB3D:                             ; xref L_DACF L_DBBE
+/*DB3D*/ L_DB3D:                             ; xref L_DB3A L_DACF L_DBBE
 /*DB3D*/             JSR    L_E600           ; $E600
-/*DB40*/ L_DB40:                             ; xref
+/*DB40*/ L_DB40:                             ; xref L_DB3D
 /*DB40*/             TAX
 /*DB41*/             LDY    #M_00            ; $0000
 /*DB43*/             INX
@@ -2630,13 +2630,13 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DB47*/ L_DB47:                             ; xref L_DB44
 /*DB47*/             LDA    (M_5E),Y         ; $005E
 /*DB49*/             JSR    L_DB5C           ; $DB5C
-/*DB4C*/ L_DB4C:                             ; xref
+/*DB4C*/ L_DB4C:                             ; xref L_DB47
 /*DB4C*/             INY
 /*DB4D*/             CMP    #M_0D            ; $000D
 /*DB4F*/             BNE    L_DB44           ; $DB44
 /*DB51*/ L_DB51:                             ; xref L_DB4C
 /*DB51*/             JSR    L_DB00           ; $DB00
-/*DB54*/ L_DB54:                             ; xref
+/*DB54*/ L_DB54:                             ; xref L_DB51
 /*DB54*/             JMP    L_DB44           ; $DB44
 /*DB57*/ L_DB57:                             ; xref L_D81A L_DB35
 /*DB57*/             LDA    #M_20            ; $0020
@@ -2653,12 +2653,12 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DB62*/             ORA    M_F3             ; $00F3
 /*DB64*/ L_DB64:                             ; xref L_DB5C L_DB62
 /*DB64*/             JSR    L_FDED           ; $FDED
-/*DB67*/ L_DB67:                             ; xref
+/*DB67*/ L_DB67:                             ; xref L_DB64
 /*DB67*/             AND    #M_7F            ; $007F
 /*DB69*/             PHA
 /*DB6A*/             LDA    M_F1             ; $00F1
 /*DB6C*/             JSR    L_FCA8           ; $FCA8
-/*DB6F*/ L_DB6F:                             ; xref
+/*DB6F*/ L_DB6F:                             ; xref L_DB67
 /*DB6F*/             PLA
 /*DB70*/             RTS
 /*DB71*/ L_DB71:                             ; xref L_DC7B
@@ -2688,7 +2688,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DB90*/             LDA    #$EF             ; $00EF
 /*DB92*/             LDY    #M_DC            ; $00DC
 /*DB94*/             JSR    L_DB3A           ; $DB3A
-/*DB97*/ L_DB97:                             ; xref
+/*DB97*/ L_DB97:                             ; xref L_DB90
 /*DB97*/             LDA    M_79             ; $0079
 /*DB99*/             LDY    M_7A             ; $007A
 ; WARNING: Instruction performs code modification
@@ -2698,36 +2698,36 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DB9F*/             RTS
 /*DBA0*/ L_DBA0:                             ; xref
 /*DBA0*/             JSR    L_E306           ; $E306
-/*DBA3*/ L_DBA3:                             ; xref
+/*DBA3*/ L_DBA3:                             ; xref L_DBA0
 /*DBA3*/             LDX    #M_01            ; $0001
 /*DBA5*/             LDY    #M_02            ; $0002
 /*DBA7*/             LDA    #M_00            ; $0000
 /*DBA9*/             STA    M_0201           ; $0201
 /*DBAC*/             LDA    #M_40            ; $0040
 /*DBAE*/             JSR    L_DBEB           ; $DBEB
-/*DBB1*/ L_DBB1:                             ; xref
+/*DBB1*/ L_DBB1:                             ; xref L_DBA3
 /*DBB1*/             RTS
 /*DBB2*/ L_DBB2:                             ; xref
 /*DBB2*/             CMP    #M_22            ; $0022
 /*DBB4*/             BNE    L_DBC4           ; $DBC4
 /*DBB6*/ L_DBB6:                             ; xref L_DBB2
 /*DBB6*/             JSR    L_DE81           ; $DE81
-/*DBB9*/ L_DBB9:                             ; xref
+/*DBB9*/ L_DBB9:                             ; xref L_DBB6
 /*DBB9*/             LDA    #M_3B            ; $003B
 /*DBBB*/             JSR    L_DEC0           ; $DEC0
-/*DBBE*/ L_DBBE:                             ; xref
+/*DBBE*/ L_DBBE:                             ; xref L_DBB9
 /*DBBE*/             JSR    L_DB3D           ; $DB3D
-/*DBC1*/ L_DBC1:                             ; xref
+/*DBC1*/ L_DBC1:                             ; xref L_DBBE
 /*DBC1*/             JMP    L_DBC7           ; $DBC7
 /*DBC4*/ L_DBC4:                             ; xref L_DBB2
 /*DBC4*/             JSR    L_DB5A           ; $DB5A
-/*DBC7*/ L_DBC7:                             ; xref L_DBC1
+/*DBC7*/ L_DBC7:                             ; xref L_DBC1 L_DBC4
 /*DBC7*/             JSR    L_E306           ; $E306
-/*DBCA*/ L_DBCA:                             ; xref
+/*DBCA*/ L_DBCA:                             ; xref L_DBC7
 /*DBCA*/             LDA    #M_2C            ; $002C
 /*DBCC*/             STA    M_01FF           ; $01FF
 /*DBCF*/             JSR    L_D52C           ; $D52C
-/*DBD2*/ L_DBD2:                             ; xref
+/*DBD2*/ L_DBD2:                             ; xref L_DBCA
 /*DBD2*/             LDA    M_0200           ; $0200
 /*DBD5*/             CMP    #M_03            ; $0003
 /*DBD7*/             BNE    L_DBE9           ; $DBE9
@@ -2735,7 +2735,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DBD9*/             JMP    L_D863           ; $D863
 /*DBDC*/ L_DBDC:                             ; xref L_DC24
 /*DBDC*/             JSR    L_DB5A           ; $DB5A
-/*DBDF*/ L_DBDF:                             ; xref
+/*DBDF*/ L_DBDF:                             ; xref L_DBDC
 /*DBDF*/             JMP    L_D52C           ; $D52C
 /*DBE2*/ L_DBE2:                             ; xref
 /*DBE2*/             LDX    M_7D             ; $007D
@@ -2752,7 +2752,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DBEF*/             STY    M_80             ; $0080
 /*DBF1*/ L_DBF1:                             ; xref L_DBEB L_DC96
 /*DBF1*/             JSR    L_DFE3           ; $DFE3
-/*DBF4*/ L_DBF4:                             ; xref
+/*DBF4*/ L_DBF4:                             ; xref L_DBF1
 /*DBF4*/             STA    M_85             ; $0085
 /*DBF6*/             STY    M_86             ; $0086
 /*DBF8*/             LDA    M_B8             ; $00B8
@@ -2766,14 +2766,14 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 ; WARNING: Instruction performs code modification
 /*DC06*/             STY    M_B9             ; $00B9
 /*DC08*/             JSR    L_00B7           ; $00B7
-/*DC0B*/ L_DC0B:                             ; xref
+/*DC0B*/ L_DC0B:                             ; xref L_DBF4
 /*DC0B*/             BNE    L_DC2B           ; $DC2B
 /*DC0D*/ L_DC0D:                             ; xref L_DC0B
 /*DC0D*/             BIT    M_15             ; $0015
 /*DC0F*/             BVC    L_DC1F           ; $DC1F
 /*DC11*/ L_DC11:                             ; xref L_DC0D
 /*DC11*/             JSR    L_FD0C           ; $FD0C
-/*DC14*/ L_DC14:                             ; xref
+/*DC14*/ L_DC14:                             ; xref L_DC11
 /*DC14*/             AND    #M_7F            ; $007F
 /*DC16*/             STA    M_0200           ; $0200
 /*DC19*/             LDX    #M_FF            ; $00FF
@@ -2783,16 +2783,16 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DC1F*/             BMI    L_DCA0           ; $DCA0
 /*DC21*/ L_DC21:                             ; xref L_DC1F
 /*DC21*/             JSR    L_DB5A           ; $DB5A
-/*DC24*/ L_DC24:                             ; xref
+/*DC24*/ L_DC24:                             ; xref L_DC21
 /*DC24*/             JSR    L_DBDC           ; $DBDC
-/*DC27*/ L_DC27:                             ; xref L_DC14
+/*DC27*/ L_DC27:                             ; xref L_DC14 L_DC24
 ; WARNING: Instruction performs code modification
 /*DC27*/             STX    M_B8             ; $00B8
 ; WARNING: Instruction performs code modification
 /*DC29*/             STY    M_B9             ; $00B9
 /*DC2B*/ L_DC2B:                             ; xref L_DC0B L_DC27 L_DCC3
 /*DC2B*/             JSR    L_00B1           ; $00B1
-/*DC2E*/ L_DC2E:                             ; xref
+/*DC2E*/ L_DC2E:                             ; xref L_DC2B
 /*DC2E*/             BIT    M_11             ; $0011
 /*DC30*/             BPL    L_DC63           ; $DC63
 /*DC32*/ L_DC32:                             ; xref L_DC2E
@@ -2825,11 +2825,11 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DC56*/             INY
 /*DC57*/ L_DC57:                             ; xref L_DC4C L_DC56
 /*DC57*/             JSR    L_E3ED           ; $E3ED
-/*DC5A*/ L_DC5A:                             ; xref
+/*DC5A*/ L_DC5A:                             ; xref L_DC57
 /*DC5A*/             JSR    L_E73D           ; $E73D
-/*DC5D*/ L_DC5D:                             ; xref
+/*DC5D*/ L_DC5D:                             ; xref L_DC5A
 /*DC5D*/             JSR    L_DA7B           ; $DA7B
-/*DC60*/ L_DC60:                             ; xref
+/*DC60*/ L_DC60:                             ; xref L_DC5D
 /*DC60*/             JMP    L_DC72           ; $DC72
 /*DC63*/ L_DC63:                             ; xref L_DC2E
 /*DC63*/             PHA
@@ -2838,12 +2838,12 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DC69*/ L_DC69:                             ; xref L_DC63 L_DC99
 /*DC69*/             PLA
 /*DC6A*/             JSR    L_EC4A           ; $EC4A
-/*DC6D*/ L_DC6D:                             ; xref
+/*DC6D*/ L_DC6D:                             ; xref L_DC69
 /*DC6D*/             LDA    M_12             ; $0012
 /*DC6F*/             JSR    L_DA63           ; $DA63
-/*DC72*/ L_DC72:                             ; xref L_DC60
+/*DC72*/ L_DC72:                             ; xref L_DC60 L_DC6D
 /*DC72*/             JSR    L_00B7           ; $00B7
-/*DC75*/ L_DC75:                             ; xref
+/*DC75*/ L_DC75:                             ; xref L_DC72
 /*DC75*/             BEQ    L_DC7E           ; $DC7E
 /*DC77*/ L_DC77:                             ; xref L_DC75
 /*DC77*/             CMP    #M_2C            ; $002C
@@ -2862,11 +2862,11 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 ; WARNING: Instruction performs code modification
 /*DC8C*/             STY    M_B9             ; $00B9
 /*DC8E*/             JSR    L_00B7           ; $00B7
-/*DC91*/ L_DC91:                             ; xref
+/*DC91*/ L_DC91:                             ; xref L_DC7E
 /*DC91*/             BEQ    L_DCC6           ; $DCC6
 /*DC93*/ L_DC93:                             ; xref L_DC91
 /*DC93*/             JSR    L_DEBE           ; $DEBE
-/*DC96*/ L_DC96:                             ; xref
+/*DC96*/ L_DC96:                             ; xref L_DC93
 /*DC96*/             JMP    L_DBF1           ; $DBF1
 /*DC99*/ L_DC99:                             ; xref L_DC63
 /*DC99*/             LDA    M_15             ; $0015
@@ -2875,7 +2875,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DC9D*/             JMP    L_DB86           ; $DB86
 /*DCA0*/ L_DCA0:                             ; xref L_DC1F L_DCBF
 /*DCA0*/             JSR    L_D9A3           ; $D9A3
-/*DCA3*/ L_DCA3:                             ; xref
+/*DCA3*/ L_DCA3:                             ; xref L_DCA0
 /*DCA3*/             INY
 /*DCA4*/             TAX
 /*DCA5*/             BNE    L_DCB9           ; $DCB9
@@ -2896,7 +2896,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DCB9*/             LDA    (M_B8),Y         ; $00B8
 /*DCBB*/             TAX
 /*DCBC*/             JSR    L_D998           ; $D998
-/*DCBF*/ L_DCBF:                             ; xref
+/*DCBF*/ L_DCBF:                             ; xref L_DCB9
 /*DCBF*/             CPX    #M_83            ; $0083
 /*DCC1*/             BNE    L_DCA0           ; $DCA0
 /*DCC3*/ L_DCC3:                             ; xref L_DCBF
@@ -2954,11 +2954,11 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DCFD*/             BEQ    L_DD02           ; $DD02
 /*DCFF*/ L_DCFF:                             ; xref L_DCF9 L_DCFB L_DD64
 /*DCFF*/             JSR    L_DFE3           ; $DFE3
-/*DD02*/ L_DD02:                             ; xref L_DCFB
+/*DD02*/ L_DD02:                             ; xref L_DCFF L_DCFB
 /*DD02*/             STA    M_85             ; $0085
 /*DD04*/             STY    M_86             ; $0086
 /*DD06*/             JSR    L_D365           ; $D365
-/*DD09*/ L_DD09:                             ; xref
+/*DD09*/ L_DD09:                             ; xref L_DD02
 /*DD09*/             BEQ    L_DD0F           ; $DD0F
 /*DD0B*/ L_DD0B:                             ; xref L_DD09
 /*DD0B*/             LDX    #M_00            ; $0000
@@ -2980,19 +2980,19 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DD1B*/             STX    M_60             ; $0060
 /*DD1D*/             LDY    #M_01            ; $0001
 /*DD1F*/             JSR    L_EAF9           ; $EAF9
-/*DD22*/ L_DD22:                             ; xref
+/*DD22*/ L_DD22:                             ; xref L_DD0F
 /*DD22*/             TSX
 /*DD23*/             LDA    M_0109,X         ; $0109
 /*DD26*/             STA    M_A2             ; $00A2
 /*DD28*/             LDA    M_85             ; $0085
 /*DD2A*/             LDY    M_86             ; $0086
 /*DD2C*/             JSR    L_E7BE           ; $E7BE
-/*DD2F*/ L_DD2F:                             ; xref
+/*DD2F*/ L_DD2F:                             ; xref L_DD22
 /*DD2F*/             JSR    L_EB27           ; $EB27
-/*DD32*/ L_DD32:                             ; xref
+/*DD32*/ L_DD32:                             ; xref L_DD2F
 /*DD32*/             LDY    #M_01            ; $0001
 /*DD34*/             JSR    L_EBB4           ; $EBB4
-/*DD37*/ L_DD37:                             ; xref
+/*DD37*/ L_DD37:                             ; xref L_DD32
 /*DD37*/             TSX
 /*DD38*/             SEC
 /*DD39*/             SBC    M_0109,X         ; $0109
@@ -3016,16 +3016,16 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DD58*/             TAX
 /*DD59*/             TXS
 /*DD5A*/             JSR    L_00B7           ; $00B7
-/*DD5D*/ L_DD5D:                             ; xref
+/*DD5D*/ L_DD5D:                             ; xref L_DD55
 /*DD5D*/             CMP    #M_2C            ; $002C
 /*DD5F*/             BNE    L_DD52           ; $DD52
 /*DD61*/ L_DD61:                             ; xref L_DD5D
 /*DD61*/             JSR    L_00B1           ; $00B1
-/*DD64*/ L_DD64:                             ; xref
+/*DD64*/ L_DD64:                             ; xref L_DD61
 /*DD64*/             JSR    L_DCFF           ; $DCFF
-/*DD67*/ L_DD67:                             ; xref L_E105 L_E6F8 L_E383 L_D799 L_D7C0 L_E746 L_F1D5 L_F286 L_F2A6 L_F6B9
+/*DD67*/ L_DD67:                             ; xref L_E105 L_E6F8 L_E383 L_D799 L_D7C0 L_E746 L_F1D5 L_F286 L_F2A6 L_F6B9 L_DD64
 /*DD67*/             JSR    L_DD7B           ; $DD7B
-/*DD6A*/ L_DD6A:                             ; xref L_DE3E L_DDD3 L_E360 L_E34D L_DF4C L_D796
+/*DD6A*/ L_DD6A:                             ; xref L_DE3E L_DDD3 L_DD67 L_E360 L_E34D L_DF4C L_D796
 /*DD6A*/             CLC
 /*DD6B*/             BIT    M_38             ; $0038
 ; Code range [$DD6C-$DD6C]
@@ -3068,14 +3068,14 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DD88*/             PHA
 /*DD89*/             LDA    #M_01            ; $0001
 /*DD8B*/             JSR    L_D3D6           ; $D3D6
-/*DD8E*/ L_DD8E:                             ; xref
+/*DD8E*/ L_DD8E:                             ; xref L_DD81 L_DD86
 /*DD8E*/             JSR    L_DE60           ; $DE60
-/*DD91*/ L_DD91:                             ; xref
+/*DD91*/ L_DD91:                             ; xref L_DD8E
 /*DD91*/             LDA    #M_00            ; $0000
 /*DD93*/             STA    M_89             ; $0089
 /*DD95*/ L_DD95:                             ; xref L_DD91 L_E5D1
 /*DD95*/             JSR    L_00B7           ; $00B7
-/*DD98*/ L_DD98:                             ; xref L_DDB1
+/*DD98*/ L_DD98:                             ; xref L_DDB1 L_DD95
 /*DD98*/             SEC
 /*DD99*/             SBC    #$CF             ; $00CF
 /*DD9B*/             BCC    L_DDB4           ; $DDB4
@@ -3092,7 +3092,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DDAC*/ L_DDAC:                             ; xref L_DDA1
 /*DDAC*/             STA    M_89             ; $0089
 /*DDAE*/             JSR    L_00B1           ; $00B1
-/*DDB1*/ L_DDB1:                             ; xref
+/*DDB1*/ L_DDB1:                             ; xref L_DDAC
 /*DDB1*/             JMP    L_DD98           ; $DD98
 /*DDB4*/ L_DDB4:                             ; xref L_DD98 L_DD9D
 /*DDB4*/             LDX    M_89             ; $0089
@@ -3119,11 +3119,11 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DDD1*/             BCS    L_DE3A           ; $DE3A
 /*DDD3*/ L_DDD3:                             ; xref L_DDCD
 /*DDD3*/             JSR    L_DD6A           ; $DD6A
-/*DDD6*/ L_DDD6:                             ; xref L_DDFB
+/*DDD6*/ L_DDD6:                             ; xref L_DDFB L_DDD3
 /*DDD6*/             PHA
 /*DDD7*/ L_DDD7:                             ; xref L_DDD6 L_DED0
 /*DDD7*/             JSR    L_DDFD           ; $DDFD
-/*DDDA*/ L_DDDA:                             ; xref
+/*DDDA*/ L_DDDA:                             ; xref L_DDD7
 /*DDDA*/             PLA
 /*DDDB*/             LDY    M_87             ; $0087
 /*DDDD*/             BPL    L_DDF6           ; $DDF6
@@ -3158,7 +3158,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DE01*/             LDA    M_D0B3,Y         ; $D0B3
 /*DE04*/             PHA
 /*DE05*/             JSR    L_DE10           ; $DE10
-/*DE08*/ L_DE08:                             ; xref
+/*DE08*/ L_DE08:                             ; xref L_DDFD
 /*DE08*/             LDA    M_89             ; $0089
 /*DE0A*/             JMP    L_DD86           ; $DD86
 /*DE0D*/ L_DE0D:                             ; xref L_DDA1
@@ -3177,7 +3177,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DE1F*/             PHA
 /*DE20*/ L_DE20:                             ; xref L_DE15 L_D79C
 /*DE20*/             JSR    L_EB72           ; $EB72
-/*DE23*/ L_DE23:                             ; xref
+/*DE23*/ L_DE23:                             ; xref L_DE20
 /*DE23*/             LDA    M_A1             ; $00A1
 /*DE25*/             PHA
 /*DE26*/             LDA    M_A0             ; $00A0
@@ -3199,7 +3199,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DE3C*/             BEQ    L_DE41           ; $DE41
 /*DE3E*/ L_DE3E:                             ; xref L_DE3A
 /*DE3E*/             JSR    L_DD6A           ; $DD6A
-/*DE41*/ L_DE41:                             ; xref L_DE3A
+/*DE41*/ L_DE41:                             ; xref L_DE3A L_DE3E
 /*DE41*/             STY    M_87             ; $0087
 /*DE43*/ L_DE43:                             ; xref L_DDF6 L_DE41 L_DDE2
 /*DE43*/             PLA
@@ -3227,13 +3227,13 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DE62*/             STA    M_11             ; $0011
 /*DE64*/ L_DE64:                             ; xref L_DE60 L_DE79
 /*DE64*/             JSR    L_00B1           ; $00B1
-/*DE67*/ L_DE67:                             ; xref
+/*DE67*/ L_DE67:                             ; xref L_DE64
 /*DE67*/             BCS    L_DE6C           ; $DE6C
 /*DE69*/ L_DE69:                             ; xref L_DE67 L_DE71
 /*DE69*/             JMP    L_EC4A           ; $EC4A
 /*DE6C*/ L_DE6C:                             ; xref L_DE67
 /*DE6C*/             JSR    L_E07D           ; $E07D
-/*DE6F*/ L_DE6F:                             ; xref
+/*DE6F*/ L_DE6F:                             ; xref L_DE6C
 /*DE6F*/             BCS    L_DED5           ; $DED5
 /*DE71*/ L_DE71:                             ; xref L_DE6F
 /*DE71*/             CMP    #M_2E            ; $002E
@@ -3256,7 +3256,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DE89*/             INY
 /*DE8A*/ L_DE8A:                             ; xref L_DE81 L_DE89
 /*DE8A*/             JSR    L_E3E7           ; $E3E7
-/*DE8D*/ L_DE8D:                             ; xref
+/*DE8D*/ L_DE8D:                             ; xref L_DE8A
 /*DE8D*/             JMP    L_E73D           ; $E73D
 /*DE90*/ L_DE90:                             ; xref L_DE7D
 /*DE90*/             CMP    #$C6             ; $00C6
@@ -3288,9 +3288,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DEAF*/             JMP    L_DF0C           ; $DF0C
 /*DEB2*/ L_DEB2:                             ; xref L_DEAB L_E357 L_DF3A
 /*DEB2*/             JSR    L_DEBB           ; $DEBB
-/*DEB5*/ L_DEB5:                             ; xref
+/*DEB5*/ L_DEB5:                             ; xref L_DEB2
 /*DEB5*/             JSR    L_DD7B           ; $DD7B
-/*DEB8*/ L_DEB8:                             ; xref L_E15A L_DF09
+/*DEB8*/ L_DEB8:                             ; xref L_DEB5 L_E15A L_DF09
 /*DEB8*/             LDA    #M_29            ; $0029
 /*DEBA*/             BIT    M_28A9           ; $28A9
 /*DEBD*/             BIT    M_2CA9           ; $2CA9
@@ -3320,7 +3320,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DED2*/             JMP    L_DDD7           ; $DDD7
 /*DED5*/ L_DED5:                             ; xref L_DE6F
 /*DED5*/             JSR    L_DFE3           ; $DFE3
-/*DED8*/ L_DED8:                             ; xref
+/*DED8*/ L_DED8:                             ; xref L_DED5
 /*DED8*/             STA    M_A0             ; $00A0
 /*DEDA*/             STY    M_A1             ; $00A1
 /*DEDC*/             LDX    M_11             ; $0011
@@ -3345,16 +3345,16 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DEF6*/             JMP    L_EAF9           ; $EAF9
 /*DEF9*/ L_DEF9:                             ; xref L_DF0C
 /*DEF9*/             JSR    L_00B1           ; $00B1
-/*DEFC*/ L_DEFC:                             ; xref
+/*DEFC*/ L_DEFC:                             ; xref L_DEF9
 /*DEFC*/             JSR    L_F1EC           ; $F1EC
-/*DEFF*/ L_DEFF:                             ; xref
+/*DEFF*/ L_DEFF:                             ; xref L_DEFC
 /*DEFF*/             TXA
 /*DF00*/             LDY    M_F0             ; $00F0
 /*DF02*/             JSR    L_F871           ; $F871
-/*DF05*/ L_DF05:                             ; xref
+/*DF05*/ L_DF05:                             ; xref L_DEFF
 /*DF05*/             TAY
 /*DF06*/             JSR    L_E301           ; $E301
-/*DF09*/ L_DF09:                             ; xref
+/*DF09*/ L_DF09:                             ; xref L_DF05
 /*DF09*/             JMP    L_DEB8           ; $DEB8
 /*DF0C*/ L_DF0C:                             ; xref L_DEAF
 /*DF0C*/             CMP    #$D7             ; $00D7
@@ -3364,18 +3364,18 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DF11*/             PHA
 /*DF12*/             TAX
 /*DF13*/             JSR    L_00B1           ; $00B1
-/*DF16*/ L_DF16:                             ; xref
+/*DF16*/ L_DF16:                             ; xref L_DF10
 /*DF16*/             CPX    #$CF             ; $00CF
 /*DF18*/             BCC    L_DF3A           ; $DF3A
 /*DF1A*/ L_DF1A:                             ; xref L_DF16
 /*DF1A*/             JSR    L_DEBB           ; $DEBB
-/*DF1D*/ L_DF1D:                             ; xref
+/*DF1D*/ L_DF1D:                             ; xref L_DF1A
 /*DF1D*/             JSR    L_DD7B           ; $DD7B
-/*DF20*/ L_DF20:                             ; xref
+/*DF20*/ L_DF20:                             ; xref L_DF1D
 /*DF20*/             JSR    L_DEBE           ; $DEBE
-/*DF23*/ L_DF23:                             ; xref
+/*DF23*/ L_DF23:                             ; xref L_DF20
 /*DF23*/             JSR    L_DD6C           ; $DD6C
-/*DF26*/ L_DF26:                             ; xref
+/*DF26*/ L_DF26:                             ; xref L_DF23
 /*DF26*/             PLA
 /*DF27*/             TAX
 /*DF28*/             LDA    M_A1             ; $00A1
@@ -3385,7 +3385,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DF2E*/             TXA
 /*DF2F*/             PHA
 /*DF30*/             JSR    L_E6F8           ; $E6F8
-/*DF33*/ L_DF33:                             ; xref
+/*DF33*/ L_DF33:                             ; xref L_DF26
 /*DF33*/             PLA
 /*DF34*/             TAY
 /*DF35*/             TXA
@@ -3393,7 +3393,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DF37*/             JMP    L_DF3F           ; $DF3F
 /*DF3A*/ L_DF3A:                             ; xref L_DF16
 /*DF3A*/             JSR    L_DEB2           ; $DEB2
-/*DF3D*/ L_DF3D:                             ; xref
+/*DF3D*/ L_DF3D:                             ; xref L_DF3A
 /*DF3D*/             PLA
 /*DF3E*/             TAY
 /*DF3F*/ L_DF3F:                             ; xref L_DF3D L_DF33
@@ -3404,7 +3404,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 ; WARNING: Instruction performs code modification
 /*DF47*/             STA    M_92             ; $0092
 /*DF49*/             JSR    L_0090           ; $0090
-/*DF4C*/ L_DF4C:                             ; xref
+/*DF4C*/ L_DF4C:                             ; xref L_DF3F
 /*DF4C*/             JMP    L_DD6A           ; $DD6A
 ; Data range [$df4f-$DF64]
 /*DF4F*/             DFB    $A5
@@ -3433,7 +3433,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DF65*/             org    $DF65
 /*DF65*/ L_DF65:                             ; xref
 /*DF65*/             JSR    L_DD6D           ; $DD6D
-/*DF68*/ L_DF68:                             ; xref
+/*DF68*/ L_DF68:                             ; xref L_DF65
 /*DF68*/             BCS    L_DF7D           ; $DF7D
 /*DF6A*/ L_DF6A:                             ; xref L_DF68
 /*DF6A*/             LDA    M_AA             ; $00AA
@@ -3443,7 +3443,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DF72*/             LDA    #M_A5            ; $00A5
 /*DF74*/             LDY    #M_00            ; $0000
 /*DF76*/             JSR    L_EBB2           ; $EBB2
-/*DF79*/ L_DF79:                             ; xref
+/*DF79*/ L_DF79:                             ; xref L_DF6A
 /*DF79*/             TAX
 /*DF7A*/             JMP    L_DFB0           ; $DFB0
 /*DF7D*/ L_DF7D:                             ; xref L_DF68
@@ -3451,14 +3451,14 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DF7F*/             STA    M_11             ; $0011
 /*DF81*/             DEC    M_89             ; $0089
 /*DF83*/             JSR    L_E600           ; $E600
-/*DF86*/ L_DF86:                             ; xref
+/*DF86*/ L_DF86:                             ; xref L_DF7D
 /*DF86*/             STA    M_9D             ; $009D
 /*DF88*/             STX    M_9E             ; $009E
 /*DF8A*/             STY    M_9F             ; $009F
 /*DF8C*/             LDA    M_A8             ; $00A8
 /*DF8E*/             LDY    M_A9             ; $00A9
 /*DF90*/             JSR    L_E604           ; $E604
-/*DF93*/ L_DF93:                             ; xref
+/*DF93*/ L_DF93:                             ; xref L_DF86
 /*DF93*/             STX    M_A8             ; $00A8
 /*DF95*/             STY    M_A9             ; $00A9
 /*DF97*/             TAX
@@ -3507,9 +3507,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DFCA*/             JMP    L_EB93           ; $EB93
 /*DFCD*/ L_DFCD:                             ; xref
 /*DFCD*/             JSR    L_E6FB           ; $E6FB
-/*DFD0*/ L_DFD0:                             ; xref
+/*DFD0*/ L_DFD0:                             ; xref L_DFCD
 /*DFD0*/             JSR    L_FB1E           ; $FB1E
-/*DFD3*/ L_DFD3:                             ; xref
+/*DFD3*/ L_DFD3:                             ; xref L_DFD0
 /*DFD3*/             JMP    L_E301           ; $E301
 ; Data range [$dfd6-$DFE2]
 /*DFD6*/             DFB    $20
@@ -3530,14 +3530,14 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*DFE3*/ L_DFE3:                             ; xref L_DA46 L_DED5 L_DBF1 L_DCFF
 /*DFE3*/             LDX    #M_00            ; $0000
 /*DFE5*/             JSR    L_00B7           ; $00B7
-/*DFE8*/ L_DFE8:                             ; xref
+/*DFE8*/ L_DFE8:                             ; xref L_DFE3
 /*DFE8*/             STX    M_10             ; $0010
 /*DFEA*/ L_DFEA:                             ; xref L_DFE8 L_E346
 /*DFEA*/             STA    M_81             ; $0081
 /*DFEC*/             JSR    L_00B7           ; $00B7
-/*DFEF*/ L_DFEF:                             ; xref
+/*DFEF*/ L_DFEF:                             ; xref L_DFEA
 /*DFEF*/             JSR    L_E07D           ; $E07D
-/*DFF2*/ L_DFF2:                             ; xref
+/*DFF2*/ L_DFF2:                             ; xref L_DFEF
 /*DFF2*/             BCS    L_DFF7           ; $DFF7
 /*DFF4*/ L_DFF4:                             ; xref L_DFF2 L_E02A
 /*DFF4*/             JMP    L_DEC9           ; $DEC9
@@ -3556,21 +3556,21 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E007*/             org    $E007
 /*E007*/ L_E007:                             ; xref L_DFF7
 /*E007*/             JSR    L_00B1           ; $00B1
-/*E00A*/ L_E00A:                             ; xref
+/*E00A*/ L_E00A:                             ; xref L_E007
 /*E00A*/             BCC    L_E011           ; $E011
 /*E00C*/ L_E00C:                             ; xref L_E00A
 /*E00C*/             JSR    L_E07D           ; $E07D
-/*E00F*/ L_E00F:                             ; xref
+/*E00F*/ L_E00F:                             ; xref L_E00C
 /*E00F*/             BCC    L_E01C           ; $E01C
 /*E011*/ L_E011:                             ; xref L_E00A L_E00F
 /*E011*/             TAX
 /*E012*/ L_E012:                             ; xref L_E011 L_E015 L_E01A
 /*E012*/             JSR    L_00B1           ; $00B1
-/*E015*/ L_E015:                             ; xref
+/*E015*/ L_E015:                             ; xref L_E012
 /*E015*/             BCC    L_E012           ; $E012
 /*E017*/ L_E017:                             ; xref L_E015
 /*E017*/             JSR    L_E07D           ; $E07D
-/*E01A*/ L_E01A:                             ; xref
+/*E01A*/ L_E01A:                             ; xref L_E017
 /*E01A*/             BCS    L_E012           ; $E012
 /*E01C*/ L_E01C:                             ; xref L_E00F L_E01A
 /*E01C*/             CMP    #M_24            ; $0024
@@ -3595,7 +3595,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E037*/             ORA    #M_80            ; $0080
 /*E039*/             TAX
 /*E03A*/             JSR    L_00B1           ; $00B1
-/*E03D*/ L_E03D:                             ; xref L_E026
+/*E03D*/ L_E03D:                             ; xref L_E026 L_E036
 /*E03D*/             STX    M_82             ; $0082
 /*E03F*/             SEC
 /*E040*/             ORA    M_14             ; $0014
@@ -3688,7 +3688,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E0B2*/             STA    M_94             ; $0094
 /*E0B4*/             STY    M_95             ; $0095
 /*E0B6*/             JSR    L_D393           ; $D393
-/*E0B9*/ L_E0B9:                             ; xref
+/*E0B9*/ L_E0B9:                             ; xref L_E0B2
 /*E0B9*/             LDA    M_94             ; $0094
 /*E0BB*/             LDY    M_95             ; $0095
 /*E0BD*/             INY
@@ -3745,9 +3745,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E102*/             org    $E102
 /*E102*/ L_E102:                             ; xref L_E12C
 /*E102*/             JSR    L_00B1           ; $00B1
-/*E105*/ L_E105:                             ; xref
+/*E105*/ L_E105:                             ; xref L_E102
 /*E105*/             JSR    L_DD67           ; $DD67
-/*E108*/ L_E108:                             ; xref L_E6FB
+/*E108*/ L_E108:                             ; xref L_E105 L_E6FB
 /*E108*/             LDA    M_A2             ; $00A2
 /*E10A*/             BMI    L_E119           ; $E119
 /*E10C*/ L_E10C:                             ; xref L_DA68 L_E108
@@ -3758,7 +3758,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E112*/             LDA    #$FE             ; $00FE
 /*E114*/             LDY    #M_E0            ; $00E0
 /*E116*/             JSR    L_EBB2           ; $EBB2
-/*E119*/ L_E119:                             ; xref L_E108
+/*E119*/ L_E119:                             ; xref L_E112 L_E108
 /*E119*/             BNE    L_E199           ; $E199
 /*E11B*/ L_E11B:                             ; xref L_E10C L_E119
 /*E11B*/             JMP    L_EBF2           ; $EBF2
@@ -3780,7 +3780,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E131*/             LDA    M_81             ; $0081
 /*E133*/             PHA
 /*E134*/             JSR    L_E102           ; $E102
-/*E137*/ L_E137:                             ; xref
+/*E137*/ L_E137:                             ; xref L_E12C
 /*E137*/             PLA
 /*E138*/             STA    M_81             ; $0081
 /*E13A*/             PLA
@@ -3798,13 +3798,13 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E14F*/             STA    M_0101,X         ; $0101
 /*E152*/             INY
 /*E153*/             JSR    L_00B7           ; $00B7
-/*E156*/ L_E156:                             ; xref
+/*E156*/ L_E156:                             ; xref L_E137
 /*E156*/             CMP    #M_2C            ; $002C
 /*E158*/             BEQ    L_E12C           ; $E12C
 /*E15A*/ L_E15A:                             ; xref L_E156
 /*E15A*/             STY    M_0F             ; $000F
 /*E15C*/             JSR    L_DEB8           ; $DEB8
-/*E15F*/ L_E15F:                             ; xref
+/*E15F*/ L_E15F:                             ; xref L_E15A
 /*E15F*/             PLA
 /*E160*/             STA    M_11             ; $0011
 /*E162*/             PLA
@@ -3863,7 +3863,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E1A9*/             RTS
 /*E1AA*/ L_E1AA:                             ; xref L_E1A4
 /*E1AA*/             JSR    L_E0ED           ; $E0ED
-/*E1AD*/ L_E1AD:                             ; xref
+/*E1AD*/ L_E1AD:                             ; xref L_E1AA
 /*E1AD*/             LDA    M_0F             ; $000F
 /*E1AF*/             LDY    #M_04            ; $0004
 /*E1B1*/             CMP    (M_9B),Y         ; $009B
@@ -3878,9 +3878,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E1BE*/             JMP    L_D412           ; $D412
 /*E1C1*/ L_E1C1:                             ; xref L_E1B8
 /*E1C1*/             JSR    L_E0ED           ; $E0ED
-/*E1C4*/ L_E1C4:                             ; xref
+/*E1C4*/ L_E1C4:                             ; xref L_E1C1
 /*E1C4*/             JSR    L_D3E3           ; $D3E3
-/*E1C7*/ L_E1C7:                             ; xref
+/*E1C7*/ L_E1C7:                             ; xref L_E1C4
 /*E1C7*/             LDA    #M_00            ; $0000
 /*E1C9*/             TAY
 /*E1CA*/             STA    M_AE             ; $00AE
@@ -3924,7 +3924,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E1FB*/             TXA
 /*E1FC*/             STA    (M_9B),Y         ; $009B
 /*E1FE*/             JSR    L_E2AD           ; $E2AD
-/*E201*/ L_E201:                             ; xref
+/*E201*/ L_E201:                             ; xref L_E1F7
 /*E201*/             STX    M_AD             ; $00AD
 /*E203*/             STA    M_AE             ; $00AE
 /*E205*/             LDY    M_5E             ; $005E
@@ -3944,7 +3944,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E218*/             BEQ    L_E26C           ; $E26C
 /*E21A*/ L_E21A:                             ; xref L_E20F L_E217
 /*E21A*/             JSR    L_D3E3           ; $D3E3
-/*E21D*/ L_E21D:                             ; xref
+/*E21D*/ L_E21D:                             ; xref L_E21A
 /*E21D*/             STA    M_6D             ; $006D
 /*E21F*/             STY    M_6E             ; $006E
 /*E221*/             LDA    #M_00            ; $0000
@@ -4009,7 +4009,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E275*/             BEQ    L_E281           ; $E281
 /*E277*/ L_E277:                             ; xref L_E270
 /*E277*/             JSR    L_E2AD           ; $E2AD
-/*E27A*/ L_E27A:                             ; xref
+/*E27A*/ L_E27A:                             ; xref L_E277
 /*E27A*/             TXA
 /*E27B*/             ADC    M_A0             ; $00A0
 /*E27D*/             TAX
@@ -4037,7 +4037,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E298*/             STX    M_64             ; $0064
 /*E29A*/             LDA    #M_00            ; $0000
 /*E29C*/             JSR    L_E2B6           ; $E2B6
-/*E29F*/ L_E29F:                             ; xref
+/*E29F*/ L_E29F:                             ; xref L_E298
 /*E29F*/             TXA
 /*E2A0*/             ADC    M_94             ; $0094
 /*E2A2*/             STA    M_83             ; $0083
@@ -4091,9 +4091,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E2E0*/             BEQ    L_E2E5           ; $E2E5
 /*E2E2*/ L_E2E2:                             ; xref L_E2DE
 /*E2E2*/             JSR    L_E600           ; $E600
-/*E2E5*/ L_E2E5:                             ; xref L_E2DE
+/*E2E5*/ L_E2E5:                             ; xref L_E2DE L_E2E2
 /*E2E5*/             JSR    L_E484           ; $E484
-/*E2E8*/ L_E2E8:                             ; xref
+/*E2E8*/ L_E2E8:                             ; xref L_E2E5
 /*E2E8*/             SEC
 /*E2E9*/             LDA    M_6F             ; $006F
 /*E2EB*/             SBC    M_6D             ; $006D
@@ -4181,25 +4181,25 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E341*/ L_E341:                             ; xref L_E354
 /*E341*/             LDA    #$C2             ; $00C2
 /*E343*/             JSR    L_DEC0           ; $DEC0
-/*E346*/ L_E346:                             ; xref
+/*E346*/ L_E346:                             ; xref L_E341
 /*E346*/             ORA    #M_80            ; $0080
 /*E348*/             STA    M_14             ; $0014
 /*E34A*/             JSR    L_DFEA           ; $DFEA
-/*E34D*/ L_E34D:                             ; xref
+/*E34D*/ L_E34D:                             ; xref L_E346
 /*E34D*/             STA    M_8A             ; $008A
 /*E34F*/             STY    M_8B             ; $008B
 /*E351*/             JMP    L_DD6A           ; $DD6A
 /*E354*/ L_E354:                             ; xref L_DEA8
 /*E354*/             JSR    L_E341           ; $E341
-/*E357*/ L_E357:                             ; xref
+/*E357*/ L_E357:                             ; xref L_E354
 /*E357*/             LDA    M_8B             ; $008B
 /*E359*/             PHA
 /*E35A*/             LDA    M_8A             ; $008A
 /*E35C*/             PHA
 /*E35D*/             JSR    L_DEB2           ; $DEB2
-/*E360*/ L_E360:                             ; xref
+/*E360*/ L_E360:                             ; xref L_E357
 /*E360*/             JSR    L_DD6A           ; $DD6A
-/*E363*/ L_E363:                             ; xref
+/*E363*/ L_E363:                             ; xref L_E360
 /*E363*/             PLA
 /*E364*/             STA    M_8A             ; $008A
 /*E366*/             PLA
@@ -4222,7 +4222,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E37E*/ L_E37E:                             ; xref L_E378
 /*E37E*/             LDY    M_84             ; $0084
 /*E380*/             JSR    L_EB2B           ; $EB2B
-/*E383*/ L_E383:                             ; xref
+/*E383*/ L_E383:                             ; xref L_E37E
 /*E383*/             LDA    M_B9             ; $00B9
 /*E385*/             PHA
 /*E386*/             LDA    M_B8             ; $00B8
@@ -4239,13 +4239,13 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E395*/             LDA    M_83             ; $0083
 /*E397*/             PHA
 /*E398*/             JSR    L_DD67           ; $DD67
-/*E39B*/ L_E39B:                             ; xref
+/*E39B*/ L_E39B:                             ; xref L_E383
 /*E39B*/             PLA
 /*E39C*/             STA    M_8A             ; $008A
 /*E39E*/             PLA
 /*E39F*/             STA    M_8B             ; $008B
 /*E3A1*/             JSR    L_00B7           ; $00B7
-/*E3A4*/ L_E3A4:                             ; xref
+/*E3A4*/ L_E3A4:                             ; xref L_E39B
 /*E3A4*/             BEQ    L_E3A9           ; $E3A9
 /*E3A6*/ L_E3A6:                             ; xref L_E3A4
 /*E3A6*/             JMP    L_DEC9           ; $DEC9
@@ -4297,7 +4297,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E3D9*/             STX    M_8C             ; $008C
 /*E3DB*/             STY    M_8D             ; $008D
 /*E3DD*/             JSR    L_E452           ; $E452
-/*E3E0*/ L_E3E0:                             ; xref
+/*E3E0*/ L_E3E0:                             ; xref L_E3D5
 /*E3E0*/             STX    M_9E             ; $009E
 /*E3E2*/             STY    M_9F             ; $009F
 /*E3E4*/             STA    M_9D             ; $009D
@@ -4346,11 +4346,11 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E41F*/ L_E41F:                             ; xref L_E415 L_E41B
 /*E41F*/             TYA
 /*E420*/             JSR    L_E3D5           ; $E3D5
-/*E423*/ L_E423:                             ; xref
+/*E423*/ L_E423:                             ; xref L_E41F
 /*E423*/             LDX    M_AB             ; $00AB
 /*E425*/             LDY    M_AC             ; $00AC
 /*E427*/             JSR    L_E5E2           ; $E5E2
-/*E42A*/ L_E42A:                             ; xref L_E41B L_E5CE
+/*E42A*/ L_E42A:                             ; xref L_E41B L_E423 L_E5CE
 /*E42A*/             LDX    M_52             ; $0052
 /*E42C*/             CPX    #M_5E            ; $005E
 /*E42E*/             BNE    L_E435           ; $E435
@@ -4409,7 +4409,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E478*/             BMI    L_E432           ; $E432
 /*E47A*/ L_E47A:                             ; xref L_E474
 /*E47A*/             JSR    L_E484           ; $E484
-/*E47D*/ L_E47D:                             ; xref
+/*E47D*/ L_E47D:                             ; xref L_E47A
 /*E47D*/             LDA    #M_80            ; $0080
 /*E47F*/             STA    M_13             ; $0013
 /*E481*/             PLA
@@ -4435,7 +4435,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E4A2*/             BEQ    L_E4A9           ; $E4A9
 /*E4A4*/ L_E4A4:                             ; xref L_E4A0
 /*E4A4*/             JSR    L_E523           ; $E523
-/*E4A7*/ L_E4A7:                             ; xref
+/*E4A7*/ L_E4A7:                             ; xref L_E4A4
 /*E4A7*/             BEQ    L_E4A0           ; $E4A0
 /*E4A9*/ L_E4A9:                             ; xref L_E4A0 L_E4A7
 /*E4A9*/             LDA    #$07             ; $0007
@@ -4452,7 +4452,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E4BB*/             BEQ    L_E4C2           ; $E4C2
 /*E4BD*/ L_E4BD:                             ; xref L_E4B9 L_E4B5
 /*E4BD*/             JSR    L_E519           ; $E519
-/*E4C0*/ L_E4C0:                             ; xref
+/*E4C0*/ L_E4C0:                             ; xref L_E4BD
 /*E4C0*/             BEQ    L_E4B5           ; $E4B5
 /*E4C2*/ L_E4C2:                             ; xref L_E4B9 L_E4C0
 /*E4C2*/             STA    M_94             ; $0094
@@ -4513,7 +4513,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E512*/             BEQ    L_E4CE           ; $E4CE
 /*E514*/ L_E514:                             ; xref L_E510 L_E50C
 /*E514*/             JSR    L_E523           ; $E523
-/*E517*/ L_E517:                             ; xref
+/*E517*/ L_E517:                             ; xref L_E514
 /*E517*/             BEQ    L_E50C           ; $E50C
 /*E519*/ L_E519:                             ; xref L_E4BD L_E517
 /*E519*/             LDA    (M_5E),Y         ; $005E
@@ -4591,7 +4591,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E57E*/             STA    M_94             ; $0094
 /*E580*/             STX    M_95             ; $0095
 /*E582*/             JSR    L_D39A           ; $D39A
-/*E585*/ L_E585:                             ; xref
+/*E585*/ L_E585:                             ; xref L_E566
 /*E585*/             LDY    M_91             ; $0091
 /*E587*/             INY
 /*E588*/             LDA    M_94             ; $0094
@@ -4608,9 +4608,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E59A*/             LDA    M_A0             ; $00A0
 /*E59C*/             PHA
 /*E59D*/             JSR    L_DE60           ; $DE60
-/*E5A0*/ L_E5A0:                             ; xref
+/*E5A0*/ L_E5A0:                             ; xref L_E597
 /*E5A0*/             JSR    L_DD6C           ; $DD6C
-/*E5A3*/ L_E5A3:                             ; xref
+/*E5A3*/ L_E5A3:                             ; xref L_E5A0
 /*E5A3*/             PLA
 /*E5A4*/             STA    M_AB             ; $00AB
 /*E5A6*/             PLA
@@ -4625,21 +4625,21 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E5B4*/             JMP    L_D412           ; $D412
 /*E5B7*/ L_E5B7:                             ; xref L_E5A3
 /*E5B7*/             JSR    L_E3D5           ; $E3D5
-/*E5BA*/ L_E5BA:                             ; xref
+/*E5BA*/ L_E5BA:                             ; xref L_E5B7
 /*E5BA*/             JSR    L_E5D4           ; $E5D4
-/*E5BD*/ L_E5BD:                             ; xref
+/*E5BD*/ L_E5BD:                             ; xref L_E5BA
 /*E5BD*/             LDA    M_8C             ; $008C
 /*E5BF*/             LDY    M_8D             ; $008D
 /*E5C1*/             JSR    L_E604           ; $E604
-/*E5C4*/ L_E5C4:                             ; xref
+/*E5C4*/ L_E5C4:                             ; xref L_E5BD
 /*E5C4*/             JSR    L_E5E6           ; $E5E6
-/*E5C7*/ L_E5C7:                             ; xref
+/*E5C7*/ L_E5C7:                             ; xref L_E5C4
 /*E5C7*/             LDA    M_AB             ; $00AB
 /*E5C9*/             LDY    M_AC             ; $00AC
 /*E5CB*/             JSR    L_E604           ; $E604
-/*E5CE*/ L_E5CE:                             ; xref
+/*E5CE*/ L_E5CE:                             ; xref L_E5C7
 /*E5CE*/             JSR    L_E42A           ; $E42A
-/*E5D1*/ L_E5D1:                             ; xref
+/*E5D1*/ L_E5D1:                             ; xref L_E5CE
 /*E5D1*/             JMP    L_DD95           ; $DD95
 /*E5D4*/ L_E5D4:                             ; xref L_DAA8 L_E5BA
 /*E5D4*/             LDY    #M_00            ; $0000
@@ -4690,7 +4690,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E604*/             STA    M_5E             ; $005E
 /*E606*/             STY    M_5F             ; $005F
 /*E608*/             JSR    L_E635           ; $E635
-/*E60B*/ L_E60B:                             ; xref
+/*E60B*/ L_E60B:                             ; xref L_E604
 /*E60B*/             PHP
 /*E60C*/             LDY    #M_00            ; $0000
 /*E60E*/             LDA    (M_5E),Y         ; $005E
@@ -4916,11 +4916,11 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E6F2*/             JMP    L_E199           ; $E199
 /*E6F5*/ L_E6F5:                             ; xref L_DB16
 /*E6F5*/             JSR    L_00B1           ; $00B1
-/*E6F8*/ L_E6F8:                             ; xref L_F1EC L_F1FA L_DF26 L_D9EC L_E74F L_F21D L_F24F L_F256 L_F6D6 L_F6E9 L_F721 L_F727 L_F72D L_F7E7
+/*E6F8*/ L_E6F8:                             ; xref L_F1EC L_F1FA L_DF26 L_D9EC L_E74F L_F21D L_F24F L_F256 L_F6D6 L_F6E9 L_F721 L_F727 L_F72D L_F7E7 L_E6F5
 /*E6F8*/             JSR    L_DD67           ; $DD67
-/*E6FB*/ L_E6FB:                             ; xref L_DFCD
+/*E6FB*/ L_E6FB:                             ; xref L_E6F8 L_DFCD
 /*E6FB*/             JSR    L_E108           ; $E108
-/*E6FE*/ L_E6FE:                             ; xref
+/*E6FE*/ L_E6FE:                             ; xref L_E6FB
 /*E6FE*/             LDX    M_A0             ; $00A0
 /*E700*/             BNE    L_E6F2           ; $E6F2
 /*E702*/ L_E702:                             ; xref L_E6FE
@@ -4993,11 +4993,11 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E745*/             RTS
 /*E746*/ L_E746:                             ; xref L_E77B
 /*E746*/             JSR    L_DD67           ; $DD67
-/*E749*/ L_E749:                             ; xref
+/*E749*/ L_E749:                             ; xref L_E746
 /*E749*/             JSR    L_E752           ; $E752
-/*E74C*/ L_E74C:                             ; xref
+/*E74C*/ L_E74C:                             ; xref L_E749
 /*E74C*/             JSR    L_DEBE           ; $DEBE
-/*E74F*/ L_E74F:                             ; xref
+/*E74F*/ L_E74F:                             ; xref L_E74C
 /*E74F*/             JMP    L_E6F8           ; $E6F8
 /*E752*/ L_E752:                             ; xref L_E749 L_E764 L_F1D8 L_F289 L_F2A9 L_F6BC
 /*E752*/             LDA    M_9D             ; $009D
@@ -5005,7 +5005,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E756*/             BCS    L_E6F2           ; $E6F2
 /*E758*/ L_E758:                             ; xref L_E752
 /*E758*/             JSR    L_EBF2           ; $EBF2
-/*E75B*/ L_E75B:                             ; xref
+/*E75B*/ L_E75B:                             ; xref L_E758
 /*E75B*/             LDA    M_A0             ; $00A0
 /*E75D*/             LDY    M_A1             ; $00A1
 /*E75F*/             STY    M_50             ; $0050
@@ -5017,7 +5017,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E767*/             LDA    M_51             ; $0051
 /*E769*/             PHA
 /*E76A*/             JSR    L_E752           ; $E752
-/*E76D*/ L_E76D:                             ; xref
+/*E76D*/ L_E76D:                             ; xref L_E764
 /*E76D*/             LDY    #M_00            ; $0000
 /*E76F*/             LDA    (M_50),Y         ; $0050
 /*E771*/             TAY
@@ -5028,7 +5028,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E778*/             JMP    L_E301           ; $E301
 /*E77B*/ L_E77B:                             ; xref
 /*E77B*/             JSR    L_E746           ; $E746
-/*E77E*/ L_E77E:                             ; xref
+/*E77E*/ L_E77E:                             ; xref L_E77B
 /*E77E*/             TXA
 /*E77F*/             LDY    #M_00            ; $0000
 /*E781*/             STA    (M_50),Y         ; $0050
@@ -5092,11 +5092,11 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E7B9*/             org    $E7B9
 /*E7B9*/ L_E7B9:                             ; xref L_E7EE
 /*E7B9*/             JSR    L_E8F0           ; $E8F0
-/*E7BC*/ L_E7BC:                             ; xref
+/*E7BC*/ L_E7BC:                             ; xref L_E7B9
 /*E7BC*/             BCC    L_E7FA           ; $E7FA
 /*E7BE*/ L_E7BE:                             ; xref L_E7A0 L_E7BC L_DD22
 /*E7BE*/             JSR    L_E9E3           ; $E9E3
-/*E7C1*/ L_E7C1:                             ; xref L_ECDD
+/*E7C1*/ L_E7C1:                             ; xref L_E7BE L_ECDD
 /*E7C1*/             BNE    L_E7C6           ; $E7C6
 /*E7C3*/ L_E7C3:                             ; xref L_E7C1
 /*E7C3*/             JMP    L_EB53           ; $EB53
@@ -5137,7 +5137,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E7F3*/             LDA    M_AC             ; $00AC
 /*E7F5*/             LSR    M_01,X           ; $0001
 /*E7F7*/             JSR    L_E907           ; $E907
-/*E7FA*/ L_E7FA:                             ; xref L_E7D1 L_E7BC
+/*E7FA*/ L_E7FA:                             ; xref L_E7D1 L_E7F2 L_E7BC
 /*E7FA*/             BIT    M_AB             ; $00AB
 /*E7FC*/             BPL    L_E855           ; $E855
 /*E7FE*/ L_E7FE:                             ; xref L_E7FA
@@ -5167,7 +5167,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E829*/             BCS    L_E82E           ; $E82E
 /*E82B*/ L_E82B:                             ; xref L_E829
 /*E82B*/             JSR    L_E89E           ; $E89E
-/*E82E*/ L_E82E:                             ; xref L_E829 L_EAE6
+/*E82E*/ L_E82E:                             ; xref L_E829 L_E82B L_EAE6
 /*E82E*/             LDY    #M_00            ; $0000
 /*E830*/             TYA
 /*E831*/             CLC
@@ -5431,13 +5431,13 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E97F*/             org    $E97F
 /*E97F*/ L_E97F:                             ; xref L_ED57
 /*E97F*/             JSR    L_E9E3           ; $E9E3
-/*E982*/ L_E982:                             ; xref
+/*E982*/ L_E982:                             ; xref L_E97F
 /*E982*/             BNE    L_E987           ; $E987
 /*E984*/ L_E984:                             ; xref L_E982
 /*E984*/             JMP    L_E9E2           ; $E9E2
 /*E987*/ L_E987:                             ; xref L_E982
 /*E987*/             JSR    L_EA0E           ; $EA0E
-/*E98A*/ L_E98A:                             ; xref
+/*E98A*/ L_E98A:                             ; xref L_E987
 /*E98A*/             LDA    #M_00            ; $0000
 /*E98C*/             STA    M_62             ; $0062
 /*E98E*/             STA    M_63             ; $0063
@@ -5445,19 +5445,19 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*E992*/             STA    M_65             ; $0065
 /*E994*/             LDA    M_AC             ; $00AC
 /*E996*/             JSR    L_E9B0           ; $E9B0
-/*E999*/ L_E999:                             ; xref
+/*E999*/ L_E999:                             ; xref L_E98A
 /*E999*/             LDA    M_A1             ; $00A1
 /*E99B*/             JSR    L_E9B0           ; $E9B0
-/*E99E*/ L_E99E:                             ; xref
+/*E99E*/ L_E99E:                             ; xref L_E999
 /*E99E*/             LDA    M_A0             ; $00A0
 /*E9A0*/             JSR    L_E9B0           ; $E9B0
-/*E9A3*/ L_E9A3:                             ; xref
+/*E9A3*/ L_E9A3:                             ; xref L_E99E
 /*E9A3*/             LDA    M_9F             ; $009F
 /*E9A5*/             JSR    L_E9B0           ; $E9B0
-/*E9A8*/ L_E9A8:                             ; xref
+/*E9A8*/ L_E9A8:                             ; xref L_E9A3
 /*E9A8*/             LDA    M_9E             ; $009E
 /*E9AA*/             JSR    L_E9B5           ; $E9B5
-/*E9AD*/ L_E9AD:                             ; xref
+/*E9AD*/ L_E9AD:                             ; xref L_E9A8
 /*E9AD*/             JMP    L_EAE6           ; $EAE6
 /*E9B0*/ L_E9B0:                             ; xref L_E98A L_E999 L_E99E L_E9A3
 /*E9B0*/             BNE    L_E9B5           ; $E9B5
@@ -5562,7 +5562,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*EA36*/             JMP    L_E8D5           ; $E8D5
 /*EA39*/ L_EA39:                             ; xref L_ED78 L_ECC8 L_ECB2
 /*EA39*/             JSR    L_EB63           ; $EB63
-/*EA3C*/ L_EA3C:                             ; xref
+/*EA3C*/ L_EA3C:                             ; xref L_EA39
 /*EA3C*/             TAX
 /*EA3D*/             BEQ    L_EA4F           ; $EA4F
 /*EA3F*/ L_EA3F:                             ; xref L_EA3C
@@ -5573,7 +5573,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*EA44*/             LDX    #M_00            ; $0000
 /*EA46*/             STX    M_AB             ; $00AB
 /*EA48*/             JSR    L_E7CE           ; $E7CE
-/*EA4B*/ L_EA4B:                             ; xref
+/*EA4B*/ L_EA4B:                             ; xref L_EA44
 /*EA4B*/             INC    M_9D             ; $009D
 /*EA4D*/             BEQ    L_EA36           ; $EA36
 /*EA4F*/ L_EA4F:                             ; xref L_EA3C L_EA4B
@@ -5588,13 +5588,13 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*EA55*/             org    $EA55
 /*EA55*/ L_EA55:                             ; xref L_ED7F L_ECA9
 /*EA55*/             JSR    L_EB63           ; $EB63
-/*EA58*/ L_EA58:                             ; xref
+/*EA58*/ L_EA58:                             ; xref L_EA55
 /*EA58*/             LDA    #M_50            ; $0050
 /*EA5A*/             LDY    #M_EA            ; $00EA
 /*EA5C*/             LDX    #M_00            ; $0000
 /*EA5E*/             STX    M_AB             ; $00AB
 /*EA60*/             JSR    L_EAF9           ; $EAF9
-/*EA63*/ L_EA63:                             ; xref
+/*EA63*/ L_EA63:                             ; xref L_EA58
 /*EA63*/             JMP    L_EA69           ; $EA69
 ; Data range [$ea66-$EA68]
 /*EA66*/             DFB    $20
@@ -5606,13 +5606,13 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*EA69*/             BEQ    L_EAE1           ; $EAE1
 /*EA6B*/ L_EA6B:                             ; xref L_EA69
 /*EA6B*/             JSR    L_EB72           ; $EB72
-/*EA6E*/ L_EA6E:                             ; xref
+/*EA6E*/ L_EA6E:                             ; xref L_EA6B
 /*EA6E*/             LDA    #M_00            ; $0000
 /*EA70*/             SEC
 /*EA71*/             SBC    M_9D             ; $009D
 /*EA73*/             STA    M_9D             ; $009D
 /*EA75*/             JSR    L_EA0E           ; $EA0E
-/*EA78*/ L_EA78:                             ; xref
+/*EA78*/ L_EA78:                             ; xref L_EA6E
 /*EA78*/             INC    M_9D             ; $009D
 /*EA7A*/             BEQ    L_EA36           ; $EA36
 /*EA7C*/ L_EA7C:                             ; xref L_EA78
@@ -5739,7 +5739,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*EB29*/             LDY    M_86             ; $0086
 /*EB2B*/ L_EB2B:                             ; xref L_EB27 L_E37E
 /*EB2B*/             JSR    L_EB72           ; $EB72
-/*EB2E*/ L_EB2E:                             ; xref
+/*EB2E*/ L_EB2E:                             ; xref L_EB2B
 /*EB2E*/             STX    M_5E             ; $005E
 /*EB30*/             STY    M_5F             ; $005F
 /*EB32*/             LDY    #M_04            ; $0004
@@ -5775,7 +5775,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*EB62*/             RTS
 /*EB63*/ L_EB63:                             ; xref L_EA55 L_EA39 L_ECD5
 /*EB63*/             JSR    L_EB72           ; $EB72
-/*EB66*/ L_EB66:                             ; xref
+/*EB66*/ L_EB66:                             ; xref L_EB63
 /*EB66*/             LDX    #$06             ; $0006
 /*EB68*/ L_EB68:                             ; xref L_EB66 L_EB68
 /*EB68*/             LDA    M_9C,X           ; $009C
@@ -5794,7 +5794,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*EB78*/             BCC    L_EB71           ; $EB71
 /*EB7A*/ L_EB7A:                             ; xref L_EB76
 /*EB7A*/             JSR    L_E8C6           ; $E8C6
-/*EB7D*/ L_EB7D:                             ; xref
+/*EB7D*/ L_EB7D:                             ; xref L_EB7A
 /*EB7D*/             BNE    L_EB71           ; $EB71
 /*EB7F*/ L_EB7F:                             ; xref L_EB7D
 /*EB7F*/             JMP    L_E88F           ; $E88F
@@ -5898,7 +5898,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*EBFE*/             LDA    #M_FF            ; $00FF
 /*EC00*/             STA    M_A4             ; $00A4
 /*EC02*/             JSR    L_E8A4           ; $E8A4
-/*EC05*/ L_EC05:                             ; xref
+/*EC05*/ L_EC05:                             ; xref L_EBFD
 /*EC05*/             TXA
 /*EC06*/ L_EC06:                             ; xref L_EBF6 L_EC05
 /*EC06*/             LDX    #M_9D            ; $009D
@@ -5906,7 +5906,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*EC0A*/             BPL    L_EC12           ; $EC12
 /*EC0C*/ L_EC0C:                             ; xref L_EC06
 /*EC0C*/             JSR    L_E8F0           ; $E8F0
-/*EC0F*/ L_EC0F:                             ; xref
+/*EC0F*/ L_EC0F:                             ; xref L_EC0C
 /*EC0F*/             STY    M_A4             ; $00A4
 /*EC11*/ L_EC11:                             ; xref L_EC0F L_EBDE
 /*EC11*/             RTS
@@ -5918,7 +5918,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*EC19*/             ORA    M_9E             ; $009E
 /*EC1B*/             STA    M_9E             ; $009E
 /*EC1D*/             JSR    L_E907           ; $E907
-/*EC20*/ L_EC20:                             ; xref
+/*EC20*/ L_EC20:                             ; xref L_EC12
 /*EC20*/             STY    M_A4             ; $00A4
 /*EC22*/             RTS
 ; Data range [$ec23-$EC3F]
@@ -5980,7 +5980,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*EC5F*/             BNE    L_EC66           ; $EC66
 /*EC61*/ L_EC61:                             ; xref L_EC59 L_EC5D L_EC98 L_ECD2
 /*EC61*/             JSR    L_00B1           ; $00B1
-/*EC64*/ L_EC64:                             ; xref L_EC53
+/*EC64*/ L_EC64:                             ; xref L_EC53 L_EC61
 /*EC64*/             BCC    L_ECC1           ; $ECC1
 /*EC66*/ L_EC66:                             ; xref L_EC64 L_EC5D
 /*EC66*/             CMP    #M_2E            ; $002E
@@ -5990,7 +5990,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*EC6C*/             BNE    L_EC9E           ; $EC9E
 /*EC6E*/ L_EC6E:                             ; xref L_EC6A
 /*EC6E*/             JSR    L_00B1           ; $00B1
-/*EC71*/ L_EC71:                             ; xref
+/*EC71*/ L_EC71:                             ; xref L_EC6E
 /*EC71*/             BCC    L_EC8A           ; $EC8A
 /*EC73*/ L_EC73:                             ; xref L_EC71
 /*EC73*/             CMP    #$C9             ; $00C9
@@ -6010,7 +6010,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*EC85*/             ROR    M_9C             ; $009C
 /*EC87*/ L_EC87:                             ; xref L_EC85 L_EC7B L_EC7F L_ED05
 /*EC87*/             JSR    L_00B1           ; $00B1
-/*EC8A*/ L_EC8A:                             ; xref L_EC71
+/*EC8A*/ L_EC8A:                             ; xref L_EC71 L_EC87
 /*EC8A*/             BCC    L_ECE8           ; $ECE8
 /*EC8C*/ L_EC8C:                             ; xref L_EC8A L_EC83
 /*EC8C*/             BIT    M_9C             ; $009C
@@ -6035,14 +6035,14 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*ECA7*/             BPL    L_ECB2           ; $ECB2
 /*ECA9*/ L_ECA9:                             ; xref L_ECA7 L_ECAC
 /*ECA9*/             JSR    L_EA55           ; $EA55
-/*ECAC*/ L_ECAC:                             ; xref
+/*ECAC*/ L_ECAC:                             ; xref L_ECA9
 /*ECAC*/             INC    M_9A             ; $009A
 /*ECAE*/             BNE    L_ECA9           ; $ECA9
 /*ECB0*/ L_ECB0:                             ; xref L_ECAC
 /*ECB0*/             BEQ    L_ECB9           ; $ECB9
 /*ECB2*/ L_ECB2:                             ; xref L_ECA7 L_ECB5 L_ECB0
 /*ECB2*/             JSR    L_EA39           ; $EA39
-/*ECB5*/ L_ECB5:                             ; xref
+/*ECB5*/ L_ECB5:                             ; xref L_ECB2
 /*ECB5*/             DEC    M_9A             ; $009A
 /*ECB7*/             BNE    L_ECB2           ; $ECB2
 /*ECB9*/ L_ECB9:                             ; xref L_ECB5 L_ECA0 L_ECB0
@@ -6060,20 +6060,20 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*ECC6*/             INC    M_99             ; $0099
 /*ECC8*/ L_ECC8:                             ; xref L_ECC1 L_ECC6
 /*ECC8*/             JSR    L_EA39           ; $EA39
-/*ECCB*/ L_ECCB:                             ; xref
+/*ECCB*/ L_ECCB:                             ; xref L_ECC8
 /*ECCB*/             PLA
 /*ECCC*/             SEC
 /*ECCD*/             SBC    #M_30            ; $0030
 /*ECCF*/             JSR    L_ECD5           ; $ECD5
-/*ECD2*/ L_ECD2:                             ; xref
+/*ECD2*/ L_ECD2:                             ; xref L_ECCB
 /*ECD2*/             JMP    L_EC61           ; $EC61
 /*ECD5*/ L_ECD5:                             ; xref L_ECCB
 /*ECD5*/             PHA
 /*ECD6*/             JSR    L_EB63           ; $EB63
-/*ECD9*/ L_ECD9:                             ; xref
+/*ECD9*/ L_ECD9:                             ; xref L_ECD5
 /*ECD9*/             PLA
 /*ECDA*/             JSR    L_EB93           ; $EB93
-/*ECDD*/ L_ECDD:                             ; xref
+/*ECDD*/ L_ECDD:                             ; xref L_ECD9
 /*ECDD*/             LDA    M_AA             ; $00AA
 /*ECDF*/             EOR    M_A2             ; $00A2
 /*ECE1*/             STA    M_AB             ; $00AB
@@ -6125,7 +6125,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*ED19*/             LDA    #$58             ; $0058
 /*ED1B*/             LDY    #M_D3            ; $00D3
 /*ED1D*/             JSR    L_ED31           ; $ED31
-/*ED20*/ L_ED20:                             ; xref
+/*ED20*/ L_ED20:                             ; xref L_ED19
 /*ED20*/             LDA    M_76             ; $0076
 /*ED22*/             LDX    M_75             ; $0075
 /*ED24*/ L_ED24:                             ; xref L_ED20 L_D813 L_D6F7
@@ -6134,9 +6134,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*ED28*/             LDX    #$90             ; $0090
 /*ED2A*/             SEC
 /*ED2B*/             JSR    L_EBA0           ; $EBA0
-/*ED2E*/ L_ED2E:                             ; xref
+/*ED2E*/ L_ED2E:                             ; xref L_ED24
 /*ED2E*/             JSR    L_ED34           ; $ED34
-/*ED31*/ L_ED31:                             ; xref L_ED19
+/*ED31*/ L_ED31:                             ; xref L_ED19 L_ED2E
 /*ED31*/             JMP    L_DB3A           ; $DB3A
 /*ED34*/ L_ED34:                             ; xref L_ED2E L_DAF2
 /*ED34*/             LDY    #M_01            ; $0001
@@ -6166,7 +6166,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*ED57*/             LDA    #M_14            ; $0014
 /*ED59*/             LDY    #$ED             ; $00ED
 /*ED5B*/             JSR    L_E97F           ; $E97F
-/*ED5E*/ L_ED5E:                             ; xref
+/*ED5E*/ L_ED5E:                             ; xref L_ED57
 /*ED5E*/             LDA    #M_F7            ; $00F7
 /*ED60*/ L_ED60:                             ; xref L_ED55 L_ED5E
 /*ED60*/             STA    M_99             ; $0099
@@ -6174,7 +6174,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*ED62*/             LDA    #M_0F            ; $000F
 /*ED64*/             LDY    #$ED             ; $00ED
 /*ED66*/             JSR    L_EBB2           ; $EBB2
-/*ED69*/ L_ED69:                             ; xref
+/*ED69*/ L_ED69:                             ; xref L_ED62
 /*ED69*/             BEQ    L_ED89           ; $ED89
 /*ED6B*/ L_ED6B:                             ; xref L_ED69
 /*ED6B*/             BPL    L_ED7F           ; $ED7F
@@ -6182,25 +6182,25 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*ED6D*/             LDA    #M_0A            ; $000A
 /*ED6F*/             LDY    #$ED             ; $00ED
 /*ED71*/             JSR    L_EBB2           ; $EBB2
-/*ED74*/ L_ED74:                             ; xref
+/*ED74*/ L_ED74:                             ; xref L_ED6D
 /*ED74*/             BEQ    L_ED78           ; $ED78
 /*ED76*/ L_ED76:                             ; xref L_ED74
 /*ED76*/             BPL    L_ED86           ; $ED86
 /*ED78*/ L_ED78:                             ; xref L_ED74 L_ED76
 /*ED78*/             JSR    L_EA39           ; $EA39
-/*ED7B*/ L_ED7B:                             ; xref
+/*ED7B*/ L_ED7B:                             ; xref L_ED78
 /*ED7B*/             DEC    M_99             ; $0099
 /*ED7D*/             BNE    L_ED6D           ; $ED6D
 /*ED7F*/ L_ED7F:                             ; xref L_ED6B L_ED7B
 /*ED7F*/             JSR    L_EA55           ; $EA55
-/*ED82*/ L_ED82:                             ; xref
+/*ED82*/ L_ED82:                             ; xref L_ED7F
 /*ED82*/             INC    M_99             ; $0099
 /*ED84*/             BNE    L_ED62           ; $ED62
 /*ED86*/ L_ED86:                             ; xref L_ED82 L_ED76
 /*ED86*/             JSR    L_E7A0           ; $E7A0
-/*ED89*/ L_ED89:                             ; xref L_ED69
+/*ED89*/ L_ED89:                             ; xref L_ED69 L_ED86
 /*ED89*/             JSR    L_EBF2           ; $EBF2
-/*ED8C*/ L_ED8C:                             ; xref
+/*ED8C*/ L_ED8C:                             ; xref L_ED89
 /*ED8C*/             LDX    #M_01            ; $0001
 /*ED8E*/             LDA    M_99             ; $0099
 /*ED90*/             CLC
@@ -7070,7 +7070,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F137*/             STA    M_04             ; $0004
 /*F139*/             STY    M_05             ; $0005
 /*F13B*/             JSR    L_F273           ; $F273
-/*F13E*/ L_F13E:                             ; xref
+/*F13E*/ L_F13E:                             ; xref L_F128
 /*F13E*/             LDA    #$4C             ; $004C
 /*F140*/             STA    M_00             ; $0000
 /*F142*/             STA    M_03             ; $0003
@@ -7097,7 +7097,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F164*/             LDA    #M_03            ; $0003
 /*F166*/             STA    M_8F             ; $008F
 /*F168*/             JSR    L_DAFB           ; $DAFB
-/*F16B*/ L_F16B:                             ; xref
+/*F16B*/ L_F16B:                             ; xref L_F15C
 /*F16B*/             LDA    #M_01            ; $0001
 /*F16D*/             STA    M_01FD           ; $01FD
 /*F170*/             STA    M_01FC           ; $01FC
@@ -7144,9 +7144,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F1B8*/             LDA    M_67             ; $0067
 /*F1BA*/             LDY    M_68             ; $0068
 /*F1BC*/             JSR    L_D3E3           ; $D3E3
-/*F1BF*/ L_F1BF:                             ; xref
+/*F1BF*/ L_F1BF:                             ; xref L_F1B8
 /*F1BF*/             JSR    L_D64B           ; $D64B
-/*F1C2*/ L_F1C2:                             ; xref
+/*F1C2*/ L_F1C2:                             ; xref L_F1BF
 /*F1C2*/             LDA    #M_3A            ; $003A
 /*F1C4*/             LDY    #M_DB            ; $00DB
 /*F1C6*/             STA    M_04             ; $0004
@@ -7158,9 +7158,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F1D2*/             JMP    (M_01)           ; $0001
 /*F1D5*/ L_F1D5:                             ; xref
 /*F1D5*/             JSR    L_DD67           ; $DD67
-/*F1D8*/ L_F1D8:                             ; xref
+/*F1D8*/ L_F1D8:                             ; xref L_F1D5
 /*F1D8*/             JSR    L_E752           ; $E752
-/*F1DB*/ L_F1DB:                             ; xref
+/*F1DB*/ L_F1DB:                             ; xref L_F1D8
 /*F1DB*/             JMP    (M_50)           ; $0050
 ; Data range [$f1de-$F1EB]
 /*F1DE*/             DFB    $20
@@ -7181,16 +7181,16 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F1EC*/             org    $F1EC
 /*F1EC*/ L_F1EC:                             ; xref L_DEFC L_F209 L_F225
 /*F1EC*/             JSR    L_E6F8           ; $E6F8
-/*F1EF*/ L_F1EF:                             ; xref
+/*F1EF*/ L_F1EF:                             ; xref L_F1EC
 /*F1EF*/             CPX    #M_30            ; $0030
 /*F1F1*/             BCS    L_F206           ; $F206
 /*F1F3*/ L_F1F3:                             ; xref L_F1EF
 /*F1F3*/             STX    M_F0             ; $00F0
 /*F1F5*/             LDA    #M_2C            ; $002C
 /*F1F7*/             JSR    L_DEC0           ; $DEC0
-/*F1FA*/ L_F1FA:                             ; xref
+/*F1FA*/ L_F1FA:                             ; xref L_F1F3
 /*F1FA*/             JSR    L_E6F8           ; $E6F8
-/*F1FD*/ L_F1FD:                             ; xref
+/*F1FD*/ L_F1FD:                             ; xref L_F1FA
 /*F1FD*/             CPX    #M_30            ; $0030
 /*F1FF*/             BCS    L_F206           ; $F206
 /*F201*/ L_F201:                             ; xref L_F1FD
@@ -7201,7 +7201,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F206*/             JMP    L_E199           ; $E199
 /*F209*/ L_F209:                             ; xref L_F232 L_F241
 /*F209*/             JSR    L_F1EC           ; $F1EC
-/*F20C*/ L_F20C:                             ; xref
+/*F20C*/ L_F20C:                             ; xref L_F209
 /*F20C*/             CPX    M_F0             ; $00F0
 /*F20E*/             BCS    L_F218           ; $F218
 /*F210*/ L_F210:                             ; xref L_F20C
@@ -7212,16 +7212,16 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F218*/ L_F218:                             ; xref L_F20C L_F210
 /*F218*/             LDA    #$C5             ; $00C5
 /*F21A*/             JSR    L_DEC0           ; $DEC0
-/*F21D*/ L_F21D:                             ; xref
+/*F21D*/ L_F21D:                             ; xref L_F218
 /*F21D*/             JSR    L_E6F8           ; $E6F8
-/*F220*/ L_F220:                             ; xref
+/*F220*/ L_F220:                             ; xref L_F21D
 /*F220*/             CPX    #M_30            ; $0030
 /*F222*/             BCS    L_F206           ; $F206
 /*F224*/ L_F224:                             ; xref L_F220
 /*F224*/             RTS
 /*F225*/ L_F225:                             ; xref
 /*F225*/             JSR    L_F1EC           ; $F1EC
-/*F228*/ L_F228:                             ; xref
+/*F228*/ L_F228:                             ; xref L_F225
 /*F228*/             TXA
 /*F229*/             LDY    M_F0             ; $00F0
 /*F22B*/             CPY    #M_28            ; $0028
@@ -7230,7 +7230,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F22F*/             JMP    L_F800           ; $F800
 /*F232*/ L_F232:                             ; xref
 /*F232*/             JSR    L_F209           ; $F209
-/*F235*/ L_F235:                             ; xref
+/*F235*/ L_F235:                             ; xref L_F232
 /*F235*/             TXA
 /*F236*/             LDY    M_2C             ; $002C
 /*F238*/             CPY    #M_28            ; $0028
@@ -7240,7 +7240,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F23E*/             JMP    L_F819           ; $F819
 /*F241*/ L_F241:                             ; xref
 /*F241*/             JSR    L_F209           ; $F209
-/*F244*/ L_F244:                             ; xref
+/*F244*/ L_F244:                             ; xref L_F241
 /*F244*/             TXA
 /*F245*/             TAY
 /*F246*/             CPY    #M_28            ; $0028
@@ -7250,12 +7250,12 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F24C*/             JMP    L_F828           ; $F828
 /*F24F*/ L_F24F:                             ; xref
 /*F24F*/             JSR    L_E6F8           ; $E6F8
-/*F252*/ L_F252:                             ; xref
+/*F252*/ L_F252:                             ; xref L_F24F
 /*F252*/             TXA
 /*F253*/             JMP    L_F864           ; $F864
 /*F256*/ L_F256:                             ; xref
 /*F256*/             JSR    L_E6F8           ; $E6F8
-/*F259*/ L_F259:                             ; xref
+/*F259*/ L_F259:                             ; xref L_F256
 /*F259*/             DEX
 /*F25A*/             TXA
 /*F25B*/             CMP    #$18             ; $0018
@@ -7311,9 +7311,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F28B*/             ???
 ; Code range [$F289-$F28B]
 /*F289*/             org    $F289
-/*F289*/ L_F289:                             ; xref
+/*F289*/ L_F289:                             ; xref L_F286
 /*F289*/             JSR    L_E752           ; $E752
-/*F28C*/ L_F28C:                             ; xref
+/*F28C*/ L_F28C:                             ; xref L_F289
 /*F28C*/             LDA    M_50             ; $0050
 /*F28E*/             CMP    M_6D             ; $006D
 /*F290*/             LDA    M_51             ; $0051
@@ -7331,9 +7331,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F2A5*/             RTS
 /*F2A6*/ L_F2A6:                             ; xref
 /*F2A6*/             JSR    L_DD67           ; $DD67
-/*F2A9*/ L_F2A9:                             ; xref
+/*F2A9*/ L_F2A9:                             ; xref L_F2A6
 /*F2A9*/             JSR    L_E752           ; $E752
-/*F2AC*/ L_F2AC:                             ; xref
+/*F2AC*/ L_F2AC:                             ; xref L_F2A9
 /*F2AC*/             LDA    M_50             ; $0050
 /*F2AE*/             CMP    M_73             ; $0073
 /*F2B0*/             LDA    M_51             ; $0051
@@ -7354,7 +7354,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F2CB*/ L_F2CB:                             ; xref
 /*F2CB*/             LDA    #M_AB            ; $00AB
 /*F2CD*/             JSR    L_DEC0           ; $DEC0
-/*F2D0*/ L_F2D0:                             ; xref
+/*F2D0*/ L_F2D0:                             ; xref L_F2CB
 /*F2D0*/             LDA    M_B8             ; $00B8
 /*F2D2*/             STA    M_F4             ; $00F4
 /*F2D4*/             LDA    M_B9             ; $00B9
@@ -7366,7 +7366,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F2DF*/             LDA    M_76             ; $0076
 /*F2E1*/             STA    M_F7             ; $00F7
 /*F2E3*/             JSR    L_D9A6           ; $D9A6
-/*F2E6*/ L_F2E6:                             ; xref
+/*F2E6*/ L_F2E6:                             ; xref L_F2D0
 /*F2E6*/             JMP    L_D998           ; $D998
 /*F2E9*/ L_F2E9:                             ; xref L_D416 L_D869 L_DB8B
 /*F2E9*/             STX    M_DE             ; $00DE
@@ -7391,9 +7391,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F30B*/             LDA    M_F7             ; $00F7
 /*F30D*/             STA    M_76             ; $0076
 /*F30F*/             JSR    L_00B7           ; $00B7
-/*F312*/ L_F312:                             ; xref
+/*F312*/ L_F312:                             ; xref L_F2E9
 /*F312*/             JSR    L_D93E           ; $D93E
-/*F315*/ L_F315:                             ; xref
+/*F315*/ L_F315:                             ; xref L_F312
 /*F315*/             JMP    L_D7D2           ; $D7D2
 /*F318*/ L_F318:                             ; xref
 /*F318*/             LDA    M_DA             ; $00DA
@@ -7600,7 +7600,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F3FE*/             LDA    M_1C             ; $001C
 /*F400*/             STA    (M_1A),Y         ; $001A
 /*F402*/             JSR    L_F47E           ; $F47E
-/*F405*/ L_F405:                             ; xref
+/*F405*/ L_F405:                             ; xref L_F3FE
 /*F405*/             INY
 /*F406*/             BNE    L_F3FE           ; $F3FE
 /*F408*/ L_F408:                             ; xref L_F405
@@ -7660,7 +7660,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F456*/             RTS
 /*F457*/ L_F457:                             ; xref L_F705
 /*F457*/             JSR    L_F411           ; $F411
-/*F45A*/ L_F45A:                             ; xref
+/*F45A*/ L_F45A:                             ; xref L_F457
 /*F45A*/             LDA    M_1C             ; $001C
 /*F45C*/             EOR    (M_26),Y         ; $0026
 /*F45E*/             AND    M_30             ; $0030
@@ -7895,7 +7895,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F57C*/ L_F57C:                             ; xref L_F568 L_F59E
 /*F57C*/             ASL    A                ; $0000
 /*F57D*/             JSR    L_F465           ; $F465
-/*F580*/ L_F580:                             ; xref
+/*F580*/ L_F580:                             ; xref L_F57C
 /*F580*/             SEC
 /*F581*/ L_F581:                             ; xref L_F568 L_F580
 /*F581*/             LDA    M_D4             ; $00D4
@@ -7920,7 +7920,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F5A0*/             BCS    L_F57C           ; $F57C
 /*F5A2*/ L_F5A2:                             ; xref L_F59E
 /*F5A2*/             JSR    L_F4D3           ; $F4D3
-/*F5A5*/ L_F5A5:                             ; xref
+/*F5A5*/ L_F5A5:                             ; xref L_F5A2
 /*F5A5*/             CLC
 /*F5A6*/             LDA    M_D4             ; $00D4
 /*F5A8*/             ADC    M_D0             ; $00D0
@@ -8052,7 +8052,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F637*/             BCC    L_F63D           ; $F63D
 /*F639*/ L_F639:                             ; xref L_F630
 /*F639*/             JSR    L_F4B3           ; $F4B3
-/*F63C*/ L_F63C:                             ; xref
+/*F63C*/ L_F63C:                             ; xref L_F639
 /*F63C*/             CLC
 /*F63D*/ L_F63D:                             ; xref L_F630 L_F63C
 /*F63D*/             LDA    M_D5             ; $00D5
@@ -8061,7 +8061,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F643*/             BCC    L_F648           ; $F648
 /*F645*/ L_F645:                             ; xref L_F63D
 /*F645*/             JSR    L_F4B4           ; $F4B4
-/*F648*/ L_F648:                             ; xref L_F63D
+/*F648*/ L_F648:                             ; xref L_F63D L_F645
 /*F648*/             DEX
 /*F649*/             BNE    L_F630           ; $F630
 /*F64B*/ L_F64B:                             ; xref L_F648
@@ -8122,7 +8122,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F693*/             BCC    L_F699           ; $F699
 /*F695*/ L_F695:                             ; xref L_F68C
 /*F695*/             JSR    L_F49C           ; $F49C
-/*F698*/ L_F698:                             ; xref
+/*F698*/ L_F698:                             ; xref L_F695
 /*F698*/             CLC
 /*F699*/ L_F699:                             ; xref L_F68C L_F698
 /*F699*/             LDA    M_D5             ; $00D5
@@ -8131,7 +8131,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F69F*/             BCC    L_F6A4           ; $F6A4
 /*F6A1*/ L_F6A1:                             ; xref L_F699
 /*F6A1*/             JSR    L_F49D           ; $F49D
-/*F6A4*/ L_F6A4:                             ; xref L_F699
+/*F6A4*/ L_F6A4:                             ; xref L_F699 L_F6A1
 /*F6A4*/             DEX
 /*F6A5*/             BNE    L_F68C           ; $F68C
 /*F6A7*/ L_F6A7:                             ; xref L_F6A4
@@ -8152,9 +8152,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F6B8*/             RTS
 /*F6B9*/ L_F6B9:                             ; xref L_F712 L_F760 L_F702
 /*F6B9*/             JSR    L_DD67           ; $DD67
-/*F6BC*/ L_F6BC:                             ; xref
+/*F6BC*/ L_F6BC:                             ; xref L_F6B9
 /*F6BC*/             JSR    L_E752           ; $E752
-/*F6BF*/ L_F6BF:                             ; xref
+/*F6BF*/ L_F6BF:                             ; xref L_F6BC
 /*F6BF*/             LDY    M_51             ; $0051
 /*F6C1*/             LDX    M_50             ; $0050
 /*F6C3*/             CPY    #M_01            ; $0001
@@ -8171,9 +8171,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F6D0*/             PHA
 /*F6D1*/             LDA    #M_2C            ; $002C
 /*F6D3*/             JSR    L_DEC0           ; $DEC0
-/*F6D6*/ L_F6D6:                             ; xref
+/*F6D6*/ L_F6D6:                             ; xref L_F6CD
 /*F6D6*/             JSR    L_E6F8           ; $E6F8
-/*F6D9*/ L_F6D9:                             ; xref
+/*F6D9*/ L_F6D9:                             ; xref L_F6D6
 /*F6D9*/             CPX    #$C0             ; $00C0
 /*F6DB*/             BCS    L_F6E6           ; $F6E6
 /*F6DD*/ L_F6DD:                             ; xref L_F6D9
@@ -8188,7 +8188,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F6E6*/             JMP    L_F206           ; $F206
 /*F6E9*/ L_F6E9:                             ; xref
 /*F6E9*/             JSR    L_E6F8           ; $E6F8
-/*F6EC*/ L_F6EC:                             ; xref
+/*F6EC*/ L_F6EC:                             ; xref L_F6E9
 /*F6EC*/             CPX    #$08             ; $0008
 /*F6EE*/             BCS    L_F6E6           ; $F6E6
 /*F6F0*/ L_F6F0:                             ; xref L_F6EC
@@ -8212,38 +8212,38 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F700*/             BEQ    L_F70F           ; $F70F
 /*F702*/ L_F702:                             ; xref L_F6FE
 /*F702*/             JSR    L_F6B9           ; $F6B9
-/*F705*/ L_F705:                             ; xref
+/*F705*/ L_F705:                             ; xref L_F702
 /*F705*/             JSR    L_F457           ; $F457
-/*F708*/ L_F708:                             ; xref L_F71E
+/*F708*/ L_F708:                             ; xref L_F705 L_F71E
 /*F708*/             JSR    L_00B7           ; $00B7
-/*F70B*/ L_F70B:                             ; xref
+/*F70B*/ L_F70B:                             ; xref L_F708
 /*F70B*/             CMP    #$C1             ; $00C1
 /*F70D*/             BNE    L_F6F5           ; $F6F5
 /*F70F*/ L_F70F:                             ; xref L_F6FE L_F70B
 /*F70F*/             JSR    L_DEC0           ; $DEC0
-/*F712*/ L_F712:                             ; xref
+/*F712*/ L_F712:                             ; xref L_F70F
 /*F712*/             JSR    L_F6B9           ; $F6B9
-/*F715*/ L_F715:                             ; xref
+/*F715*/ L_F715:                             ; xref L_F712
 /*F715*/             STY    M_9D             ; $009D
 /*F717*/             TAY
 /*F718*/             TXA
 /*F719*/             LDX    M_9D             ; $009D
 /*F71B*/             JSR    L_F53A           ; $F53A
-/*F71E*/ L_F71E:                             ; xref
+/*F71E*/ L_F71E:                             ; xref L_F715
 /*F71E*/             JMP    L_F708           ; $F708
 /*F721*/ L_F721:                             ; xref
 /*F721*/             JSR    L_E6F8           ; $E6F8
-/*F724*/ L_F724:                             ; xref
+/*F724*/ L_F724:                             ; xref L_F721
 /*F724*/             STX    M_F9             ; $00F9
 /*F726*/             RTS
 /*F727*/ L_F727:                             ; xref
 /*F727*/             JSR    L_E6F8           ; $E6F8
-/*F72A*/ L_F72A:                             ; xref
+/*F72A*/ L_F72A:                             ; xref L_F727
 /*F72A*/             STX    M_E7             ; $00E7
 /*F72C*/             RTS
 /*F72D*/ L_F72D:                             ; xref L_F769 L_F76F
 /*F72D*/             JSR    L_E6F8           ; $E6F8
-/*F730*/ L_F730:                             ; xref
+/*F730*/ L_F730:                             ; xref L_F72D
 /*F730*/             LDA    M_E8             ; $00E8
 /*F732*/             STA    M_1A             ; $001A
 /*F734*/             LDA    M_E9             ; $00E9
@@ -8271,25 +8271,25 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F752*/             STA    M_1B             ; $001B
 /*F754*/             STX    M_1A             ; $001A
 /*F756*/             JSR    L_00B7           ; $00B7
-/*F759*/ L_F759:                             ; xref
+/*F759*/ L_F759:                             ; xref L_F747
 /*F759*/             CMP    #$C5             ; $00C5
 /*F75B*/             BNE    L_F766           ; $F766
 /*F75D*/ L_F75D:                             ; xref L_F759
 /*F75D*/             JSR    L_DEC0           ; $DEC0
-/*F760*/ L_F760:                             ; xref
+/*F760*/ L_F760:                             ; xref L_F75D
 /*F760*/             JSR    L_F6B9           ; $F6B9
-/*F763*/ L_F763:                             ; xref
+/*F763*/ L_F763:                             ; xref L_F760
 /*F763*/             JSR    L_F411           ; $F411
-/*F766*/ L_F766:                             ; xref L_F759
+/*F766*/ L_F766:                             ; xref L_F759 L_F763
 /*F766*/             LDA    M_F9             ; $00F9
 /*F768*/             RTS
 /*F769*/ L_F769:                             ; xref
 /*F769*/             JSR    L_F72D           ; $F72D
-/*F76C*/ L_F76C:                             ; xref
+/*F76C*/ L_F76C:                             ; xref L_F769
 /*F76C*/             JMP    L_F605           ; $F605
 /*F76F*/ L_F76F:                             ; xref
 /*F76F*/             JSR    L_F72D           ; $F72D
-/*F772*/ L_F772:                             ; xref
+/*F772*/ L_F772:                             ; xref L_F76F
 /*F772*/             JMP    L_F661           ; $F661
 ; Data range [$f775-$F7E6]
 /*F775*/             DFB    $A9
@@ -8410,7 +8410,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F7E7*/             org    $F7E7
 /*F7E7*/ L_F7E7:                             ; xref
 /*F7E7*/             JSR    L_E6F8           ; $E6F8
-/*F7EA*/ L_F7EA:                             ; xref
+/*F7EA*/ L_F7EA:                             ; xref L_F7E7
 /*F7EA*/             DEX
 /*F7EB*/             TXA
 /*F7EC*/ L_F7EC:                             ; xref L_F7EA L_F7F6
@@ -8420,7 +8420,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F7F0*/             SBC    #M_28            ; $0028
 /*F7F2*/             PHA
 /*F7F3*/             JSR    L_DAFB           ; $DAFB
-/*F7F6*/ L_F7F6:                             ; xref
+/*F7F6*/ L_F7F6:                             ; xref L_F7F0
 /*F7F6*/             PLA
 /*F7F7*/             JMP    L_F7EC           ; $F7EC
 /*F7FA*/ L_F7FA:                             ; xref L_F7EC
@@ -8436,7 +8436,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F800*/             LSR    A                ; $0000
 /*F801*/             PHP
 /*F802*/             JSR    L_F847           ; $F847
-/*F805*/ L_F805:                             ; xref
+/*F805*/ L_F805:                             ; xref L_F800
 /*F805*/             PLP
 /*F806*/             LDA    #M_0F            ; $000F
 /*F808*/             BCC    L_F80C           ; $F80C
@@ -8453,20 +8453,20 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F818*/             RTS
 /*F819*/ L_F819:                             ; xref L_F23C
 /*F819*/             JSR    L_F800           ; $F800
-/*F81C*/ L_F81C:                             ; xref L_F824
+/*F81C*/ L_F81C:                             ; xref L_F819 L_F824
 /*F81C*/             CPY    M_2C             ; $002C
 /*F81E*/             BCS    L_F831           ; $F831
 /*F820*/ L_F820:                             ; xref L_F81C
 /*F820*/             INY
 /*F821*/             JSR    L_F80E           ; $F80E
-/*F824*/ L_F824:                             ; xref
+/*F824*/ L_F824:                             ; xref L_F820
 /*F824*/             BCC    L_F81C           ; $F81C
 /*F826*/ L_F826:                             ; xref L_F82C L_F824
 /*F826*/             ADC    #M_01            ; $0001
 /*F828*/ L_F828:                             ; xref L_F83C L_F826 L_F24A
 /*F828*/             PHA
 /*F829*/             JSR    L_F800           ; $F800
-/*F82C*/ L_F82C:                             ; xref
+/*F82C*/ L_F82C:                             ; xref L_F828
 /*F82C*/             PLA
 /*F82D*/             CMP    M_2D             ; $002D
 /*F82F*/             BCC    L_F826           ; $F826
@@ -8487,7 +8487,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F83C*/             LDA    #M_00            ; $0000
 /*F83E*/             STA    M_30             ; $0030
 /*F840*/             JSR    L_F828           ; $F828
-/*F843*/ L_F843:                             ; xref
+/*F843*/ L_F843:                             ; xref L_F83C
 /*F843*/             DEY
 /*F844*/             BPL    L_F83C           ; $F83C
 /*F846*/ L_F846:                             ; xref L_F843
@@ -8532,7 +8532,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F871*/             LSR    A                ; $0000
 /*F872*/             PHP
 /*F873*/             JSR    L_F847           ; $F847
-/*F876*/ L_F876:                             ; xref
+/*F876*/ L_F876:                             ; xref L_F871
 /*F876*/             LDA    (M_26),Y         ; $0026
 /*F878*/             PLP
 /*F879*/ L_F879:                             ; xref L_F876 L_F89B
@@ -8549,9 +8549,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F882*/             LDX    M_3A             ; $003A
 /*F884*/             LDY    M_3B             ; $003B
 /*F886*/             JSR    L_FD96           ; $FD96
-/*F889*/ L_F889:                             ; xref
+/*F889*/ L_F889:                             ; xref L_F882
 /*F889*/             JSR    L_F948           ; $F948
-/*F88C*/ L_F88C:                             ; xref
+/*F88C*/ L_F88C:                             ; xref L_F889
 /*F88C*/             LDA    (M_3A,X)         ; $003A
 /*F88E*/             TAY
 /*F88F*/             LSR    A                ; $0000
@@ -8569,7 +8569,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F89C*/             TAX
 /*F89D*/             LDA    M_F962,X         ; $F962
 /*F8A0*/             JSR    L_F879           ; $F879
-/*F8A3*/ L_F8A3:                             ; xref
+/*F8A3*/ L_F8A3:                             ; xref L_F89B
 /*F8A3*/             BNE    L_F8A9           ; $F8A9
 /*F8A5*/ L_F8A5:                             ; xref L_F8A3 L_F892 L_F895
 /*F8A5*/             LDY    #M_80            ; $0080
@@ -8612,16 +8612,16 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F8D0*/             org    $F8D0
 /*F8D0*/ L_F8D0:                             ; xref L_FE63
 /*F8D0*/             JSR    L_F882           ; $F882
-/*F8D3*/ L_F8D3:                             ; xref
+/*F8D3*/ L_F8D3:                             ; xref L_F8D0
 /*F8D3*/             PHA
 /*F8D4*/ L_F8D4:                             ; xref L_F8D3 L_F8DE
 /*F8D4*/             LDA    (M_3A),Y         ; $003A
 /*F8D6*/             JSR    L_FDDA           ; $FDDA
-/*F8D9*/ L_F8D9:                             ; xref
+/*F8D9*/ L_F8D9:                             ; xref L_F8D4
 /*F8D9*/             LDX    #M_01            ; $0001
 /*F8DB*/ L_F8DB:                             ; xref L_F8D9 L_F8E3
 /*F8DB*/             JSR    L_F94A           ; $F94A
-/*F8DE*/ L_F8DE:                             ; xref
+/*F8DE*/ L_F8DE:                             ; xref L_F8DB
 /*F8DE*/             CPY    M_2F             ; $002F
 /*F8E0*/             INY
 /*F8E1*/             BCC    L_F8D4           ; $F8D4
@@ -8648,12 +8648,12 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F901*/ L_F901:                             ; xref L_F8F9
 /*F901*/             ADC    #$BF             ; $00BF
 /*F903*/             JSR    L_FDED           ; $FDED
-/*F906*/ L_F906:                             ; xref
+/*F906*/ L_F906:                             ; xref L_F901
 /*F906*/             DEX
 /*F907*/             BNE    L_F8F5           ; $F8F5
 /*F909*/ L_F909:                             ; xref L_F906
 /*F909*/             JSR    L_F948           ; $F948
-/*F90C*/ L_F90C:                             ; xref
+/*F90C*/ L_F90C:                             ; xref L_F909
 /*F90C*/             LDY    M_2F             ; $002F
 /*F90E*/             LDX    #$06             ; $0006
 /*F910*/ L_F910:                             ; xref L_F90C L_F926
@@ -8665,12 +8665,12 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F918*/ L_F918:                             ; xref L_F914
 /*F918*/             LDA    M_F9B3,X         ; $F9B3
 /*F91B*/             JSR    L_FDED           ; $FDED
-/*F91E*/ L_F91E:                             ; xref
+/*F91E*/ L_F91E:                             ; xref L_F918
 /*F91E*/             LDA    M_F9B9,X         ; $F9B9
 /*F921*/             BEQ    L_F926           ; $F926
 /*F923*/ L_F923:                             ; xref L_F91E
 /*F923*/             JSR    L_FDED           ; $FDED
-/*F926*/ L_F926:                             ; xref L_F914 L_F91E
+/*F926*/ L_F926:                             ; xref L_F914 L_F91E L_F923
 /*F926*/             DEX
 /*F927*/             BNE    L_F910           ; $F910
 /*F929*/ L_F929:                             ; xref L_F926
@@ -8680,14 +8680,14 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F92B*/             BMI    L_F914           ; $F914
 /*F92D*/ L_F92D:                             ; xref L_F92A
 /*F92D*/             JSR    L_FDDA           ; $FDDA
-/*F930*/ L_F930:                             ; xref L_F910
+/*F930*/ L_F930:                             ; xref L_F910 L_F92D
 /*F930*/             LDA    M_2E             ; $002E
 /*F932*/             CMP    #M_E8            ; $00E8
 /*F934*/             LDA    (M_3A),Y         ; $003A
 /*F936*/             BCC    L_F92A           ; $F92A
 /*F938*/ L_F938:                             ; xref L_F930
 /*F938*/             JSR    L_F956           ; $F956
-/*F93B*/ L_F93B:                             ; xref
+/*F93B*/ L_F93B:                             ; xref L_F938
 /*F93B*/             TAX
 /*F93C*/             INX
 /*F93D*/             BNE    L_F940           ; $F940
@@ -8696,7 +8696,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F940*/ L_F940:                             ; xref L_FD99 L_F93B L_F93F
 /*F940*/             TYA
 /*F941*/             JSR    L_FDDA           ; $FDDA
-/*F944*/ L_F944:                             ; xref
+/*F944*/ L_F944:                             ; xref L_F940
 /*F944*/             TXA
 /*F945*/             JMP    L_FDDA           ; $FDDA
 /*F948*/ L_F948:                             ; xref L_F889 L_F909
@@ -8704,7 +8704,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*F94A*/ L_F94A:                             ; xref L_F8DB L_F948 L_F94F
 /*F94A*/             LDA    #M_A0            ; $00A0
 /*F94C*/             JSR    L_FDED           ; $FDED
-/*F94F*/ L_F94F:                             ; xref
+/*F94F*/ L_F94F:                             ; xref L_F94A
 /*F94F*/             DEX
 /*F950*/             BNE    L_F94A           ; $F94A
 /*F952*/ L_F952:                             ; xref L_F94F
@@ -8987,13 +8987,13 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FA62*/ START:                             ; xref
 /*FA62*/             CLD
 /*FA63*/             JSR    L_FE84           ; $FE84
-/*FA66*/ L_FA66:                             ; xref
+/*FA66*/ L_FA66:                             ; xref START
 /*FA66*/             JSR    L_FB2F           ; $FB2F
-/*FA69*/ L_FA69:                             ; xref
+/*FA69*/ L_FA69:                             ; xref L_FA66
 /*FA69*/             JSR    L_FE93           ; $FE93
-/*FA6C*/ L_FA6C:                             ; xref
+/*FA6C*/ L_FA6C:                             ; xref L_FA69
 /*FA6C*/             JSR    L_FE89           ; $FE89
-/*FA6F*/ L_FA6F:                             ; xref
+/*FA6F*/ L_FA6F:                             ; xref L_FA6C
 /*FA6F*/             LDA    $C058            ; $C058
 /*FA72*/             LDA    $C05A            ; $C05A
 /*FA75*/             LDA    $C05D            ; $C05D
@@ -9002,7 +9002,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FA7E*/             BIT    $C010            ; $C010
 /*FA81*/             CLD
 /*FA82*/             JSR    L_FF3A           ; $FF3A
-/*FA85*/ L_FA85:                             ; xref
+/*FA85*/ L_FA85:                             ; xref L_FA6F
 /*FA85*/             LDA    M_03F3           ; $03F3
 /*FA88*/             EOR    #M_A5            ; $00A5
 /*FA8A*/             CMP    M_03F4           ; $03F4
@@ -9022,7 +9022,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FAA3*/             JMP    (M_03F2)         ; $03F2
 /*FAA6*/ L_FAA6:                             ; xref L_FA85
 /*FAA6*/             JSR    L_FB60           ; $FB60
-/*FAA9*/ L_FAA9:                             ; xref
+/*FAA9*/ L_FAA9:                             ; xref L_FAA6
 /*FAA9*/             LDX    #M_05            ; $0005
 /*FAAB*/ L_FAAB:                             ; xref L_FAA9 L_FAAB
 /*FAAB*/             LDA    M_FAFC,X         ; $FAFC
@@ -9155,7 +9155,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FB40*/             LDA    $C050            ; $C050
 /*FB43*/             LDA    $C053            ; $C053
 /*FB46*/             JSR    L_F836           ; $F836
-/*FB49*/ L_FB49:                             ; xref
+/*FB49*/ L_FB49:                             ; xref L_FB40
 /*FB49*/             LDA    #M_14            ; $0014
 /*FB4B*/ L_FB4B:                             ; xref L_FB49 L_FB39
 /*FB4B*/             STA    M_22             ; $0022
@@ -9171,7 +9171,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FB5D*/             JMP    L_FC22           ; $FC22
 /*FB60*/ L_FB60:                             ; xref L_FAA6
 /*FB60*/             JSR    L_FC58           ; $FC58
-/*FB63*/ L_FB63:                             ; xref
+/*FB63*/ L_FB63:                             ; xref L_FB60
 /*FB63*/             LDY    #$08             ; $0008
 /*FB65*/ L_FB65:                             ; xref L_FB63 L_FB65
 /*FB65*/             LDA    M_FB08,Y         ; $FB08
@@ -9220,9 +9220,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FB9B*/             TAY
 /*FB9C*/             LDA    M_FA48,Y         ; $FA48
 /*FB9F*/             JSR    L_FB97           ; $FB97
-/*FBA2*/ L_FBA2:                             ; xref
+/*FBA2*/ L_FBA2:                             ; xref L_FB9B
 /*FBA2*/             JSR    L_FD0C           ; $FD0C
-/*FBA5*/ L_FBA5:                             ; xref L_FD32
+/*FBA5*/ L_FBA5:                             ; xref L_FD32 L_FBA2
 /*FBA5*/             CMP    #$CE             ; $00CE
 /*FBA7*/             BCS    L_FB97           ; $FB97
 /*FBA9*/ L_FBA9:                             ; xref L_FBA5
@@ -9272,12 +9272,12 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FBDD*/ L_FBDD:                             ; xref L_FBD9
 /*FBDD*/             LDA    #M_40            ; $0040
 /*FBDF*/             JSR    L_FCA8           ; $FCA8
-/*FBE2*/ L_FBE2:                             ; xref
+/*FBE2*/ L_FBE2:                             ; xref L_FBDD
 /*FBE2*/             LDY    #$C0             ; $00C0
 /*FBE4*/ L_FBE4:                             ; xref L_FBE2 L_FBE9
 /*FBE4*/             LDA    #M_0C            ; $000C
 /*FBE6*/             JSR    L_FCA8           ; $FCA8
-/*FBE9*/ L_FBE9:                             ; xref
+/*FBE9*/ L_FBE9:                             ; xref L_FBE4
 /*FBE9*/             LDA    $C030            ; $C030
 /*FBEC*/             DEY
 /*FBED*/             BNE    L_FBE4           ; $FBE4
@@ -9325,7 +9325,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FC22*/             LDA    M_25             ; $0025
 /*FC24*/ L_FC24:                             ; xref L_FC22 L_FC46 L_FC6E L_FC88 L_FC66
 /*FC24*/             JSR    L_FBC1           ; $FBC1
-/*FC27*/ L_FC27:                             ; xref
+/*FC27*/ L_FC27:                             ; xref L_FC24
 /*FC27*/             ADC    M_20             ; $0020
 /*FC29*/             STA    M_28             ; $0028
 /*FC2B*/ L_FC2B:                             ; xref L_FC27 L_FC1A L_FC40
@@ -9354,9 +9354,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FC46*/ L_FC46:                             ; xref L_FC58 L_FC4D L_FC42
 /*FC46*/             PHA
 /*FC47*/             JSR    L_FC24           ; $FC24
-/*FC4A*/ L_FC4A:                             ; xref
+/*FC4A*/ L_FC4A:                             ; xref L_FC46
 /*FC4A*/             JSR    L_FC9E           ; $FC9E
-/*FC4D*/ L_FC4D:                             ; xref
+/*FC4D*/ L_FC4D:                             ; xref L_FC4A
 /*FC4D*/             LDY    #M_00            ; $0000
 /*FC4F*/             PLA
 /*FC50*/             ADC    #M_00            ; $0000
@@ -9383,7 +9383,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FC70*/             LDA    M_22             ; $0022
 /*FC72*/             PHA
 /*FC73*/             JSR    L_FC24           ; $FC24
-/*FC76*/ L_FC76:                             ; xref L_FC93
+/*FC76*/ L_FC76:                             ; xref L_FC6E L_FC93
 /*FC76*/             LDA    M_28             ; $0028
 /*FC78*/             STA    M_2A             ; $002A
 /*FC7A*/             LDA    M_29             ; $0029
@@ -9397,7 +9397,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FC88*/ L_FC88:                             ; xref L_FC76
 /*FC88*/             PHA
 /*FC89*/             JSR    L_FC24           ; $FC24
-/*FC8C*/ L_FC8C:                             ; xref L_FC8C
+/*FC8C*/ L_FC8C:                             ; xref L_FC88 L_FC8C
 /*FC8C*/             LDA    (M_28),Y         ; $0028
 /*FC8E*/             STA    (M_2A),Y         ; $002A
 /*FC90*/             DEY
@@ -9407,7 +9407,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FC95*/ L_FC95:                             ; xref L_FC76 L_FC93
 /*FC95*/             LDY    #M_00            ; $0000
 /*FC97*/             JSR    L_FC9E           ; $FC9E
-/*FC9A*/ L_FC9A:                             ; xref
+/*FC9A*/ L_FC9A:                             ; xref L_FC95
 /*FC9A*/             BCS    L_FC22           ; $FC22
 /*FC9C*/ L_FC9C:                             ; xref L_FC9A L_FD8B L_FC3C
 /*FC9C*/             LDY    M_24             ; $0024
@@ -9456,7 +9456,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FCC9*/ L_FCC9:                             ; xref L_FF00 L_FCCE L_FCD0
 /*FCC9*/             LDY    #$4B             ; $004B
 /*FCCB*/             JSR    L_FCDB           ; $FCDB
-/*FCCE*/ L_FCCE:                             ; xref
+/*FCCE*/ L_FCCE:                             ; xref L_FCC9
 /*FCCE*/             BNE    L_FCC9           ; $FCC9
 /*FCD0*/ L_FCD0:                             ; xref L_FCCE
 /*FCD0*/             ADC    #$FE             ; $00FE
@@ -9464,7 +9464,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FCD4*/ L_FCD4:                             ; xref L_FCD0
 /*FCD4*/             LDY    #M_21            ; $0021
 /*FCD6*/             JSR    L_FCDB           ; $FCDB
-/*FCD9*/ L_FCD9:                             ; xref
+/*FCD9*/ L_FCD9:                             ; xref L_FCD4
 /*FCD9*/             INY
 /*FCDA*/             INY
 /*FCDB*/ L_FCDB:                             ; xref L_FCC9 L_FCDB L_FCD4 L_FCD9
@@ -9487,7 +9487,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FCEE*/ L_FCEE:                             ; xref L_FCEC L_FCF2
 /*FCEE*/             PHA
 /*FCEF*/             JSR    L_FCFA           ; $FCFA
-/*FCF2*/ L_FCF2:                             ; xref
+/*FCF2*/ L_FCF2:                             ; xref L_FCEE
 /*FCF2*/             PLA
 /*FCF3*/             ROL    A                ; $0000
 /*FCF4*/             LDY    #M_3A            ; $003A
@@ -9497,7 +9497,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FCF9*/             RTS
 /*FCFA*/ L_FCFA:                             ; xref L_FEFD L_FF05 L_FCEE
 /*FCFA*/             JSR    L_FCFD           ; $FCFD
-/*FCFD*/ L_FCFD:                             ; xref L_FCFA L_FCFD L_FF0A L_FF11
+/*FCFD*/ L_FCFD:                             ; xref L_FCFA L_FCFA L_FCFD L_FF0A L_FF11
 /*FCFD*/             DEY
 /*FCFE*/             LDA    $C060            ; $C060
 /*FD01*/             EOR    M_2F             ; $002F
@@ -9531,11 +9531,11 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FD2E*/             RTS
 /*FD2F*/ L_FD2F:                             ; xref L_FD38
 /*FD2F*/             JSR    L_FD0C           ; $FD0C
-/*FD32*/ L_FD32:                             ; xref
+/*FD32*/ L_FD32:                             ; xref L_FD2F
 /*FD32*/             JSR    L_FBA5           ; $FBA5
-/*FD35*/ L_FD35:                             ; xref L_FD75
+/*FD35*/ L_FD35:                             ; xref L_FD32 L_FD75
 /*FD35*/             JSR    L_FD0C           ; $FD0C
-/*FD38*/ L_FD38:                             ; xref
+/*FD38*/ L_FD38:                             ; xref L_FD35
 /*FD38*/             CMP    #M_9B            ; $009B
 /*FD3A*/             BEQ    L_FD2F           ; $FD2F
 /*FD3C*/ L_FD3C:                             ; xref L_FD38
@@ -9547,7 +9547,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FD42*/             STA    M_32             ; $0032
 /*FD44*/             LDA    M_0200,X         ; $0200
 /*FD47*/             JSR    L_FDED           ; $FDED
-/*FD4A*/ L_FD4A:                             ; xref
+/*FD4A*/ L_FD4A:                             ; xref L_FD3D
 /*FD4A*/             PLA
 /*FD4B*/             STA    M_32             ; $0032
 /*FD4D*/             LDA    M_0200,X         ; $0200
@@ -9561,18 +9561,18 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FD5A*/             BCC    L_FD5F           ; $FD5F
 /*FD5C*/ L_FD5C:                             ; xref L_FD58
 /*FD5C*/             JSR    L_FF3A           ; $FF3A
-/*FD5F*/ L_FD5F:                             ; xref L_FD58
+/*FD5F*/ L_FD5F:                             ; xref L_FD58 L_FD5C
 /*FD5F*/             INX
 /*FD60*/             BNE    L_FD75           ; $FD75
 /*FD62*/ L_FD62:                             ; xref L_FD54 L_FD5F
 /*FD62*/             LDA    #M_DC            ; $00DC
 /*FD64*/             JSR    L_FDED           ; $FDED
-/*FD67*/ L_FD67:                             ; xref L_FD71 L_FF69
+/*FD67*/ L_FD67:                             ; xref L_FD71 L_FD62 L_FF69
 /*FD67*/             JSR    L_FD8E           ; $FD8E
-/*FD6A*/ L_FD6A:                             ; xref L_D52E
+/*FD6A*/ L_FD6A:                             ; xref L_D52E L_FD67
 /*FD6A*/             LDA    M_33             ; $0033
 /*FD6C*/             JSR    L_FDED           ; $FDED
-/*FD6F*/ L_FD6F:                             ; xref
+/*FD6F*/ L_FD6F:                             ; xref L_FD6A
 /*FD6F*/             LDX    #M_01            ; $0001
 /*FD71*/ L_FD71:                             ; xref L_FD6F L_FD4A
 /*FD71*/             TXA
@@ -9581,7 +9581,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FD74*/             DEX
 /*FD75*/ L_FD75:                             ; xref L_FD74 L_FD5F
 /*FD75*/             JSR    L_FD35           ; $FD35
-/*FD78*/ L_FD78:                             ; xref
+/*FD78*/ L_FD78:                             ; xref L_FD75
 /*FD78*/             CMP    #M_95            ; $0095
 /*FD7A*/             BNE    L_FD7E           ; $FD7E
 /*FD7C*/ L_FD7C:                             ; xref L_FD78
@@ -9597,7 +9597,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FD89*/             BNE    L_FD3D           ; $FD3D
 /*FD8B*/ L_FD8B:                             ; xref L_FD84
 /*FD8B*/             JSR    L_FC9C           ; $FC9C
-/*FD8E*/ L_FD8E:                             ; xref L_FD67 L_FD96
+/*FD8E*/ L_FD8E:                             ; xref L_FD67 L_FD8B L_FD96
 /*FD8E*/             LDA    #M_8D            ; $008D
 /*FD90*/             BNE    L_FDED           ; $FDED
 /*FD92*/ L_FD92:                             ; xref L_FD8E L_FDB3
@@ -9605,9 +9605,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FD94*/             LDX    M_3C             ; $003C
 /*FD96*/ L_FD96:                             ; xref L_FD92 L_F882
 /*FD96*/             JSR    L_FD8E           ; $FD8E
-/*FD99*/ L_FD99:                             ; xref
+/*FD99*/ L_FD99:                             ; xref L_FD96
 /*FD99*/             JSR    L_F940           ; $F940
-/*FD9C*/ L_FD9C:                             ; xref
+/*FD9C*/ L_FD9C:                             ; xref L_FD99
 /*FD9C*/             LDY    #M_00            ; $0000
 /*FD9E*/             LDA    #M_AD            ; $00AD
 /*FDA0*/             JMP    L_FDED           ; $FDED
@@ -9623,15 +9623,15 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FDB1*/             BNE    L_FDB6           ; $FDB6
 /*FDB3*/ L_FDB3:                             ; xref L_FDC6 L_FDAD
 /*FDB3*/             JSR    L_FD92           ; $FD92
-/*FDB6*/ L_FDB6:                             ; xref L_FDAD
+/*FDB6*/ L_FDB6:                             ; xref L_FDB3 L_FDAD
 /*FDB6*/             LDA    #M_A0            ; $00A0
 /*FDB8*/             JSR    L_FDED           ; $FDED
-/*FDBB*/ L_FDBB:                             ; xref
+/*FDBB*/ L_FDBB:                             ; xref L_FDB6
 /*FDBB*/             LDA    (M_3C),Y         ; $003C
 /*FDBD*/             JSR    L_FDDA           ; $FDDA
-/*FDC0*/ L_FDC0:                             ; xref
+/*FDC0*/ L_FDC0:                             ; xref L_FDBB
 /*FDC0*/             JSR    L_FCBA           ; $FCBA
-/*FDC3*/ L_FDC3:                             ; xref
+/*FDC3*/ L_FDC3:                             ; xref L_FDC0
 /*FDC3*/             BCC    L_FDAD           ; $FDAD
 /*FDC5*/ L_FDC5:                             ; xref L_FDC3
 /*FDC5*/             RTS
@@ -9650,7 +9650,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FDD3*/             PHA
 /*FDD4*/             LDA    #$BD             ; $00BD
 /*FDD6*/             JSR    L_FDED           ; $FDED
-/*FDD9*/ L_FDD9:                             ; xref
+/*FDD9*/ L_FDD9:                             ; xref L_FDD1
 /*FDD9*/             PLA
 /*FDDA*/ L_FDDA:                             ; xref L_F940 L_F944 L_F8D4 L_F92D L_FDBB L_FDD9
 /*FDDA*/             PHA
@@ -9659,7 +9659,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FDDD*/             LSR    A                ; $0000
 /*FDDE*/             LSR    A                ; $0000
 /*FDDF*/             JSR    L_FDE5           ; $FDE5
-/*FDE2*/ L_FDE2:                             ; xref
+/*FDE2*/ L_FDE2:                             ; xref L_FDDA
 /*FDE2*/             PLA
 /*FDE3*/             AND    #M_0F            ; $000F
 /*FDE5*/ L_FDE5:                             ; xref L_FDDA L_FDE2
@@ -9679,7 +9679,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FDF6*/             STY    M_35             ; $0035
 /*FDF8*/             PHA
 /*FDF9*/             JSR    L_FB78           ; $FB78
-/*FDFC*/ L_FDFC:                             ; xref
+/*FDFC*/ L_FDFC:                             ; xref L_FDF6
 /*FDFC*/             PLA
 /*FDFD*/             LDY    M_35             ; $0035
 /*FDFF*/             RTS
@@ -9780,14 +9780,14 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FE5E*/             org    $FE5E
 /*FE5E*/ L_FE5E:                             ; xref
 /*FE5E*/             JSR    L_FE75           ; $FE75
-/*FE61*/ L_FE61:                             ; xref
+/*FE61*/ L_FE61:                             ; xref L_FE5E
 /*FE61*/             LDA    #M_14            ; $0014
 /*FE63*/ L_FE63:                             ; xref L_FE61 L_FE6A
 /*FE63*/             PHA
 /*FE64*/             JSR    L_F8D0           ; $F8D0
-/*FE67*/ L_FE67:                             ; xref
+/*FE67*/ L_FE67:                             ; xref L_FE63
 /*FE67*/             JSR    L_F953           ; $F953
-/*FE6A*/ L_FE6A:                             ; xref
+/*FE6A*/ L_FE6A:                             ; xref L_FE67
 /*FE6A*/             STA    M_3A             ; $003A
 /*FE6C*/             STY    M_3B             ; $003B
 /*FE6E*/             PLA
@@ -9855,9 +9855,9 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FEB6*/             org    $FEB6
 /*FEB6*/ L_FEB6:                             ; xref
 /*FEB6*/             JSR    L_FE75           ; $FE75
-/*FEB9*/ L_FEB9:                             ; xref
+/*FEB9*/ L_FEB9:                             ; xref L_FEB6
 /*FEB9*/             JSR    L_FF3F           ; $FF3F
-/*FEBC*/ L_FEBC:                             ; xref
+/*FEBC*/ L_FEBC:                             ; xref L_FEB9
 /*FEBC*/             JMP    (M_3A)           ; $003A
 ; Data range [$febf-$FEF5]
 /*FEBF*/             DFB    $4C
@@ -9919,51 +9919,51 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FEF6*/             org    $FEF6
 /*FEF6*/ L_FEF6:                             ; xref
 /*FEF6*/             JSR    L_FE00           ; $FE00
-/*FEF9*/ L_FEF9:                             ; xref
+/*FEF9*/ L_FEF9:                             ; xref L_FEF6
 /*FEF9*/             PLA
 /*FEFA*/             PLA
 /*FEFB*/             BNE    L_FF69           ; $FF69
 /*FEFD*/ L_FEFD:                             ; xref L_FEF9
 /*FEFD*/             JSR    L_FCFA           ; $FCFA
-/*FF00*/ L_FF00:                             ; xref
+/*FF00*/ L_FF00:                             ; xref L_FEFD
 /*FF00*/             LDA    #M_16            ; $0016
 /*FF02*/             JSR    L_FCC9           ; $FCC9
-/*FF05*/ L_FF05:                             ; xref
+/*FF05*/ L_FF05:                             ; xref L_FF00
 /*FF05*/             STA    M_2E             ; $002E
 /*FF07*/             JSR    L_FCFA           ; $FCFA
-/*FF0A*/ L_FF0A:                             ; xref L_FF0F
+/*FF0A*/ L_FF0A:                             ; xref L_FF05 L_FF0F
 /*FF0A*/             LDY    #M_24            ; $0024
 /*FF0C*/             JSR    L_FCFD           ; $FCFD
-/*FF0F*/ L_FF0F:                             ; xref
+/*FF0F*/ L_FF0F:                             ; xref L_FF0A
 /*FF0F*/             BCS    L_FF0A           ; $FF0A
 /*FF11*/ L_FF11:                             ; xref L_FF0F
 /*FF11*/             JSR    L_FCFD           ; $FCFD
-/*FF14*/ L_FF14:                             ; xref
+/*FF14*/ L_FF14:                             ; xref L_FF11
 /*FF14*/             LDY    #M_3B            ; $003B
 /*FF16*/ L_FF16:                             ; xref L_FF14 L_FF22
 /*FF16*/             JSR    L_FCEC           ; $FCEC
-/*FF19*/ L_FF19:                             ; xref
+/*FF19*/ L_FF19:                             ; xref L_FF16
 /*FF19*/             STA    (M_3C,X)         ; $003C
 /*FF1B*/             EOR    M_2E             ; $002E
 /*FF1D*/             STA    M_2E             ; $002E
 /*FF1F*/             JSR    L_FCBA           ; $FCBA
-/*FF22*/ L_FF22:                             ; xref
+/*FF22*/ L_FF22:                             ; xref L_FF19
 /*FF22*/             LDY    #M_35            ; $0035
 /*FF24*/             BCC    L_FF16           ; $FF16
 /*FF26*/ L_FF26:                             ; xref L_FF22
 /*FF26*/             JSR    L_FCEC           ; $FCEC
-/*FF29*/ L_FF29:                             ; xref
+/*FF29*/ L_FF29:                             ; xref L_FF26
 /*FF29*/             CMP    M_2E             ; $002E
 /*FF2B*/             BEQ    L_FF3A           ; $FF3A
 /*FF2D*/ L_FF2D:                             ; xref L_FF29
 /*FF2D*/             LDA    #$C5             ; $00C5
 /*FF2F*/             JSR    L_FDED           ; $FDED
-/*FF32*/ L_FF32:                             ; xref
+/*FF32*/ L_FF32:                             ; xref L_FF2D
 /*FF32*/             LDA    #M_D2            ; $00D2
 /*FF34*/             JSR    L_FDED           ; $FDED
-/*FF37*/ L_FF37:                             ; xref
+/*FF37*/ L_FF37:                             ; xref L_FF32
 /*FF37*/             JSR    L_FDED           ; $FDED
-/*FF3A*/ L_FF3A:                             ; xref L_FA6F L_FD5C L_FF65 L_FF29
+/*FF3A*/ L_FF3A:                             ; xref L_FA6F L_FD5C L_FF65 L_FF29 L_FF37
 /*FF3A*/             LDA    #M_87            ; $0087
 /*FF3C*/             JMP    L_FDED           ; $FDED
 /*FF3F*/ L_FF3F:                             ; xref L_FEB9
@@ -10007,15 +10007,15 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FF65*/ L_FF65:                             ; xref L_FF7A
 /*FF65*/             CLD
 /*FF66*/             JSR    L_FF3A           ; $FF3A
-/*FF69*/ L_FF69:                             ; xref L_FEF9
+/*FF69*/ L_FF69:                             ; xref L_FEF9 L_FF65
 /*FF69*/             LDA    #M_AA            ; $00AA
 /*FF6B*/             STA    M_33             ; $0033
 /*FF6D*/             JSR    L_FD67           ; $FD67
-/*FF70*/ L_FF70:                             ; xref
+/*FF70*/ L_FF70:                             ; xref L_FF69
 /*FF70*/             JSR    L_FFC7           ; $FFC7
-/*FF73*/ L_FF73:                             ; xref L_FF85
+/*FF73*/ L_FF73:                             ; xref L_FF70 L_FF85
 /*FF73*/             JSR    L_FFA7           ; $FFA7
-/*FF76*/ L_FF76:                             ; xref
+/*FF76*/ L_FF76:                             ; xref L_FF73
 /*FF76*/             STY    M_34             ; $0034
 /*FF78*/             LDY    #$17             ; $0017
 /*FF7A*/ L_FF7A:                             ; xref L_FF76 L_FF7D
@@ -10026,7 +10026,7 @@ M_5AA2          EQU    $5AA2 ; xref $D97B
 /*FF80*/             BNE    L_FF7A           ; $FF7A
 /*FF82*/ L_FF82:                             ; xref L_FF7D
 /*FF82*/             JSR    L_FFBE           ; $FFBE
-/*FF85*/ L_FF85:                             ; xref
+/*FF85*/ L_FF85:                             ; xref L_FF82
 /*FF85*/             LDY    M_34             ; $0034
 /*FF87*/             JMP    L_FF73           ; $FF73
 /*FF8A*/ L_FF8A:                             ; xref L_FFAD L_FFB7
