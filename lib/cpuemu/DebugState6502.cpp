@@ -285,11 +285,13 @@ Emu6502::StopReason DebugState6502::collectData(const Emu6502 *emu, uint16_t pc)
 
   // Check for stack over/under flow.
   if (inst.kind == CPUInstKind::TXS) {
-    virtualSP_ = regs.sp;
+    virtualSP_ = regs.x;
   } else if (int stackChange = getStackChange(inst.kind)) {
     // The real stack may have been updated explicitly with setRegs().
-    if ((virtualSP_ & 255) != regs.sp)
+    if ((virtualSP_ & 255) != regs.sp) {
+      fprintf(stderr, "STACK RESET from $%02X to $%02X PC $%04X\n", virtualSP_, regs.sp, pc);
       virtualSP_ = regs.sp;
+    }
 
     int newSP = virtualSP_ + stackChange;
     if (newSP < -1) {
