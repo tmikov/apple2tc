@@ -249,6 +249,22 @@ struct Regs {
 };
 
 struct RuntimeData {
+  struct BaseStats {
+    /// The limit on collection of branch target.
+    unsigned limit;
+    /// Registers when start of collecting.
+    Regs startRegs = {};
+    /// Was any instruction executed with the D flag set.
+    bool decimalSet = false;
+    /// Was ADC ever executed with D flag set.
+    bool decimalADC = false;
+    /// Was SBC ever executed with D flag set.
+    bool decimalSBC = false;
+    /// Did the stack ever overflow?
+    bool stackOverflow = false;
+    /// Did the stack ever underflow?
+    bool stackUnderflow = false;
+  };
   struct Segment {
     uint16_t addr;
     std::vector<uint8_t> bytes;
@@ -259,10 +275,15 @@ struct RuntimeData {
     Generation(){};
   };
 
+  /// Statistics.
+  std::unique_ptr<BaseStats> baseStats{};
   /// All branch targets seen at runtime, sorted by address.
   std::vector<uint16_t> branchTargets;
   /// All executable generations.
   std::vector<Generation> generations;
+
+  /// Return the start regs if present or nullptr.
+  const Regs *getStartRegs() const;
 
   static std::unique_ptr<RuntimeData> load(const std::string &path);
 };
