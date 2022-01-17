@@ -41,7 +41,7 @@ void DebugState6502::finishCollection(const Emu6502 *emu, std::ostream &os) {
   json root;
 
   json stats;
-  stats["limit"] = limit_;
+  stats["limit"] = icount_;
   stats["startRegs"] = saveRegs(collected_.startRegs);
   stats["decimalSet"] = collected_.decimalSet;
   stats["decimalADC"] = collected_.decimalADC;
