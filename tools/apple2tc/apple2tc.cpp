@@ -153,6 +153,10 @@ int main(int argc, char **argv) {
         mem2reg(mod);
       if (optLevel > 1)
         dce(mod);
+      if (optLevel > 2) {
+        if (simplify(mod))
+          dce(mod);
+      }
       dumpModule(mod);
       break;
     }

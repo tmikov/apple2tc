@@ -22,3 +22,4 @@ void dumpModule(ir::Module *mod);
 
 bool mem2reg(ir::Module *mod);
 bool dce(ir::Module *mod);
+bool simplify(ir::Module *mod);

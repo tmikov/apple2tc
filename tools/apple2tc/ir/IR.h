@@ -588,6 +588,9 @@ public:
   void setAddress(uint32_t addr) {
     address_ = addr;
   }
+  void setAddress(const std::optional<uint32_t> & addr) {
+    address_ = addr;
+  }
   void clearAddress() {
     address_.reset();
   }
@@ -602,6 +605,11 @@ public:
   void setInsertionPointBefore(Instruction *inst) {
     block_ = inst->getBasicBlock();
     insertionPoint_ = CircularList<Instruction>::iterator(inst);
+  }
+  void setInsertionPointAfter(Instruction *inst) {
+    block_ = inst->getBasicBlock();
+    insertionPoint_ = CircularList<Instruction>::iterator(inst);
+    ++insertionPoint_;
   }
 
   BasicBlock *getCurBasicBlock() {
