@@ -8,3 +8,6 @@ link_libraries(decapplib)
 add_executable(bolo
   bolo.c ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   )
+#add_executable(boloc1
+#  boloc1.c ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
+#  )

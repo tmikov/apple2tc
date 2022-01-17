@@ -8,3 +8,6 @@ link_libraries(decapplib)
 add_executable(robotron
   robotron.c ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   )
+#add_executable(robotronc1
+#  robotronc1.c ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
+#  )
