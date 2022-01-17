@@ -88,6 +88,7 @@ bool Instruction::hasSideEffects() const {
   case ValueKind::Peek16al:
   case ValueKind::Peek16un:
   case ValueKind::Pop8:
+  case ValueKind::Nop8:
     return true;
   default:
     return false;

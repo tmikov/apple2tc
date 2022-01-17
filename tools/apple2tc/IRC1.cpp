@@ -428,6 +428,13 @@ void IRC1::printStoreR8(Instruction *inst) {
   }
 }
 
+void IRC1::printVoidNop(Instruction *inst) {
+  fprintf(os_, "(void)0");
+}
+void IRC1::printNop8(Instruction *inst) {
+  fprintf(os_, "0");
+}
+
 void IRC1::printPeek8(Instruction *inst) {
   const char *func = "peek";
   if (auto *u16 = dyn_cast<LiteralU16>(inst->getOperand(0)))

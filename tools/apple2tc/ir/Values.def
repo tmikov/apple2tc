@@ -87,6 +87,10 @@ IR_RANGE(CPUReg, CPUReg8, CPUReg16)
 IR_INST1(LoadR8, U8, CPUReg8)
 IR_INST2(StoreR8, Void, CPUReg8, U8)
 
+/// Used for debugging when we wont to keep instruction numbers persistent.
+IR_INST0(VoidNop, Void)
+IR_INST0(Nop8, U8)
+
 IR_INST1(Peek8, U8, U16)
 IR_INST2(Poke8, Void, U16, U8)
 IR_INST1(RamPeek8, U8, U16)
