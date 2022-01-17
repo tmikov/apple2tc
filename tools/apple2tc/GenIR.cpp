@@ -75,6 +75,9 @@ void GenIR::genAsmBlock(const AsmBlock &asmBlock) {
     builder_.setAddress(addr);
     genInst(addr, inst, asmBlock);
   }
+
+  if (!builder_.getCurBasicBlock()->getTerminator())
+    builder_.createJmp(resolveFallBranch(asmBlock));
 }
 
 void GenIR::genInst(uint16_t pc, const CPUInst &inst, const AsmBlock &asmBlock) {
