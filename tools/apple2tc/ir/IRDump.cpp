@@ -125,11 +125,11 @@ void IRDumper::dumpBlockTrees(BasicBlock *bb) {
   for (auto &rInst : bb->instructions()) {
     auto *inst = &rInst;
     Instruction *onlyUser;
-    if (!inst->getType()->isVoid() && !inst->hasSideEffects() && !inst->readsMemory() &&
+    if (!inst->getType()->isVoid() && !inst->hasSideEffects() &&
         (onlyUser = inst->getOnlyUser()) != nullptr && onlyUser->getBasicBlock() == bb) {
       // Is this instruction suitable for adding to an expression tree?
-      // A non-void instruction without side effects, which does not read memory,
-      // with exactly one user, which is in the same basic block.
+      // A non-void instruction without side effects, with exactly one user in
+      // the same basic block.
       trees.insert(inst);
       validTrees.insert(inst);
     } else {
@@ -153,6 +153,16 @@ void IRDumper::dumpBlockTrees(BasicBlock *bb) {
           auto cur = begin++;
           auto *tInst = *cur;
           if (tInst->getKind() == ValueKind::LoadR8 && tInst->getOperand(0) == cpuReg) {
+            trees.erase(cur);
+            validTrees.erase(tInst);
+          }
+        }
+      } else if (inst->writesMemory()) {
+        // Invalidate memory read leaves.
+        for (auto begin = trees.begin(), end = trees.end(); begin != end;) {
+          auto cur = begin++;
+          auto *tInst = *cur;
+          if (tInst->readsMemory()) {
             trees.erase(cur);
             validTrees.erase(tInst);
           }

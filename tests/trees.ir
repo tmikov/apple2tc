@@ -1,0 +1,17 @@
+// Loaded binary at [$0300..$0310]
+// code labels: 1
+// data labels: 4
+function Func0001
+%BB1:  // Pred() Succ(%BB2)
+                Jmp           %BB2
+%BB2:  // [$0300] Pred(%BB1) Succ(%BB3)
+/*$0300*/       AddCycles     31
+/*$0304*/       RamPoke8      0x1001, (RamPeek8 0x1000)
+/*$0307*/ %5  = RamPeek8      0x1002
+/*$030A*/       RamPoke8      0x1002, (Add8 (RamPeek8 0x1002) 0x01)
+/*$030E*/       RamPoke8      0x1003, %5
+/*$0311*/       Jmp           %BB3
+%BB3:  // [$0311] Pred(%BB2) Succ()
+                Abort         0x0311, 0x0311, 0x03
+end Func0001
+
