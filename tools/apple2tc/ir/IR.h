@@ -712,6 +712,8 @@ public:
   class SaveStateRAII;
   SaveStateRAII saveState();
 
+  Instruction *createInst(ValueKind kind, ArrayRef<Value *> operands);
+
 #define IR_INST0(name, type) Inst0 *create##name();
 #define IR_INST1(name, type, op1type) Inst1 *create##name(Value *op1);
 #define IR_INST2(name, type, op1type, op2type) Inst2 *create##name(Value *op1, Value *op2);

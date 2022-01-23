@@ -8,6 +8,8 @@
 
 #include "IRDump.h"
 
+#include "apple2tc/support.h"
+
 namespace ir {
 
 const char *getTypeKindName(TypeKind kind) {
@@ -239,6 +241,33 @@ void IRBuilder::insert(Instruction *inst) {
   block_->insertBefore(insertionPoint_, inst);
   if (address_)
     inst->setAddress(*address_);
+}
+
+Instruction *IRBuilder::createInst(ValueKind kind, ArrayRef<Value *> operands) {
+#define IR_INST0(name, type)      \
+  case ValueKind::name:           \
+    assert(operands.size() == 0); \
+    return create##name();
+#define IR_INST1(name, type, op1type) \
+  case ValueKind::name:               \
+    assert(operands.size() == 1);     \
+    return create##name(operands[0]);
+#define IR_INST2(name, type, op1type, op2type) \
+  case ValueKind::name:                        \
+    assert(operands.size() == 2);              \
+    return create##name(operands[0], operands[1]);
+#define IR_INST3(name, type, op1type, op2type, op3type) \
+  case ValueKind::name:                                 \
+    assert(operands.size() == 3);                       \
+    return create##name(operands[0], operands[1], operands[2]);
+#define IR_INST_N(name, type, opcount, optype) \
+  case ValueKind::name:                        \
+    return create##name##_##opcount##op(operands);
+  switch (kind) {
+#include "Values.def"
+  default:
+    PANIC_ABORT("Invalid instruction kind");
+  }
 }
 
 #define IR_INST0(name, type)                                                       \
