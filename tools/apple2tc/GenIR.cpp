@@ -260,7 +260,8 @@ void GenIR::genInst(uint16_t pc, const CPUInst &inst, const AsmBlock &asmBlock) 
     if (inst.addrMode == CPUAddrMode::A) {
       tmp2 = emitLoadReg8(CPURegKind::A);
       emitStoreReg8(CPURegKind::STATUS_C, builder_.createAnd8(tmp2, builder_.getLiteralU8(0x01)));
-      emitStoreReg8(CPURegKind::A, emitUpdateNZ(builder_.createShr8(tmp2, builder_.getLiteralU8(1))));
+      emitStoreReg8(
+          CPURegKind::A, emitUpdateNZ(builder_.createShr8(tmp2, builder_.getLiteralU8(1))));
     } else {
       tmp1 = genAddr(inst);
       tmp2 = emitAutoPeek8(tmp1);
