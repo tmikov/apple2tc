@@ -1,0 +1,20 @@
+{
+  "BaseStats": {
+    "decimalADC": false,
+    "decimalSBC": false,
+    "decimalSet": false,
+    "limit": 3391441,
+    "stackOverflow": false,
+    "stackUnderflow": false,
+    "startRegs": {
+      "a": 0,
+      "pc": 768,
+      "sp": 255,
+      "status": 32,
+      "x": 0,
+      "y": 0
+    }
+  },
+  "BranchTargets": [],
+  "generations": []
+}

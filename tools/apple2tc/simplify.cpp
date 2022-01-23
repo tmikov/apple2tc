@@ -69,16 +69,24 @@ std::optional<std::pair<LiteralT *, Value *>> literalFirst(Value *value, ValueKi
     return std::nullopt;
 }
 
-template <ValueKind kind>
+template <class LiteralT, ValueKind kind>
 Instruction *create(IRBuilder &builder, Value *op1, Value *op2);
 
 template <>
-Instruction *create<ValueKind::Add8>(IRBuilder &builder, Value *op1, Value *op2) {
+Instruction *create<LiteralU8, ValueKind::Add8>(IRBuilder &builder, Value *op1, Value *op2) {
   return builder.createAdd8(op1, op2);
 }
 template <>
-Instruction *create<ValueKind::Add16>(IRBuilder &builder, Value *op1, Value *op2) {
+Instruction *create<LiteralU16, ValueKind::Add8>(IRBuilder &builder, Value *op1, Value *op2) {
   return builder.createAdd16(op1, op2);
+}
+template <>
+Instruction *create<LiteralU8, ValueKind::Sub8>(IRBuilder &builder, Value *op1, Value *op2) {
+  return builder.createSub8(op1, op2);
+}
+template <>
+Instruction *create<LiteralU16, ValueKind::Sub8>(IRBuilder &builder, Value *op1, Value *op2) {
+  return builder.createSub16(op1, op2);
 }
 
 template <class LiteralT>
@@ -102,8 +110,84 @@ inline Value *simplifyAdd(IRBuilder &builder, Instruction *inst) {
       // (Add lit1 (Add lit2 op2))
       auto [lit2, op2] = *childPair;
       builder.setInsertionPointAfter(inst);
-      return create<arithKindForType<LiteralT>(ValueKind::Add8)>(
+      return create<LiteralT, ValueKind::Add8>(
           builder, op2, getLiteral<LiteralT>(builder, lit1->getValue() + lit2->getValue()));
+    }
+  }
+
+  return nullptr;
+}
+
+template <class LiteralT>
+inline Value *simplifySub(IRBuilder &builder, Instruction *inst) {
+  // (Sub x 0) => x
+  if (isLiteral<LiteralT>(inst->getOperand(1), 0))
+    return inst->getOperand(0);
+
+  auto *leftLit = dyn_cast<LiteralT>(inst->getOperand(0));
+  auto *rightLit = dyn_cast<LiteralT>(inst->getOperand(1));
+
+  // (Sub const1 const2)
+  if (leftLit && rightLit)
+    return getLiteral<LiteralT>(builder, leftLit->getValue() - rightLit->getValue());
+
+  if (!leftLit && !rightLit)
+    return nullptr;
+
+  builder.setInsertionPointAfter(inst);
+
+  if (leftLit) {
+    // (Sub leftLit (Sub lit2 x)) => (Add (leftLit - lit2) x)
+    // (Sub leftLit (Sub x lit2)) => (Sub (leftLit + lit2) x)
+    // (Sub leftLit (Add lit2 x)) => (Sub (leftLit - lit2) x)
+
+    if (inst->getOperand(1)->getKind() == arithKindForType<LiteralT>(ValueKind::Sub8)) {
+      // (Sub leftLit (Sub _ _))
+      auto *op = cast<Instruction>(inst->getOperand(1));
+      LiteralT *lit2;
+      if ((lit2 = dyn_cast<LiteralT>(op->getOperand(0))) != nullptr) {
+        // (Sub leftLit (Sub lit2 x)) => (Add (leftLit - lit2) x)
+        auto *x = op->getOperand(1);
+        return create<LiteralT, ValueKind::Add8>(
+            builder, getLiteral<LiteralT>(builder, leftLit->getValue() - lit2->getValue()), x);
+      } else if ((lit2 = dyn_cast<LiteralT>(op->getOperand(1))) != nullptr) {
+        // (Sub leftLit (Sub x lit2)) => (Sub (leftLit + lit2) x)
+        auto *x = op->getOperand(0);
+        return create<LiteralT, ValueKind::Sub8>(
+            builder, getLiteral<LiteralT>(builder, leftLit->getValue() + lit2->getValue()), x);
+      }
+    } else if (auto childPair = literalFirst<LiteralT>(inst->getOperand(1), ValueKind::Add8)) {
+      // (Sub leftLit (Add lit2 x)) => (Sub (leftLit - lit2) x)
+      auto [lit2, x] = *childPair;
+      return create<LiteralT, ValueKind::Sub8>(
+          builder, getLiteral<LiteralT>(builder, leftLit->getValue() - lit2->getValue()), x);
+    }
+  } else {
+    assert(rightLit);
+    // (Sub (Sub lit2 x) rightLit) -> (Sub (lit2 - rightLit) x)
+    // (Sub (Sub x lit2) rightLit) -> (Sub x (lit2 + rightLit))
+    // (Sub (Add lit2 x) rightLit) -> (Add (lit2 - rightLit) x)
+
+    if (inst->getOperand(0)->getKind() == arithKindForType<LiteralT>(ValueKind::Sub8)) {
+      // (Sub (Sub _ _) rightLit)
+      auto *op = cast<Instruction>(inst->getOperand(0));
+      LiteralT *lit2;
+      if ((lit2 = dyn_cast<LiteralT>(op->getOperand(0))) != nullptr) {
+        // (Sub (Sub lit2 x) rightLit) -> (Sub (lit2 - rightLit) x)
+        auto *x = op->getOperand(1);
+        return create<LiteralT, ValueKind::Sub8>(
+            builder, getLiteral<LiteralT>(builder, lit2->getValue() + rightLit->getValue()), x);
+      } else if ((lit2 = dyn_cast<LiteralT>(op->getOperand(1))) != nullptr) {
+        // (Sub (Sub x lit2) rightLit) -> (Sub x (lit2 + rightLit))
+        auto *x = op->getOperand(0);
+        return create<LiteralT, ValueKind::Sub8>(
+            builder, x, getLiteral<LiteralT>(builder, lit2->getValue() + rightLit->getValue()));
+      }
+    } else if (auto childPair = literalFirst<LiteralT>(inst->getOperand(0), ValueKind::Add8)) {
+      // (Sub (Add lit2 x) rightLit) -> (Sub x (rightLit - lit2))
+      auto [lit2, x] = *childPair;
+      return create<LiteralT, ValueKind::Sub8>(
+          builder, x, getLiteral<LiteralT>(builder, rightLit->getValue() - lit2->getValue()));
     }
   }
 
@@ -207,23 +291,9 @@ static Value *simplifyInst(IRBuilder &builder, Instruction *inst) {
   case ValueKind::Add16:
     return simplifyAdd<LiteralU16>(builder, inst);
   case ValueKind::Sub8:
-    // (Sub8 x 0) => x
-    if (isLiteral<LiteralU8>(inst->getOperand(1), 0))
-      return inst->getOperand(0);
-    // (Sub8 const1 const2)
-    if (auto *left = dyn_cast<LiteralU8>(inst->getOperand(0)))
-      if (auto *right = dyn_cast<LiteralU8>(inst->getOperand(1)))
-        return builder.getLiteralU8(left->getValue() - right->getValue());
-    break;
+    return simplifySub<LiteralU8>(builder, inst);
   case ValueKind::Sub16:
-    // (Sub16 x 0) => x
-    if (isLiteral<LiteralU16>(inst->getOperand(1), 0))
-      return inst->getOperand(0);
-    // (Sub16 const1 const2)
-    if (auto *left = dyn_cast<LiteralU16>(inst->getOperand(0)))
-      if (auto *right = dyn_cast<LiteralU16>(inst->getOperand(1)))
-        return builder.getLiteralU16(left->getValue() - right->getValue());
-    break;
+    return simplifySub<LiteralU16>(builder, inst);
   case ValueKind::Ovf8:
     break;
   case ValueKind::Cmp8eq:
