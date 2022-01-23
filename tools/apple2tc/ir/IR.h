@@ -168,6 +168,16 @@ public:
   size_t countUsers() const {
     return userList_.countElements();
   }
+  /// Count and return the number of users up to \p maxCount. This method is O(number-of-users)!
+  size_t countUsersUpTo(size_t maxCount) const {
+    return userList_.countElementsUpTo(maxCount);
+  }
+
+  /// If the instruction has exactly one user, return it, otherwise return nullptr.
+  Instruction *getOnlyUser() {
+    return !userList_.empty() && &userList_.front() == &userList_.back() ? userList_.front().owner()
+                                                                         : nullptr;
+  }
 
   auto users() {
     return makeIteratorRange(userList_.begin(), userList_.end());
