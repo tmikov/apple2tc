@@ -6,6 +6,8 @@
  */
 #include "IRDump.h"
 
+#include "IRUtil.h"
+
 namespace ir {
 
 IRDumper::IRDumper(FILE *os, bool trees) : os_(os), trees_(trees) {}
@@ -117,6 +119,8 @@ void IRDumper::dumpImpl(BasicBlock *bb) {
 void IRDumper::preBasicBlock(BasicBlock *bb) {}
 void IRDumper::postBasicBlock(BasicBlock *bb) {}
 
+namespace {} // namespace
+
 void IRDumper::dumpBlockTrees(BasicBlock *bb) {
   InstSet trees{};
   InstSet validTrees{};
@@ -158,13 +162,20 @@ void IRDumper::dumpBlockTrees(BasicBlock *bb) {
           }
         }
       } else if (inst->writesMemory()) {
+        auto [writeAddr, writeWidth] = inst->memoryAddress();
+        auto writeRange = classifyMemoryAddr(writeAddr, writeWidth);
+
         // Invalidate memory read leaves.
         for (auto begin = trees.begin(), end = trees.end(); begin != end;) {
           auto cur = begin++;
           auto *tInst = *cur;
           if (tInst->readsMemory()) {
-            trees.erase(cur);
-            validTrees.erase(tInst);
+            auto [readAddr, readWidth] = tInst->memoryAddress();
+            auto readRange = classifyMemoryAddr(readAddr, readWidth);
+            if (writeRange.overlaps(readRange)) {
+              trees.erase(cur);
+              validTrees.erase(tInst);
+            }
           }
         }
       }

@@ -119,4 +119,19 @@ private:
   }
 };
 
+struct Range32 {
+  uint32_t begin;
+  /// Exclusive.
+  uint32_t end;
+
+  constexpr Range32(uint32_t begin, uint32_t anEnd) : begin(begin), end(anEnd) {}
+
+  bool overlaps(Range32 r) const {
+    return std::max(begin, r.begin) < std::min(end, r.end);
+  }
+};
+
+/// Return a conservative range of the memory pointed by \p addr.
+Range32 classifyMemoryAddr(Value *addr, unsigned width);
+
 } // namespace ir

@@ -8,6 +8,7 @@
 
 #include "PubIR.h"
 #include "ir/IRDump.h"
+#include "ir/IRUtil.h"
 
 #include "apple2tc/apple2iodefs.h"
 
@@ -905,39 +906,8 @@ void GenIR::emitAutoPoke8(Value *addr, Value *value) {
 }
 
 bool GenIR::isAddrNonIO(Value *addr, unsigned width) {
-  --width;
-  assert(addr->getType()->getKind() == TypeKind::U16 && "Address must be 16-bit");
-  if (auto *u16 = dyn_cast<LiteralU16>(addr)) {
-    return u16->getValue() < A2_IO_RANGE_START - width;
-  } else if (addr->getKind() == ValueKind::ZExt8t16) {
-    // 8-bit values are always smaller than the IO range.
-    return true;
-  } else if (addr->getKind() == ValueKind::Add16) {
-    auto *inst = cast<Instruction>(addr);
-    auto *op1 = inst->getOperand(0);
-    auto *op2 = inst->getOperand(1);
-    // If we have a zext, it will be in operand2.
-    if (op1->getKind() == ValueKind::ZExt8t16)
-      std::swap(op1, op2);
-    // zext + zext.
-    if (op2->getKind() == ValueKind::ZExt8t16) {
-      // Zext + Zext is <= 255*2, which is always less.
-      if (op1->getKind() == ValueKind::ZExt8t16)
-        return true;
-      if (auto *op1u16 = dyn_cast<LiteralU16>(op1)) {
-        // literal16 + [0..255] + ofs < A2_IO_RANGE_START.
-        // literal16 < A2_IO_RANGE_START - 255 - ofs.
-        if (op1u16->getValue() < A2_IO_RANGE_START - 255 - width)
-          return true;
-
-        // literal16 + [0..255] > A2_IO_RANGE_END
-        // literal16 > A2_IO_RANGE_END
-        if (op1u16->getValue() > A2_IO_RANGE_END)
-          return true;
-      }
-    }
-  }
-  return false;
+  constexpr Range32 kIORange(A2_IO_RANGE_START, A2_IO_RANGE_END + 1);
+  return !classifyMemoryAddr(addr, width).overlaps(kIORange);
 }
 
 std::shared_ptr<ir::IRContext> newIRContext() {

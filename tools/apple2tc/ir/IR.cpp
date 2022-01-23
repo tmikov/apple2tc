@@ -124,6 +124,35 @@ bool Instruction::writesMemory() const {
   }
 }
 
+std::pair<Value *, unsigned> Instruction::memoryAddress() {
+  switch (getKind()) {
+  case ValueKind::Peek8:
+  case ValueKind::RamPeek8:
+  case ValueKind::Poke8:
+  case ValueKind::RamPoke8:
+    return {getOperand(0), 1};
+
+  case ValueKind::Peek16al:
+  case ValueKind::Peek16un:
+  case ValueKind::RamPeek16al:
+  case ValueKind::RamPeek16un:
+    return {getOperand(0), 2};
+
+  // Ideally we would return an expression involving SP, but who owns it?
+  // So, we treat implicit stack instruction specially.
+  case ValueKind::Pop8:
+  case ValueKind::Push8:
+    return {this, 1};
+  case ValueKind::RTS:
+  case ValueKind::JSR:
+  case ValueKind::JSRInd:
+    return {this, 2};
+
+  default:
+    return {nullptr, 0};
+  };
+}
+
 BasicBlock::~BasicBlock() {
   instList_.destroyAll();
 }

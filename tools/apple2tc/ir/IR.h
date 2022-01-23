@@ -270,6 +270,8 @@ public:
   bool hasSideEffects() const;
   bool readsMemory() const;
   bool writesMemory() const;
+  /// Return the memory address and width accessed by the specified instruction or nullptr.
+  std::pair<Value *, unsigned> memoryAddress();
 
   unsigned getNumOperands() const {
     return getOperands().size();
