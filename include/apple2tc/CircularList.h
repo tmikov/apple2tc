@@ -174,6 +174,14 @@ public:
       ++size;
     return size;
   }
+  /// Count and return the number of elements up to \p maxCount. This method is O(n).
+  [[nodiscard]] size_t countElementsUpTo(size_t maxCount) const {
+    size_t size = 0;
+    for (const ListEntry *cur = m_root.next, *end = &m_root; cur != end; cur = cur->next)
+      if (++size >= maxCount)
+        break;
+    return size;
+  }
 
   T &front() {
     assert(!empty());
