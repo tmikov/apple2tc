@@ -632,13 +632,6 @@ void IRC1::printCmp8ne(Instruction *inst) {
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
-void IRC1::printCmp8lt(Instruction *inst) {
-  fprintf(
-      os_,
-      "(int8_t)%s < (int8_t)%s",
-      formatOperand(inst->getOperand(0)).c_str(),
-      formatOperand(inst->getOperand(1)).c_str());
-}
 void IRC1::printCmp8ge(Instruction *inst) {
   fprintf(
       os_,
@@ -646,10 +639,24 @@ void IRC1::printCmp8ge(Instruction *inst) {
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
+void IRC1::printCmp8lt(Instruction *inst) {
+  fprintf(
+      os_,
+      "(int8_t)%s < (int8_t)%s",
+      formatOperand(inst->getOperand(0)).c_str(),
+      formatOperand(inst->getOperand(1)).c_str());
+}
 void IRC1::printCmp8ae(Instruction *inst) {
   fprintf(
       os_,
       "%s >= %s",
+      formatOperand(inst->getOperand(0)).c_str(),
+      formatOperand(inst->getOperand(1)).c_str());
+}
+void IRC1::printCmp8bt(Instruction *inst) {
+  fprintf(
+      os_,
+      "%s < %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }

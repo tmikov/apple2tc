@@ -52,4 +52,10 @@ Range32 classifyMemoryAddr(Value *addr, unsigned width) {
   return {0, 0x10000};
 }
 
+ValueKind negateComparison(ValueKind kind) {
+  assert(kind >= ValueKind::_Comparison_First && kind <= ValueKind::_Comparison_Last);
+  constexpr auto kFirst = (unsigned)ValueKind::_Comparison_First;
+  return (ValueKind)((((unsigned)kind - kFirst) ^ 1) + kFirst);
+}
+
 } // namespace ir

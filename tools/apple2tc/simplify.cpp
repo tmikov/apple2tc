@@ -7,6 +7,7 @@
 
 #include "PubIR.h"
 #include "ir/IR.h"
+#include "ir/IRUtil.h"
 
 using namespace ir;
 
@@ -120,6 +121,8 @@ inline Value *simplifyAdd(IRBuilder &builder, Instruction *inst) {
 
 template <class LiteralT>
 inline Value *simplifySub(IRBuilder &builder, Instruction *inst) {
+  constexpr unsigned kWidth = sizeof(typename LiteralT::ValueType);
+
   // (Sub x 0) => x
   if (isLiteral<LiteralT>(inst->getOperand(1), 0))
     return inst->getOperand(0);
@@ -161,6 +164,11 @@ inline Value *simplifySub(IRBuilder &builder, Instruction *inst) {
       auto [lit2, x] = *childPair;
       return create<LiteralT, ValueKind::Sub8>(
           builder, getLiteral<LiteralT>(builder, leftLit->getValue() - lit2->getValue()), x);
+    } else if (kWidth == 1 && leftLit->getValue() == 1 && inst->getOperand(1)->isComparison()) {
+      // (Sub8 1 (cmp a b)) => (!cmp a b).
+      auto *cmp = cast<Instruction>(inst->getOperand(1));
+      return builder.createInst(
+          negateComparison(cmp->getKind()), {cmp->getOperand(0), cmp->getOperand(1)});
     }
   } else {
     assert(rightLit);

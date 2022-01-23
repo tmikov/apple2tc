@@ -139,12 +139,15 @@ IR_INST3(SbcDec16, U16, U8, U8, U8)
 
 IR_INST2(Cmp8eq, U8, U8, U8)
 IR_INST2(Cmp8ne, U8, U8, U8)
-/// Signed less than.
-IR_INST2(Cmp8lt, U8, U8, U8)
 /// Signed greater or equal.
 IR_INST2(Cmp8ge, U8, U8, U8)
+/// Signed less than.
+IR_INST2(Cmp8lt, U8, U8, U8)
 /// Unsigned above or equal.
 IR_INST2(Cmp8ae, U8, U8, U8)
+/// Unsigned below than.
+IR_INST2(Cmp8bt, U8, U8, U8)
+IR_RANGE(Comparison, Cmp8eq, Cmp8bt)
 
 IR_INST1(Not16, U16, U16)
 

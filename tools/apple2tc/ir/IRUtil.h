@@ -134,4 +134,6 @@ struct Range32 {
 /// Return a conservative range of the memory pointed by \p addr.
 Range32 classifyMemoryAddr(Value *addr, unsigned width);
 
+ValueKind negateComparison(ValueKind kind);
+
 } // namespace ir
