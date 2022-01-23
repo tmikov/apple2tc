@@ -259,7 +259,7 @@ public:
   void setAddress(uint32_t address) {
     address_ = address;
   }
-  const std::optional<uint32_t> &getAddress() {
+  const std::optional<uint32_t> &getAddress() const {
     return address_;
   }
 
@@ -268,6 +268,7 @@ public:
   }
 
   bool hasSideEffects() const;
+  bool modifiesSP() const;
   bool readsMemory() const;
   bool writesMemory() const;
   /// Return the memory address and width accessed by the specified instruction or nullptr.

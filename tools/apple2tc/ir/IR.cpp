@@ -97,6 +97,20 @@ bool Instruction::hasSideEffects() const {
   }
 }
 
+bool Instruction::modifiesSP() const {
+  switch (getKind()) {
+  case ValueKind::StoreSP:
+  case ValueKind::Push8:
+  case ValueKind::Pop8:
+  case ValueKind::JSR:
+  case ValueKind::JSRInd:
+  case ValueKind::RTS:
+    return true;
+  default:
+    return false;
+  }
+}
+
 bool Instruction::readsMemory() const {
   switch (getKind()) {
   case ValueKind::Peek8:

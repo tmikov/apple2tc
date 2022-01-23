@@ -122,67 +122,8 @@ void IRDumper::postBasicBlock(BasicBlock *bb) {}
 namespace {} // namespace
 
 void IRDumper::dumpBlockTrees(BasicBlock *bb) {
-  InstSet trees{};
   InstSet validTrees{};
-  std::vector<Instruction *> stack{};
-
-  for (auto &rInst : bb->instructions()) {
-    auto *inst = &rInst;
-    Instruction *onlyUser;
-    if (!inst->getType()->isVoid() && !inst->hasSideEffects() &&
-        (onlyUser = inst->getOnlyUser()) != nullptr && onlyUser->getBasicBlock() == bb) {
-      // Is this instruction suitable for adding to an expression tree?
-      // A non-void instruction without side effects, with exactly one user in
-      // the same basic block.
-      trees.insert(inst);
-      validTrees.insert(inst);
-    } else {
-      // This instruction can't be a part of an expression tree. It has to be
-      // emitted. All referenced trees are cleared.
-      stack.push_back(inst);
-      do {
-        auto *toClear = stack.back();
-        stack.pop_back();
-        trees.erase(toClear);
-        for (auto &op : toClear->operands())
-          if (auto *opInst = dyn_cast<Instruction>(&op))
-            stack.push_back(opInst);
-      } while (!stack.empty());
-
-      // Check if it invalidated any tree leaves.
-      if (inst->getKind() == ValueKind::StoreR8) {
-        // Invalidate register leaves.
-        auto *cpuReg = inst->getOperand(0);
-        for (auto begin = trees.begin(), end = trees.end(); begin != end;) {
-          auto cur = begin++;
-          auto *tInst = *cur;
-          if (tInst->getKind() == ValueKind::LoadR8 && tInst->getOperand(0) == cpuReg) {
-            trees.erase(cur);
-            validTrees.erase(tInst);
-          }
-        }
-      } else if (inst->writesMemory()) {
-        auto [writeAddr, writeWidth] = inst->memoryAddress();
-        auto writeRange = classifyMemoryAddr(writeAddr, writeWidth);
-
-        // Invalidate memory read leaves.
-        for (auto begin = trees.begin(), end = trees.end(); begin != end;) {
-          auto cur = begin++;
-          auto *tInst = *cur;
-          if (tInst->readsMemory()) {
-            auto [readAddr, readWidth] = tInst->memoryAddress();
-            auto readRange = classifyMemoryAddr(readAddr, readWidth);
-            if (writeRange.overlaps(readRange)) {
-              trees.erase(cur);
-              validTrees.erase(tInst);
-            }
-          }
-        }
-      }
-    }
-  }
-  assert(trees.empty() && "All trees must have been consumed by the end of the basic block");
-
+  markExpressionTrees(bb, validTrees);
   for (auto &rInst : bb->instructions()) {
     auto *inst = &rInst;
     // Part of a tree? Skip it.

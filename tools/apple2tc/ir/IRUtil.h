@@ -136,4 +136,14 @@ Range32 classifyMemoryAddr(Value *addr, unsigned width);
 
 ValueKind negateComparison(ValueKind kind);
 
+using InstSet = std::unordered_set<Instruction *>;
+
+/// For a given basic block \p bb, populate a set of instructions that are
+/// part of an expression tree and should not be emitted when encountered
+/// sequentially in the block instruction list.
+///
+/// \param bb the basic block we are marking.
+/// \param validTrees instructions that are part of a tree are recorded here
+void markExpressionTrees(BasicBlock *bb, InstSet &validTrees);
+
 } // namespace ir

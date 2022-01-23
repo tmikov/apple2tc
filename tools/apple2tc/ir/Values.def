@@ -55,7 +55,11 @@ IR_TYPE(U32)
 IR_CPUREG(A, CPUReg8)
 IR_CPUREG(X, CPUReg8)
 IR_CPUREG(Y, CPUReg8)
-IR_CPUREG(SP, CPUReg8)
+
+// SP can't be exposed as a register, because we have instructions manipulating
+// it implicitly.
+// IR_CPUREG(SP, CPUReg8)
+
 /// Negative.
 IR_CPUREG(STATUS_N, CPUReg8)
 /// Overflow.
@@ -86,6 +90,8 @@ IR_RANGE(CPUReg, CPUReg8, CPUReg16)
 
 IR_INST1(LoadR8, U8, CPUReg8)
 IR_INST2(StoreR8, Void, CPUReg8, U8)
+IR_INST0(LoadSP, U8)
+IR_INST1(StoreSP, Void, U8)
 
 /// Used for debugging when we wont to keep instruction numbers persistent.
 IR_INST0(VoidNop, Void)

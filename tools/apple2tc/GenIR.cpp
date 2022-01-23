@@ -35,7 +35,7 @@ Module *GenIR::run() {
     emitStoreReg8(CPURegKind::A, builder_.getLiteralU8(regs.a));
     emitStoreReg8(CPURegKind::X, builder_.getLiteralU8(regs.x));
     emitStoreReg8(CPURegKind::Y, builder_.getLiteralU8(regs.y));
-    emitStoreReg8(CPURegKind::SP, builder_.getLiteralU8(regs.sp));
+    builder_.createStoreSP(builder_.getLiteralU8(regs.sp));
 
     emitStoreReg8(
         CPURegKind::STATUS_N, builder_.getLiteralU8((regs.status & Regs::STATUS_N) ? 0x80 : 0));
@@ -362,13 +362,13 @@ void GenIR::genInst(uint16_t pc, const CPUInst &inst, const AsmBlock &asmBlock) 
     emitStoreReg8(CPURegKind::Y, emitUpdateNZ(emitLoadReg8(CPURegKind::A)));
     break;
   case CPUInstKind::TSX:
-    emitStoreReg8(CPURegKind::X, emitUpdateNZ(emitLoadReg8(CPURegKind::SP)));
+    emitStoreReg8(CPURegKind::X, emitUpdateNZ(builder_.createLoadSP()));
     break;
   case CPUInstKind::TXA:
     emitStoreReg8(CPURegKind::A, emitUpdateNZ(emitLoadReg8(CPURegKind::X)));
     break;
   case CPUInstKind::TXS:
-    emitStoreReg8(CPURegKind::SP, emitLoadReg8(CPURegKind::X));
+    builder_.createStoreSP(emitLoadReg8(CPURegKind::X));
     break;
   case CPUInstKind::TYA:
     emitStoreReg8(CPURegKind::A, emitUpdateNZ(emitLoadReg8(CPURegKind::Y)));

@@ -173,7 +173,7 @@ int main(int argc, char **argv) {
       if (action == Action::GenIR)
         dumpModule(mod, irTrees);
       else
-        printIRC1(mod, stdout);
+        printIRC1(mod, stdout, irTrees);
       break;
     }
     }

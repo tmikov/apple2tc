@@ -10,6 +10,9 @@
 #include "apple2tc/apple2iodefs.h"
 #include "apple2tc/d6502.h"
 #include "apple2tc/support.h"
+#include "apple2tc/SaveAndRestore.h"
+
+#include <cstdarg>
 
 unsigned IRC1::blockID(const Value *bb) {
   auto res = blockIDs_.try_emplace(cast<const BasicBlock>(bb), 0);
@@ -42,44 +45,149 @@ const IRC1::TmpVar *IRC1::varFor(const Instruction *inst) {
 }
 
 void IRC1::regAlloc(Function *func) {
-  for (auto &bb : func->basicBlocks())
-    regAllocBB(&bb);
+  for (auto &bb : func->basicBlocks()) {
+    if (trees_)
+      regAllocBBTrees(&bb);
+    else
+      regAllocBB(&bb);
+  }
 }
+
+class IRC1::BBAllocator {
+  IRC1 &irc1_;
+  // Keep track of the variable allocated to existing instructions and the
+  // number of users remaining. When the user count is 0, the variable can be
+  // freed.
+  std::unordered_map<const Instruction *, std::pair<const TmpVar *, size_t>> allocated_{};
+  bool trace_ = false;
+
+public:
+  explicit BBAllocator(IRC1 &irc1) : irc1_(irc1) {}
+
+  bool isTrace() const {
+    return trace_;
+  }
+  void setTrace(bool trace) {
+    trace_ = trace;
+  }
+
+  /// Allocate a register for the instruction result.
+  void allocInst(Instruction *inst) {
+    if (inst->getType()->getKind() == TypeKind::Void)
+      return;
+
+    size_t numUsers = inst->countUsers();
+    auto *tmpVar = irc1_.getTmpVar(inst->getType()->getKind());
+    irc1_.varMapping_[inst] = tmpVar;
+    if (!numUsers)
+      irc1_.freeTmpVar(tmpVar);
+    else
+      allocated_.try_emplace(inst, tmpVar, numUsers);
+
+    if (trace_) {
+      fprintf(
+          stderr,
+          "$%04x %-10s: allocated %s with %zu users\n",
+          inst->getAddress().value_or(0),
+          getValueKindName(inst->getKind()),
+          tmpVar->name.c_str(),
+          numUsers);
+    }
+  }
+
+  /// Free a single use of the specified instruction.
+  void freeInstUse(const Instruction *inst, const Instruction *root) {
+    auto it = allocated_.find(inst);
+    if (it == allocated_.end())
+      return;
+
+    if (trace_) {
+      fprintf(
+          stderr,
+          "$%04x %-10s: freeing use of node $%04x:%s %s with %zu users\n",
+          root->getAddress().value_or(0),
+          getValueKindName(root->getKind()),
+          inst->getAddress().value_or(0),
+          getValueKindName(inst->getKind()),
+          it->second.first->name.c_str(),
+          it->second.second);
+    }
+
+    // Decrease the number of remaining users. If zero, free the variable.
+    if (--it->second.second == 0) {
+      irc1_.freeTmpVar(it->second.first);
+      allocated_.erase(it);
+    }
+  }
+
+  bool empty() const {
+    return allocated_.empty();
+  }
+};
 
 // Perform simple linear scan register allocation only within the block.
 // Variables used in other blocks are never freed.
 void IRC1::regAllocBB(BasicBlock *bb) {
+  BBAllocator allocator{*this};
+
   // Keep track of the variable allocated to existing instructions and the
   // number of users remaining. When the user count is 0, the variable can be
   // freed.
   std::unordered_map<const Value *, std::pair<const TmpVar *, size_t>> allocated{};
 
-  for (auto &iRef : bb->instructions()) {
-    auto *inst = &iRef;
-
-    for (const Value &operand : inst->operands()) {
-      auto it = allocated.find(&operand);
-      if (it == allocated.end())
-        continue;
-      // Decrease the number of remaining users. If zero, free the variable.
-      if (--it->second.second == 0) {
-        freeTmpVar(it->second.first);
-        allocated.erase(it);
-      }
+  for (auto &inst : bb->instructions()) {
+    // Release one usage of every operand.
+    for (const Value &operand : inst.operands()) {
+      if (auto *opInst = dyn_cast<const Instruction>(&operand))
+        allocator.freeInstUse(opInst, &inst);
     }
 
-    if (inst->getType()->getKind() == TypeKind::Void)
+    allocator.allocInst(&inst);
+  }
+  assert(allocator.empty() && "For now we don't keep values alive across blocks");
+}
+
+void IRC1::regAllocBBTrees(BasicBlock *bb) {
+  markExpressionTrees(bb, validTrees_);
+
+  // Perform register allocation, now that trees have been identified.
+  BBAllocator allocator{*this};
+  allocator.setTrace(bb->getAddress().value_or(0) == 0x300 && bb->isRealAddress());
+  //allocator.setTrace(true);
+
+  std::vector<Instruction *> stack{};
+
+  for (auto &iRef : bb->instructions()) {
+    Instruction *inst = &iRef;
+    // Skip instructions that are part of an expression tree.
+    if (validTrees_.count(inst))
       continue;
 
-    size_t numUsers = inst->countUsers();
-    auto *tmpVar = getTmpVar(inst->getType()->getKind());
-    varMapping_[inst] = tmpVar;
-    if (!numUsers)
-      freeTmpVar(tmpVar);
-    else
-      allocated.try_emplace(inst, tmpVar, numUsers);
+    // Free all register uses in the operands or trees rooted by them.
+    stack.push_back(inst);
+    do {
+      Instruction *toClear = stack.back();
+      stack.pop_back();
+
+      for (auto &op : toClear->operands()) {
+        if (auto *opInst = dyn_cast<Instruction>(&op)) {
+          // Is the operand instruction part of a tree?
+          if (validTrees_.count(opInst)) {
+            // Part of a tree doesn't have an allocated register, so recursively process its
+            // children until a leaf with an allocated register is reached.
+            stack.push_back(opInst);
+          } else {
+            // Not part of a tree, so free one use of its register.
+            allocator.freeInstUse(opInst, inst);
+          }
+        }
+      }
+    } while (!stack.empty());
+
+    allocator.allocInst(inst);
   }
-  assert(allocated.empty());
+
+  assert(allocator.empty() && "For now we don't keep values alive across blocks");
 }
 
 void IRC1::printPrologue() {
@@ -281,24 +389,28 @@ void IRC1::printBB(BasicBlock *bb) {
   fprintf(os_, "\n");
 
   std::optional<uint32_t> lastAddr{};
-  for (auto &inst : bb->instructions()) {
+  for (auto &rInst : bb->instructions()) {
+    auto *inst = &rInst;
+    if (trees_ && validTrees_.count(inst))
+      continue;
+
     fprintf(os_, "      ");
-    if (inst.getAddress() && inst.getAddress() != lastAddr)
-      fprintf(os_, "/*$%04X*/", *inst.getAddress());
+    if (inst->getAddress() && inst->getAddress() != lastAddr)
+      fprintf(os_, "/*$%04X*/ ", *inst->getAddress());
     else
-      fprintf(os_, "         ");
-    lastAddr = inst.getAddress();
-    printInst(&inst);
-    fprintf(os_, "\n");
+      fprintf(os_, "          ");
+    lastAddr = inst->getAddress();
+    if (auto *tmpVar = varFor(inst))
+      fprintf(os_, "%s = ", tmpVar->name.c_str());
+    printInst(inst);
+    fprintf(os_, ";\n");
   }
 
   fprintf(os_, "      break;\n");
 }
 
-void IRC1::printInst(Instruction *inst) {
-  if (auto *tmpVar = varFor(inst))
-    fprintf(os_, "%s = ", tmpVar->name.c_str());
-
+std::string IRC1::formatInst(Instruction *inst) {
+  SaveAndRestore saveObuf(obuf_, {});
   switch (inst->getKind()) {
 #define IR_INST(name, type) \
   case ValueKind::name:     \
@@ -308,8 +420,56 @@ void IRC1::printInst(Instruction *inst) {
   default:
     panicAbort("unsupported instruction %s", getValueKindName(inst->getKind()));
   }
+  return std::move(obuf_);
+}
 
-  fprintf(os_, ";");
+void IRC1::printInst(Instruction *inst) {
+  fprintf(os_, "%s", formatInst(inst).c_str());
+}
+
+static bool needParens(const char *s) {
+  // A number doesn't need parens, but an expression starting with one,
+  // does (according to our simplified rules here).
+  if (isdigit(*s)) {
+    // TODO: check for hex, etc.
+    do
+      ++s;
+    while (isdigit(*s));
+    return *s != 0;
+  }
+
+  // Expressions of the form "ident(...)" or "(...)" don't need parens.
+  // Skip a starting identifier.
+  if (isalpha(*s) || *s == '_') {
+    do
+      ++s;
+    while (isalnum(*s) || *s == '_');
+    // An expression consisting of an identifier doesn't need parens.
+    if (*s == 0)
+      return false;
+  }
+  if (*s != '(')
+    return true;
+  int pcount = 1;
+  ++s;
+  while (*s) {
+    if (*s == '(')
+      ++pcount;
+    else if (*s == ')')
+      --pcount;
+    else if (*s == '"') // Can't skip strings, which may contain parens.
+      return true;
+    else if (pcount == 0) // Last paren closed before end of string.
+      return true;
+    ++s;
+  }
+  assert(pcount == 0 && "Unmatched parens in input");
+  return false;
+}
+
+/// Wrap the input string with parens unless it obviously doesn't need them.
+static std::string parens(std::string &&str) {
+  return needParens(str.c_str()) ? '(' + str + ')' : std::move(str);
 }
 
 std::string IRC1::formatOperand(Value *operand) {
@@ -322,12 +482,25 @@ std::string IRC1::formatOperand(Value *operand) {
   } else if (auto *bb = dyn_cast<BasicBlock>(operand)) {
     return format("%u", blockID(bb));
   } else if (auto *inst = dyn_cast<Instruction>(operand)) {
-    auto *var = varFor(inst);
-    PANIC_ASSERT_MSG(var != nullptr, "instruction hasn't been allocated a register");
-    return var->name;
+    if (trees_ && validTrees_.count(inst)) {
+      return parens(formatInst(inst));
+    } else {
+      auto *var = varFor(inst);
+      PANIC_ASSERT_MSG(var != nullptr, "instruction hasn't been allocated a register");
+      return var->name;
+    }
   } else {
     PANIC_ABORT("Unsupported operand kind %s", getValueKindName(operand->getKind()));
   }
+}
+
+static void bprintf(std::string &buf, const char *msg, ...)
+    __attribute__((__format__(__printf__, 2, 3)));
+static void bprintf(std::string &buf, const char *msg, ...) {
+  va_list ap;
+  va_start(ap, msg);
+  buf += vformat(msg, ap);
+  va_end(ap);
 }
 
 void IRC1::printBranchTarget(Instruction *inst) {
@@ -341,43 +514,40 @@ void IRC1::printBranchTarget(Instruction *inst) {
   CPUOpcode opc = decodeOpcode(mod_->getDisas()->peek(addr));
   if (!instIsBranch(opc.kind, opc.addrMode))
     return;
-  fprintf(os_, "branchTarget = true; ");
+  bprintf(obuf_, "branchTarget = true; ");
 }
 
 void IRC1::printLoadR8(Instruction *inst) {
   switch (cast<CPUReg8>(inst->getOperand(0))->getValue()) {
   case CPURegKind::A:
-    fprintf(os_, "s_a");
+    bprintf(obuf_, "s_a");
     break;
   case CPURegKind::X:
-    fprintf(os_, "s_x");
+    bprintf(obuf_, "s_x");
     break;
   case CPURegKind::Y:
-    fprintf(os_, "s_y");
-    break;
-  case CPURegKind::SP:
-    fprintf(os_, "s_sp");
+    bprintf(obuf_, "s_y");
     break;
   case CPURegKind::STATUS_N:
-    fprintf(os_, "s_status & STATUS_N");
+    bprintf(obuf_, "s_status & STATUS_N");
     break;
   case CPURegKind::STATUS_V:
-    fprintf(os_, "(s_status & STATUS_V) != 0");
+    bprintf(obuf_, "(s_status & STATUS_V) != 0");
     break;
   case CPURegKind::STATUS_B:
-    fprintf(os_, "(s_status & STATUS_B) != 0");
+    bprintf(obuf_, "(s_status & STATUS_B) != 0");
     break;
   case CPURegKind::STATUS_D:
-    fprintf(os_, "(s_status & STATUS_D) != 0");
+    bprintf(obuf_, "(s_status & STATUS_D) != 0");
     break;
   case CPURegKind::STATUS_I:
-    fprintf(os_, "(s_status & STATUS_I) != 0");
+    bprintf(obuf_, "(s_status & STATUS_I) != 0");
     break;
   case CPURegKind::STATUS_NotZ:
-    fprintf(os_, "(~s_status & STATUS_Z)");
+    bprintf(obuf_, "(~s_status & STATUS_Z)");
     break;
   case CPURegKind::STATUS_C:
-    fprintf(os_, "s_status & STATUS_C");
+    bprintf(obuf_, "s_status & STATUS_C");
     break;
   case CPURegKind::_last:
     PANIC_ABORT("Invalid CPU register");
@@ -388,51 +558,55 @@ void IRC1::printStoreR8(Instruction *inst) {
   Value *operand = inst->getOperand(1);
   switch (cast<CPUReg8>(inst->getOperand(0))->getValue()) {
   case CPURegKind::A:
-    fprintf(os_, "s_a = %s", formatOperand(operand).c_str());
+    bprintf(obuf_, "s_a = %s", formatOperand(operand).c_str());
     break;
   case CPURegKind::X:
-    fprintf(os_, "s_x = %s", formatOperand(operand).c_str());
+    bprintf(obuf_, "s_x = %s", formatOperand(operand).c_str());
     break;
   case CPURegKind::Y:
-    fprintf(os_, "s_y = %s", formatOperand(operand).c_str());
-    break;
-  case CPURegKind::SP:
-    fprintf(os_, "s_sp = %s", formatOperand(operand).c_str());
+    bprintf(obuf_, "s_y = %s", formatOperand(operand).c_str());
     break;
   case CPURegKind::STATUS_N:
-    fprintf(os_, "s_status = (s_status & ~STATUS_N) | %s", formatOperand(operand).c_str());
+    bprintf(obuf_, "s_status = (s_status & ~STATUS_N) | %s", formatOperand(operand).c_str());
     break;
   case CPURegKind::STATUS_V:
-    fprintf(os_, "s_status = (s_status & ~STATUS_V) | (%s << 6)", formatOperand(operand).c_str());
+    bprintf(obuf_, "s_status = (s_status & ~STATUS_V) | (%s << 6)", formatOperand(operand).c_str());
     break;
   case CPURegKind::STATUS_B:
-    fprintf(os_, "s_status = (s_status & ~STATUS_B) | (%s << 4)", formatOperand(operand).c_str());
+    bprintf(obuf_, "s_status = (s_status & ~STATUS_B) | (%s << 4)", formatOperand(operand).c_str());
     break;
   case CPURegKind::STATUS_D:
-    fprintf(os_, "s_status = (s_status & ~STATUS_D) | (%s << 3)", formatOperand(operand).c_str());
+    bprintf(obuf_, "s_status = (s_status & ~STATUS_D) | (%s << 3)", formatOperand(operand).c_str());
     break;
   case CPURegKind::STATUS_I:
-    fprintf(os_, "s_status = (s_status & ~STATUS_I) | (%s << 2)", formatOperand(operand).c_str());
+    bprintf(obuf_, "s_status = (s_status & ~STATUS_I) | (%s << 2)", formatOperand(operand).c_str());
     break;
   case CPURegKind::STATUS_NotZ:
-    fprintf(
-        os_,
+    bprintf(
+        obuf_,
         "s_status = (s_status & ~STATUS_Z) | (%s ? 0 : STATUS_Z)",
         formatOperand(operand).c_str());
     break;
   case CPURegKind::STATUS_C:
-    fprintf(os_, "s_status = (s_status & ~STATUS_C) | %s", formatOperand(operand).c_str());
+    bprintf(obuf_, "s_status = (s_status & ~STATUS_C) | %s", formatOperand(operand).c_str());
     break;
   case CPURegKind::_last:
     PANIC_ABORT("Invalid CPU register");
   }
 }
 
+void IRC1::printLoadSP(Instruction *inst) {
+  bprintf(obuf_, "s_sp");
+}
+void IRC1::printStoreSP(Instruction *inst) {
+  bprintf(obuf_, "s_sp = %s", formatOperand(inst->getOperand(0)).c_str());
+}
+
 void IRC1::printVoidNop(Instruction *inst) {
-  fprintf(os_, "(void)0");
+  bprintf(obuf_, "(void)0");
 }
 void IRC1::printNop8(Instruction *inst) {
-  fprintf(os_, "0");
+  bprintf(obuf_, "0");
 }
 
 void IRC1::printPeek8(Instruction *inst) {
@@ -440,7 +614,7 @@ void IRC1::printPeek8(Instruction *inst) {
   if (auto *u16 = dyn_cast<LiteralU16>(inst->getOperand(0)))
     if (u16->getValue() >= A2_IO_RANGE_START && u16->getValue() <= A2_IO_RANGE_END)
       func = "io_peek";
-  fprintf(os_, "%s(%s)", func, formatOperand(inst->getOperand(0)).c_str());
+  bprintf(obuf_, "%s(%s)", func, formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printPoke8(Instruction *inst) {
   const char *func = "poke";
@@ -448,248 +622,248 @@ void IRC1::printPoke8(Instruction *inst) {
     if (u16->getValue() >= A2_IO_RANGE_START && u16->getValue() <= A2_IO_RANGE_END)
       func = "io_poke";
 
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s(%s, %s)",
       func,
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printRamPeek8(Instruction *inst) {
-  fprintf(os_, "ram_peek(%s)", formatOperand(inst->getOperand(0)).c_str());
+  bprintf(obuf_, "ram_peek(%s)", formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printRamPoke8(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "ram_poke(%s, %s)",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printPeek16al(Instruction *inst) {
-  fprintf(os_, "peek16al(%s)", formatOperand(inst->getOperand(0)).c_str());
+  bprintf(obuf_, "peek16al(%s)", formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printPeek16un(Instruction *inst) {
-  fprintf(os_, "peek16(%s)", formatOperand(inst->getOperand(0)).c_str());
+  bprintf(obuf_, "peek16(%s)", formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printRamPeek16al(Instruction *inst) {
-  fprintf(os_, "ram_peek16al(%s)", formatOperand(inst->getOperand(0)).c_str());
+  bprintf(obuf_, "ram_peek16al(%s)", formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printRamPeek16un(Instruction *inst) {
-  fprintf(os_, "ram_peek16(%s)", formatOperand(inst->getOperand(0)).c_str());
+  bprintf(obuf_, "ram_peek16(%s)", formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printSExt8t16(Instruction *inst) {
-  fprintf(os_, "(int8_t)%s", formatOperand(inst->getOperand(0)).c_str());
+  bprintf(obuf_, "(int8_t)%s", formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printZExt8t16(Instruction *inst) {
-  fprintf(os_, "%s", formatOperand(inst->getOperand(0)).c_str());
+  bprintf(obuf_, "%s", formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printTrunc16t8(Instruction *inst) {
-  fprintf(os_, "(uint8_t)%s", formatOperand(inst->getOperand(0)).c_str());
+  bprintf(obuf_, "(uint8_t)%s", formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printHigh8(Instruction *inst) {
-  fprintf(os_, "(uint8_t)(%s >> 8)", formatOperand(inst->getOperand(0)).c_str());
+  bprintf(obuf_, "(uint8_t)(%s >> 8)", formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printMake16(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s + (%s << 8)",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printShl8(Instruction *inst) {
-  fprintf(
-      os_,
-      "%s << %s",
+  bprintf(
+      obuf_,
+      "(uint8_t)(%s << %s)",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printShl16(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s << %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printShr8(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s >> %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printShr16(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s >> %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printAnd8(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s & %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printAnd16(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s & %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printOr8(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s | %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printOr16(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s | %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printXor8(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s ^ %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printXor16(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s ^ %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printAdd8(Instruction *inst) {
-  fprintf(
-      os_,
-      "%s + %s",
+  bprintf(
+      obuf_,
+      "(uint8_t)(%s + %s)",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printAdd16(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s + %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printSub8(Instruction *inst) {
-  fprintf(
-      os_,
-      "%s - %s",
+  bprintf(
+      obuf_,
+      "(uint8_t)(%s - %s)",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printSub16(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s - %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printOvf8(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "ovf8((uint8_t)%s, (uint8_t)%s, (uint8_t)%s)",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str(),
       formatOperand(inst->getOperand(2)).c_str());
 }
 void IRC1::printAdcDec16(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "adc_dec16(%s, %s, %s)",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str(),
       formatOperand(inst->getOperand(2)).c_str());
 }
 void IRC1::printSbcDec16(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "sbc_dec16(%s, %s, %s)",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str(),
       formatOperand(inst->getOperand(2)).c_str());
 }
 void IRC1::printCmp8eq(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s == %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printCmp8ne(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s != %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printCmp8ge(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "(int8_t)%s >= (int8_t)%s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printCmp8lt(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "(int8_t)%s < (int8_t)%s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printCmp8ae(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s >= %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printCmp8bt(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "%s < %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printNot16(Instruction *inst) {
-  fprintf(os_, "~%s", formatOperand(inst->getOperand(0)).c_str());
+  bprintf(obuf_, "~%s", formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printAddCycles(Instruction *inst) {
   uint16_t pc;
   if (inst->getAddress()) {
     pc = *inst->getAddress();
-    fprintf(os_, "s_pc = 0x%04x; ", pc);
+    bprintf(obuf_, "s_pc = 0x%04x; ", pc);
   } else {
     pc = 0xFFFF;
   }
-  fprintf(os_, "CYCLES(0x%04x, %s)", pc, formatOperand(inst->getOperand(0)).c_str());
+  bprintf(obuf_, "CYCLES(0x%04x, %s)", pc, formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printCycles(Instruction *inst) {
-  fprintf(os_, "s_cycles");
+  bprintf(obuf_, "s_cycles");
 }
 void IRC1::printPush8(Instruction *inst) {
-  fprintf(os_, "push8(%s)", formatOperand(inst->getOperand(0)).c_str());
+  bprintf(obuf_, "push8(%s)", formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printPop8(Instruction *inst) {
-  fprintf(os_, "pop8()");
+  bprintf(obuf_, "pop8()");
 }
 void IRC1::printEncodeFlags(Instruction *inst) {
-  fprintf(os_, "%s", formatOperand(inst->getOperand(0)).c_str());
-  fprintf(os_, " | ((%s == 0) << 1)", formatOperand(inst->getOperand(1)).c_str());
-  fprintf(os_, " | (%s << 2)", formatOperand(inst->getOperand(2)).c_str());
-  fprintf(os_, " | (%s << 3)", formatOperand(inst->getOperand(3)).c_str());
-  fprintf(os_, " | STATUS_B");
-  fprintf(os_, " | (%s << 6)", formatOperand(inst->getOperand(4)).c_str());
-  fprintf(os_, " | %s", formatOperand(inst->getOperand(5)).c_str());
+  bprintf(obuf_, "%s", formatOperand(inst->getOperand(0)).c_str());
+  bprintf(obuf_, " | ((%s == 0) << 1)", formatOperand(inst->getOperand(1)).c_str());
+  bprintf(obuf_, " | (%s << 2)", formatOperand(inst->getOperand(2)).c_str());
+  bprintf(obuf_, " | (%s << 3)", formatOperand(inst->getOperand(3)).c_str());
+  bprintf(obuf_, " | STATUS_B");
+  bprintf(obuf_, " | (%s << 6)", formatOperand(inst->getOperand(4)).c_str());
+  bprintf(obuf_, " | %s", formatOperand(inst->getOperand(5)).c_str());
 }
 void IRC1::printDecodeFlag(Instruction *inst) {
   assert(isa<LiteralU8>(inst->getOperand(1)) && "DecodeFlag operand2 must be a literal");
@@ -698,34 +872,34 @@ void IRC1::printDecodeFlag(Instruction *inst) {
 
   if (bitIndex == 0 || bitIndex == 7) {
     // C and N require just a mask.
-    fprintf(os_, "%s & 0x%02x", formatOperand(inst->getOperand(0)).c_str(), 1 << bitIndex);
+    bprintf(obuf_, "%s & 0x%02x", formatOperand(inst->getOperand(0)).c_str(), 1 << bitIndex);
   } else if (bitIndex == 1) {
     // Z needs to be inverted into NotZ
-    fprintf(os_, "(~%s & 2)", formatOperand(inst->getOperand(0)).c_str());
+    bprintf(obuf_, "(~%s & 2)", formatOperand(inst->getOperand(0)).c_str());
   } else {
     // The rest are a mask and a check.
-    fprintf(os_, "(%s & 0x%02x) != 0", formatOperand(inst->getOperand(0)).c_str(), 1 << bitIndex);
+    bprintf(obuf_, "(%s & 0x%02x) != 0", formatOperand(inst->getOperand(0)).c_str(), 1 << bitIndex);
   }
 }
 void IRC1::printCPUAddr2BB(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "addr_to_block_id(0x%04x, %s)",
       inst->getAddress().value_or(0xFFFF),
       formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printJmp(Instruction *inst) {
   printBranchTarget(inst);
-  fprintf(os_, "block_id = %s", formatOperand(inst->getOperand(0)).c_str());
+  bprintf(obuf_, "block_id = %s", formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printJmpInd(Instruction *inst) {
   printBranchTarget(inst);
-  fprintf(os_, "block_id = %s", formatOperand(inst->getOperand(0)).c_str());
+  bprintf(obuf_, "block_id = %s", formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printJTrue(Instruction *inst) {
   printBranchTarget(inst);
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "block_id = %s ? %s : %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str(),
@@ -733,8 +907,8 @@ void IRC1::printJTrue(Instruction *inst) {
 }
 void IRC1::printJFalse(Instruction *inst) {
   printBranchTarget(inst);
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "block_id = !%s ? %s : %s",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str(),
@@ -748,7 +922,7 @@ void IRC1::printJSR(Instruction *inst) {
   // Note that the 6502 pushes pc + 2 instead of pc + 3, so we decrement the return address.
   uint16_t retAddr = *fall->getAddress() - 1;
   printBranchTarget(inst);
-  fprintf(os_, "push16(0x%04x); block_id = %s", retAddr, formatOperand(target).c_str());
+  bprintf(obuf_, "push16(0x%04x); block_id = %s", retAddr, formatOperand(target).c_str());
 }
 void IRC1::printJSRInd(Instruction *inst) {
   auto *target = inst->getOperand(0);
@@ -758,18 +932,18 @@ void IRC1::printJSRInd(Instruction *inst) {
   // Note that the 6502 pushes pc + 2 instead of pc + 3, so we decrement the return address.
   uint16_t retAddr = *fall->getAddress() - 1;
   printBranchTarget(inst);
-  fprintf(os_, "push16(0x%04x); block_id = %s", retAddr, formatOperand(target).c_str());
+  bprintf(obuf_, "push16(0x%04x); block_id = %s", retAddr, formatOperand(target).c_str());
 }
 void IRC1::printRTS(Instruction *inst) {
   printBranchTarget(inst);
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "block_id = addr_to_block_id(0x%04x, pop16() + 1);",
       inst->getAddress().value_or(0xFFFF));
 }
 void IRC1::printAbort(Instruction *inst) {
-  fprintf(
-      os_,
+  bprintf(
+      obuf_,
       "fprintf(stderr, \"abort: pc=$%%04X, target=$%%04X, reason=%%u\", %s, %s, %s); error_handler(%s)",
       formatOperand(inst->getOperand(0)).c_str(),
       formatOperand(inst->getOperand(1)).c_str(),
@@ -777,6 +951,6 @@ void IRC1::printAbort(Instruction *inst) {
       formatOperand(inst->getOperand(0)).c_str());
 }
 
-void printIRC1(ir::Module *mod, FILE *os) {
-  IRC1(mod, os).run();
+void printIRC1(ir::Module *mod, FILE *os, bool trees) {
+  IRC1(mod, os, trees).run();
 }

@@ -8,6 +8,7 @@
 #pragma once
 
 #include "IR.h"
+#include "IRUtil.h"
 
 #include <cstdio>
 #include <string>
@@ -31,8 +32,6 @@ public:
   const std::string &name(Value *v);
 
 private:
-  using InstSet = std::unordered_set<Instruction *>;
-
   void dumpImpl(BasicBlock *bb);
   /// Dump a basic block using tree representation.
   void dumpBlockTrees(BasicBlock *bb);

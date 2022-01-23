@@ -3,23 +3,24 @@
 // data labels: 9
 function Func0001
 %BB1:  // Pred() Succ(%BB2)
+                StoreSP       0xff
                 Jmp           %BB2
 %BB2:  // [$0300] Pred(%BB1) Succ(%BB5, %BB3)
 /*$0300*/       AddCycles     33
 /*$0304*/       RamPoke8      0x1001, (RamPeek8 0x1000)
-/*$0307*/ %5  = RamPeek8      0x1002
+/*$0307*/ %6  = RamPeek8      0x1002
 /*$030A*/       RamPoke8      0x1002, (Add8 (RamPeek8 0x1002) 0x01)
-/*$030E*/       RamPoke8      0x1003, %5
-/*$0311*/       JFalse        %5, %BB5, %BB3
+/*$030E*/       RamPoke8      0x1003, %6
+/*$0311*/       JFalse        %6, %BB5, %BB3
 %BB3:  // [$0313] Pred(%BB2) Succ(%BB5, %BB4)
 /*$0313*/       AddCycles     24
 /*$0319*/       RamPoke8      0x2005, (Add8 (RamPeek8 0x2000) 0x01)
 /*$031F*/       JFalse        (RamPeek8 0x2006), %BB5, %BB4
 %BB4:  // [$0321] Pred(%BB3) Succ(%BB5)
 /*$0321*/       AddCycles     24
-          %18 = RamPeek8      0x3000
+          %19 = RamPeek8      0x3000
 /*$0328*/       RamPoke8      0x3000, 0x01
-/*$032C*/       RamPoke8      0x3005, (Add8 %18 0x01)
+/*$032C*/       RamPoke8      0x3005, (Add8 %19 0x01)
                 Jmp           %BB5
 %BB5:  // [$032F] Pred(%BB2, %BB3, %BB4) Succ(%BB6)
 /*$032F*/       AddCycles     2
