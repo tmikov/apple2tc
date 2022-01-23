@@ -10,14 +10,107 @@
 
 using namespace ir;
 
-template <class T, class C>
-static bool isLiteral(Value *v, C c) {
+namespace {
+
+template <class T>
+bool isLiteral(Value *v, typename T::ValueType c) {
   if (auto *lit = dyn_cast<T>(v))
     return lit->getValue() == c;
   return false;
 }
 
-// static Instruction *simplifyPeekPoke(Instruction *inst) {}
+template <class T>
+T *getLiteral(IRBuilder &builder, typename T::ValueType c);
+
+template <>
+inline LiteralU8 *getLiteral<LiteralU8>(IRBuilder &builder, typename LiteralU8::ValueType c) {
+  return builder.getLiteralU8(c);
+}
+
+template <>
+inline LiteralU16 *getLiteral<LiteralU16>(IRBuilder &builder, typename LiteralU16::ValueType c) {
+  return builder.getLiteralU16(c);
+}
+
+template <>
+inline LiteralU32 *getLiteral<LiteralU32>(IRBuilder &builder, typename LiteralU32::ValueType c) {
+  return builder.getLiteralU32(c);
+}
+
+template <class LiteralT>
+ValueKind arithKindForType(ValueKind arith8);
+
+template <>
+constexpr ValueKind arithKindForType<LiteralU8>(ValueKind arith8) {
+  return arith8;
+}
+template <>
+constexpr ValueKind arithKindForType<LiteralU16>(ValueKind arith8) {
+  return static_cast<ValueKind>(static_cast<unsigned>(arith8) + 1);
+}
+
+template <class LiteralT>
+std::optional<std::pair<LiteralT *, Value *>> literalFirst(Instruction *inst) {
+  LiteralT *lit;
+  Value *op;
+  if ((lit = dyn_cast<LiteralT>(inst->getOperand(0))) != nullptr)
+    op = inst->getOperand(1);
+  else if ((lit = dyn_cast<LiteralT>(inst->getOperand(1))) != nullptr)
+    op = inst->getOperand(0);
+  else
+    return std::nullopt;
+  return std::make_pair(lit, op);
+}
+template <class LiteralT>
+std::optional<std::pair<LiteralT *, Value *>> literalFirst(Value *value, ValueKind arith8) {
+  if (value->getKind() == arithKindForType<LiteralT>(arith8))
+    return literalFirst<LiteralT>(cast<Instruction>(value));
+  else
+    return std::nullopt;
+}
+
+template <ValueKind kind>
+Instruction *create(IRBuilder &builder, Value *op1, Value *op2);
+
+template <>
+Instruction *create<ValueKind::Add8>(IRBuilder &builder, Value *op1, Value *op2) {
+  return builder.createAdd8(op1, op2);
+}
+template <>
+Instruction *create<ValueKind::Add16>(IRBuilder &builder, Value *op1, Value *op2) {
+  return builder.createAdd16(op1, op2);
+}
+
+template <class LiteralT>
+inline Value *simplifyAdd(IRBuilder &builder, Instruction *inst) {
+  // (Add 0 x) => x
+  if (isLiteral<LiteralT>(inst->getOperand(0), 0))
+    return inst->getOperand(1);
+  // (Add x 0) => x
+  if (isLiteral<LiteralT>(inst->getOperand(1), 0))
+    return inst->getOperand(0);
+  // (Add const1 const2)
+  if (auto *left = dyn_cast<LiteralT>(inst->getOperand(0)))
+    if (auto *right = dyn_cast<LiteralT>(inst->getOperand(1)))
+      return getLiteral<LiteralT>(builder, left->getValue() + right->getValue());
+
+  // (Add lit1 (Add lit2 op2)) => (Add op2 (lit1 + lit2))
+  if (auto optPair = literalFirst<LiteralT>(inst)) {
+    // (Add lit1 op1)
+    auto [lit1, op1] = *optPair;
+    if (auto childPair = literalFirst<LiteralT>(op1, ValueKind::Add8)) {
+      // (Add lit1 (Add lit2 op2))
+      auto [lit2, op2] = *childPair;
+      builder.setInsertionPointAfter(inst);
+      return create<arithKindForType<LiteralT>(ValueKind::Add8)>(
+          builder, op2, getLiteral<LiteralT>(builder, lit1->getValue() + lit2->getValue()));
+    }
+  }
+
+  return nullptr;
+}
+
+} // namespace
 
 /// Return a replacement value or nullptr.
 static Value *simplifyInst(IRBuilder &builder, Instruction *inst) {
@@ -110,29 +203,9 @@ static Value *simplifyInst(IRBuilder &builder, Instruction *inst) {
   case ValueKind::Xor16:
     break;
   case ValueKind::Add8:
-    // (Add8 0 x) => x
-    if (isLiteral<LiteralU8>(inst->getOperand(0), 0))
-      return inst->getOperand(1);
-    // (Add8 x 0) => x
-    if (isLiteral<LiteralU8>(inst->getOperand(1), 0))
-      return inst->getOperand(0);
-    // (Add8 const1 const2)
-    if (auto *left = dyn_cast<LiteralU8>(inst->getOperand(0)))
-      if (auto *right = dyn_cast<LiteralU8>(inst->getOperand(1)))
-        return builder.getLiteralU8(left->getValue() + right->getValue());
-    break;
+    return simplifyAdd<LiteralU8>(builder, inst);
   case ValueKind::Add16:
-    // (Add16 0 x) => x
-    if (isLiteral<LiteralU16>(inst->getOperand(0), 0))
-      return inst->getOperand(1);
-    // (Add16 x 0) => x
-    if (isLiteral<LiteralU16>(inst->getOperand(1), 0))
-      return inst->getOperand(0);
-    // (Add16 const1 const2)
-    if (auto *left = dyn_cast<LiteralU16>(inst->getOperand(0)))
-      if (auto *right = dyn_cast<LiteralU16>(inst->getOperand(1)))
-        return builder.getLiteralU16(left->getValue() + right->getValue());
-    break;
+    return simplifyAdd<LiteralU16>(builder, inst);
   case ValueKind::Sub8:
     // (Sub8 x 0) => x
     if (isLiteral<LiteralU8>(inst->getOperand(1), 0))

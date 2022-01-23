@@ -213,18 +213,20 @@ public:
 template <class Base, class StorageType, ValueKind VK, TypeKind TK>
 class ConstValueImpl : public Base {
 public:
-  ConstValueImpl(IRContext *ctx, StorageType num) : Base(VK, ctx->getType(TK)), storage_(num) {}
+  using ValueType = StorageType;
+
+  ConstValueImpl(IRContext *ctx, ValueType num) : Base(VK, ctx->getType(TK)), storage_(num) {}
 
   static bool classof(const Value *v) {
     return v->getKind() == VK;
   }
 
-  StorageType getValue() const {
+  ValueType getValue() const {
     return storage_;
   }
 
 private:
-  StorageType storage_;
+  ValueType storage_;
 };
 
 class Instruction : public Value {
