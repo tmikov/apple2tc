@@ -12,22 +12,32 @@
 #include <cstdio>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace ir {
 
 class IRDumper {
 public:
-  explicit IRDumper(FILE *os);
+  explicit IRDumper(FILE *os, bool trees = true);
+  ~IRDumper();
 
   void dump(Module *mod);
   void dump(Function *func);
   void dump(BasicBlock *block);
-  void dump(Instruction *inst);
+  void dumpInstruction(Instruction *inst) {
+    dumpInstructionImpl(nullptr, inst);
+  }
 
   const std::string &name(Value *v);
 
 private:
+  using InstSet = std::unordered_set<Instruction *>;
+
   void dumpImpl(BasicBlock *bb);
+  /// Dump a basic block using tree representation.
+  void dumpBlockTrees(BasicBlock *bb);
+  void printTree(const InstSet &validTrees, Value *inst);
+  void dumpInstructionImpl(const InstSet *validTrees, Instruction *inst);
   void printOperand(Value *operand);
 
 protected:
@@ -36,6 +46,7 @@ protected:
 
 protected:
   FILE *os_;
+  bool trees_ = true;
 
 private:
   struct PerFunction {
