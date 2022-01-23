@@ -102,17 +102,17 @@ void IRC1::printPrologue() {
 static inline uint8_t ovf8(uint8_t res, uint8_t a, uint8_t b) {
   return (~(a ^ b) & (a ^ res)) >> 7;
 }
-static uint16_t adc_dec16(uint8_t a, uint8_t b) {
+static uint16_t adc_dec16(uint8_t a, uint8_t b, uint8_t cf) {
   uint8_t saveStatus = s_status;
-  s_status = 0;
+  s_status = cf;
   uint16_t res = adc_decimal(a, b);
   res |= s_status << 8;
   s_status = saveStatus;
   return res;
 }
-static uint16_t sbc_dec16(uint8_t a, uint8_t b) {
+static uint16_t sbc_dec16(uint8_t a, uint8_t b, uint8_t cf) {
   uint8_t saveStatus = s_status;
-  s_status = 0;
+  s_status = cf;
   uint16_t res = sbc_decimal(a, b);
   res |= s_status << 8;
   s_status = saveStatus;
@@ -605,16 +605,18 @@ void IRC1::printOvf8(Instruction *inst) {
 void IRC1::printAdcDec16(Instruction *inst) {
   fprintf(
       os_,
-      "adc_dec16(%s, %s)",
+      "adc_dec16(%s, %s, %s)",
       formatOperand(inst->getOperand(0)).c_str(),
-      formatOperand(inst->getOperand(1)).c_str());
+      formatOperand(inst->getOperand(1)).c_str(),
+      formatOperand(inst->getOperand(2)).c_str());
 }
 void IRC1::printSbcDec16(Instruction *inst) {
   fprintf(
       os_,
-      "sbc_dec16(%s, %s)",
+      "sbc_dec16(%s, %s, %s)",
       formatOperand(inst->getOperand(0)).c_str(),
-      formatOperand(inst->getOperand(1)).c_str());
+      formatOperand(inst->getOperand(1)).c_str(),
+      formatOperand(inst->getOperand(2)).c_str());
 }
 void IRC1::printCmp8eq(Instruction *inst) {
   fprintf(
