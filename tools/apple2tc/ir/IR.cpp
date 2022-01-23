@@ -95,6 +95,35 @@ bool Instruction::hasSideEffects() const {
   }
 }
 
+bool Instruction::readsMemory() const {
+  switch (getKind()) {
+  case ValueKind::Peek8:
+  case ValueKind::RamPeek8:
+  case ValueKind::Peek16al:
+  case ValueKind::Peek16un:
+  case ValueKind::RamPeek16al:
+  case ValueKind::RamPeek16un:
+  case ValueKind::Pop8:
+  case ValueKind::RTS:
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool Instruction::writesMemory() const {
+  switch (getKind()) {
+  case ValueKind::Poke8:
+  case ValueKind::RamPoke8:
+  case ValueKind::Push8:
+  case ValueKind::JSR:
+  case ValueKind::JSRInd:
+    return true;
+  default:
+    return false;
+  }
+}
+
 BasicBlock::~BasicBlock() {
   instList_.destroyAll();
 }

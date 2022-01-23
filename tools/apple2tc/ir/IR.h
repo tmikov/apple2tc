@@ -266,6 +266,8 @@ public:
   }
 
   bool hasSideEffects() const;
+  bool readsMemory() const;
+  bool writesMemory() const;
 
   unsigned getNumOperands() const {
     return getOperands().size();
