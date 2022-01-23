@@ -1,0 +1,35 @@
+// Loaded binary at [$0300..$031C]
+// code labels: 3
+// data labels: 6
+M_90          EQU    $0090 ; xref $030D
+M_91          EQU    $0091 ; xref $030F
+M_92          EQU    $0092 ; xref $0311
+M_93          EQU    $0093 ; xref $0319
+M_0101          EQU    $0101 ; xref $0309
+M_1721          EQU    $1721 ; xref $0315
+; Code range [$0300-$031C]
+/*0300*/             org    $0300
+/*0300*/ START:                             ; xref
+/*0300*/             LDA    $C050            ; $C050
+/*0303*/             LDA    $C052            ; $C052
+/*0306*/             TSX
+/*0307*/             INX
+/*0308*/             INX
+/*0309*/             LDY    M_0101,X         ; $0101
+/*030C*/             INY
+/*030D*/             STY    M_90             ; $0090
+/*030F*/             LDA    M_91             ; $0091
+/*0311*/             STA    M_92             ; $0092
+/*0313*/             LDY    #$00             ; $0000
+/*0315*/             STY    M_1721           ; $1721
+/*0318*/             DEY
+/*0319*/             STY    M_93             ; $0093
+/*031B*/             BNE    L_0350           ; $0350
+/*031D*/ L_031D:                             ; xref START
+; ERROR: Invalid instruction
+/*031D*/             ???
+; Code range [$0350-$0350]
+/*0350*/             org    $0350
+/*0350*/ L_0350:                             ; xref START
+; ERROR: Invalid instruction
+/*0350*/             ???
