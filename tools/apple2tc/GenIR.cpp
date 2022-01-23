@@ -7,6 +7,7 @@
 #include "GenIR.h"
 
 #include "PubIR.h"
+#include "ir/IRDump.h"
 
 #include "apple2tc/apple2iodefs.h"
 
@@ -948,6 +949,6 @@ Module *genIR(const std::shared_ptr<Disas> &disas, ir::IRContext &ctx) {
   return genIR.run();
 }
 
-void dumpModule(ir::Module *mod) {
-  mod->dump();
+void dumpModule(ir::Module *mod, bool irTrees) {
+  ir::IRDumper(stdout, irTrees).dump(mod);
 }
