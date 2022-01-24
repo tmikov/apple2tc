@@ -6,7 +6,7 @@ function Func0001
                 StoreR8       A, 0x00
                 StoreR8       X, 0x00
                 StoreR8       Y, 0x00
-                StoreR8       SP, 0xff
+                StoreSP       0xff
                 StoreR8       STATUS_N, 0x00
                 StoreR8       STATUS_V, 0x00
                 StoreR8       STATUS_B, 0x00
@@ -17,7 +17,7 @@ function Func0001
                 Jmp           %BB2
 %BB2:  // [$0300] Pred(%BB1) Succ(%BB5, %BB3)
 /*$0300*/       AddCycles     40
-          %14 = LoadR8        SP
+          %14 = LoadSP
                 StoreR8       STATUS_NotZ, %14
           %16 = And8          %14, 0x80
                 StoreR8       STATUS_N, %16

@@ -3,11 +3,11 @@
 // data labels: 6
 function Func0001
 %BB1:  // Pred() Succ(%BB2)
-                StoreR8       SP, 0xff
+                StoreSP       0xff
                 Jmp           %BB2
 %BB2:  // [$0300] Pred(%BB1) Succ(%BB5, %BB3)
 /*$0300*/       AddCycles     40
-          %4  = LoadR8        SP
+          %4  = LoadSP
           %_  = And8          %4, 0x80
 /*$0301*/ %6  = Add8          %4, 0x01
           %_  = And8          %6, 0x80
