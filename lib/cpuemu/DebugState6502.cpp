@@ -62,6 +62,7 @@ void DebugState6502::printHistory() {
 
 void DebugState6502::clearCollectedData() {
   branchTargets_.clear();
+  allBranches_.clear();
   generations_.clear();
 }
 
@@ -318,6 +319,7 @@ Emu6502::StopReason DebugState6502::collectData(const Emu6502 *emu, uint16_t pc)
 
   if (instIsBranch(inst.kind, inst.addrMode) || inst.kind == CPUInstKind::RTS) {
     branchTargets_.insert(ea);
+    allBranches_.insert(BranchDesc{.origin = pc, .target = ea});
     if (limit_ && icount_ >= limit_)
       return Emu6502::StopReason::StopRequesed;
     ++icount_;

@@ -186,6 +186,25 @@ private:
   /// Collected branch targets.
   std::unordered_set<uint16_t> branchTargets_{};
 
+  struct BranchDesc {
+    uint16_t origin;
+    uint16_t target;
+    bool operator==(BranchDesc other) const {
+      return memcmp(this, &other, sizeof(*this)) == 0;
+    }
+  };
+  struct HashBranchDesc {
+    size_t operator()(BranchDesc bd) const {
+      static_assert(sizeof(uint32_t) == sizeof(BranchDesc), "BranchDesc should be 32 bits");
+      uint32_t res;
+      memcpy(&res, &bd, sizeof(res));
+      return res;
+    }
+  };
+
+  /// All branches.
+  std::unordered_set<BranchDesc, HashBranchDesc> allBranches_{};
+
   /// Keep track of addresses that are written to in the current generation.
   BitSet memWritten_{0x10000};
   /// Starts of instructions written to and executed but not written again.

@@ -33,10 +33,6 @@ void DebugState6502::finishCollection(const Emu6502 *emu, std::ostream &os) {
   mode_ = Mode::None;
 
   saveGeneration(emu, emu->getRegs());
-  std::vector<uint16_t> branchTargets;
-  branchTargets.reserve(branchTargets_.size());
-  branchTargets.insert(branchTargets.begin(), branchTargets_.begin(), branchTargets_.end());
-  std::sort(branchTargets.begin(), branchTargets.end());
 
   json root;
 
@@ -50,7 +46,42 @@ void DebugState6502::finishCollection(const Emu6502 *emu, std::ostream &os) {
   stats["stackUnderflow"] = collected_.stackUnderflow;
 
   root["BaseStats"] = stats;
-  root["BranchTargets"] = json(branchTargets);
+  // BranchTargets.
+  {
+    std::vector<uint16_t> branchTargets;
+    branchTargets.reserve(branchTargets_.size());
+    branchTargets.insert(branchTargets.begin(), branchTargets_.begin(), branchTargets_.end());
+    std::sort(branchTargets.begin(), branchTargets.end());
+    root["BranchTargets"] = json(branchTargets);
+  }
+  // Branches.
+  {
+    std::vector<BranchDesc> allBranches;
+    allBranches.reserve(allBranches_.size());
+    allBranches.insert(allBranches.begin(), allBranches_.begin(), allBranches_.end());
+    // Sort by
+    std::sort(allBranches.begin(), allBranches.end(), [](BranchDesc a, BranchDesc b) {
+      /// Sorts first by origin, then by target.
+      return a.origin < b.origin || a.origin == b.origin && a.target < b.target;
+    });
+
+    json branches = json::object();
+    json targets{};
+    bool first = true;
+    BranchDesc lastDesc = {0, 0};
+    for (auto bd : allBranches) {
+      if (!first && bd.origin != lastDesc.origin) {
+        branches[std::to_string(lastDesc.origin)] = targets;
+        targets.clear();
+      }
+      first = false;
+      targets.push_back(bd.target);
+      lastDesc = bd;
+    }
+    if (!first)
+      branches[std::to_string(lastDesc.origin)] = targets;
+    root["Branches"] = branches;
+  }
 
   json jsonGens;
   for (const auto &gen : generations_) {
