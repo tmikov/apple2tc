@@ -17,7 +17,7 @@ using namespace ir;
 class GenIR {
   std::shared_ptr<Disas> dis_;
   const RuntimeData *const runData_;
-  const RuntimeData::BaseStats * const baseStats_;
+  const RuntimeData::BaseStats *const baseStats_;
   IRContext *const ctx_;
   IRBuilder builder_;
 
@@ -40,9 +40,14 @@ public:
   Module *run();
 
 private:
+  const std::vector<uint16_t> *branchTargetsFrom(uint16_t addr) const {
+    return runData_ ? runData_->branchTargetsFrom(addr) : nullptr;
+  }
+
   void genAsmBlock(const AsmBlock &asmBlock);
   void genInst(uint16_t pc, const CPUInst &inst, const AsmBlock &asmBlock);
 
+  void addBranchTargets(Instruction * inst, const std::vector<uint16_t> *targets);
   BasicBlock *createBB(uint32_t addr, bool real);
   BasicBlock *createAbortBlock(uint16_t target, uint8_t reason);
   BasicBlock *basicBlockFor(const AsmBlock *asmBlock);

@@ -238,10 +238,6 @@ protected:
     assert(block != nullptr && "Every instruction must belong to a block");
   }
 
-  void pushOperand(Value *v) {
-    getOperands().push_back(v);
-  }
-
   inline OperandList &getOperands();
   inline const OperandList &getOperands() const;
 
@@ -252,6 +248,10 @@ protected:
 public:
   static bool classof(const Value *v) {
     return v->isInstruction();
+  }
+
+  void pushOperand(Value *v) {
+    getOperands().push_back(v);
   }
 
   void eraseFromBasicBlock();

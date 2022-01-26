@@ -187,7 +187,9 @@ IR_INST2(JSR, Void, BasicBlock, BasicBlock)
 
 IR_INST1(JmpInd, Void, IndBasicBlock)
 IR_INST2(JSRInd, Void, IndBasicBlock, BasicBlock)
-IR_INST0(RTS, Void)
+// Note: we need to add an unused operand to RTS because otherwise it has
+// capacity 0, which disallows adding of more operands.
+IR_INST1(RTS, Void, U8)
 IR_RANGE(IndirectBranch, JmpInd, RTS)
 
 /// Abort(pc, target_pc, reason)

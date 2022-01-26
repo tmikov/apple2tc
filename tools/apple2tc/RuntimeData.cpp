@@ -61,6 +61,17 @@ std::unique_ptr<RuntimeData> RuntimeData::load(const std::string &path) {
 
   res->branchTargets = static_cast<std::vector<uint16_t>>(root["BranchTargets"]);
 
+  it = root.find("Branches");
+  if (it != root.end()) {
+    for (auto &[originStr, jsonTargets] : it->items()) {
+      auto origin = (uint16_t)std::stoul(originStr);
+      std::vector<uint16_t> targets = jsonTargets;
+      // Make sure the targets are sorted.
+      std::sort(targets.begin(), targets.end());
+      res->allBranches.try_emplace(origin, std::move(targets));
+    }
+  }
+
   for (const json &jgen : root["generations"]) {
     res->generations.emplace_back();
 

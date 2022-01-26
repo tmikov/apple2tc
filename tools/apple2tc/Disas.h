@@ -279,11 +279,19 @@ struct RuntimeData {
   std::unique_ptr<BaseStats> baseStats{};
   /// All branch targets seen at runtime, sorted by address.
   std::vector<uint16_t> branchTargets;
+  /// All branches indexed by address of the origin.
+  std::unordered_map<uint16_t, std::vector<uint16_t>> allBranches{};
   /// All executable generations.
   std::vector<Generation> generations;
 
   /// Return the start regs if present or nullptr.
   const Regs *getStartRegs() const;
+
+  /// Return the branch targets for a given instruction, or nullptr.
+  const std::vector<uint16_t> *branchTargetsFrom(uint16_t origin) const {
+    auto it = allBranches.find(origin);
+    return it != allBranches.end() ? &it->second : nullptr;
+  }
 
   static std::unique_ptr<RuntimeData> load(const std::string &path);
 };

@@ -94,6 +94,7 @@ void GenIR::genInst(uint16_t pc, const CPUInst &inst, const AsmBlock &asmBlock) 
   }
 
   Value *tmp1, *tmp2;
+  const std::vector<uint16_t> *targets = nullptr;
   switch (inst.kind) {
   case CPUInstKind::ADC:
     emitADC(inst);
@@ -209,18 +210,28 @@ void GenIR::genInst(uint16_t pc, const CPUInst &inst, const AsmBlock &asmBlock) 
 
   case CPUInstKind::JMP:
     tmp1 = genAddr(inst);
-    if (auto *u16 = dyn_cast<LiteralU16>(tmp1))
+    targets = branchTargetsFrom(pc);
+    if (auto *u16 = dyn_cast<LiteralU16>(tmp1)) {
       builder_.createJmp(resolveBranch(u16->getValue()));
-    else
-      builder_.createJmpInd(builder_.createCPUAddr2BB(tmp1));
+      if (targets && targets->size() != 1)
+        fprintf(stderr, "Warning: $%04x JMP has %zu branch targets\n", pc, targets->size());
+    } else {
+      auto *jmp = builder_.createJmpInd(builder_.createCPUAddr2BB(tmp1));
+      addBranchTargets(jmp, targets);
+    }
     break;
   case CPUInstKind::JSR:
     tmp1 = genAddr(inst);
     tmp2 = resolveFallBranch(asmBlock);
-    if (auto *u16 = dyn_cast<LiteralU16>(tmp1))
+    targets = branchTargetsFrom(pc);
+    if (auto *u16 = dyn_cast<LiteralU16>(tmp1)) {
+      if (targets && targets->size() != 1)
+        fprintf(stderr, "Warning: $%04x JSR has %zu branch targets\n", pc, targets->size());
       builder_.createJSR(resolveBranch(u16->getValue()), tmp2);
-    else
-      builder_.createJSRInd(builder_.createCPUAddr2BB(tmp1), tmp2);
+    } else {
+      auto *jsr = builder_.createJSRInd(builder_.createCPUAddr2BB(tmp1), tmp2);
+      addBranchTargets(jsr, targets);
+    }
     break;
   case CPUInstKind::BRK:
     if (!brkBB_) {
@@ -335,13 +346,17 @@ void GenIR::genInst(uint16_t pc, const CPUInst &inst, const AsmBlock &asmBlock) 
     emitDecodeFlags(builder_.createPop8());
     break;
 
-  case CPUInstKind::RTI:
+  case CPUInstKind::RTI: {
     emitDecodeFlags(builder_.createPop8());
-    builder_.createRTS();
+    auto *rts = builder_.createRTS(builder_.getLiteralU8(0));
+    addBranchTargets(rts, branchTargetsFrom(pc));
     break;
-  case CPUInstKind::RTS:
-    builder_.createRTS();
+  }
+  case CPUInstKind::RTS: {
+    auto *rts = builder_.createRTS(builder_.getLiteralU8(0));
+    addBranchTargets(rts, branchTargetsFrom(pc));
     break;
+  }
 
   case CPUInstKind::STA:
     tmp1 = genAddr(inst);
@@ -383,6 +398,14 @@ void GenIR::genInst(uint16_t pc, const CPUInst &inst, const AsmBlock &asmBlock) 
     assert(false && "Unsupported instruction");
     abort();
   }
+}
+
+void GenIR::addBranchTargets(Instruction *inst, const std::vector<uint16_t> *targets) {
+  assert(inst->isIndirectBranch());
+  if (!targets)
+    return;
+  for (auto target : *targets)
+    inst->pushOperand(resolveBranch(target));
 }
 
 BasicBlock *GenIR::createBB(uint32_t addr, bool real) {
@@ -585,7 +608,10 @@ void GenIR::emitCmpCPUReg(const CPUInst &inst, CPURegKind cpuReg) {
 }
 
 void GenIR::emitJCond(bool jTrue, const CPUInst &inst, Value *cond, const AsmBlock &asmBlock) {
+  auto *targets = branchTargetsFrom(pc_);
   if (!selfModOperand_) {
+    if (targets && targets->size() > 2)
+      fprintf(stderr, "Warning: $%04x JCond has %zu branch targets\n", pc_, targets->size());
     auto *target = resolveBranch(inst.operand);
     auto *fall = resolveFallBranch(asmBlock);
     if (jTrue)
@@ -611,7 +637,9 @@ void GenIR::emitJCond(bool jTrue, const CPUInst &inst, Value *cond, const AsmBlo
   // Next instruction address.
   auto *nextAddr = builder_.getLiteralU16(pc_ + 2);
   // Indirect jump to brOffset + nextAddr.
-  builder_.createJmpInd(builder_.createCPUAddr2BB(builder_.createAdd16(nextAddr, brOffset)));
+  auto *jmp =
+      builder_.createJmpInd(builder_.createCPUAddr2BB(builder_.createAdd16(nextAddr, brOffset)));
+  addBranchTargets(jmp, targets);
 }
 
 void GenIR::emitWrite(const CPUInst &inst, Value *addr, Value *value) {
