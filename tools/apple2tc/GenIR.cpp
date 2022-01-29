@@ -938,8 +938,10 @@ bool GenIR::isAddrNonIO(Value *addr, unsigned width) {
   return !classifyMemoryAddr(addr, width).overlaps(kIORange);
 }
 
-std::shared_ptr<ir::IRContext> newIRContext() {
-  return std::make_shared<IRContext>();
+std::shared_ptr<ir::IRContext> newIRContext(unsigned verbosity) {
+  auto res = std::make_shared<IRContext>();
+  res->setVerbosity(verbosity);
+  return res;
 }
 
 Module *genIR(const std::shared_ptr<Disas> &disas, ir::IRContext &ctx) {

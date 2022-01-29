@@ -17,7 +17,7 @@ class Module;
 
 class Disas;
 
-std::shared_ptr<ir::IRContext> newIRContext();
+std::shared_ptr<ir::IRContext> newIRContext(unsigned verbosity);
 ir::Module *genIR(const std::shared_ptr<Disas> &disas, ir::IRContext &ctx);
 void dumpModule(ir::Module *mod, bool irTrees);
 

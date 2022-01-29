@@ -53,6 +53,7 @@ static std::tuple<std::vector<uint8_t>, uint16_t> loadInputBinary(const char *in
 static const char *s_appPath;
 static void printHelp() {
   fprintf(stderr, "syntax: %s [options] input_file\n", s_appPath);
+  fprintf(stderr, "  -v<number>          Verbosity level\n");
   fprintf(stderr, "  --rom               Input file is a ROM\n");
   fprintf(stderr, "  --asm               Generate asm listing (default)\n");
   fprintf(stderr, "  --simple-c          Generate simple C code\n");
@@ -73,6 +74,7 @@ int main(int argc, char **argv) {
   };
   bool noGenerations = false;
   Action action = Action::GenAsm;
+  unsigned verbosity = 0;
   unsigned optLevel = 0;
   bool irTrees = true;
   s_appPath = argc ? argv[0] : "apple2tc";
@@ -81,6 +83,10 @@ int main(int argc, char **argv) {
   std::string runDataPath;
   bool rom = false;
   for (int i = 1; i < argc; ++i) {
+    if (strncmp(argv[i], "-v", 2) == 0 && strlen(argv[i]) == 3 && isdigit(argv[i][2])) {
+      verbosity = argv[i][2] - '0';
+      continue;
+    }
     if (strcmp(argv[i], "--rom") == 0) {
       rom = true;
       continue;
@@ -160,7 +166,7 @@ int main(int argc, char **argv) {
       break;
     case Action::GenIR:
     case Action::GenIRC1: {
-      auto irCtx = newIRContext();
+      auto irCtx = newIRContext(verbosity);
       auto *mod = genIR(dis, *irCtx);
       if (optLevel > 0)
         localCPURegSSA(mod);

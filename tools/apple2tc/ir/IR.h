@@ -126,6 +126,13 @@ public:
     return cpuRegs_[(unsigned)kind].get();
   }
 
+  unsigned int getVerbosity() const {
+    return verbosity_;
+  }
+  void setVerbosity(unsigned int verbosity) {
+    verbosity_ = verbosity;
+  }
+
 private:
   CircularList<Module> moduleList_{};
   std::vector<Type> types_{};
@@ -133,6 +140,8 @@ private:
   std::unordered_map<uint16_t, LiteralU16> u16_{};
   std::unordered_map<uint32_t, LiteralU32> u32_{};
   std::vector<std::unique_ptr<CPUReg>> cpuRegs_{};
+
+  unsigned verbosity_ = 0;
 };
 
 using OperandList = ValueListBase<Value, Instruction>;
