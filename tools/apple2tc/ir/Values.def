@@ -44,6 +44,7 @@
 #endif
 
 IR_TYPE(Void)
+IR_TYPE(Function)
 IR_TYPE(BasicBlock)
 IR_TYPE(IndBasicBlock)
 IR_TYPE(CPUReg8)
@@ -76,7 +77,7 @@ IR_CPUREG(STATUS_NotZ, CPUReg8)
 IR_CPUREG(STATUS_C, CPUReg8)
 
 IR_VALUE(Module, Void)
-IR_VALUE(Function, Void)
+IR_VALUE(Function, Function)
 IR_VALUE(BasicBlock, BasicBlock)
 
 IR_VALUE(LiteralU8, U8)
@@ -180,6 +181,9 @@ IR_INST2(DecodeFlag, U8, U8, U8)
 /// Convert a CPU address to an "indirect basic block".
 IR_INST1(CPUAddr2BB, IndBasicBlock, U16)
 
+IR_INST1(Call, Void, Function)
+
+IR_INST0(Return, Void)
 IR_INST1(Jmp, Void, BasicBlock)
 IR_INST3(JTrue, Void, U8, BasicBlock, BasicBlock)
 IR_INST3(JFalse, Void, U8, BasicBlock, BasicBlock)
@@ -194,7 +198,7 @@ IR_RANGE(IndirectBranch, JmpInd, RTS)
 
 /// Abort(pc, target_pc, reason)
 IR_INST3(Abort, Void, U16, U16, U8)
-IR_RANGE(Terminator, Jmp, Abort)
+IR_RANGE(Terminator, Return, Abort)
 
 IR_RANGE(Instruction, LoadR8, Abort)
 

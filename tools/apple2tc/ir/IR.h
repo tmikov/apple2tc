@@ -561,10 +561,10 @@ IteratorRange<BasicBlock::SuccIterator> successors(BasicBlock &bb);
 class Function : public Value {
   friend class Module;
   explicit Function(IRContext *ctx, Module *module)
-      : Value(ValueKind::Function, ctx->getVoidType()), module_(module) {}
+      : Value(ValueKind::Function, ctx->getType(TypeKind::Function)), module_(module) {}
 
 public:
-  ~Function();
+  ~Function() override;
 
   static bool classof(const Value *v) {
     return v->getKind() == ValueKind::Function;

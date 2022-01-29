@@ -315,6 +315,7 @@ static unsigned addr_to_block_id(uint16_t from_pc, uint16_t addr) {
 static const char *getCTypeName(TypeKind type) {
   switch (type) {
   case TypeKind::Void:
+  case TypeKind::Function:
   case TypeKind::BasicBlock:
   case TypeKind::CPUReg8:
   case TypeKind::CPUReg16:
@@ -887,6 +888,12 @@ void IRC1::printCPUAddr2BB(Instruction *inst) {
       "addr_to_block_id(0x%04x, %s)",
       inst->getAddress().value_or(0xFFFF),
       formatOperand(inst->getOperand(0)).c_str());
+}
+void IRC1::printCall(Instruction *inst) {
+  PANIC_ABORT("Call not implemented");
+}
+void IRC1::printReturn(Instruction *inst) {
+  PANIC_ABORT("Return not implemented");
 }
 void IRC1::printJmp(Instruction *inst) {
   printBranchTarget(inst);
