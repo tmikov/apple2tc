@@ -19,12 +19,17 @@
 
 using namespace ir;
 
+class IRC1Mod;
+
 // Generates a straight-forward 1-to1 mapping from IR to C.
 class IRC1 {
+  IRC1Mod *const c1mod_;
   IRContext *const ctx_;
   Module *const mod_;
+  Function *const func_;
   FILE *const os_;
   bool const trees_;
+  const char *name_;
 
   std::string obuf_{};
 
@@ -32,6 +37,9 @@ class IRC1 {
   std::unordered_map<const BasicBlock *, unsigned> blockIDs_{};
   /// Next blockID to assign.
   unsigned nextBlockID_ = 0;
+
+  /// Blocks for which we require CPU address mapping.
+  std::vector<BasicBlock *> sortedDynamicBlocks_{};
 
   /// Descriptor of a single temporary variable.
   struct TmpVar {
@@ -58,14 +66,23 @@ class IRC1 {
   // A helper class for allocating registers in a basic block.
   class BBAllocator;
 
-public:
-  IRC1(Module *mod, FILE *os, bool trees)
-      : ctx_(mod->getContext()), mod_(mod), os_(os), trees_(trees) {}
-  ~IRC1() = default;
+  /// The next basic block when printing the current one.
+  BasicBlock *nextBB_ = nullptr;
 
-  void run();
+public:
+  IRC1(IRC1Mod *c1mod, Function *func, FILE *os, bool trees);
+  ~IRC1();
+
+  void runFunc();
 
 private:
+  void scanForDynamicBlocks();
+
+  /// Whether the function needs "dynamic basic blocks".
+  bool needDynamicBlocks() const {
+    return !sortedDynamicBlocks_.empty();
+  }
+
   /// Return an existing or assign a new block ID.
   unsigned blockID(const Value *bb);
 
@@ -75,23 +92,45 @@ private:
   const TmpVar *varFor(const Instruction *inst);
 
   /// Allocate temporaries to all values.
-  void regAlloc(Function *func);
+  void regAlloc();
   /// Register allocation in a basic block in non-tree mode.
   void regAllocBB(BasicBlock *bb);
   /// Register allocation in a basic block in tree mode.
   void regAllocBBTrees(BasicBlock *bb);
 
-  void printPrologue();
-  void printEpilogue();
-  void printAddr2BlockMap(const std::vector<BasicBlock *> &sortedBlocks);
+  void printAddr2BlockMap();
   void printBB(BasicBlock *bb);
   std::string formatInst(Instruction *inst);
   void printInst(Instruction *inst);
   std::string formatOperand(Value *operand);
 
-  /// Print setting of the branchTarget flag, if necessary.
-  void printBranchTarget(Instruction *inst);
+  /// Return true if this instruction needs to set branchTarget = true.
+  bool needBranchTarget(Instruction *inst);
+  /// Print setting of the branchTarget flag, if necessary. Return true if
+  /// printed.
+  bool printBranchTarget(Instruction *inst);
 
 #define IR_INST(name, type) void print##name(Instruction *inst);
 #include "ir/Values.def"
+};
+
+class IRC1Mod {
+  IRContext *const ctx_;
+  Module *const mod_;
+  FILE *const os_;
+  bool const trees_;
+
+  std::unordered_set<std::string> names_{};
+  std::unordered_map<Function *, const std::string *> funcNames_{};
+public:
+  IRC1Mod(Module *mod, FILE *os, bool trees)
+      : ctx_(mod->getContext()), mod_(mod), os_(os), trees_(trees) {}
+  ~IRC1Mod() = default;
+
+  void run();
+  const char *getName(Function *func) const;
+
+private:
+  void printPrologue();
+  void printEpilogue();
 };

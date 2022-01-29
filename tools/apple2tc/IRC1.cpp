@@ -7,12 +7,129 @@
 
 #include "IRC1.h"
 
+#include "apple2tc/SaveAndRestore.h"
 #include "apple2tc/apple2iodefs.h"
 #include "apple2tc/d6502.h"
 #include "apple2tc/support.h"
-#include "apple2tc/SaveAndRestore.h"
 
 #include <cstdarg>
+
+static inline constexpr bool BLOCKMAP_BSEARCH = true;
+
+void IRC1Mod::printPrologue() {
+  fprintf(os_, "\n#include \"apple2tc/system2-inc.h\"\n\n");
+
+  for (auto const &mr : mod_->getDisas()->memRanges()) {
+    unsigned len = mr.to - mr.from + 1;
+    fprintf(os_, "static const uint8_t s_mem_%04x[0x%04x];\n", mr.from, len);
+  }
+
+  fprintf(os_, "\nvoid init_emulated(void) {\n");
+  for (auto const &mr : mod_->getDisas()->memRanges()) {
+    unsigned len = mr.to - mr.from + 1;
+    fprintf(os_, "  memcpy(s_ram + 0x%04x, s_mem_%04x, 0x%04x);\n", mr.from, mr.from, len);
+  }
+
+  fprintf(os_, "}\n");
+
+  fprintf(os_, R"(
+static inline uint8_t ovf8(uint8_t res, uint8_t a, uint8_t b) {
+  return (~(a ^ b) & (a ^ res)) >> 7;
+}
+static uint16_t adc_dec16(uint8_t a, uint8_t b, uint8_t cf) {
+  struct ResAndStatus res = adc_decimal(a, b, cf);
+  return res.result | (res.status << 8);
+}
+static uint16_t sbc_dec16(uint8_t a, uint8_t b, uint8_t cf) {
+  struct ResAndStatus res = sbc_decimal(a, b, cf);
+  return res.result | (res.status << 8);
+}
+)");
+  if (BLOCKMAP_BSEARCH) {
+    fprintf(os_, "%s", R"(
+static int cmp_map_addr(const void *a, const void *b) {
+  return *((const int *)a) - *((const int *)b);
+}
+
+static unsigned
+addr_to_block_id(uint16_t from_pc, uint16_t addr, const unsigned *block_map, size_t length) {
+  unsigned uaddr = addr;
+  const unsigned *p =
+      (const unsigned *)bsearch(&uaddr, block_map, length, sizeof(unsigned) * 2, cmp_map_addr);
+  if (p)
+    return p[1];
+  fprintf(stderr, "Unknown address $%04X\n", addr);
+  error_handler(from_pc);
+  abort();
+};
+)");
+  }
+}
+
+void IRC1Mod::printEpilogue() {
+  for (auto const &mr : mod_->getDisas()->memRanges()) {
+    unsigned len = mr.to - mr.from + 1;
+    fprintf(os_, "static const uint8_t s_mem_%04x[0x%04x] = {", mr.from, len);
+    for (unsigned i = 0; i != len; ++i) {
+      if (i % 16 == 0)
+        fprintf(os_, "\n  ");
+      else
+        fputc(' ', os_);
+      fprintf(os_, "0x%02X", mod_->getDisas()->peek(mr.from + i));
+      if (i != len - 1)
+        fputc(',', os_);
+    }
+    fputc('\n', os_);
+    fprintf(os_, "};\n");
+  }
+}
+
+void IRC1Mod::run() {
+  unsigned numFunctions = 0;
+
+  // Name all functions.
+  for (auto &func : mod_->functions()) {
+    ++numFunctions;
+    if (func.getEntryBlock()->getAddress().has_value()) {
+      auto res = names_.insert(format("func_%04x", *func.getEntryBlock()->getAddress()));
+      if (!res.second) {
+        res = names_.insert(
+            format("func_%04x_%u", *func.getEntryBlock()->getAddress(), numFunctions));
+        assert(res.second && "The generated name should be unique");
+      }
+      funcNames_.try_emplace(&func, &*res.first);
+    } else {
+      auto res = names_.insert(format("func_t%03u", numFunctions));
+      (void)res;
+      assert(res.second && "The generated name should be unique");
+      funcNames_.try_emplace(&func, &*res.first);
+    }
+  }
+
+  printPrologue();
+
+  fprintf(os_, "\n");
+  for (auto &func : mod_->functions())
+    fprintf(os_, "void %s(bool adjust_sp);\n", getName(&func));
+
+  fprintf(os_, "\n");
+  fprintf(os_, "static void emulated_entry_point(void) {\n");
+  fprintf(os_, "  %s(false);\n", getName(mod_->getStartFunction()));
+  fprintf(os_, "}\n");
+
+  for (auto &func : mod_->functions()) {
+    fprintf(os_, "\n");
+    IRC1(this, &func, os_, trees_).runFunc();
+  }
+
+  printEpilogue();
+}
+
+const char *IRC1Mod::getName(Function *func) const {
+  auto it = funcNames_.find(func);
+  assert(it != funcNames_.end() && "All functions must be named");
+  return it->second->c_str();
+}
 
 unsigned IRC1::blockID(const Value *bb) {
   auto res = blockIDs_.try_emplace(cast<const BasicBlock>(bb), 0);
@@ -44,8 +161,8 @@ const IRC1::TmpVar *IRC1::varFor(const Instruction *inst) {
   return it->second;
 }
 
-void IRC1::regAlloc(Function *func) {
-  for (auto &bb : func->basicBlocks()) {
+void IRC1::regAlloc() {
+  for (auto &bb : func_->basicBlocks()) {
     if (trees_)
       regAllocBBTrees(&bb);
     else
@@ -153,7 +270,7 @@ void IRC1::regAllocBBTrees(BasicBlock *bb) {
   // Perform register allocation, now that trees have been identified.
   BBAllocator allocator{*this};
   allocator.setTrace(bb->getAddress().value_or(0) == 0x300 && bb->isRealAddress());
-  //allocator.setTrace(true);
+  // allocator.setTrace(true);
 
   std::vector<Instruction *> stack{};
 
@@ -190,69 +307,13 @@ void IRC1::regAllocBBTrees(BasicBlock *bb) {
   assert(allocator.empty() && "For now we don't keep values alive across blocks");
 }
 
-void IRC1::printPrologue() {
-  fprintf(os_, "\n#include \"apple2tc/system-inc.h\"\n\n");
+void IRC1::printAddr2BlockMap() {
+  if (sortedDynamicBlocks_.empty())
+    return;
 
-  for (auto const &mr : mod_->getDisas()->memRanges()) {
-    unsigned len = mr.to - mr.from + 1;
-    fprintf(os_, "static const uint8_t s_mem_%04x[0x%04x];\n", mr.from, len);
-  }
-
-  fprintf(os_, "\nvoid init_emulated(void) {\n");
-  for (auto const &mr : mod_->getDisas()->memRanges()) {
-    unsigned len = mr.to - mr.from + 1;
-    fprintf(os_, "  memcpy(s_ram + 0x%04x, s_mem_%04x, 0x%04x);\n", mr.from, mr.from, len);
-  }
-
-  fprintf(os_, "}\n");
-
-  fprintf(os_, R"(
-static inline uint8_t ovf8(uint8_t res, uint8_t a, uint8_t b) {
-  return (~(a ^ b) & (a ^ res)) >> 7;
-}
-static uint16_t adc_dec16(uint8_t a, uint8_t b, uint8_t cf) {
-  uint8_t saveStatus = s_status;
-  s_status = cf;
-  uint16_t res = adc_decimal(a, b);
-  res |= s_status << 8;
-  s_status = saveStatus;
-  return res;
-}
-static uint16_t sbc_dec16(uint8_t a, uint8_t b, uint8_t cf) {
-  uint8_t saveStatus = s_status;
-  s_status = cf;
-  uint16_t res = sbc_decimal(a, b);
-  res |= s_status << 8;
-  s_status = saveStatus;
-  return res;
-}
-)");
-}
-
-void IRC1::printEpilogue() {
-  for (auto const &mr : mod_->getDisas()->memRanges()) {
-    unsigned len = mr.to - mr.from + 1;
-    fprintf(os_, "static const uint8_t s_mem_%04x[0x%04x] = {", mr.from, len);
-    for (unsigned i = 0; i != len; ++i) {
-      if (i % 16 == 0)
-        fprintf(os_, "\n  ");
-      else
-        fputc(' ', os_);
-      fprintf(os_, "0x%02X", mod_->getDisas()->peek(mr.from + i));
-      if (i != len - 1)
-        fputc(',', os_);
-    }
-    fputc('\n', os_);
-    fprintf(os_, "};\n");
-  }
-}
-
-static inline constexpr bool BLOCKMAP_BSEARCH = true;
-
-void IRC1::printAddr2BlockMap(const std::vector<BasicBlock *> &sortedBlocks) {
   std::vector<std::pair<uint16_t, unsigned>> map{};
   std::optional<uint32_t> lastAddr;
-  for (auto *bb : sortedBlocks) {
+  for (auto *bb : sortedDynamicBlocks_) {
     if (!bb->getAddress() || !bb->isRealAddress())
       continue;
     uint32_t addr = *bb->getAddress();
@@ -263,8 +324,8 @@ void IRC1::printAddr2BlockMap(const std::vector<BasicBlock *> &sortedBlocks) {
     map.emplace_back(addr, blockID(bb));
   }
 
-  if (BLOCKMAP_BSEARCH) {
-    fprintf(os_, "static const unsigned s_block_map[] = {");
+  if (map.size() > 8) {
+    fprintf(os_, "static const unsigned s_block_map_%s[] = {", name_);
     static constexpr unsigned ROW = 5;
     for (unsigned i = 0; i != map.size(); ++i) {
       if (i % ROW == 0)
@@ -279,28 +340,18 @@ void IRC1::printAddr2BlockMap(const std::vector<BasicBlock *> &sortedBlocks) {
         fprintf(os_, ",");
     }
     fprintf(os_, "};\n");
-    fprintf(os_, "%s", R"(
-static int cmp_map_addr(const void *a, const void *b) {
-  return *((const int *)a) - *((const int *)b);
-}
-
-static unsigned addr_to_block_id(uint16_t from_pc, uint16_t addr) {
-  unsigned uaddr = addr;
-  const unsigned *p = (const unsigned *)bsearch(
-      &uaddr,
-      s_block_map,
-      sizeof(s_block_map) / (sizeof(unsigned) * 2),
-      sizeof(unsigned) * 2,
-      cmp_map_addr);
-  if (p)
-    return p[1];
-  fprintf(stderr, "Unknown address $%04X\n", addr);
-  error_handler(from_pc);
-  abort();
+    fprintf(
+        os_,
+        R"(
+static unsigned find_block_id_%s(uint16_t from_pc, uint16_t addr) {
+  return addr_to_block_id(from_pc, addr, s_block_map_%s, sizeof(s_block_map_%s) / (sizeof(unsigned) * 2));
 };
-)");
+)",
+        name_,
+        name_,
+        name_);
   } else {
-    fprintf(os_, "static unsigned addr_to_block_id(uint16_t from_pc, uint16_t addr) {\n");
+    fprintf(os_, "static unsigned find_block_id_%s(uint16_t from_pc, uint16_t addr) {\n", name_);
     fprintf(os_, "  switch(addr) {\n");
     for (const auto &p : map)
       fprintf(os_, "  case 0x%04x: return %u;\n", p.first, p.second);
@@ -335,58 +386,108 @@ static const char *getCTypeName(TypeKind type) {
   }
 }
 
-void IRC1::run() {
-  printPrologue();
+IRC1::IRC1(IRC1Mod *c1mod, Function *func, FILE *os, bool trees)
+    : c1mod_(c1mod),
+      ctx_(func->getModule()->getContext()),
+      mod_(func->getModule()),
+      func_(func),
+      os_(os),
+      trees_(trees),
+      name_(c1mod->getName(func)) {}
+
+IRC1::~IRC1() = default;
+
+void IRC1::runFunc() {
+  scanForDynamicBlocks();
+
+  auto sortedBlocks = sortBasicBlocksByAddress(func_->basicBlocks());
+  // "name" the blocks consistently.
+  for (auto *bb : sortedBlocks)
+    blockID(bb);
+
+  // Make sure the entry block is 0.
+  PANIC_ASSERT(blockID(sortedBlocks[0]) == 0);
+  if (!sortedDynamicBlocks_.empty())
+    fprintf(os_, "static unsigned find_block_id_%s(uint16_t from_pc, uint16_t addr);\n\n", name_);
+
+  regAlloc();
+
+  fprintf(os_, "void %s(bool adjust_sp) {\n", name_);
+  if (needDynamicBlocks())
+    fprintf(os_, "  unsigned block_id = 0;\n");
+  fprintf(os_, "  bool branchTarget = true;\n");
+
+  for (const auto &tmpVar : tmpVars_) {
+    fprintf(os_, "  %s %s;\n", getCTypeName(tmpVar.type), tmpVar.name.c_str());
+  }
   fprintf(os_, "\n");
-  unsigned numFunctions = 0;
-  for (auto &func : mod_->functions()) {
-    ++numFunctions;
-    PANIC_ASSERT_MSG(numFunctions < 2, "irc1 doesn't support more than one function");
 
-    auto sortedBlocks = sortBasicBlocksByAddress(func.basicBlocks());
-    // "name" the blocks consistently.
-    for (auto *bb : sortedBlocks)
-      blockID(bb);
-
-    // Make sure the entry block is 0.
-    PANIC_ASSERT(blockID(sortedBlocks[0]) == 0);
-    fprintf(os_, "static unsigned addr_to_block_id(uint16_t from_pc, uint16_t addr);\n\n");
-
-    regAlloc(&func);
-
-    fprintf(os_, "void run_emulated(unsigned run_cycles) {\n");
-    fprintf(os_, "  static unsigned block_id = 0;\n");
-    fprintf(os_, "  bool branchTarget = true;\n");
-
-    for (const auto &tmpVar : tmpVars_) {
-      fprintf(os_, "  %s %s;\n", getCTypeName(tmpVar.type), tmpVar.name.c_str());
-    }
-    fprintf(os_, "\n");
-
-    fprintf(
-        os_, "  for(unsigned start_cycles = s_cycles; s_cycles - start_cycles < run_cycles;) {\n");
+  fprintf(os_, "  if (adjust_sp)\n");
+  fprintf(os_, "    push16(0xffff); // Fake return address.\n");
+  fprintf(os_, "\n");
+  if (needDynamicBlocks()) {
+    fprintf(os_, "  for(;;) {\n");
     fprintf(os_, "    switch (block_id) {\n");
+  }
 
-    for (auto *bb : sortedBlocks)
-      printBB(bb);
+  for (auto it = sortedBlocks.begin(), end = sortedBlocks.end(); it != end; ++it) {
+    nextBB_ = it + 1 != end ? *(it + 1) : nullptr;
+    printBB(*it);
+  }
 
+  if (needDynamicBlocks()) {
     fprintf(os_, "    default:\n");
     fprintf(os_, "      fprintf(stderr, \"panic: unknown block_id: %%u\\n\", block_id);\n");
     fprintf(os_, "      abort();\n");
     fprintf(os_, "    }\n");
     fprintf(os_, "  }\n");
-    fprintf(os_, "}\n\n");
+  }
+  fprintf(os_, "}\n\n");
 
-    printAddr2BlockMap(sortedBlocks);
+  printAddr2BlockMap();
+}
+
+void IRC1::scanForDynamicBlocks() {
+  bool haveCPUAddr2BB = false;
+  std::unordered_set<BasicBlock *> dynamicBlocks{};
+
+  for (auto &bb : func_->basicBlocks()) {
+    for (auto &inst : bb.instructions()) {
+      if (inst.getKind() == ValueKind::CPUAddr2BB || inst.getKind() == ValueKind::RTS)
+        haveCPUAddr2BB = true;
+
+      int opIndex = -1;
+      switch (inst.getKind()) {
+      case ValueKind::JSR:
+      case ValueKind::JmpInd:
+      case ValueKind::RTS:
+        opIndex = 1;
+        break;
+      case ValueKind::JSRInd:
+        opIndex = 2;
+        break;
+      default:
+        break;
+      }
+      if (opIndex >= 0) {
+        for (unsigned numOps = inst.getNumOperands(); opIndex < numOps; ++opIndex)
+          dynamicBlocks.insert(cast<BasicBlock>(inst.getOperand(opIndex)));
+      }
+    }
   }
 
-  printEpilogue();
+  if (haveCPUAddr2BB)
+    sortedDynamicBlocks_ = sortBasicBlocksByAddress(dynamicBlocks, false);
 }
 
 void IRC1::printBB(BasicBlock *bb) {
-  fprintf(os_, "    case %u:", blockID(bb));
-  if (bb->getAddress())
-    fprintf(os_, "  // $%04X", *bb->getAddress());
+  if (needDynamicBlocks()) {
+    fprintf(os_, "    case %u:", blockID(bb));
+    if (bb->getAddress())
+      fprintf(os_, "  // $%04X", *bb->getAddress());
+  } else {
+    fprintf(os_, "bb_%u:", blockID(bb));
+  }
   fprintf(os_, "\n");
 
   std::optional<uint32_t> lastAddr{};
@@ -395,19 +496,36 @@ void IRC1::printBB(BasicBlock *bb) {
     if (trees_ && validTrees_.count(inst))
       continue;
 
-    fprintf(os_, "      ");
-    if (inst->getAddress() && inst->getAddress() != lastAddr)
-      fprintf(os_, "/*$%04X*/ ", *inst->getAddress());
-    else
-      fprintf(os_, "          ");
-    lastAddr = inst->getAddress();
-    if (auto *tmpVar = varFor(inst))
-      fprintf(os_, "%s = ", tmpVar->name.c_str());
+    // A little hack. Let the instruction print its own line, but only in
+    // a couple of places.
+    bool printOwnLine = false;
+    if (!needDynamicBlocks()) {
+      switch (inst->getKind()) {
+      case ValueKind::Jmp:
+      case ValueKind::JTrue:
+      case ValueKind::JFalse:
+        printOwnLine = true;
+      default:;
+      }
+    }
+
+    if (!printOwnLine) {
+      fprintf(os_, needDynamicBlocks() ? "      " : "  ");
+      if (inst->getAddress() && inst->getAddress() != lastAddr)
+        fprintf(os_, "/*$%04X*/ ", *inst->getAddress());
+      else
+        fprintf(os_, "          ");
+      lastAddr = inst->getAddress();
+      if (auto *tmpVar = varFor(inst))
+        fprintf(os_, "%s = ", tmpVar->name.c_str());
+    }
     printInst(inst);
-    fprintf(os_, ";\n");
+    if (!printOwnLine)
+      fprintf(os_, ";\n");
   }
 
-  fprintf(os_, "      break;\n");
+  if (needDynamicBlocks())
+    fprintf(os_, "      break;\n");
 }
 
 std::string IRC1::formatInst(Instruction *inst) {
@@ -504,18 +622,25 @@ static void bprintf(std::string &buf, const char *msg, ...) {
   va_end(ap);
 }
 
-void IRC1::printBranchTarget(Instruction *inst) {
+bool IRC1::needBranchTarget(Instruction *inst) {
   if (!inst->getAddress())
-    return;
+    return false;
   if (*inst->getAddress() > 0xFFFF)
-    return;
+    return false;
   uint16_t addr = *inst->getAddress();
   if (!mod_->getDisas()->cfindAsmBlockContaining(addr))
-    return;
+    return false;
   CPUOpcode opc = decodeOpcode(mod_->getDisas()->peek(addr));
   if (!instIsBranch(opc.kind, opc.addrMode))
-    return;
+    return false;
+  return true;
+}
+
+bool IRC1::printBranchTarget(Instruction *inst) {
+  if (!needBranchTarget(inst))
+    return false;
   bprintf(obuf_, "branchTarget = true; ");
+  return true;
 }
 
 void IRC1::printLoadR8(Instruction *inst) {
@@ -885,41 +1010,107 @@ void IRC1::printDecodeFlag(Instruction *inst) {
 void IRC1::printCPUAddr2BB(Instruction *inst) {
   bprintf(
       obuf_,
-      "addr_to_block_id(0x%04x, %s)",
+      "find_block_id_%s(0x%04x, %s)",
+      name_,
       inst->getAddress().value_or(0xFFFF),
       formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printCall(Instruction *inst) {
-  PANIC_ABORT("Call not implemented");
+  bprintf(obuf_, "%s(true)", c1mod_->getName(cast<Function>(inst->getOperand(0))));
 }
 void IRC1::printReturn(Instruction *inst) {
-  PANIC_ABORT("Return not implemented");
+  bprintf(obuf_, "if (adjust_sp) pop16(); return");
 }
 void IRC1::printJmp(Instruction *inst) {
-  printBranchTarget(inst);
-  bprintf(obuf_, "block_id = %s", formatOperand(inst->getOperand(0)).c_str());
+  if (needDynamicBlocks()) {
+    printBranchTarget(inst);
+    bprintf(obuf_, "block_id = %s", formatOperand(inst->getOperand(0)).c_str());
+  } else {
+    if (needBranchTarget(inst)) {
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "branchTarget = true;\n");
+    }
+    if (inst->getOperand(0) != nextBB_) {
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "goto bb_%s;\n", formatOperand(inst->getOperand(0)).c_str());
+    }
+  }
 }
 void IRC1::printJmpInd(Instruction *inst) {
   printBranchTarget(inst);
   bprintf(obuf_, "block_id = %s", formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printJTrue(Instruction *inst) {
-  printBranchTarget(inst);
-  bprintf(
-      obuf_,
-      "block_id = %s ? %s : %s",
-      formatOperand(inst->getOperand(0)).c_str(),
-      formatOperand(inst->getOperand(1)).c_str(),
-      formatOperand(inst->getOperand(2)).c_str());
+  if (needDynamicBlocks()) {
+    printBranchTarget(inst);
+    bprintf(
+        obuf_,
+        "block_id = %s ? %s : %s",
+        formatOperand(inst->getOperand(0)).c_str(),
+        formatOperand(inst->getOperand(1)).c_str(),
+        formatOperand(inst->getOperand(2)).c_str());
+  } else {
+    if (needBranchTarget(inst)) {
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "branchTarget = true;\n");
+    }
+    if (nextBB_ == inst->getOperand(1)) {
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "if (!%s)\n", formatOperand(inst->getOperand(0)).c_str());
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "  goto bb_%s;\n", formatOperand(inst->getOperand(2)).c_str());
+    } else if (nextBB_ == inst->getOperand(2)) {
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "if (%s)\n", formatOperand(inst->getOperand(0)).c_str());
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "  goto bb_%s;\n", formatOperand(inst->getOperand(1)).c_str());
+    } else {
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "if (%s)\n", formatOperand(inst->getOperand(0)).c_str());
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "  goto bb_%s;\n", formatOperand(inst->getOperand(1)).c_str());
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "else\n");
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "  goto bb_%s;\n", formatOperand(inst->getOperand(2)).c_str());
+    }
+  }
 }
 void IRC1::printJFalse(Instruction *inst) {
-  printBranchTarget(inst);
-  bprintf(
-      obuf_,
-      "block_id = !%s ? %s : %s",
-      formatOperand(inst->getOperand(0)).c_str(),
-      formatOperand(inst->getOperand(1)).c_str(),
-      formatOperand(inst->getOperand(2)).c_str());
+  if (needDynamicBlocks()) {
+    printBranchTarget(inst);
+    bprintf(
+        obuf_,
+        "block_id = !%s ? %s : %s",
+        formatOperand(inst->getOperand(0)).c_str(),
+        formatOperand(inst->getOperand(1)).c_str(),
+        formatOperand(inst->getOperand(2)).c_str());
+  } else {
+    if (needBranchTarget(inst)) {
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "branchTarget = true;\n");
+    }
+    if (nextBB_ == inst->getOperand(1)) {
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "if (%s)\n", formatOperand(inst->getOperand(0)).c_str());
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "  goto bb_%s;\n", formatOperand(inst->getOperand(2)).c_str());
+    } else if (nextBB_ == inst->getOperand(2)) {
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "if (!%s)\n", formatOperand(inst->getOperand(0)).c_str());
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "  goto bb_%s;\n", formatOperand(inst->getOperand(1)).c_str());
+    } else {
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "if (!%s)\n", formatOperand(inst->getOperand(0)).c_str());
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "  goto bb_%s;\n", formatOperand(inst->getOperand(1)).c_str());
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "else\n");
+      bprintf(obuf_, "%12s", "");
+      bprintf(obuf_, "  goto bb_%s;\n", formatOperand(inst->getOperand(2)).c_str());
+    }
+  }
 }
 void IRC1::printJSR(Instruction *inst) {
   auto *target = cast<BasicBlock>(inst->getOperand(0));
@@ -945,7 +1136,8 @@ void IRC1::printRTS(Instruction *inst) {
   printBranchTarget(inst);
   bprintf(
       obuf_,
-      "block_id = addr_to_block_id(0x%04x, pop16() + 1);",
+      "block_id = find_block_id_%s(0x%04x, pop16() + 1);",
+      name_,
       inst->getAddress().value_or(0xFFFF));
 }
 void IRC1::printAbort(Instruction *inst) {
@@ -959,5 +1151,5 @@ void IRC1::printAbort(Instruction *inst) {
 }
 
 void printIRC1(ir::Module *mod, FILE *os, bool trees) {
-  IRC1(mod, os, trees).run();
+  IRC1Mod(mod, os, trees).run();
 }
