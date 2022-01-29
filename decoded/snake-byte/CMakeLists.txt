@@ -8,6 +8,6 @@ link_libraries(decapplib)
 add_executable(snake-byte
   snake-byte.c ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   )
-#add_executable(snake-bytec1
-#  snake-bytec1.c ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
-#  )
+add_executable(snake-bytec1
+  snake-bytec1.c ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
+  )
