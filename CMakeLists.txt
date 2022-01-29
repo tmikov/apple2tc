@@ -15,6 +15,9 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 #add_link_options(-fsanitize=address,undefined)
 #add_compile_options(-fsanitize=address)
 #add_link_options(-fsanitize=address)
+#add_compile_options(-fsanitize=thread)
+#add_link_options(-fsanitize=thread)
+
 
 set(APPLE2TC_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(APPLE2TC_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
