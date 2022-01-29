@@ -372,3 +372,34 @@ bool simplify(Module *mod) {
   }
   return changed;
 }
+
+static bool simplifyCFG(Function *func) {
+  bool changed = false;
+  for (auto &rbb : func->basicBlocks()) {
+    BasicBlock *bb = &rbb;
+    Instruction *terminator = bb->getTerminator();
+    // Look for blocks ending with an unconditional Jmp, where the successor has a single
+    // predecessor.
+    if (!(terminator->getKind() == ValueKind::Jmp && terminator->getOperand(0)->getOnlyUser()))
+      continue;
+
+    auto *nextBlock = cast<BasicBlock>(terminator->getOperand(0));
+    auto insts = nextBlock->instructions();
+    for (auto it = insts.begin(); it != insts.end();) {
+      auto cur = it++;
+      bb->importInstruction(&*cur);
+    }
+
+    bb->eraseInstruction(terminator);
+    func->eraseBasicBlock(nextBlock);
+    changed = true;
+  }
+  return changed;
+}
+
+bool simplifyCFG(Module *mod) {
+  bool changed = false;
+  for (auto &func : mod->functions())
+    changed |= simplifyCFG(&func);
+  return changed;
+}
