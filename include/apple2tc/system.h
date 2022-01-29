@@ -60,6 +60,7 @@ uint16_t ram_peek16(uint16_t addr);
 
 void init_emulated(void);
 void run_emulated(unsigned run_cycles);
+void shutdown_emulated(void);
 
 uint8_t io_peek(uint16_t addr);
 void io_poke(uint16_t addr, uint8_t value);

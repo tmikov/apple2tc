@@ -217,3 +217,5 @@ static uint8_t sbc_decimal(uint8_t a, uint8_t b) {
     ah -= 6;
   return (ah << 4) | (al & 15);
 }
+
+void shutdown_emulated(void) {}

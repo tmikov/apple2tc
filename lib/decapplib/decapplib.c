@@ -260,6 +260,7 @@ static void init_cb(void) {
 }
 
 static void cleanup_cb(void) {
+  shutdown_emulated();
   sg_shutdown();
   if (sound_enabled_)
     saudio_shutdown();
