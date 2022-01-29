@@ -182,6 +182,27 @@ Instruction *BasicBlock::getTerminator() {
   return !instList_.empty() && instList_.back().isTerminator() ? &instList_.back() : nullptr;
 }
 
+void BasicBlock::eraseInstruction(Instruction *inst) {
+  assert(inst->getBasicBlock() == this && "Erased instruction must belong to block");
+  assert(!inst->hasUsers() && "Instruction with users cannot be erased");
+  instList_.remove(inst);
+  inst->setBasicBlock(nullptr);
+  delete inst;
+}
+
+void BasicBlock::importInstruction(Instruction *inst) {
+  inst->getBasicBlock()->instList_.remove(inst);
+  instList_.push_back(inst);
+  inst->setBasicBlock(this);
+}
+
+IteratorRange<BasicBlock::PredInstIterator> predecessorInsts(BasicBlock &bb) {
+  auto users = bb.users();
+  return makeIteratorRange(
+      BasicBlock::PredInstIterator(users.begin(), users.end()),
+      BasicBlock::PredInstIterator(users.end()));
+}
+
 IteratorRange<BasicBlock::PredIterator> predecessors(BasicBlock &bb) {
   auto users = bb.users();
   return makeIteratorRange(
@@ -209,6 +230,20 @@ BasicBlock *Function::createBasicBlock() {
   auto *block = new BasicBlock(module_->getContext(), this);
   bbList_.push_back(block);
   return block;
+}
+
+void Function::importBasicBlock(BasicBlock *bb) {
+  bb->getFunction()->bbList_.remove(bb);
+  bbList_.push_back(bb);
+  bb->function_ = this;
+}
+
+void Function::eraseBasicBlock(BasicBlock *bb) {
+  assert(bb->getFunction() == this && "Erased BasicBlock must belong to function");
+  assert(!bb->hasUsers() && "BasicBlock with users cannot be erased");
+  bbList_.remove(bb);
+  bb->function_ = nullptr;
+  delete bb;
 }
 
 void Module::dump() {

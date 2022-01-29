@@ -420,6 +420,7 @@ public:
   /// participating in the CFG should always have a terminator.
   Instruction *getTerminator();
 
+  class PredInstIterator;
   class PredIterator;
   class SuccIterator;
 
@@ -430,13 +431,9 @@ public:
     return makeIteratorRange(instList_.rbegin(), instList_.rend());
   }
 
-  void eraseInstruction(Instruction *inst) {
-    assert(inst->getBasicBlock() == this && "Erased instruction must belong to block");
-    assert(!inst->hasUsers() && "Instruction with users cannot be erased");
-    instList_.remove(inst);
-    inst->setBasicBlock(nullptr);
-    delete inst;
-  }
+  void eraseInstruction(Instruction *inst);
+
+  void importInstruction(Instruction *inst);
 
   std::optional<uint32_t> const &getAddress() const {
     return address_;
@@ -466,37 +463,38 @@ private:
 };
 
 /// Iterator over the terminator instructions that are predecessors of this basic block.
-class BasicBlock::PredIterator {
+class BasicBlock::PredInstIterator {
 public:
-  PredIterator(
+  PredInstIterator(
       OperandList::UserListType::iterator const &begin,
       OperandList::UserListType::iterator const &end)
       : begin_(begin), end_(end) {
     skipNonTerminators();
   }
-  explicit PredIterator(OperandList::UserListType::iterator const &end) : begin_(end), end_(end) {}
+  explicit PredInstIterator(OperandList::UserListType::iterator const &end)
+      : begin_(end), end_(end) {}
 
-  bool operator==(const PredIterator &other) const {
+  bool operator==(const PredInstIterator &other) const {
     return begin_ == other.begin_;
   }
-  bool operator!=(const PredIterator &other) const {
+  bool operator!=(const PredInstIterator &other) const {
     return begin_ != other.begin_;
   }
 
-  PredIterator &operator++() {
+  PredInstIterator &operator++() {
     assert(begin_ != end_ && "++ past end iterator");
     ++begin_;
     skipNonTerminators();
     return *this;
   }
 
-  BasicBlock *operator->() const {
+  Instruction *operator->() const {
     assert(begin_ != end_ && "deref of end iterator");
-    return begin_->owner()->getBasicBlock();
+    return begin_->owner();
   }
-  BasicBlock &operator*() const {
+  Instruction &operator*() const {
     assert(begin_ != end_ && "deref of end iterator");
-    return *begin_->owner()->getBasicBlock();
+    return *begin_->owner();
   }
 
 private:
@@ -509,6 +507,37 @@ private:
 private:
   OperandList::UserListType::iterator begin_;
   OperandList::UserListType::iterator end_;
+};
+
+/// Iterator over the predecessor blocks of this basic block.
+class BasicBlock::PredIterator {
+  PredInstIterator it_;
+
+public:
+  PredIterator(
+      OperandList::UserListType::iterator const &begin,
+      OperandList::UserListType::iterator const &end)
+      : it_(begin, end) {}
+  explicit PredIterator(OperandList::UserListType::iterator const &end) : it_(end) {}
+
+  bool operator==(const PredIterator &other) const {
+    return it_ == other.it_;
+  }
+  bool operator!=(const PredIterator &other) const {
+    return it_ != other.it_;
+  }
+
+  PredIterator &operator++() {
+    ++it_;
+    return *this;
+  }
+
+  BasicBlock *operator->() const {
+    return it_->getBasicBlock();
+  }
+  BasicBlock &operator*() const {
+    return *it_->getBasicBlock();
+  }
 };
 
 /// Iterator over basic block successors of the current basic block.
@@ -555,6 +584,7 @@ private:
   Instruction::OperandIterator end_;
 };
 
+IteratorRange<BasicBlock::PredInstIterator> predecessorInsts(BasicBlock &bb);
 IteratorRange<BasicBlock::PredIterator> predecessors(BasicBlock &bb);
 IteratorRange<BasicBlock::SuccIterator> successors(BasicBlock &bb);
 
@@ -576,6 +606,13 @@ public:
 
   BasicBlock *createBasicBlock();
 
+  /// Move a basic block from a different function into this one. Even if the
+  /// block already belongs to this function, it will be removed from the list
+  /// and appended to the end.
+  void importBasicBlock(BasicBlock *bb);
+
+  void eraseBasicBlock(BasicBlock *bb);
+
   BasicBlock *getEntryBlock() {
     assert(!bbList_.empty() && "getEntryPoint() can only be invoked on non-empty block");
     return &bbList_.front();
@@ -590,20 +627,33 @@ private:
   CircularList<BasicBlock> bbList_{};
 };
 
+namespace detail {
+template <class T>
+T *toPointer(T *x) {
+  return x;
+}
+template <class T>
+T *toPointer(T &x) {
+  return &x;
+}
+} // namespace detail
+
 /// Sort a sequence of blocks using their addresses, when available. Block 0
 /// is assumed to be the entry point and is not sorted.
 template <class R>
-std::vector<BasicBlock *> sortBasicBlocksByAddress(R range) {
+std::vector<BasicBlock *> sortBasicBlocksByAddress(R range, bool excludeFirst = true) {
   std::vector<BasicBlock *> sortedBlocks{};
 
   // Sort the blocks by starting address using a stable sort.
   for (auto &bb : range)
-    sortedBlocks.push_back(&bb);
+    sortedBlocks.push_back(detail::toPointer(bb));
 
   // Note that we are not sorting the entry block.
-  if (sortedBlocks.size() > 2) {
+  if (sortedBlocks.size() > 1 + excludeFirst) {
     std::stable_sort(
-        sortedBlocks.begin() + 1, sortedBlocks.end(), [](BasicBlock *a, BasicBlock *b) -> bool {
+        sortedBlocks.begin() + excludeFirst,
+        sortedBlocks.end(),
+        [](BasicBlock *a, BasicBlock *b) -> bool {
           // No address is less than address.
           if (!a->getAddress())
             return b->getAddress().has_value();
@@ -641,6 +691,10 @@ public:
 
   auto functions() {
     return makeIteratorRange(functionList_.begin(), functionList_.end());
+  }
+
+  Function *getStartFunction() {
+    return &functionList_.front();
   }
 
 private:

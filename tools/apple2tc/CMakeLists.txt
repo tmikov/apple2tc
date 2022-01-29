@@ -11,6 +11,7 @@ add_executable(apple2tc
   Disas.cpp RuntimeData.cpp Disas.h
   GenIR.cpp GenIR.h PubIR.h
   SSA.cpp dce.cpp simplify.cpp
+  routines.cpp
   IRC1.cpp IRC1.h
   PrintSimpleC.cpp
   ir/IR.cpp ir/ValueList.h ir/IR.h ir/IRUtil.cpp ir/IRUtil.h

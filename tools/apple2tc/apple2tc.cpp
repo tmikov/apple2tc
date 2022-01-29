@@ -176,6 +176,7 @@ int main(int argc, char **argv) {
         if (simplify(mod))
           dce(mod);
       }
+      identifySimpleRoutines(mod);
       if (action == Action::GenIR)
         dumpModule(mod, irTrees);
       else

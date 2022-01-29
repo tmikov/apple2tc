@@ -25,5 +25,6 @@ void dumpModule(ir::Module *mod, bool irTrees);
 bool localCPURegSSA(ir::Module *mod);
 bool dce(ir::Module *mod);
 bool simplify(ir::Module *mod);
+void identifySimpleRoutines(ir::Module *mod);
 
 void printIRC1(ir::Module *mod, FILE *os, bool trees);
