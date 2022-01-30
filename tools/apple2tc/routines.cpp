@@ -250,7 +250,17 @@ void IdentifySimpleRoutines::splitRoutines() {
   IRBuilder builder(ctx_);
   std::vector<Instruction *> jsrs{};
 
-  for (auto &[entry, cand] : candidates_) {
+  // Copy all routines into a vector, so they can be sorted for predictable results.
+  std::vector<std::pair<BasicBlock *, Candidate *>> candidates{};
+  candidates.reserve(candidates_.size());
+  for (auto &p : candidates_)
+    candidates.emplace_back(p.first, &p.second);
+  std::sort(candidates.begin(), candidates.end(), [](const auto &a, const auto &b) {
+    return a.first->getAddress().value_or(0) < b.first->getAddress().value_or(0);
+  });
+
+  for (auto [entry, pCand] : candidates) {
+    auto &cand = *pCand;
     cand.func = mod->createFunction();
 
     // Replace all RTS with Return.
