@@ -263,8 +263,12 @@ std::optional<uint8_t> SimpleAsm::assemble(
     am = CPUAddrMode::Rel;
     encoding = encodeInst(CPUOpcode{.kind = *optKind, .addrMode = am});
   }
+  if (!encoding && *optKind == CPUInstKind::BRK && am == CPUAddrMode::Implied) {
+    // BRK is also recognized as a 1-byte instruction.
+    encoding = 0;
+  }
   if (!encoding) {
-    error(right, "unsupported address mode for '%s'", middle);
+    error(*right ? right : middle, "unsupported address mode for '%s'", middle);
     return std::nullopt;
   }
 
