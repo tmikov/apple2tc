@@ -259,6 +259,8 @@ public:
     return v->isInstruction();
   }
 
+  void dump();
+
   void pushOperand(Value *v) {
     getOperands().push_back(v);
   }

@@ -70,8 +70,8 @@ void func_t001(bool adjust_sp) {
   uint8_t tmp2_U8;
   uint16_t tmp3_U16;
   uint16_t tmp4_U16;
-  uint8_t tmp5_U8;
-  uint16_t tmp6_U16;
+  uint16_t tmp5_U16;
+  uint8_t tmp6_U8;
 
   if (adjust_sp)
     push16(0xffff); // Fake return address.
@@ -123,11 +123,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 6:  // $00C2
       /*$00C2*/ s_pc = 0x00c2; CYCLES(0x00c2, 11);
-      /*$00C6*/ tmp3_U16 = (s_a - 0x0030) & 0x00ff;
-                tmp4_U16 = tmp3_U16 - 0x00d0;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0xff2f) << 6);
-                tmp2_U8 = (uint8_t)tmp4_U16;
+      /*$00C3*/ tmp3_U16 = s_a;
+      /*$00C6*/ tmp4_U16 = (tmp3_U16 - 0x0030) & 0x00ff;
+                tmp5_U16 = tmp4_U16 - 0x00d0;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp5_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)0xff2f) << 6);
+                tmp2_U8 = (uint8_t)(tmp3_U16 - 0x0100);
                 s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
                 s_a = tmp2_U8;
@@ -180,19 +181,19 @@ void func_t001(bool adjust_sp) {
                 tmp2_U8 = ram_peek(0x0085);
                 s_a = tmp2_U8;
       /*$D386*/ tmp1_U8 = ram_peek((0x0102 + s_x));
-                tmp5_U8 = tmp2_U8 != tmp1_U8;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
+                tmp6_U8 = tmp2_U8 != tmp1_U8;
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp1_U8);
                 s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - tmp1_U8) & 0x80);
-      /*$D389*/ branchTarget = true; block_id = !tmp5_U8 ? 16 : 15;
+      /*$D389*/ branchTarget = true; block_id = !tmp6_U8 ? 16 : 15;
       break;
     case 15:  // $D38B
       /*$D38B*/ s_pc = 0xd38b; CYCLES(0xd38b, 12);
-      /*$D38D*/ tmp3_U16 = s_x;
-                tmp4_U16 = tmp3_U16 + 0x0012;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0x0012) << 6);
-                tmp2_U8 = (uint8_t)tmp4_U16;
+      /*$D38D*/ tmp4_U16 = s_x;
+                tmp3_U16 = tmp4_U16 + 0x0012;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0x0012) << 6);
+                tmp2_U8 = (uint8_t)tmp3_U16;
                 s_a = tmp2_U8;
       /*$D38F*/ s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
@@ -215,25 +216,25 @@ void func_t001(bool adjust_sp) {
       break;
     case 19:  // $D39A
       /*$D39A*/ s_pc = 0xd39a; CYCLES(0xd39a, 29);
-      /*$D39D*/ tmp4_U16 = ram_peek(0x0096) - ram_peek(0x009b);
-                tmp2_U8 = (uint8_t)tmp4_U16;
+      /*$D39D*/ tmp3_U16 = ram_peek(0x0096) - ram_peek(0x009b);
+                tmp2_U8 = (uint8_t)tmp3_U16;
       /*$D39F*/ ram_poke(0x005e, tmp2_U8);
       /*$D3A1*/ s_y = tmp2_U8;
-      /*$D3A4*/ tmp3_U16 = ram_peek(0x0097);
-                tmp6_U16 = ram_peek(0x009c);
-                tmp4_U16 = (tmp3_U16 - tmp6_U16) - ((uint8_t)(tmp4_U16 >> 8) & 0x01);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)(~tmp6_U16)) << 6);
-      /*$D3A7*/ s_x = (uint8_t)(((uint8_t)tmp4_U16) + 0x01);
+      /*$D3A4*/ tmp4_U16 = ram_peek(0x0097);
+                tmp5_U16 = ram_peek(0x009c);
+                tmp3_U16 = (tmp4_U16 - tmp5_U16) - ((uint8_t)(tmp3_U16 >> 8) & 0x01);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)(~tmp5_U16)) << 6);
+      /*$D3A7*/ s_x = (uint8_t)(((uint8_t)tmp3_U16) + 0x01);
       /*$D3A8*/ s_a = tmp2_U8;
       /*$D3A9*/ branchTarget = true; block_id = !tmp2_U8 ? 27 : 20;
       break;
     case 20:  // $D3AB
       /*$D3AB*/ s_pc = 0xd3ab; CYCLES(0xd3ab, 16);
-      /*$D3AE*/ tmp4_U16 = ram_peek(0x0096) - ram_peek(0x005e);
-                tmp2_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+      /*$D3AE*/ tmp3_U16 = ram_peek(0x0096) - ram_peek(0x005e);
+                tmp2_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-      /*$D3B0*/ ram_poke(0x0096, ((uint8_t)tmp4_U16));
+      /*$D3B0*/ ram_poke(0x0096, ((uint8_t)tmp3_U16));
       /*$D3B2*/ branchTarget = true; block_id = tmp2_U8 ? 22 : 21;
       break;
     case 21:  // $D3B4
@@ -244,13 +245,13 @@ void func_t001(bool adjust_sp) {
       break;
     case 22:  // $D3B7
       /*$D3B7*/ s_pc = 0xd3b7; CYCLES(0xd3b7, 14);
-      /*$D3B9*/ tmp4_U16 = ram_peek(0x0094);
-                tmp6_U16 = ram_peek(0x005e);
-                tmp3_U16 = (tmp4_U16 - tmp6_U16) - (uint8_t)(0x01 - (s_status & STATUS_C));
-                tmp2_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
+      /*$D3B9*/ tmp3_U16 = ram_peek(0x0094);
+                tmp5_U16 = ram_peek(0x005e);
+                tmp4_U16 = (tmp3_U16 - tmp5_U16) - (uint8_t)(0x01 - (s_status & STATUS_C));
+                tmp2_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)(~tmp6_U16)) << 6);
-      /*$D3BB*/ ram_poke(0x0094, ((uint8_t)tmp3_U16));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)(~tmp5_U16)) << 6);
+      /*$D3BB*/ ram_poke(0x0094, ((uint8_t)tmp4_U16));
       /*$D3BD*/ branchTarget = true; block_id = tmp2_U8 ? 25 : 23;
       break;
     case 23:  // $D3BF
@@ -295,13 +296,13 @@ void func_t001(bool adjust_sp) {
       break;
     case 29:  // $D3D6
       /*$D3D6*/ s_pc = 0xd3d6; CYCLES(0xd3d6, 9);
-                tmp3_U16 = s_a << 0x01;
-      /*$D3D7*/ tmp6_U16 = tmp3_U16 & 0x00ff;
-                tmp3_U16 = (tmp6_U16 + 0x0036) + (uint8_t)(tmp3_U16 >> 8);
-                tmp2_U8 = (uint8_t)(tmp3_U16 >> 8);
+                tmp4_U16 = s_a << 0x01;
+      /*$D3D7*/ tmp5_U16 = tmp4_U16 & 0x00ff;
+                tmp4_U16 = (tmp5_U16 + 0x0036) + (uint8_t)(tmp4_U16 >> 8);
+                tmp2_U8 = (uint8_t)(tmp4_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)0x0036) << 6);
-                s_a = ((uint8_t)tmp3_U16);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)0x0036) << 6);
+                s_a = ((uint8_t)tmp4_U16);
       /*$D3D9*/ branchTarget = true; block_id = tmp2_U8 ? 44 : 30;
       break;
     case 30:  // $D3DB
@@ -311,10 +312,10 @@ void func_t001(bool adjust_sp) {
                 s_x = tmp2_U8;
       /*$D3DE*/ tmp1_U8 = ram_peek(0x005e);
                 s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != tmp1_U8) ? 0 : STATUS_Z);
-                tmp5_U8 = tmp2_U8 >= tmp1_U8;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
+                tmp6_U8 = tmp2_U8 >= tmp1_U8;
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
                 s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - tmp1_U8) & 0x80);
-      /*$D3E0*/ branchTarget = true; block_id = !tmp5_U8 ? 44 : 31;
+      /*$D3E0*/ branchTarget = true; block_id = !tmp6_U8 ? 44 : 31;
       break;
     case 31:  // $D3E2
       /*$D3E2*/ s_pc = 0xd3e2; CYCLES(0xd3e2, 2);
@@ -322,12 +323,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 32:  // $D3E3
       /*$D3E3*/ s_pc = 0xd3e3; CYCLES(0xd3e3, 7);
-                tmp5_U8 = s_y;
+                tmp6_U8 = s_y;
                 tmp1_U8 = ram_peek(0x0070);
-                s_status = (s_status & ~STATUS_Z) | ((tmp5_U8 != tmp1_U8) ? 0 : STATUS_Z);
-                tmp2_U8 = tmp5_U8 >= tmp1_U8;
+                s_status = (s_status & ~STATUS_Z) | ((tmp6_U8 != tmp1_U8) ? 0 : STATUS_Z);
+                tmp2_U8 = tmp6_U8 >= tmp1_U8;
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp5_U8 - tmp1_U8) & 0x80);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp6_U8 - tmp1_U8) & 0x80);
       /*$D3E5*/ branchTarget = true; block_id = !tmp2_U8 ? 43 : 33;
       break;
     case 33:  // $D3E7
@@ -336,12 +337,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 34:  // $D3E9
       /*$D3E9*/ s_pc = 0xd3e9; CYCLES(0xd3e9, 7);
-                tmp5_U8 = s_a;
+                tmp6_U8 = s_a;
                 tmp1_U8 = ram_peek(0x006f);
-                s_status = (s_status & ~STATUS_Z) | ((tmp5_U8 != tmp1_U8) ? 0 : STATUS_Z);
-                tmp2_U8 = tmp5_U8 >= tmp1_U8;
+                s_status = (s_status & ~STATUS_Z) | ((tmp6_U8 != tmp1_U8) ? 0 : STATUS_Z);
+                tmp2_U8 = tmp6_U8 >= tmp1_U8;
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp5_U8 - tmp1_U8) & 0x80);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp6_U8 - tmp1_U8) & 0x80);
       /*$D3EB*/ branchTarget = true; block_id = !tmp2_U8 ? 43 : 35;
       break;
     case 35:  // $D3ED
@@ -386,10 +387,10 @@ void func_t001(bool adjust_sp) {
                 s_a = tmp2_U8;
       /*$D405*/ tmp2_U8 = ram_peek(0x0070);
                 s_status = (s_status & ~STATUS_Z) | ((tmp1_U8 != tmp2_U8) ? 0 : STATUS_Z);
-                tmp5_U8 = tmp1_U8 >= tmp2_U8;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
+                tmp6_U8 = tmp1_U8 >= tmp2_U8;
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
                 s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - tmp2_U8) & 0x80);
-      /*$D407*/ branchTarget = true; block_id = !tmp5_U8 ? 43 : 41;
+      /*$D407*/ branchTarget = true; block_id = !tmp6_U8 ? 43 : 41;
       break;
     case 41:  // $D409
       /*$D409*/ s_pc = 0xd409; CYCLES(0xd409, 4);
@@ -397,12 +398,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 42:  // $D40B
       /*$D40B*/ s_pc = 0xd40b; CYCLES(0xd40b, 7);
-                tmp5_U8 = s_a;
+                tmp6_U8 = s_a;
                 tmp2_U8 = ram_peek(0x006f);
-                s_status = (s_status & ~STATUS_Z) | ((tmp5_U8 != tmp2_U8) ? 0 : STATUS_Z);
-                tmp1_U8 = tmp5_U8 >= tmp2_U8;
+                s_status = (s_status & ~STATUS_Z) | ((tmp6_U8 != tmp2_U8) ? 0 : STATUS_Z);
+                tmp1_U8 = tmp6_U8 >= tmp2_U8;
                 s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp5_U8 - tmp2_U8) & 0x80);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp6_U8 - tmp2_U8) & 0x80);
       /*$D40D*/ branchTarget = true; block_id = tmp1_U8 ? 44 : 43;
       break;
     case 43:  // $D40F
@@ -535,18 +536,19 @@ void func_t001(bool adjust_sp) {
       /*$D479*/ ram_poke(0x005e, ram_peek(0x0069));
       /*$D47D*/ ram_poke(0x0061, ram_peek(0x009c));
       /*$D482*/ tmp1_U8 = peek(ram_peek16(0x009b));
-      /*$D485*/ tmp3_U16 = (((ram_peek(0x009b) - tmp1_U8) - (uint8_t)(0x01 - (s_status & STATUS_C))) & 0x00ff) + ram_peek(0x0069);
-                tmp1_U8 = (uint8_t)tmp3_U16;
+                tmp4_U16 = (ram_peek(0x009b) - tmp1_U8) - (uint8_t)(0x01 - (s_status & STATUS_C));
+      /*$D485*/ tmp5_U16 = ram_peek(0x0069);
+                tmp1_U8 = (uint8_t)(tmp4_U16 + tmp5_U16);
       /*$D487*/ ram_poke(0x0069, tmp1_U8);
       /*$D489*/ ram_poke(0x0060, tmp1_U8);
-      /*$D48D*/ tmp3_U16 = (ram_peek(0x006a) + 0x00ff) + (uint8_t)(tmp3_U16 >> 8);
-      /*$D48F*/ ram_poke(0x006a, ((uint8_t)tmp3_U16));
-      /*$D493*/ s_x = (uint8_t)(((tmp3_U16 & 0x00ff) - ram_peek(0x009c)) - (uint8_t)(0x01 - (uint8_t)(tmp3_U16 >> 8)));
-      /*$D497*/ tmp3_U16 = ram_peek(0x009b) - ram_peek(0x0069);
-                tmp1_U8 = (uint8_t)tmp3_U16;
+      /*$D48D*/ tmp4_U16 = (ram_peek(0x006a) + 0x00ff) + (uint8_t)(((tmp4_U16 & 0x00ff) + tmp5_U16) >> 8);
+      /*$D48F*/ ram_poke(0x006a, ((uint8_t)tmp4_U16));
+      /*$D493*/ s_x = (uint8_t)(((tmp4_U16 & 0x00ff) - ram_peek(0x009c)) - (uint8_t)(0x01 - (uint8_t)(tmp4_U16 >> 8)));
+      /*$D497*/ tmp4_U16 = ram_peek(0x009b) - ram_peek(0x0069);
+                tmp1_U8 = (uint8_t)tmp4_U16;
                 s_a = tmp1_U8;
       /*$D499*/ s_y = tmp1_U8;
-      /*$D49A*/ branchTarget = true; block_id = (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01)) ? 69 : 68;
+      /*$D49A*/ branchTarget = true; block_id = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01)) ? 69 : 68;
       break;
     case 68:  // $D49C
       /*$D49C*/ s_pc = 0xd49c; CYCLES(0xd49c, 6);
@@ -556,12 +558,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 69:  // $D49F
       /*$D49F*/ s_pc = 0xd49f; CYCLES(0xd49f, 9);
-      /*$D4A0*/ tmp3_U16 = s_a;
-                tmp6_U16 = ram_peek(0x005e);
-                tmp4_U16 = tmp3_U16 + tmp6_U16;
-                tmp1_U8 = (uint8_t)(tmp4_U16 >> 8);
+      /*$D4A0*/ tmp4_U16 = s_a;
+                tmp5_U16 = ram_peek(0x005e);
+                tmp3_U16 = tmp4_U16 + tmp5_U16;
+                tmp1_U8 = (uint8_t)(tmp3_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)tmp6_U16) << 6);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)tmp5_U16) << 6);
       /*$D4A2*/ branchTarget = true; block_id = !tmp1_U8 ? 71 : 70;
       break;
     case 70:  // $D4A4
@@ -597,13 +599,13 @@ void func_t001(bool adjust_sp) {
       /*$D4C0*/ ram_poke(0x0070, ram_peek(0x0074));
       /*$D4C2*/ tmp1_U8 = ram_peek(0x0069);
       /*$D4C4*/ ram_poke(0x0096, tmp1_U8);
-      /*$D4C6*/ tmp6_U16 = tmp1_U8;
-                tmp3_U16 = ram_peek(0x000f);
-                tmp4_U16 = (tmp6_U16 + tmp3_U16) + (s_status & STATUS_C);
-                tmp1_U8 = (uint8_t)(tmp4_U16 >> 8);
+      /*$D4C6*/ tmp5_U16 = tmp1_U8;
+                tmp4_U16 = ram_peek(0x000f);
+                tmp3_U16 = (tmp5_U16 + tmp4_U16) + (s_status & STATUS_C);
+                tmp1_U8 = (uint8_t)(tmp3_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp6_U16, (uint8_t)tmp3_U16) << 6);
-                tmp2_U8 = (uint8_t)tmp4_U16;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp5_U16, (uint8_t)tmp4_U16) << 6);
+                tmp2_U8 = (uint8_t)tmp3_U16;
                 s_a = tmp2_U8;
       /*$D4C8*/ ram_poke(0x0094, tmp2_U8);
       /*$D4CA*/ tmp2_U8 = ram_peek(0x006a);
@@ -677,20 +679,20 @@ void func_t001(bool adjust_sp) {
       break;
     case 85:  // $D516
       /*$D516*/ s_pc = 0xd516; CYCLES(0xd516, 38);
-      /*$D518*/ tmp4_U16 = ((uint8_t)(s_y + 0x01) + ram_peek(0x005e)) + (s_status & STATUS_C);
-                tmp2_U8 = (uint8_t)tmp4_U16;
+      /*$D518*/ tmp3_U16 = ((uint8_t)(s_y + 0x01) + ram_peek(0x005e)) + (s_status & STATUS_C);
+                tmp2_U8 = (uint8_t)tmp3_U16;
       /*$D51A*/ s_x = tmp2_U8;
       /*$D51D*/ poke(ram_peek16al(0x005e), tmp2_U8);
-      /*$D521*/ tmp3_U16 = ram_peek(0x005f);
-                tmp4_U16 = tmp3_U16 + (uint8_t)(tmp4_U16 >> 8);
-                tmp1_U8 = (uint8_t)(tmp4_U16 >> 8);
+      /*$D521*/ tmp4_U16 = ram_peek(0x005f);
+                tmp3_U16 = tmp4_U16 + (uint8_t)(tmp3_U16 >> 8);
+                tmp1_U8 = (uint8_t)(tmp3_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0x0000) << 6);
-                tmp5_U8 = (uint8_t)tmp4_U16;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0x0000) << 6);
+                tmp6_U8 = (uint8_t)tmp3_U16;
       /*$D523*/ s_y = 0x01;
-      /*$D524*/ poke((ram_peek16al(0x005e) + 0x0001), tmp5_U8);
+      /*$D524*/ poke((ram_peek16al(0x005e) + 0x0001), tmp6_U8);
       /*$D526*/ ram_poke(0x005e, tmp2_U8);
-      /*$D528*/ ram_poke(0x005f, tmp5_U8);
+      /*$D528*/ ram_poke(0x005f, tmp6_U8);
       /*$D52A*/ branchTarget = true; block_id = !tmp1_U8 ? 81 : 86;
       break;
     case 86:  // $D52C
@@ -745,7 +747,7 @@ void func_t001(bool adjust_sp) {
       /*$D556*/ s_pc = 0xd556; CYCLES(0xd556, 6);
                 tmp1_U8 = s_a & 0x7f;
                 s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_status = (s_status & ~STATUS_N) | 0x00;
                 s_a = tmp1_U8;
       /*$D558*/ branchTarget = true; block_id = find_block_id_func_t001(0xd558, pop16() + 1);;
       break;
@@ -852,12 +854,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 112:  // $D5AF
       /*$D5AF*/ s_pc = 0xd5af; CYCLES(0xd5af, 9);
-      /*$D5B0*/ tmp4_U16 = s_a;
+      /*$D5B0*/ tmp3_U16 = s_a;
                 tmp1_U8 = peek((ram_peek16(0x009d) + s_y));
-                tmp3_U16 = tmp1_U8;
-                tmp6_U16 = tmp4_U16 - tmp3_U16;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp4_U16, (uint8_t)(~tmp3_U16)) << 6);
-                tmp1_U8 = (uint8_t)tmp6_U16;
+                tmp4_U16 = tmp1_U8;
+                tmp5_U16 = tmp3_U16 - tmp4_U16;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp3_U16, (uint8_t)(~tmp4_U16)) << 6);
+                tmp1_U8 = (uint8_t)tmp5_U16;
                 s_a = tmp1_U8;
       /*$D5B2*/ branchTarget = true; block_id = !tmp1_U8 ? 108 : 113;
       break;
@@ -921,11 +923,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 123:  // $D5E2
       /*$D5E2*/ s_pc = 0xd5e2; CYCLES(0xd5e2, 9);
-      /*$D5E3*/ tmp6_U16 = s_a;
-                tmp3_U16 = tmp6_U16 - 0x0078;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)0xff87) << 6);
-                tmp1_U8 = (uint8_t)tmp3_U16;
+      /*$D5E3*/ tmp5_U16 = s_a;
+                tmp4_U16 = tmp5_U16 - 0x0078;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)0xff87) << 6);
+                tmp1_U8 = (uint8_t)tmp4_U16;
                 s_a = tmp1_U8;
       /*$D5E5*/ branchTarget = true; block_id = tmp1_U8 ? 99 : 124;
       break;
@@ -943,9 +945,9 @@ void func_t001(bool adjust_sp) {
     case 126:  // $D5EE
       /*$D5EE*/ s_pc = 0xd5ee; CYCLES(0xd5ee, 7);
                 tmp1_U8 = s_a;
-                tmp5_U8 = ram_peek(0x000e);
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp5_U8);
-      /*$D5F0*/ branchTarget = true; block_id = !(tmp1_U8 != tmp5_U8) ? 119 : 127;
+                tmp6_U8 = ram_peek(0x000e);
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp6_U8);
+      /*$D5F0*/ branchTarget = true; block_id = !(tmp1_U8 != tmp6_U8) ? 119 : 127;
       break;
     case 127:  // $D5F2
       /*$D5F2*/ s_pc = 0xd5f2; CYCLES(0xd5f2, 12);
@@ -964,12 +966,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 129:  // $D5FD
       /*$D5FD*/ s_pc = 0xd5fd; CYCLES(0xd5fd, 9);
-                tmp5_U8 = s_y;
-                tmp1_U8 = peek((ram_peek16(0x009d) + tmp5_U8));
+                tmp6_U8 = s_y;
+                tmp1_U8 = peek((ram_peek16(0x009d) + tmp6_U8));
                 s_a = tmp1_U8;
-      /*$D5FF*/ tmp5_U8 = (uint8_t)(tmp5_U8 + 0x01);
-                s_y = tmp5_U8;
-      /*$D600*/ branchTarget = true; block_id = tmp5_U8 ? 131 : 130;
+      /*$D5FF*/ tmp6_U8 = (uint8_t)(tmp6_U8 + 0x01);
+                s_y = tmp6_U8;
+      /*$D600*/ branchTarget = true; block_id = tmp6_U8 ? 131 : 130;
       break;
     case 130:  // $D602
       /*$D602*/ s_pc = 0xd602; CYCLES(0xd602, 4);
@@ -978,20 +980,20 @@ void func_t001(bool adjust_sp) {
       break;
     case 131:  // $D604
       /*$D604*/ s_pc = 0xd604; CYCLES(0xd604, 6);
-                tmp5_U8 = (uint8_t)((s_a << 0x01) >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$D605*/ branchTarget = true; block_id = !tmp5_U8 ? 129 : 132;
+                tmp6_U8 = (uint8_t)((s_a << 0x01) >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+      /*$D605*/ branchTarget = true; block_id = !tmp6_U8 ? 129 : 132;
       break;
     case 132:  // $D607
       /*$D607*/ s_pc = 0xd607; CYCLES(0xd607, 7);
-                tmp5_U8 = peek((ram_peek16(0x009d) + s_y));
-      /*$D609*/ branchTarget = true; block_id = tmp5_U8 ? 111 : 133;
+                tmp6_U8 = peek((ram_peek16(0x009d) + s_y));
+      /*$D609*/ branchTarget = true; block_id = tmp6_U8 ? 111 : 133;
       break;
     case 133:  // $D60B
       /*$D60B*/ s_pc = 0xd60b; CYCLES(0xd60b, 9);
-                tmp5_U8 = ram_peek((0x0200 + s_x));
-                s_a = tmp5_U8;
-      /*$D60E*/ branchTarget = true; block_id = !(tmp5_U8 & 0x80) ? 118 : 134;
+                tmp6_U8 = ram_peek((0x0200 + s_x));
+                s_a = tmp6_U8;
+      /*$D60E*/ branchTarget = true; block_id = !(tmp6_U8 & 0x80) ? 118 : 134;
       break;
     case 134:  // $D610
       /*$D610*/ s_pc = 0xd610; CYCLES(0xd610, 18);
@@ -1014,23 +1016,23 @@ void func_t001(bool adjust_sp) {
                 s_y = 0x01;
       /*$D620*/ ram_poke(0x009b, s_a);
       /*$D622*/ ram_poke(0x009c, s_x);
-      /*$D624*/ tmp5_U8 = peek((ram_peek16(0x009b) + 0x0001));
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$D626*/ branchTarget = true; block_id = !tmp5_U8 ? 143 : 137;
+      /*$D624*/ tmp6_U8 = peek((ram_peek16(0x009b) + 0x0001));
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_a = tmp6_U8;
+      /*$D626*/ branchTarget = true; block_id = !tmp6_U8 ? 143 : 137;
       break;
     case 137:  // $D628
       /*$D628*/ s_pc = 0xd628; CYCLES(0xd628, 14);
-      /*$D629*/ tmp5_U8 = (uint8_t)(s_y + 0x02);
-                s_y = tmp5_U8;
+      /*$D629*/ tmp6_U8 = (uint8_t)(s_y + 0x02);
+                s_y = tmp6_U8;
       /*$D62A*/ tmp1_U8 = ram_peek(0x0051);
                 s_a = tmp1_U8;
-      /*$D62C*/ tmp5_U8 = peek((ram_peek16(0x009b) + tmp5_U8));
-                s_status = (s_status & ~STATUS_Z) | ((tmp1_U8 != tmp5_U8) ? 0 : STATUS_Z);
-                tmp2_U8 = tmp1_U8 >= tmp5_U8;
+      /*$D62C*/ tmp6_U8 = peek((ram_peek16(0x009b) + tmp6_U8));
+                s_status = (s_status & ~STATUS_Z) | ((tmp1_U8 != tmp6_U8) ? 0 : STATUS_Z);
+                tmp2_U8 = tmp1_U8 >= tmp6_U8;
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - tmp5_U8) & 0x80);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - tmp6_U8) & 0x80);
       /*$D62E*/ branchTarget = true; block_id = !tmp2_U8 ? 144 : 138;
       break;
     case 138:  // $D630
@@ -1047,13 +1049,13 @@ void func_t001(bool adjust_sp) {
       /*$D635*/ s_pc = 0xd635; CYCLES(0xd635, 12);
                 tmp2_U8 = ram_peek(0x0050);
                 s_a = tmp2_U8;
-      /*$D637*/ tmp5_U8 = (uint8_t)(s_y - 0x01);
-                s_y = tmp5_U8;
-      /*$D638*/ tmp5_U8 = peek((ram_peek16(0x009b) + tmp5_U8));
-                s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != tmp5_U8) ? 0 : STATUS_Z);
-                tmp1_U8 = tmp2_U8 >= tmp5_U8;
+      /*$D637*/ tmp6_U8 = (uint8_t)(s_y - 0x01);
+                s_y = tmp6_U8;
+      /*$D638*/ tmp6_U8 = peek((ram_peek16(0x009b) + tmp6_U8));
+                s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != tmp6_U8) ? 0 : STATUS_Z);
+                tmp1_U8 = tmp2_U8 >= tmp6_U8;
                 s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - tmp5_U8) & 0x80);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - tmp6_U8) & 0x80);
       /*$D63A*/ branchTarget = true; block_id = !tmp1_U8 ? 144 : 141;
       break;
     case 141:  // $D63C
@@ -1063,8 +1065,8 @@ void func_t001(bool adjust_sp) {
     case 142:  // $D63E
       /*$D63E*/ s_pc = 0xd63e; CYCLES(0xd63e, 16);
                 tmp1_U8 = s_y;
-      /*$D63F*/ tmp5_U8 = peek((ram_peek16(0x009b) + (uint8_t)(tmp1_U8 - 0x01)));
-      /*$D641*/ s_x = tmp5_U8;
+      /*$D63F*/ tmp6_U8 = peek((ram_peek16(0x009b) + (uint8_t)(tmp1_U8 - 0x01)));
+      /*$D641*/ s_x = tmp6_U8;
       /*$D642*/ tmp1_U8 = (uint8_t)(tmp1_U8 - 0x02);
                 s_y = tmp1_U8;
       /*$D643*/ tmp1_U8 = peek((ram_peek16(0x009b) + tmp1_U8));
@@ -1092,15 +1094,15 @@ void func_t001(bool adjust_sp) {
       /*$D650*/ poke(ram_peek16(0x0067), 0x00);
       /*$D652*/ s_y = 0x01;
       /*$D653*/ poke((ram_peek16(0x0067) + 0x0001), 0x00);
-      /*$D657*/ tmp3_U16 = (ram_peek(0x0067) + 0x0002) + (s_status & STATUS_C);
-                tmp1_U8 = (uint8_t)tmp3_U16;
+      /*$D657*/ tmp4_U16 = (ram_peek(0x0067) + 0x0002) + (s_status & STATUS_C);
+                tmp1_U8 = (uint8_t)tmp4_U16;
       /*$D659*/ ram_poke(0x0069, tmp1_U8);
       /*$D65B*/ ram_poke(0x00af, tmp1_U8);
-      /*$D65F*/ tmp6_U16 = ram_peek(0x0068);
-                tmp3_U16 = tmp6_U16 + (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)0x0000) << 6);
-                tmp1_U8 = (uint8_t)tmp3_U16;
+      /*$D65F*/ tmp5_U16 = ram_peek(0x0068);
+                tmp4_U16 = tmp5_U16 + (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)0x0000) << 6);
+                tmp1_U8 = (uint8_t)tmp4_U16;
       /*$D661*/ ram_poke(0x006a, tmp1_U8);
       /*$D663*/ ram_poke(0x00b0, tmp1_U8);
                 block_id = 147;
@@ -1123,11 +1125,11 @@ void func_t001(bool adjust_sp) {
       /*$D670*/ ram_poke(0x006f, ram_peek(0x0073));
       /*$D672*/ ram_poke(0x0070, ram_peek(0x0074));
       /*$D674*/ tmp1_U8 = ram_peek(0x0069);
-      /*$D676*/ tmp5_U8 = ram_peek(0x006a);
+      /*$D676*/ tmp6_U8 = ram_peek(0x006a);
       /*$D678*/ ram_poke(0x006b, tmp1_U8);
-      /*$D67A*/ ram_poke(0x006c, tmp5_U8);
+      /*$D67A*/ ram_poke(0x006c, tmp6_U8);
       /*$D67C*/ ram_poke(0x006d, tmp1_U8);
-      /*$D67E*/ ram_poke(0x006e, tmp5_U8);
+      /*$D67E*/ ram_poke(0x006e, tmp6_U8);
       /*$D680*/ branchTarget = true; push16(0xd682); block_id = 236;
       break;
     case 150:  // $D683
@@ -1161,20 +1163,20 @@ void func_t001(bool adjust_sp) {
       break;
     case 154:  // $D6A9
       /*$D6A9*/ s_pc = 0xd6a9; CYCLES(0xd6a9, 7);
-                tmp5_U8 = s_a;
-                tmp1_U8 = tmp5_U8 != 0xc9;
+                tmp6_U8 = s_a;
+                tmp1_U8 = tmp6_U8 != 0xc9;
                 s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0xc9);
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= 0xc9);
       /*$D6AB*/ branchTarget = true; block_id = !tmp1_U8 ? 156 : 155;
       break;
     case 155:  // $D6AD
       /*$D6AD*/ s_pc = 0xd6ad; CYCLES(0xd6ad, 7);
                 tmp1_U8 = s_a;
-                tmp5_U8 = tmp1_U8 != 0x2c;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
+                tmp6_U8 = tmp1_U8 != 0x2c;
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x2c);
                 s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - 0x2c) & 0x80);
-      /*$D6AF*/ branchTarget = true; block_id = tmp5_U8 ? 151 : 156;
+      /*$D6AF*/ branchTarget = true; block_id = tmp6_U8 ? 151 : 156;
       break;
     case 156:  // $D6B1
       /*$D6B1*/ s_pc = 0xd6b1; CYCLES(0xd6b1, 6);
@@ -1194,21 +1196,21 @@ void func_t001(bool adjust_sp) {
       break;
     case 160:  // $D6BC
       /*$D6BC*/ s_pc = 0xd6bc; CYCLES(0xd6bc, 7);
-                tmp5_U8 = s_a;
-                tmp1_U8 = tmp5_U8 != 0xc9;
+                tmp6_U8 = s_a;
+                tmp1_U8 = tmp6_U8 != 0xc9;
                 s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0xc9);
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp5_U8 - 0xc9) & 0x80);
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= 0xc9);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp6_U8 - 0xc9) & 0x80);
       /*$D6BE*/ branchTarget = true; block_id = !tmp1_U8 ? 162 : 161;
       break;
     case 161:  // $D6C0
       /*$D6C0*/ s_pc = 0xd6c0; CYCLES(0xd6c0, 7);
                 tmp1_U8 = s_a;
-                tmp5_U8 = tmp1_U8 != 0x2c;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
+                tmp6_U8 = tmp1_U8 != 0x2c;
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x2c);
                 s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - 0x2c) & 0x80);
-      /*$D6C2*/ branchTarget = true; block_id = tmp5_U8 ? 144 : 162;
+      /*$D6C2*/ branchTarget = true; block_id = tmp6_U8 ? 144 : 162;
       break;
     case 162:  // $D6C4
       /*$D6C4*/ s_pc = 0xd6c4; CYCLES(0xd6c4, 6);
@@ -1224,8 +1226,8 @@ void func_t001(bool adjust_sp) {
       break;
     case 165:  // $D6CC
       /*$D6CC*/ s_pc = 0xd6cc; CYCLES(0xd6cc, 14);
-                tmp5_U8 = pop8();
-      /*$D6CD*/ tmp5_U8 = pop8();
+                tmp6_U8 = pop8();
+      /*$D6CD*/ tmp6_U8 = pop8();
       /*$D6D2*/ branchTarget = true; block_id = (ram_peek(0x0050) | ram_peek(0x0051)) ? 167 : 166;
       break;
     case 166:  // $D6D4
@@ -1237,8 +1239,8 @@ void func_t001(bool adjust_sp) {
     case 167:  // $D6DA
       /*$D6DA*/ s_pc = 0xd6da; CYCLES(0xd6da, 11);
                 s_y = 0x01;
-      /*$D6DC*/ tmp5_U8 = peek((ram_peek16(0x009b) + 0x0001));
-      /*$D6DE*/ branchTarget = true; block_id = !tmp5_U8 ? 182 : 168;
+      /*$D6DC*/ tmp6_U8 = peek((ram_peek16(0x009b) + 0x0001));
+      /*$D6DE*/ branchTarget = true; block_id = !tmp6_U8 ? 182 : 168;
       break;
     case 168:  // $D6E0
       /*$D6E0*/ s_pc = 0xd6e0; CYCLES(0xd6e0, 6);
@@ -1251,22 +1253,22 @@ void func_t001(bool adjust_sp) {
     case 170:  // $D6E6
       /*$D6E6*/ s_pc = 0xd6e6; CYCLES(0xd6e6, 19);
                 tmp1_U8 = s_y;
-      /*$D6E7*/ tmp5_U8 = peek((ram_peek16(0x009b) + (uint8_t)(tmp1_U8 + 0x01)));
-      /*$D6E9*/ s_x = tmp5_U8;
+      /*$D6E7*/ tmp6_U8 = peek((ram_peek16(0x009b) + (uint8_t)(tmp1_U8 + 0x01)));
+      /*$D6E9*/ s_x = tmp6_U8;
       /*$D6EA*/ tmp1_U8 = (uint8_t)(tmp1_U8 + 0x02);
                 s_y = tmp1_U8;
       /*$D6EB*/ tmp1_U8 = peek((ram_peek16(0x009b) + tmp1_U8));
                 s_a = tmp1_U8;
-      /*$D6ED*/ tmp5_U8 = ram_peek(0x0051);
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp5_U8);
-      /*$D6EF*/ branchTarget = true; block_id = (tmp1_U8 != tmp5_U8) ? 172 : 171;
+      /*$D6ED*/ tmp6_U8 = ram_peek(0x0051);
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp6_U8);
+      /*$D6EF*/ branchTarget = true; block_id = (tmp1_U8 != tmp6_U8) ? 172 : 171;
       break;
     case 171:  // $D6F1
       /*$D6F1*/ s_pc = 0xd6f1; CYCLES(0xd6f1, 7);
-                tmp5_U8 = s_x;
+                tmp6_U8 = s_x;
                 tmp1_U8 = ram_peek(0x0050);
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= tmp1_U8);
-      /*$D6F3*/ branchTarget = true; block_id = !(tmp5_U8 != tmp1_U8) ? 173 : 172;
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= tmp1_U8);
+      /*$D6F3*/ branchTarget = true; block_id = !(tmp6_U8 != tmp1_U8) ? 173 : 172;
       break;
     case 172:  // $D6F5
       /*$D6F5*/ s_pc = 0xd6f5; CYCLES(0xd6f5, 4);
@@ -1319,12 +1321,12 @@ void func_t001(bool adjust_sp) {
     case 181:  // $D717
       /*$D717*/ s_pc = 0xd717; CYCLES(0xd717, 23);
                 tmp1_U8 = s_a;
-      /*$D718*/ tmp5_U8 = peek((ram_peek16(0x009b) + tmp1_U8));
-      /*$D71A*/ s_x = tmp5_U8;
+      /*$D718*/ tmp6_U8 = peek((ram_peek16(0x009b) + tmp1_U8));
+      /*$D71A*/ s_x = tmp6_U8;
       /*$D71B*/ tmp1_U8 = (uint8_t)(tmp1_U8 + 0x01);
                 s_y = tmp1_U8;
       /*$D71C*/ tmp1_U8 = peek((ram_peek16(0x009b) + tmp1_U8));
-      /*$D71E*/ ram_poke(0x009b, tmp5_U8);
+      /*$D71E*/ ram_poke(0x009b, tmp6_U8);
       /*$D720*/ ram_poke(0x009c, tmp1_U8);
       /*$D722*/ branchTarget = true; block_id = tmp1_U8 ? 167 : 182;
       break;
@@ -1343,11 +1345,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 185:  // $D736
       /*$D736*/ s_pc = 0xd736; CYCLES(0xd736, 28);
-      /*$D737*/ tmp3_U16 = s_a;
-                tmp6_U16 = tmp3_U16 - 0x007f;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp6_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)0xff80) << 6);
-      /*$D739*/ s_x = ((uint8_t)tmp6_U16);
+      /*$D737*/ tmp4_U16 = s_a;
+                tmp5_U16 = tmp4_U16 - 0x007f;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp5_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)0xff80) << 6);
+      /*$D739*/ s_x = ((uint8_t)tmp5_U16);
       /*$D73A*/ ram_poke(0x0085, s_y);
       /*$D73E*/ ram_poke(0x009d, 0xd0);
       /*$D742*/ ram_poke(0x009e, 0xcf);
@@ -1418,9 +1420,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 198:  // $D772
       /*$D772*/ s_pc = 0xd772; CYCLES(0xd772, 9);
-      /*$D773*/ tmp6_U16 = (s_x + 0x000f) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp6_U16 >> 8);
-                tmp1_U8 = (uint8_t)tmp6_U16;
+      /*$D773*/ tmp5_U16 = (s_x + 0x000f) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp5_U16 >> 8);
+                tmp1_U8 = (uint8_t)tmp5_U16;
       /*$D775*/ s_x = tmp1_U8;
       /*$D776*/ s_sp = tmp1_U8;
                 block_id = 199;
@@ -1438,13 +1440,13 @@ void func_t001(bool adjust_sp) {
       break;
     case 201:  // $D781
       /*$D781*/ s_pc = 0xd781; CYCLES(0xd781, 36);
-      /*$D783*/ tmp6_U16 = s_y + ram_peek(0x00b8);
-      /*$D785*/ push8(((uint8_t)tmp6_U16));
-      /*$D788*/ tmp3_U16 = ram_peek(0x00b9);
-                tmp6_U16 = tmp3_U16 + (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)0x0000) << 6);
-      /*$D78A*/ push8(((uint8_t)tmp6_U16));
+      /*$D783*/ tmp5_U16 = s_y + ram_peek(0x00b8);
+      /*$D785*/ push8(((uint8_t)tmp5_U16));
+      /*$D788*/ tmp4_U16 = ram_peek(0x00b9);
+                tmp5_U16 = tmp4_U16 + (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)0x0000) << 6);
+      /*$D78A*/ push8(((uint8_t)tmp5_U16));
       /*$D78D*/ push8(ram_peek(0x0076));
       /*$D790*/ push8(ram_peek(0x0075));
       /*$D791*/ s_a = 0xc1;
@@ -1516,9 +1518,9 @@ void func_t001(bool adjust_sp) {
       /*$D7D8*/ s_pc = 0xd7d8; CYCLES(0xd7d8, 16);
                 s_a = ram_peek(0x00b8);
       /*$D7DA*/ s_y = ram_peek(0x00b9);
-      /*$D7DE*/ tmp5_U8 = (uint8_t)(ram_peek(0x0076) + 0x01);
-                s_x = tmp5_U8;
-      /*$D7DF*/ branchTarget = true; block_id = !tmp5_U8 ? 216 : 215;
+      /*$D7DE*/ tmp6_U8 = (uint8_t)(ram_peek(0x0076) + 0x01);
+                s_x = tmp6_U8;
+      /*$D7DF*/ branchTarget = true; block_id = !tmp6_U8 ? 216 : 215;
       break;
     case 215:  // $D7E1
       /*$D7E1*/ s_pc = 0xd7e1; CYCLES(0xd7e1, 7);
@@ -1529,36 +1531,36 @@ void func_t001(bool adjust_sp) {
     case 216:  // $D7E5
       /*$D7E5*/ s_pc = 0xd7e5; CYCLES(0xd7e5, 11);
                 s_y = 0x00;
-      /*$D7E7*/ tmp5_U8 = peek(ram_peek16al(0x00b8));
-                s_a = tmp5_U8;
-      /*$D7E9*/ branchTarget = true; block_id = tmp5_U8 ? 234 : 217;
+      /*$D7E7*/ tmp6_U8 = peek(ram_peek16al(0x00b8));
+                s_a = tmp6_U8;
+      /*$D7E9*/ branchTarget = true; block_id = tmp6_U8 ? 234 : 217;
       break;
     case 217:  // $D7EB
       /*$D7EB*/ s_pc = 0xd7eb; CYCLES(0xd7eb, 12);
                 s_y = 0x02;
-      /*$D7ED*/ tmp5_U8 = peek((ram_peek16al(0x00b8) + 0x0002));
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
+      /*$D7ED*/ tmp6_U8 = peek((ram_peek16al(0x00b8) + 0x0002));
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_a = tmp6_U8;
       /*$D7EF*/ s_status = (s_status & ~STATUS_C) | 0x00;
-      /*$D7F0*/ branchTarget = true; block_id = !tmp5_U8 ? 228 : 218;
+      /*$D7F0*/ branchTarget = true; block_id = !tmp6_U8 ? 228 : 218;
       break;
     case 218:  // $D7F2
       /*$D7F2*/ s_pc = 0xd7f2; CYCLES(0xd7f2, 29);
-                tmp5_U8 = s_y;
-      /*$D7F3*/ tmp1_U8 = peek((ram_peek16al(0x00b8) + (uint8_t)(tmp5_U8 + 0x01)));
+                tmp6_U8 = s_y;
+      /*$D7F3*/ tmp1_U8 = peek((ram_peek16al(0x00b8) + (uint8_t)(tmp6_U8 + 0x01)));
       /*$D7F5*/ ram_poke(0x0075, tmp1_U8);
-      /*$D7F7*/ tmp5_U8 = (uint8_t)(tmp5_U8 + 0x02);
-                s_y = tmp5_U8;
-      /*$D7F8*/ tmp1_U8 = peek((ram_peek16al(0x00b8) + tmp5_U8));
+      /*$D7F7*/ tmp6_U8 = (uint8_t)(tmp6_U8 + 0x02);
+                s_y = tmp6_U8;
+      /*$D7F8*/ tmp1_U8 = peek((ram_peek16al(0x00b8) + tmp6_U8));
       /*$D7FA*/ ram_poke(0x0076, tmp1_U8);
-      /*$D7FD*/ tmp6_U16 = (tmp5_U8 + ram_peek(0x00b8)) + (s_status & STATUS_C);
-                tmp5_U8 = (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                tmp1_U8 = (uint8_t)tmp6_U16;
+      /*$D7FD*/ tmp5_U16 = (tmp6_U8 + ram_peek(0x00b8)) + (s_status & STATUS_C);
+                tmp6_U8 = (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+                tmp1_U8 = (uint8_t)tmp5_U16;
                 s_a = tmp1_U8;
       /*$D7FF*/ ram_poke(0x00b8, tmp1_U8);
-      /*$D801*/ branchTarget = true; block_id = !tmp5_U8 ? 220 : 219;
+      /*$D801*/ branchTarget = true; block_id = !tmp6_U8 ? 220 : 219;
       break;
     case 219:  // $D803
       /*$D803*/ s_pc = 0xd803; CYCLES(0xd803, 4);
@@ -1576,11 +1578,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 221:  // $D809
       /*$D809*/ s_pc = 0xd809; CYCLES(0xd809, 9);
-      /*$D80B*/ tmp5_U8 = (uint8_t)(ram_peek(0x0076) + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_x = tmp5_U8;
-      /*$D80C*/ branchTarget = true; block_id = !tmp5_U8 ? 225 : 222;
+      /*$D80B*/ tmp6_U8 = (uint8_t)(ram_peek(0x0076) + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_x = tmp6_U8;
+      /*$D80C*/ branchTarget = true; block_id = !tmp6_U8 ? 225 : 222;
       break;
     case 222:  // $D80E
       /*$D80E*/ s_pc = 0xd80e; CYCLES(0xd80e, 9);
@@ -1590,10 +1592,10 @@ void func_t001(bool adjust_sp) {
     case 223:  // $D813
       /*$D813*/ s_pc = 0xd813; CYCLES(0xd813, 12);
                 s_x = ram_peek(0x0075);
-      /*$D815*/ tmp5_U8 = ram_peek(0x0076);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
+      /*$D815*/ tmp6_U8 = ram_peek(0x0076);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_a = tmp6_U8;
       /*$D817*/ branchTarget = true; push16(0xd819); block_id = 1076;
       break;
     case 224:  // $D81A
@@ -1622,26 +1624,26 @@ void func_t001(bool adjust_sp) {
       break;
     case 230:  // $D82A
       /*$D82A*/ s_pc = 0xd82a; CYCLES(0xd82a, 7);
-                tmp6_U16 = s_a;
-                tmp3_U16 = (tmp6_U16 - 0x0080) - (uint8_t)(0x01 - (s_status & STATUS_C));
-                tmp5_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)0xff7f) << 6);
-                s_a = ((uint8_t)tmp3_U16);
-      /*$D82C*/ branchTarget = true; block_id = !tmp5_U8 ? 233 : 231;
+                tmp5_U16 = s_a;
+                tmp4_U16 = (tmp5_U16 - 0x0080) - (uint8_t)(0x01 - (s_status & STATUS_C));
+                tmp6_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)0xff7f) << 6);
+                s_a = ((uint8_t)tmp4_U16);
+      /*$D82C*/ branchTarget = true; block_id = !tmp6_U8 ? 233 : 231;
       break;
     case 231:  // $D82E
       /*$D82E*/ s_pc = 0xd82e; CYCLES(0xd82e, 7);
-                tmp5_U8 = s_a >= 0x40;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$D830*/ branchTarget = true; block_id = tmp5_U8 ? 235 : 232;
+                tmp6_U8 = s_a >= 0x40;
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+      /*$D830*/ branchTarget = true; block_id = tmp6_U8 ? 235 : 232;
       break;
     case 232:  // $D832
       /*$D832*/ s_pc = 0xd832; CYCLES(0xd832, 23);
-                tmp3_U16 = s_a << 0x01;
-      /*$D833*/ s_y = ((uint8_t)tmp3_U16);
-      /*$D837*/ push8(ram_peek((0xd001 + (tmp3_U16 & 0x00ff))));
-      /*$D83B*/ push8(ram_peek((0xd000 + (tmp3_U16 & 0x00ff))));
+                tmp4_U16 = s_a << 0x01;
+      /*$D833*/ s_y = ((uint8_t)tmp4_U16);
+      /*$D837*/ push8(ram_peek((0xd001 + (tmp4_U16 & 0x00ff))));
+      /*$D83B*/ push8(ram_peek((0xd000 + (tmp4_U16 & 0x00ff))));
       /*$D83C*/ branchTarget = true; block_id = 2;
       break;
     case 233:  // $D83F
@@ -1650,9 +1652,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 234:  // $D842
       /*$D842*/ s_pc = 0xd842; CYCLES(0xd842, 7);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0x3a);
-      /*$D844*/ branchTarget = true; block_id = !(tmp5_U8 != 0x3a) ? 220 : 235;
+                tmp6_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= 0x3a);
+      /*$D844*/ branchTarget = true; block_id = !(tmp6_U8 != 0x3a) ? 220 : 235;
       break;
     case 235:  // $D846
       /*$D846*/ s_pc = 0xd846; CYCLES(0xd846, 6);
@@ -1660,12 +1662,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 236:  // $D849
       /*$D849*/ s_pc = 0xd849; CYCLES(0xd849, 16);
-      /*$D84C*/ tmp4_U16 = ram_peek(0x0067);
-                tmp3_U16 = tmp4_U16 - 0x0001;
-                tmp2_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
+      /*$D84C*/ tmp3_U16 = ram_peek(0x0067);
+                tmp4_U16 = tmp3_U16 - 0x0001;
+                tmp2_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0xfffe) << 6);
-                s_a = ((uint8_t)tmp3_U16);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0xfffe) << 6);
+                s_a = ((uint8_t)tmp4_U16);
       /*$D84E*/ tmp1_U8 = ram_peek(0x0068);
                 s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
@@ -1674,10 +1676,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 237:  // $D852
       /*$D852*/ s_pc = 0xd852; CYCLES(0xd852, 2);
-                tmp5_U8 = (uint8_t)(s_y - 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_y = tmp5_U8;
+                tmp6_U8 = (uint8_t)(s_y - 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_y = tmp6_U8;
                 block_id = 238;
       break;
     case 238:  // $D853
@@ -1692,12 +1694,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 240:  // $D858
       /*$D858*/ s_pc = 0xd858; CYCLES(0xd858, 12);
-                tmp5_U8 = io_peek(0xc000);
-                s_a = tmp5_U8;
-      /*$D85B*/ tmp1_U8 = tmp5_U8 != 0x83;
+                tmp6_U8 = io_peek(0xc000);
+                s_a = tmp6_U8;
+      /*$D85B*/ tmp1_U8 = tmp6_U8 != 0x83;
                 s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0x83);
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp5_U8 - 0x83) & 0x80);
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= 0x83);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp6_U8 - 0x83) & 0x80);
       /*$D85D*/ branchTarget = true; block_id = !tmp1_U8 ? 242 : 241;
       break;
     case 241:  // $D85F
@@ -1711,9 +1713,9 @@ void func_t001(bool adjust_sp) {
     case 243:  // $D863
       /*$D863*/ s_pc = 0xd863; CYCLES(0xd863, 11);
                 s_x = 0xff;
-      /*$D865*/ tmp5_U8 = ram_peek(0x00d8);
-                s_status = (s_status & ~STATUS_V) | (((tmp5_U8 >> 0x06) & 0x01) << 6);
-      /*$D867*/ branchTarget = true; block_id = !(tmp5_U8 & 0x80) ? 245 : 244;
+      /*$D865*/ tmp6_U8 = ram_peek(0x00d8);
+                s_status = (s_status & ~STATUS_V) | (((tmp6_U8 >> 0x06) & 0x01) << 6);
+      /*$D867*/ branchTarget = true; block_id = !(tmp6_U8 & 0x80) ? 245 : 244;
       break;
     case 244:  // $D869
       /*$D869*/ s_pc = 0xd869; CYCLES(0xd869, 6);
@@ -1721,11 +1723,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 245:  // $D86C
       /*$D86C*/ s_pc = 0xd86c; CYCLES(0xd86c, 7);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_Z) | ((tmp5_U8 != 0x03) ? 0 : STATUS_Z);
-                tmp1_U8 = tmp5_U8 >= 0x03;
+                tmp6_U8 = s_a;
+                s_status = (s_status & ~STATUS_Z) | ((tmp6_U8 != 0x03) ? 0 : STATUS_Z);
+                tmp1_U8 = tmp6_U8 >= 0x03;
                 s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp5_U8 - 0x03) & 0x80);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp6_U8 - 0x03) & 0x80);
       /*$D86E*/ branchTarget = true; block_id = tmp1_U8 ? 247 : 246;
       break;
     case 246:  // $D870
@@ -1844,13 +1846,13 @@ void func_t001(bool adjust_sp) {
       break;
     case 267:  // $D94A
       /*$D94A*/ s_pc = 0xd94a; CYCLES(0xd94a, 14);
-      /*$D94C*/ tmp3_U16 = s_y;
-                tmp6_U16 = ram_peek(0x00b8);
-                tmp4_U16 = (tmp3_U16 + tmp6_U16) + 0x0001;
-                tmp1_U8 = (uint8_t)(tmp4_U16 >> 8);
+      /*$D94C*/ tmp4_U16 = s_y;
+                tmp5_U16 = ram_peek(0x00b8);
+                tmp3_U16 = (tmp4_U16 + tmp5_U16) + 0x0001;
+                tmp1_U8 = (uint8_t)(tmp3_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)tmp6_U16) << 6);
-                s_a = ((uint8_t)tmp4_U16);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)tmp5_U16) << 6);
+                s_a = ((uint8_t)tmp3_U16);
       /*$D94E*/ s_x = ram_peek(0x00b9);
       /*$D950*/ branchTarget = true; block_id = !tmp1_U8 ? 270 : 268;
       break;
@@ -1875,13 +1877,13 @@ void func_t001(bool adjust_sp) {
       break;
     case 272:  // $D95E
       /*$D95E*/ s_pc = 0xd95e; CYCLES(0xd95e, 21);
-      /*$D960*/ tmp4_U16 = (ram_peek(0x009b) - 0x0001) - (uint8_t)(0x01 - (s_status & STATUS_C));
-      /*$D962*/ ram_poke(0x00b8, ((uint8_t)tmp4_U16));
-      /*$D966*/ tmp6_U16 = ram_peek(0x009c);
-                tmp4_U16 = tmp6_U16 - ((uint8_t)(tmp4_U16 >> 8) & 0x01);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp6_U16, (uint8_t)0xffff) << 6);
-                tmp1_U8 = (uint8_t)tmp4_U16;
+      /*$D960*/ tmp3_U16 = (ram_peek(0x009b) - 0x0001) - (uint8_t)(0x01 - (s_status & STATUS_C));
+      /*$D962*/ ram_poke(0x00b8, ((uint8_t)tmp3_U16));
+      /*$D966*/ tmp5_U16 = ram_peek(0x009c);
+                tmp3_U16 = tmp5_U16 - ((uint8_t)(tmp3_U16 >> 8) & 0x01);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp5_U16, (uint8_t)0xffff) << 6);
+                tmp1_U8 = (uint8_t)tmp3_U16;
                 s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
                 s_a = tmp1_U8;
@@ -1905,9 +1907,9 @@ void func_t001(bool adjust_sp) {
     case 276:  // $D974
       /*$D974*/ s_pc = 0xd974; CYCLES(0xd974, 9);
                 s_sp = s_x;
-      /*$D975*/ tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0xb0);
-      /*$D977*/ branchTarget = true; block_id = !(tmp5_U8 != 0xb0) ? 280 : 277;
+      /*$D975*/ tmp6_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= 0xb0);
+      /*$D977*/ branchTarget = true; block_id = !(tmp6_U8 != 0xb0) ? 280 : 277;
       break;
     case 277:  // $D979
       /*$D979*/ s_pc = 0xd979; CYCLES(0xd979, 14);
@@ -1950,17 +1952,17 @@ void func_t001(bool adjust_sp) {
       break;
     case 283:  // $D998
       /*$D998*/ s_pc = 0xd998; CYCLES(0xd998, 14);
-      /*$D99A*/ tmp4_U16 = s_y;
-                tmp6_U16 = ram_peek(0x00b8);
-                tmp3_U16 = tmp4_U16 + tmp6_U16;
-                tmp1_U8 = (uint8_t)(tmp3_U16 >> 8);
+      /*$D99A*/ tmp3_U16 = s_y;
+                tmp5_U16 = ram_peek(0x00b8);
+                tmp4_U16 = tmp3_U16 + tmp5_U16;
+                tmp1_U8 = (uint8_t)(tmp4_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)tmp6_U16) << 6);
-                tmp5_U8 = (uint8_t)tmp3_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$D99C*/ ram_poke(0x00b8, tmp5_U8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)tmp5_U16) << 6);
+                tmp6_U8 = (uint8_t)tmp4_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_a = tmp6_U8;
+      /*$D99C*/ ram_poke(0x00b8, tmp6_U8);
       /*$D99E*/ branchTarget = true; block_id = !tmp1_U8 ? 285 : 284;
       break;
     case 284:  // $D9A0
@@ -2009,21 +2011,21 @@ void func_t001(bool adjust_sp) {
     case 290:  // $D9BA
       /*$D9BA*/ s_pc = 0xd9ba; CYCLES(0xd9ba, 7);
                 tmp1_U8 = s_a;
-                tmp5_U8 = ram_peek(0x000e);
-                tmp2_U8 = tmp1_U8 != tmp5_U8;
+                tmp6_U8 = ram_peek(0x000e);
+                tmp2_U8 = tmp1_U8 != tmp6_U8;
                 s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp5_U8);
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - tmp5_U8) & 0x80);
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp6_U8);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - tmp6_U8) & 0x80);
       /*$D9BC*/ branchTarget = true; block_id = !tmp2_U8 ? 285 : 291;
       break;
     case 291:  // $D9BE
       /*$D9BE*/ s_pc = 0xd9be; CYCLES(0xd9be, 9);
                 s_y = (uint8_t)(s_y + 0x01);
       /*$D9BF*/ tmp2_U8 = s_a;
-                tmp5_U8 = tmp2_U8 != 0x22;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
+                tmp6_U8 = tmp2_U8 != 0x22;
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x22);
-      /*$D9C1*/ branchTarget = true; block_id = tmp5_U8 ? 289 : 292;
+      /*$D9C1*/ branchTarget = true; block_id = tmp6_U8 ? 289 : 292;
       break;
     case 292:  // $D9C3
       /*$D9C3*/ s_pc = 0xd9c3; CYCLES(0xd9c3, 4);
@@ -2103,20 +2105,20 @@ void func_t001(bool adjust_sp) {
       break;
     case 307:  // $D9F4
       /*$D9F4*/ s_pc = 0xd9f4; CYCLES(0xd9f4, 7);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0xab);
-      /*$D9F6*/ branchTarget = true; block_id = (tmp5_U8 != 0xab) ? 279 : 308;
+                tmp6_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= 0xab);
+      /*$D9F6*/ branchTarget = true; block_id = (tmp6_U8 != 0xab) ? 279 : 308;
       break;
     case 308:  // $D9F8
       /*$D9F8*/ s_pc = 0xd9f8; CYCLES(0xd9f8, 7);
-                tmp5_U8 = (uint8_t)(ram_peek(0x00a1) - 0x01);
-                ram_poke(0x00a1, tmp5_U8);
-      /*$D9FA*/ branchTarget = true; block_id = tmp5_U8 ? 310 : 309;
+                tmp6_U8 = (uint8_t)(ram_peek(0x00a1) - 0x01);
+                ram_poke(0x00a1, tmp6_U8);
+      /*$D9FA*/ branchTarget = true; block_id = tmp6_U8 ? 310 : 309;
       break;
     case 309:  // $D9FC
       /*$D9FC*/ s_pc = 0xd9fc; CYCLES(0xd9fc, 7);
-                tmp5_U8 = pop8();
-                s_a = tmp5_U8;
+                tmp6_U8 = pop8();
+                s_a = tmp6_U8;
       /*$D9FD*/ branchTarget = true; block_id = 230;
       break;
     case 310:  // $DA00
@@ -2129,16 +2131,16 @@ void func_t001(bool adjust_sp) {
       break;
     case 312:  // $DA06
       /*$DA06*/ s_pc = 0xda06; CYCLES(0xda06, 7);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0x2c);
-      /*$DA08*/ branchTarget = true; block_id = !(tmp5_U8 != 0x2c) ? 308 : 313;
+                tmp6_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= 0x2c);
+      /*$DA08*/ branchTarget = true; block_id = !(tmp6_U8 != 0x2c) ? 308 : 313;
       break;
     case 313:  // $DA0A
       /*$DA0A*/ s_pc = 0xda0a; CYCLES(0xda0a, 2);
-                tmp5_U8 = pop8();
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
+                tmp6_U8 = pop8();
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_a = tmp6_U8;
                 block_id = 314;
       break;
     case 314:  // $DA0B
@@ -2160,48 +2162,48 @@ void func_t001(bool adjust_sp) {
       break;
     case 317:  // $DA14
       /*$DA14*/ s_pc = 0xda14; CYCLES(0xda14, 21);
-                tmp3_U16 = s_a;
-                tmp6_U16 = (tmp3_U16 - 0x002f) - (uint8_t)(0x01 - (s_status & STATUS_C));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)0xffd0) << 6);
-      /*$DA16*/ ram_poke(0x000d, ((uint8_t)tmp6_U16));
-      /*$DA18*/ tmp5_U8 = ram_peek(0x0051);
-                s_a = tmp5_U8;
-      /*$DA1A*/ ram_poke(0x005e, tmp5_U8);
-      /*$DA1E*/ branchTarget = true; block_id = (tmp5_U8 >= 0x19) ? 307 : 318;
+                tmp4_U16 = s_a;
+                tmp5_U16 = (tmp4_U16 - 0x002f) - (uint8_t)(0x01 - (s_status & STATUS_C));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)0xffd0) << 6);
+      /*$DA16*/ ram_poke(0x000d, ((uint8_t)tmp5_U16));
+      /*$DA18*/ tmp6_U8 = ram_peek(0x0051);
+                s_a = tmp6_U8;
+      /*$DA1A*/ ram_poke(0x005e, tmp6_U8);
+      /*$DA1E*/ branchTarget = true; block_id = (tmp6_U8 >= 0x19) ? 307 : 318;
       break;
     case 318:  // $DA20
       /*$DA20*/ s_pc = 0xda20; CYCLES(0xda20, 52);
-      /*$DA22*/ tmp6_U16 = ram_peek(0x0050) << 0x01;
-      /*$DA23*/ ram_poke(0x005e, (uint8_t)((ram_peek(0x005e) << 0x01) | (uint8_t)(tmp6_U16 >> 8)));
-      /*$DA25*/ tmp6_U16 = (tmp6_U16 & 0x00ff) << 0x01;
-      /*$DA26*/ tmp3_U16 = (ram_peek(0x005e) << 0x01) | (uint8_t)(tmp6_U16 >> 8);
-                ram_poke(0x005e, ((uint8_t)tmp3_U16));
-      /*$DA28*/ tmp6_U16 = ((tmp6_U16 & 0x00ff) + ram_peek(0x0050)) + (uint8_t)(tmp3_U16 >> 8);
-      /*$DA2A*/ ram_poke(0x0050, ((uint8_t)tmp6_U16));
-      /*$DA30*/ ram_poke(0x0051, (uint8_t)((ram_peek(0x005e) + ram_peek(0x0051)) + (uint8_t)(tmp6_U16 >> 8)));
-      /*$DA32*/ tmp6_U16 = ram_peek(0x0050) << 0x01;
-                ram_poke(0x0050, ((uint8_t)tmp6_U16));
-      /*$DA34*/ tmp6_U16 = (ram_peek(0x0051) << 0x01) | (uint8_t)(tmp6_U16 >> 8);
-                ram_poke(0x0051, ((uint8_t)tmp6_U16));
-      /*$DA38*/ tmp3_U16 = ram_peek(0x0050);
-                tmp4_U16 = ram_peek(0x000d);
-                tmp6_U16 = (tmp3_U16 + tmp4_U16) + (uint8_t)(tmp6_U16 >> 8);
-                tmp5_U8 = (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)tmp4_U16) << 6);
-                tmp2_U8 = (uint8_t)tmp6_U16;
+      /*$DA22*/ tmp5_U16 = ram_peek(0x0050);
+      /*$DA23*/ ram_poke(0x005e, (uint8_t)((ram_peek(0x005e) << 0x01) | (uint8_t)((tmp5_U16 << 0x01) >> 8)));
+      /*$DA25*/ tmp5_U16 = tmp5_U16 << 0x02;
+      /*$DA26*/ tmp4_U16 = (ram_peek(0x005e) << 0x01) | (uint8_t)((tmp5_U16 & 0x01ff) >> 8);
+                ram_poke(0x005e, ((uint8_t)tmp4_U16));
+      /*$DA28*/ tmp5_U16 = ((tmp5_U16 & 0x00ff) + ram_peek(0x0050)) + (uint8_t)(tmp4_U16 >> 8);
+      /*$DA2A*/ ram_poke(0x0050, ((uint8_t)tmp5_U16));
+      /*$DA30*/ ram_poke(0x0051, (uint8_t)((ram_peek(0x005e) + ram_peek(0x0051)) + (uint8_t)(tmp5_U16 >> 8)));
+      /*$DA32*/ tmp5_U16 = ram_peek(0x0050) << 0x01;
+                ram_poke(0x0050, ((uint8_t)tmp5_U16));
+      /*$DA34*/ tmp5_U16 = (ram_peek(0x0051) << 0x01) | (uint8_t)(tmp5_U16 >> 8);
+                ram_poke(0x0051, ((uint8_t)tmp5_U16));
+      /*$DA38*/ tmp4_U16 = ram_peek(0x0050);
+                tmp3_U16 = ram_peek(0x000d);
+                tmp5_U16 = (tmp4_U16 + tmp3_U16) + (uint8_t)(tmp5_U16 >> 8);
+                tmp6_U8 = (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)tmp3_U16) << 6);
+                tmp2_U8 = (uint8_t)tmp5_U16;
                 s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
                 s_a = tmp2_U8;
       /*$DA3A*/ ram_poke(0x0050, tmp2_U8);
-      /*$DA3C*/ branchTarget = true; block_id = !tmp5_U8 ? 320 : 319;
+      /*$DA3C*/ branchTarget = true; block_id = !tmp6_U8 ? 320 : 319;
       break;
     case 319:  // $DA3E
       /*$DA3E*/ s_pc = 0xda3e; CYCLES(0xda3e, 4);
-                tmp5_U8 = (uint8_t)(ram_peek(0x0051) + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                ram_poke(0x0051, tmp5_U8);
+                tmp6_U8 = (uint8_t)(ram_peek(0x0051) + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                ram_poke(0x0051, tmp6_U8);
                 block_id = 320;
       break;
     case 320:  // $DA40
@@ -2233,12 +2235,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 325:  // $DA5B
       /*$DA5B*/ s_pc = 0xda5b; CYCLES(0xda5b, 9);
-                tmp5_U8 = pop8();
-      /*$DA5C*/ tmp6_U16 = (tmp5_U8 << 0x01) | (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp6_U16 >> 8);
-                tmp5_U8 = (uint8_t)tmp6_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_a = tmp5_U8;
+                tmp6_U8 = pop8();
+      /*$DA5C*/ tmp5_U16 = (tmp6_U8 << 0x01) | (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp5_U16 >> 8);
+                tmp6_U8 = (uint8_t)tmp5_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_a = tmp6_U8;
       /*$DA5D*/ branchTarget = true; push16(0xda5f); block_id = 487;
       break;
     case 326:  // $DA60
@@ -2287,11 +2289,11 @@ void func_t001(bool adjust_sp) {
       /*$DA7B*/ s_pc = 0xda7b; CYCLES(0xda7b, 14);
                 s_y = 0x02;
       /*$DA7D*/ tmp2_U8 = peek((ram_peek16al(0x00a0) + 0x0002));
-      /*$DA7F*/ tmp5_U8 = ram_peek(0x0070);
-                s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != tmp5_U8) ? 0 : STATUS_Z);
-                tmp5_U8 = tmp2_U8 >= tmp5_U8;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$DA81*/ branchTarget = true; block_id = !tmp5_U8 ? 340 : 335;
+      /*$DA7F*/ tmp6_U8 = ram_peek(0x0070);
+                s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != tmp6_U8) ? 0 : STATUS_Z);
+                tmp6_U8 = tmp2_U8 >= tmp6_U8;
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+      /*$DA81*/ branchTarget = true; block_id = !tmp6_U8 ? 340 : 335;
       break;
     case 335:  // $DA83
       /*$DA83*/ s_pc = 0xda83; CYCLES(0xda83, 4);
@@ -2306,10 +2308,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 337:  // $DA8C
       /*$DA8C*/ s_pc = 0xda8c; CYCLES(0xda8c, 11);
-                tmp5_U8 = ram_peek(0x00a1);
+                tmp6_U8 = ram_peek(0x00a1);
       /*$DA8E*/ tmp2_U8 = ram_peek(0x006a);
-                s_status = (s_status & ~STATUS_Z) | ((tmp5_U8 != tmp2_U8) ? 0 : STATUS_Z);
-                tmp2_U8 = tmp5_U8 >= tmp2_U8;
+                s_status = (s_status & ~STATUS_Z) | ((tmp6_U8 != tmp2_U8) ? 0 : STATUS_Z);
+                tmp2_U8 = tmp6_U8 >= tmp2_U8;
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
       /*$DA90*/ branchTarget = true; block_id = !tmp2_U8 ? 340 : 338;
       break;
@@ -2383,21 +2385,21 @@ void func_t001(bool adjust_sp) {
       break;
     case 349:  // $DAD9
       /*$DAD9*/ s_pc = 0xdad9; CYCLES(0xdad9, 7);
-                tmp5_U8 = s_a;
-                tmp2_U8 = tmp5_U8 != 0xc0;
+                tmp6_U8 = s_a;
+                tmp2_U8 = tmp6_U8 != 0xc0;
                 s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0xc0);
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp5_U8 - 0xc0) & 0x80);
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= 0xc0);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp6_U8 - 0xc0) & 0x80);
       /*$DADB*/ branchTarget = true; block_id = !tmp2_U8 ? 365 : 350;
       break;
     case 350:  // $DADD
       /*$DADD*/ s_pc = 0xdadd; CYCLES(0xdadd, 9);
                 tmp2_U8 = s_a;
-                tmp5_U8 = tmp2_U8 != 0xc3;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
+                tmp6_U8 = tmp2_U8 != 0xc3;
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - 0xc3) & 0x80);
       /*$DADF*/ s_status = (s_status & ~STATUS_C) | 0x00;
-      /*$DAE0*/ branchTarget = true; block_id = !tmp5_U8 ? 365 : 351;
+      /*$DAE0*/ branchTarget = true; block_id = !tmp6_U8 ? 365 : 351;
       break;
     case 351:  // $DAE2
       /*$DAE2*/ s_pc = 0xdae2; CYCLES(0xdae2, 9);
@@ -2406,11 +2408,11 @@ void func_t001(bool adjust_sp) {
     case 352:  // $DAE7
       /*$DAE7*/ s_pc = 0xdae7; CYCLES(0xdae7, 7);
                 tmp2_U8 = s_a;
-                tmp5_U8 = tmp2_U8 != 0x3b;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
+                tmp6_U8 = tmp2_U8 != 0x3b;
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x3b);
                 s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - 0x3b) & 0x80);
-      /*$DAE9*/ branchTarget = true; block_id = !tmp5_U8 ? 373 : 353;
+      /*$DAE9*/ branchTarget = true; block_id = !tmp6_U8 ? 373 : 353;
       break;
     case 353:  // $DAEB
       /*$DAEB*/ s_pc = 0xdaeb; CYCLES(0xdaeb, 6);
@@ -2418,11 +2420,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 354:  // $DAEE
       /*$DAEE*/ s_pc = 0xdaee; CYCLES(0xdaee, 7);
-                tmp5_U8 = ram_peek(0x0011);
-                tmp2_U8 = tmp5_U8 & 0x80;
+                tmp6_U8 = ram_peek(0x0011);
+                tmp2_U8 = tmp6_U8 & 0x80;
                 s_status = (s_status & ~STATUS_N) | tmp2_U8;
-                s_status = (s_status & ~STATUS_V) | (((tmp5_U8 >> 0x06) & 0x01) << 6);
-                s_status = (s_status & ~STATUS_Z) | ((s_a & tmp5_U8) ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_V) | (((tmp6_U8 >> 0x06) & 0x01) << 6);
+                s_status = (s_status & ~STATUS_Z) | ((s_a & tmp6_U8) ? 0 : STATUS_Z);
       /*$DAF0*/ branchTarget = true; block_id = tmp2_U8 ? 345 : 355;
       break;
     case 355:  // $DAF2
@@ -2456,12 +2458,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 361:  // $DB03
       /*$DB03*/ s_pc = 0xdb03; CYCLES(0xdb03, 11);
-                tmp5_U8 = ram_peek(0x0024);
-                s_a = tmp5_U8;
-      /*$DB05*/ s_status = (s_status & ~STATUS_Z) | ((tmp5_U8 != 0x18) ? 0 : STATUS_Z);
-                tmp2_U8 = tmp5_U8 >= 0x18;
+                tmp6_U8 = ram_peek(0x0024);
+                s_a = tmp6_U8;
+      /*$DB05*/ s_status = (s_status & ~STATUS_Z) | ((tmp6_U8 != 0x18) ? 0 : STATUS_Z);
+                tmp2_U8 = tmp6_U8 >= 0x18;
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp5_U8 - 0x18) & 0x80);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp6_U8 - 0x18) & 0x80);
       /*$DB07*/ branchTarget = true; block_id = !tmp2_U8 ? 364 : 362;
       break;
     case 362:  // $DB09
@@ -2474,16 +2476,17 @@ void func_t001(bool adjust_sp) {
       break;
     case 364:  // $DB0E
       /*$DB0E*/ s_pc = 0xdb0e; CYCLES(0xdb0e, 14);
-                tmp6_U16 = s_a;
-                tmp4_U16 = (tmp6_U16 + 0x0010) + (s_status & STATUS_C);
-                tmp2_U8 = (uint8_t)(tmp4_U16 >> 8);
+                tmp5_U16 = s_a;
+                tmp3_U16 = (tmp5_U16 + 0x0010) + (s_status & STATUS_C);
+                tmp2_U8 = (uint8_t)(tmp3_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp6_U16, (uint8_t)0x0010) << 6);
-      /*$DB10*/ tmp5_U8 = ((uint8_t)tmp4_U16) & 0xf0;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$DB12*/ ram_poke(0x0024, tmp5_U8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp5_U16, (uint8_t)0x0010) << 6);
+                tmp6_U8 = (uint8_t)tmp3_U16;
+      /*$DB10*/ tmp1_U8 = tmp6_U8 & 0xf0;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_a = tmp1_U8;
+      /*$DB12*/ ram_poke(0x0024, tmp1_U8);
       /*$DB14*/ branchTarget = true; block_id = !tmp2_U8 ? 373 : 365;
       break;
     case 365:  // $DB16
@@ -2504,29 +2507,29 @@ void func_t001(bool adjust_sp) {
     case 368:  // $DB21
       /*$DB21*/ s_pc = 0xdb21; CYCLES(0xdb21, 6);
                 tmp2_U8 = pop8();
-                tmp5_U8 = tmp2_U8 & 0x01;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
+                tmp1_U8 = tmp2_U8 & 0x01;
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
                 s_status = (s_status & ~STATUS_I) | (((tmp2_U8 & 0x04) != 0) << 2);
                 s_status = (s_status & ~STATUS_D) | (((tmp2_U8 & 0x08) != 0) << 3);
                 s_status = (s_status & ~STATUS_B) | (0x00 << 4);
                 s_status = (s_status & ~STATUS_V) | (((tmp2_U8 & 0x40) != 0) << 6);
-      /*$DB22*/ branchTarget = true; block_id = !tmp5_U8 ? 371 : 369;
+      /*$DB22*/ branchTarget = true; block_id = !tmp1_U8 ? 371 : 369;
       break;
     case 369:  // $DB24
       /*$DB24*/ s_pc = 0xdb24; CYCLES(0xdb24, 11);
-                tmp5_U8 = (uint8_t)(s_x - 0x01);
-                s_x = tmp5_U8;
-      /*$DB26*/ tmp4_U16 = tmp5_U8;
-                tmp6_U16 = ram_peek(0x0024);
-                tmp3_U16 = (tmp4_U16 - tmp6_U16) - (uint8_t)(0x01 - (s_status & STATUS_C));
-                tmp5_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)(~tmp6_U16)) << 6);
-                tmp2_U8 = (uint8_t)tmp3_U16;
+                tmp1_U8 = (uint8_t)(s_x - 0x01);
+                s_x = tmp1_U8;
+      /*$DB26*/ tmp3_U16 = tmp1_U8;
+                tmp5_U16 = ram_peek(0x0024);
+                tmp4_U16 = (tmp3_U16 - tmp5_U16) - (uint8_t)(0x01 - (s_status & STATUS_C));
+                tmp1_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)(~tmp5_U16)) << 6);
+                tmp2_U8 = (uint8_t)tmp4_U16;
                 s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
                 s_a = tmp2_U8;
-      /*$DB28*/ branchTarget = true; block_id = !tmp5_U8 ? 373 : 370;
+      /*$DB28*/ branchTarget = true; block_id = !tmp1_U8 ? 373 : 370;
       break;
     case 370:  // $DB2A
       /*$DB2A*/ s_pc = 0xdb2a; CYCLES(0xdb2a, 2);
@@ -2540,11 +2543,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 372:  // $DB2C
       /*$DB2C*/ s_pc = 0xdb2c; CYCLES(0xdb2c, 6);
-                tmp5_U8 = (uint8_t)(s_x - 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_x = tmp5_U8;
-      /*$DB2D*/ branchTarget = true; block_id = tmp5_U8 ? 375 : 373;
+                tmp1_U8 = (uint8_t)(s_x - 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_x = tmp1_U8;
+      /*$DB2D*/ branchTarget = true; block_id = tmp1_U8 ? 375 : 373;
       break;
     case 373:  // $DB2F
       /*$DB2F*/ s_pc = 0xdb2f; CYCLES(0xdb2f, 6);
@@ -2578,24 +2581,24 @@ void func_t001(bool adjust_sp) {
       break;
     case 380:  // $DB44
       /*$DB44*/ s_pc = 0xdb44; CYCLES(0xdb44, 6);
-                tmp5_U8 = (uint8_t)(s_x - 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_x = tmp5_U8;
-      /*$DB45*/ branchTarget = true; block_id = !tmp5_U8 ? 360 : 381;
+                tmp1_U8 = (uint8_t)(s_x - 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_x = tmp1_U8;
+      /*$DB45*/ branchTarget = true; block_id = !tmp1_U8 ? 360 : 381;
       break;
     case 381:  // $DB47
       /*$DB47*/ s_pc = 0xdb47; CYCLES(0xdb47, 9);
-                tmp5_U8 = peek((ram_peek16al(0x005e) + s_y));
-                s_a = tmp5_U8;
+                tmp1_U8 = peek((ram_peek16al(0x005e) + s_y));
+                s_a = tmp1_U8;
       /*$DB49*/ branchTarget = true; push16(0xdb4b); block_id = 387;
       break;
     case 382:  // $DB4C
       /*$DB4C*/ s_pc = 0xdb4c; CYCLES(0xdb4c, 9);
                 s_y = (uint8_t)(s_y + 0x01);
-      /*$DB4D*/ tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0x0d);
-      /*$DB4F*/ branchTarget = true; block_id = (tmp5_U8 != 0x0d) ? 380 : 383;
+      /*$DB4D*/ tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x0d);
+      /*$DB4F*/ branchTarget = true; block_id = (tmp1_U8 != 0x0d) ? 380 : 383;
       break;
     case 383:  // $DB51
       /*$DB51*/ s_pc = 0xdb51; CYCLES(0xdb51, 6);
@@ -2628,10 +2631,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 388:  // $DB62
       /*$DB62*/ s_pc = 0xdb62; CYCLES(0xdb62, 4);
-                tmp5_U8 = s_a | ram_peek(0x00f3);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
+                tmp1_U8 = s_a | ram_peek(0x00f3);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_a = tmp1_U8;
                 block_id = 389;
       break;
     case 389:  // $DB64
@@ -2646,10 +2649,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 391:  // $DB6F
       /*$DB6F*/ s_pc = 0xdb6f; CYCLES(0xdb6f, 4);
-                tmp5_U8 = pop8();
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
+                tmp1_U8 = pop8();
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_a = tmp1_U8;
       /*$DB70*/ branchTarget = true; block_id = find_block_id_func_t001(0xdb70, pop16() + 1);;
       break;
     case 392:  // $DB75
@@ -2675,9 +2678,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 396:  // $DB87
       /*$DB87*/ s_pc = 0xdb87; CYCLES(0xdb87, 7);
-                tmp5_U8 = ram_peek(0x00d8);
-                s_status = (s_status & ~STATUS_V) | (((tmp5_U8 >> 0x06) & 0x01) << 6);
-      /*$DB89*/ branchTarget = true; block_id = !(tmp5_U8 & 0x80) ? 398 : 397;
+                tmp1_U8 = ram_peek(0x00d8);
+                s_status = (s_status & ~STATUS_V) | (((tmp1_U8 >> 0x06) & 0x01) << 6);
+      /*$DB89*/ branchTarget = true; block_id = !(tmp1_U8 & 0x80) ? 398 : 397;
       break;
     case 397:  // $DB8B
       /*$DB8B*/ s_pc = 0xdb8b; CYCLES(0xdb8b, 9);
@@ -2692,13 +2695,13 @@ void func_t001(bool adjust_sp) {
       break;
     case 399:  // $DB97
       /*$DB97*/ s_pc = 0xdb97; CYCLES(0xdb97, 16);
-                tmp5_U8 = ram_peek(0x0079);
-                s_a = tmp5_U8;
+                tmp1_U8 = ram_peek(0x0079);
+                s_a = tmp1_U8;
       /*$DB99*/ tmp2_U8 = ram_peek(0x007a);
                 s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
                 s_y = tmp2_U8;
-      /*$DB9B*/ ram_poke(0x00b8, tmp5_U8);
+      /*$DB9B*/ ram_poke(0x00b8, tmp1_U8);
       /*$DB9D*/ ram_poke(0x00b9, tmp2_U8);
       /*$DB9F*/ branchTarget = true; block_id = find_block_id_func_t001(0xdb9f, pop16() + 1);;
       break;
@@ -2809,11 +2812,11 @@ void func_t001(bool adjust_sp) {
       /*$DBFE*/ ram_poke(0x0088, ram_peek(0x00b9));
       /*$DC00*/ tmp2_U8 = ram_peek(0x007f);
                 s_x = tmp2_U8;
-      /*$DC02*/ tmp5_U8 = ram_peek(0x0080);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_y = tmp5_U8;
+      /*$DC02*/ tmp1_U8 = ram_peek(0x0080);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_y = tmp1_U8;
       /*$DC04*/ ram_poke(0x00b8, tmp2_U8);
-      /*$DC06*/ ram_poke(0x00b9, tmp5_U8);
+      /*$DC06*/ ram_poke(0x00b9, tmp1_U8);
       /*$DC08*/ branchTarget = true; push16(0xdc0a); block_id = 4;
       break;
     case 420:  // $DC0B
@@ -2822,11 +2825,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 421:  // $DC0D
       /*$DC0D*/ s_pc = 0xdc0d; CYCLES(0xdc0d, 7);
-                tmp5_U8 = ram_peek(0x0015);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                tmp5_U8 = (tmp5_U8 >> 0x06) & 0x01;
-                s_status = (s_status & ~STATUS_V) | (tmp5_U8 << 6);
-      /*$DC0F*/ branchTarget = true; block_id = !tmp5_U8 ? 424 : 422;
+                tmp1_U8 = ram_peek(0x0015);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                tmp1_U8 = (tmp1_U8 >> 0x06) & 0x01;
+                s_status = (s_status & ~STATUS_V) | (tmp1_U8 << 6);
+      /*$DC0F*/ branchTarget = true; block_id = !tmp1_U8 ? 424 : 422;
       break;
     case 422:  // $DC11
       /*$DC11*/ s_pc = 0xdc11; CYCLES(0xdc11, 6);
@@ -2834,9 +2837,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 423:  // $DC14
       /*$DC14*/ s_pc = 0xdc14; CYCLES(0xdc14, 19);
-                tmp5_U8 = s_a & 0x7f;
-                s_a = tmp5_U8;
-      /*$DC16*/ ram_poke(0x0200, tmp5_U8);
+                tmp1_U8 = s_a & 0x7f;
+                s_a = tmp1_U8;
+      /*$DC16*/ ram_poke(0x0200, tmp1_U8);
       /*$DC19*/ s_x = 0xff;
       /*$DC1B*/ s_status = (s_status & ~STATUS_N) | 0x00;
                 s_y = 0x01;
@@ -2876,19 +2879,19 @@ void func_t001(bool adjust_sp) {
       break;
     case 431:  // $DC36
       /*$DC36*/ s_pc = 0xdc36; CYCLES(0xdc36, 16);
-                tmp5_U8 = (uint8_t)(s_x + 0x01);
-                s_x = tmp5_U8;
-      /*$DC37*/ ram_poke(0x00b8, tmp5_U8);
+                tmp1_U8 = (uint8_t)(s_x + 0x01);
+                s_x = tmp1_U8;
+      /*$DC37*/ ram_poke(0x00b8, tmp1_U8);
       /*$DC39*/ s_a = 0x00;
       /*$DC3B*/ ram_poke(0x000d, 0x00);
       /*$DC3D*/ branchTarget = true; block_id = 434;
       break;
     case 432:  // $DC3F
       /*$DC3F*/ s_pc = 0xdc3f; CYCLES(0xdc3f, 11);
-                tmp5_U8 = s_a;
-                ram_poke(0x000d, tmp5_U8);
-      /*$DC41*/ s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0x22);
-      /*$DC43*/ branchTarget = true; block_id = !(tmp5_U8 != 0x22) ? 435 : 433;
+                tmp1_U8 = s_a;
+                ram_poke(0x000d, tmp1_U8);
+      /*$DC41*/ s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x22);
+      /*$DC43*/ branchTarget = true; block_id = !(tmp1_U8 != 0x22) ? 435 : 433;
       break;
     case 433:  // $DC45
       /*$DC45*/ s_pc = 0xdc45; CYCLES(0xdc45, 11);
@@ -2905,21 +2908,21 @@ void func_t001(bool adjust_sp) {
       /*$DC4C*/ s_pc = 0xdc4c; CYCLES(0xdc4c, 18);
                 ram_poke(0x000e, s_a);
       /*$DC50*/ s_y = ram_peek(0x00b9);
-      /*$DC52*/ tmp6_U16 = ram_peek(0x00b8);
-                tmp3_U16 = tmp6_U16 + (s_status & STATUS_C);
-                tmp5_U8 = (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)0x0000) << 6);
-                tmp2_U8 = (uint8_t)tmp3_U16;
+      /*$DC52*/ tmp5_U16 = ram_peek(0x00b8);
+                tmp4_U16 = tmp5_U16 + (s_status & STATUS_C);
+                tmp1_U8 = (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)0x0000) << 6);
+                tmp2_U8 = (uint8_t)tmp4_U16;
                 s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
                 s_a = tmp2_U8;
-      /*$DC54*/ branchTarget = true; block_id = !tmp5_U8 ? 437 : 436;
+      /*$DC54*/ branchTarget = true; block_id = !tmp1_U8 ? 437 : 436;
       break;
     case 436:  // $DC56
       /*$DC56*/ s_pc = 0xdc56; CYCLES(0xdc56, 2);
-                tmp5_U8 = (uint8_t)(s_y + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_y = tmp5_U8;
+                tmp1_U8 = (uint8_t)(s_y + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_y = tmp1_U8;
                 block_id = 437;
       break;
     case 437:  // $DC57
@@ -2945,16 +2948,16 @@ void func_t001(bool adjust_sp) {
       break;
     case 442:  // $DC69
       /*$DC69*/ s_pc = 0xdc69; CYCLES(0xdc69, 7);
-                tmp5_U8 = pop8();
-                s_a = tmp5_U8;
+                tmp1_U8 = pop8();
+                s_a = tmp1_U8;
       /*$DC6A*/ branchTarget = true; push16(0xdc6c); block_id = 1027;
       break;
     case 443:  // $DC6D
       /*$DC6D*/ s_pc = 0xdc6d; CYCLES(0xdc6d, 9);
-                tmp5_U8 = ram_peek(0x0012);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
+                tmp1_U8 = ram_peek(0x0012);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_a = tmp1_U8;
       /*$DC6F*/ branchTarget = true; push16(0xdc71); block_id = 328;
       break;
     case 444:  // $DC72
@@ -2983,12 +2986,12 @@ void func_t001(bool adjust_sp) {
       /*$DC7E*/ s_pc = 0xdc7e; CYCLES(0xdc7e, 33);
       /*$DC82*/ ram_poke(0x007f, ram_peek(0x00b8));
       /*$DC84*/ ram_poke(0x0080, ram_peek(0x00b9));
-      /*$DC86*/ tmp5_U8 = ram_peek(0x0087);
-                s_a = tmp5_U8;
+      /*$DC86*/ tmp1_U8 = ram_peek(0x0087);
+                s_a = tmp1_U8;
       /*$DC88*/ tmp2_U8 = ram_peek(0x0088);
                 s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
                 s_y = tmp2_U8;
-      /*$DC8A*/ ram_poke(0x00b8, tmp5_U8);
+      /*$DC8A*/ ram_poke(0x00b8, tmp1_U8);
       /*$DC8C*/ ram_poke(0x00b9, tmp2_U8);
       /*$DC8E*/ branchTarget = true; push16(0xdc90); block_id = 4;
       break;
@@ -3011,8 +3014,8 @@ void func_t001(bool adjust_sp) {
     case 453:  // $DC9D
       /*$DC9D*/ s_pc = 0xdc9d; CYCLES(0xdc9d, 6);
       /*$DB86*/ s_pc = 0xdb86; CYCLES(0xdb86, 2);
-                tmp5_U8 = pop8();
-                s_a = tmp5_U8;
+                tmp1_U8 = pop8();
+                s_a = tmp1_U8;
                 block_id = 396;
       break;
     case 454:  // $DCA0
@@ -3027,28 +3030,28 @@ void func_t001(bool adjust_sp) {
     case 456:  // $DCA7
       /*$DCA7*/ s_pc = 0xdca7; CYCLES(0xdca7, 12);
                 s_x = 0x2a;
-      /*$DCA9*/ tmp5_U8 = (uint8_t)(s_y + 0x01);
-                s_y = tmp5_U8;
-      /*$DCAA*/ tmp5_U8 = peek((ram_peek16al(0x00b8) + tmp5_U8));
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_a = tmp5_U8;
-      /*$DCAC*/ branchTarget = true; block_id = !tmp5_U8 ? 472 : 457;
+      /*$DCA9*/ tmp1_U8 = (uint8_t)(s_y + 0x01);
+                s_y = tmp1_U8;
+      /*$DCAA*/ tmp1_U8 = peek((ram_peek16al(0x00b8) + tmp1_U8));
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_a = tmp1_U8;
+      /*$DCAC*/ branchTarget = true; block_id = !tmp1_U8 ? 472 : 457;
       break;
     case 457:  // $DCAE
       /*$DCAE*/ s_pc = 0xdcae; CYCLES(0xdcae, 19);
-                tmp5_U8 = s_y;
-      /*$DCAF*/ tmp2_U8 = peek((ram_peek16al(0x00b8) + (uint8_t)(tmp5_U8 + 0x01)));
+                tmp1_U8 = s_y;
+      /*$DCAF*/ tmp2_U8 = peek((ram_peek16al(0x00b8) + (uint8_t)(tmp1_U8 + 0x01)));
       /*$DCB1*/ ram_poke(0x007b, tmp2_U8);
-      /*$DCB4*/ tmp2_U8 = peek((ram_peek16al(0x00b8) + (uint8_t)(tmp5_U8 + 0x02)));
-      /*$DCB6*/ s_y = (uint8_t)(tmp5_U8 + 0x03);
+      /*$DCB4*/ tmp2_U8 = peek((ram_peek16al(0x00b8) + (uint8_t)(tmp1_U8 + 0x02)));
+      /*$DCB6*/ s_y = (uint8_t)(tmp1_U8 + 0x03);
       /*$DCB7*/ ram_poke(0x007c, tmp2_U8);
                 block_id = 458;
       break;
     case 458:  // $DCB9
       /*$DCB9*/ s_pc = 0xdcb9; CYCLES(0xdcb9, 11);
-                tmp5_U8 = peek((ram_peek16al(0x00b8) + s_y));
-                s_a = tmp5_U8;
-      /*$DCBB*/ s_x = tmp5_U8;
+                tmp1_U8 = peek((ram_peek16al(0x00b8) + s_y));
+                s_a = tmp1_U8;
+      /*$DCBB*/ s_x = tmp1_U8;
       /*$DCBC*/ branchTarget = true; push16(0xdcbe); block_id = 283;
       break;
     case 459:  // $DCBF
@@ -3067,10 +3070,10 @@ void func_t001(bool adjust_sp) {
       /*$DCC8*/ s_y = ram_peek(0x0080);
       /*$DCCA*/ tmp2_U8 = ram_peek(0x0015);
                 s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                tmp5_U8 = tmp2_U8 & 0x80;
-                s_status = (s_status & ~STATUS_N) | tmp5_U8;
+                tmp1_U8 = tmp2_U8 & 0x80;
+                s_status = (s_status & ~STATUS_N) | tmp1_U8;
                 s_x = tmp2_U8;
-      /*$DCCC*/ branchTarget = true; block_id = !tmp5_U8 ? 463 : 462;
+      /*$DCCC*/ branchTarget = true; block_id = !tmp1_U8 ? 463 : 462;
       break;
     case 462:  // $DCCE
       /*$DCCE*/ s_pc = 0xdcce; CYCLES(0xdcce, 6);
@@ -3164,12 +3167,12 @@ void func_t001(bool adjust_sp) {
       /*$DD37*/ s_pc = 0xdd37; CYCLES(0xdd37, 12);
                 tmp2_U8 = s_sp;
                 s_x = tmp2_U8;
-      /*$DD39*/ tmp3_U16 = s_a;
-                tmp6_U16 = ram_peek((0x0109 + tmp2_U8));
-                tmp4_U16 = tmp3_U16 - tmp6_U16;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)(~tmp6_U16)) << 6);
-      /*$DD3C*/ branchTarget = true; block_id = !((uint8_t)tmp4_U16) ? 480 : 478;
+      /*$DD39*/ tmp4_U16 = s_a;
+                tmp5_U16 = ram_peek((0x0109 + tmp2_U8));
+                tmp3_U16 = tmp4_U16 - tmp5_U16;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)(~tmp5_U16)) << 6);
+      /*$DD3C*/ branchTarget = true; block_id = !((uint8_t)tmp3_U16) ? 480 : 478;
       break;
     case 478:  // $DD3E
       /*$DD3E*/ s_pc = 0xdd3e; CYCLES(0xdd3e, 35);
@@ -3186,10 +3189,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 480:  // $DD55
       /*$DD55*/ s_pc = 0xdd55; CYCLES(0xdd55, 14);
-      /*$DD56*/ tmp4_U16 = s_x;
-                tmp6_U16 = (tmp4_U16 + 0x0011) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp4_U16, (uint8_t)0x0011) << 6);
-                tmp2_U8 = (uint8_t)tmp6_U16;
+      /*$DD56*/ tmp3_U16 = s_x;
+                tmp5_U16 = (tmp3_U16 + 0x0011) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp3_U16, (uint8_t)0x0011) << 6);
+                tmp2_U8 = (uint8_t)tmp5_U16;
                 s_a = tmp2_U8;
       /*$DD58*/ s_x = tmp2_U8;
       /*$DD59*/ s_sp = tmp2_U8;
@@ -3227,11 +3230,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 487:  // $DD6D
       /*$DD6D*/ s_pc = 0xdd6d; CYCLES(0xdd6d, 7);
-                tmp5_U8 = ram_peek(0x0011);
-                tmp2_U8 = tmp5_U8 & 0x80;
+                tmp6_U8 = ram_peek(0x0011);
+                tmp2_U8 = tmp6_U8 & 0x80;
                 s_status = (s_status & ~STATUS_N) | tmp2_U8;
-                s_status = (s_status & ~STATUS_V) | (((tmp5_U8 >> 0x06) & 0x01) << 6);
-                s_status = (s_status & ~STATUS_Z) | ((s_a & tmp5_U8) ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_V) | (((tmp6_U8 >> 0x06) & 0x01) << 6);
+                s_status = (s_status & ~STATUS_Z) | ((s_a & tmp6_U8) ? 0 : STATUS_Z);
       /*$DD6F*/ branchTarget = true; block_id = tmp2_U8 ? 490 : 488;
       break;
     case 488:  // $DD71
@@ -3289,12 +3292,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 499:  // $DD98
       /*$DD98*/ s_pc = 0xdd98; CYCLES(0xdd98, 9);
-      /*$DD99*/ tmp3_U16 = s_a;
-                tmp4_U16 = tmp3_U16 - 0x00cf;
-                tmp1_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+      /*$DD99*/ tmp4_U16 = s_a;
+                tmp3_U16 = tmp4_U16 - 0x00cf;
+                tmp1_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
                 s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0xff30) << 6);
-                s_a = ((uint8_t)tmp4_U16);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0xff30) << 6);
+                s_a = ((uint8_t)tmp3_U16);
       /*$DD9B*/ branchTarget = true; block_id = !tmp1_U8 ? 504 : 500;
       break;
     case 500:  // $DD9D
@@ -3333,22 +3336,22 @@ void func_t001(bool adjust_sp) {
       break;
     case 506:  // $DDBA
       /*$DDBA*/ s_pc = 0xddba; CYCLES(0xddba, 7);
-                tmp6_U16 = s_a;
-                tmp4_U16 = (tmp6_U16 + 0x0007) + (s_status & STATUS_C);
-                tmp2_U8 = (uint8_t)(tmp4_U16 >> 8);
+                tmp5_U16 = s_a;
+                tmp3_U16 = (tmp5_U16 + 0x0007) + (s_status & STATUS_C);
+                tmp2_U8 = (uint8_t)(tmp3_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp6_U16, (uint8_t)0x0007) << 6);
-                s_a = ((uint8_t)tmp4_U16);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp5_U16, (uint8_t)0x0007) << 6);
+                s_a = ((uint8_t)tmp3_U16);
       /*$DDBC*/ branchTarget = true; block_id = !tmp2_U8 ? 529 : 507;
       break;
     case 507:  // $DDBE
       /*$DDBE*/ s_pc = 0xddbe; CYCLES(0xddbe, 7);
-                tmp4_U16 = s_a;
-                tmp6_U16 = ram_peek(0x0011);
-                tmp3_U16 = (tmp4_U16 + tmp6_U16) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)tmp6_U16) << 6);
-                tmp2_U8 = (uint8_t)tmp3_U16;
+                tmp3_U16 = s_a;
+                tmp5_U16 = ram_peek(0x0011);
+                tmp4_U16 = (tmp3_U16 + tmp5_U16) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)tmp5_U16) << 6);
+                tmp2_U8 = (uint8_t)tmp4_U16;
                 s_a = tmp2_U8;
       /*$DDC0*/ branchTarget = true; block_id = tmp2_U8 ? 509 : 508;
       break;
@@ -3363,14 +3366,14 @@ void func_t001(bool adjust_sp) {
       break;
     case 509:  // $DDC5
       /*$DDC5*/ s_pc = 0xddc5; CYCLES(0xddc5, 14);
-                tmp3_U16 = (s_a + 0x00ff) + (s_status & STATUS_C);
-      /*$DDC7*/ ram_poke(0x005e, ((uint8_t)tmp3_U16));
-      /*$DDC9*/ tmp3_U16 = (tmp3_U16 & 0x00ff) << 0x01;
-      /*$DDCA*/ tmp6_U16 = tmp3_U16 & 0x00ff;
-                tmp4_U16 = ram_peek(0x005e);
-                tmp3_U16 = (tmp6_U16 + tmp4_U16) + (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)tmp4_U16) << 6);
-      /*$DDCC*/ s_y = ((uint8_t)tmp3_U16);
+                tmp4_U16 = (s_a + 0x00ff) + (s_status & STATUS_C);
+      /*$DDC7*/ ram_poke(0x005e, ((uint8_t)tmp4_U16));
+      /*$DDC9*/ tmp4_U16 = tmp4_U16 << 0x01;
+      /*$DDCA*/ tmp5_U16 = tmp4_U16 & 0x00ff;
+                tmp3_U16 = ram_peek(0x005e);
+                tmp4_U16 = (tmp5_U16 + tmp3_U16) + (uint8_t)((tmp4_U16 & 0x01ff) >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)tmp3_U16) << 6);
+      /*$DDCC*/ s_y = ((uint8_t)tmp4_U16);
                 block_id = 510;
       break;
     case 510:  // $DDCD
@@ -3472,14 +3475,14 @@ void func_t001(bool adjust_sp) {
       break;
     case 526:  // $DE15
       /*$DE15*/ s_pc = 0xde15; CYCLES(0xde15, 19);
-                tmp5_U8 = s_a;
-                s_y = tmp5_U8;
+                tmp6_U8 = s_a;
+                s_y = tmp6_U8;
       /*$DE16*/ tmp1_U8 = pop8();
       /*$DE17*/ ram_poke(0x005e, tmp1_U8);
       /*$DE19*/ ram_poke(0x005e, (uint8_t)(ram_peek(0x005e) + 0x01));
       /*$DE1B*/ tmp1_U8 = pop8();
       /*$DE1C*/ ram_poke(0x005f, tmp1_U8);
-      /*$DE1F*/ push8(tmp5_U8);
+      /*$DE1F*/ push8(tmp6_U8);
                 block_id = 527;
       break;
     case 527:  // $DE20
@@ -3580,37 +3583,37 @@ void func_t001(bool adjust_sp) {
       break;
     case 542:  // $DE71
       /*$DE71*/ s_pc = 0xde71; CYCLES(0xde71, 7);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0x2e);
-      /*$DE73*/ branchTarget = true; block_id = !(tmp5_U8 != 0x2e) ? 539 : 543;
+                tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x2e);
+      /*$DE73*/ branchTarget = true; block_id = !(tmp1_U8 != 0x2e) ? 539 : 543;
       break;
     case 543:  // $DE75
       /*$DE75*/ s_pc = 0xde75; CYCLES(0xde75, 7);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0xc9);
-      /*$DE77*/ branchTarget = true; block_id = !(tmp5_U8 != 0xc9) ? 567 : 544;
+                tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0xc9);
+      /*$DE77*/ branchTarget = true; block_id = !(tmp1_U8 != 0xc9) ? 567 : 544;
       break;
     case 544:  // $DE79
       /*$DE79*/ s_pc = 0xde79; CYCLES(0xde79, 7);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0xc8);
-      /*$DE7B*/ branchTarget = true; block_id = !(tmp5_U8 != 0xc8) ? 537 : 545;
+                tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0xc8);
+      /*$DE7B*/ branchTarget = true; block_id = !(tmp1_U8 != 0xc8) ? 537 : 545;
       break;
     case 545:  // $DE7D
       /*$DE7D*/ s_pc = 0xde7d; CYCLES(0xde7d, 7);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0x22);
-      /*$DE7F*/ branchTarget = true; block_id = (tmp5_U8 != 0x22) ? 550 : 546;
+                tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x22);
+      /*$DE7F*/ branchTarget = true; block_id = (tmp1_U8 != 0x22) ? 550 : 546;
       break;
     case 546:  // $DE81
       /*$DE81*/ s_pc = 0xde81; CYCLES(0xde81, 14);
       /*$DE83*/ s_y = ram_peek(0x00b9);
-      /*$DE85*/ tmp3_U16 = ram_peek(0x00b8);
-                tmp6_U16 = tmp3_U16 + (s_status & STATUS_C);
-                tmp2_U8 = (uint8_t)(tmp6_U16 >> 8);
+      /*$DE85*/ tmp4_U16 = ram_peek(0x00b8);
+                tmp5_U16 = tmp4_U16 + (s_status & STATUS_C);
+                tmp2_U8 = (uint8_t)(tmp5_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)0x0000) << 6);
-                s_a = ((uint8_t)tmp6_U16);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)0x0000) << 6);
+                s_a = ((uint8_t)tmp5_U16);
       /*$DE87*/ branchTarget = true; block_id = !tmp2_U8 ? 548 : 547;
       break;
     case 547:  // $DE89
@@ -3628,9 +3631,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 550:  // $DE90
       /*$DE90*/ s_pc = 0xde90; CYCLES(0xde90, 7);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0xc6);
-      /*$DE92*/ branchTarget = true; block_id = (tmp5_U8 != 0xc6) ? 555 : 551;
+                tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0xc6);
+      /*$DE92*/ branchTarget = true; block_id = (tmp1_U8 != 0xc6) ? 555 : 551;
       break;
     case 551:  // $DE94
       /*$DE94*/ s_pc = 0xde94; CYCLES(0xde94, 7);
@@ -3639,9 +3642,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 552:  // $DE98
       /*$DE98*/ s_pc = 0xde98; CYCLES(0xde98, 7);
-                tmp5_U8 = ram_peek(0x009d);
-                s_a = tmp5_U8;
-      /*$DE9A*/ branchTarget = true; block_id = tmp5_U8 ? 554 : 553;
+                tmp1_U8 = ram_peek(0x009d);
+                s_a = tmp1_U8;
+      /*$DE9A*/ branchTarget = true; block_id = tmp1_U8 ? 554 : 553;
       break;
     case 553:  // $DE9C
       /*$DE9C*/ s_pc = 0xde9c; CYCLES(0xde9c, 14);
@@ -3656,9 +3659,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 555:  // $DEA4
       /*$DEA4*/ s_pc = 0xdea4; CYCLES(0xdea4, 7);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0xc2);
-      /*$DEA6*/ branchTarget = true; block_id = (tmp5_U8 != 0xc2) ? 557 : 556;
+                tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0xc2);
+      /*$DEA6*/ branchTarget = true; block_id = (tmp1_U8 != 0xc2) ? 557 : 556;
       break;
     case 556:  // $DEA8
       /*$DEA8*/ s_pc = 0xdea8; CYCLES(0xdea8, 6);
@@ -3667,16 +3670,16 @@ void func_t001(bool adjust_sp) {
       break;
     case 557:  // $DEAB
       /*$DEAB*/ s_pc = 0xdeab; CYCLES(0xdeab, 7);
-                tmp5_U8 = s_a >= 0xd2;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$DEAD*/ branchTarget = true; block_id = !tmp5_U8 ? 559 : 558;
+                tmp1_U8 = s_a >= 0xd2;
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+      /*$DEAD*/ branchTarget = true; block_id = !tmp1_U8 ? 559 : 558;
       break;
     case 558:  // $DEAF
       /*$DEAF*/ s_pc = 0xdeaf; CYCLES(0xdeaf, 6);
       /*$DF0C*/ s_pc = 0xdf0c; CYCLES(0xdf0c, 7);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0xd7);
-      /*$DF0E*/ branchTarget = true; block_id = !(tmp5_U8 != 0xd7) ? 575 : 580;
+                tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0xd7);
+      /*$DF0E*/ branchTarget = true; block_id = !(tmp1_U8 != 0xd7) ? 575 : 580;
       break;
     case 559:  // $DEB2
       /*$DEB2*/ s_pc = 0xdeb2; CYCLES(0xdeb2, 6);
@@ -3707,9 +3710,9 @@ void func_t001(bool adjust_sp) {
       /*$DEC0*/ s_pc = 0xdec0; CYCLES(0xdec0, 11);
                 s_y = 0x00;
       /*$DEC2*/ tmp1_U8 = s_a;
-                tmp5_U8 = peek(ram_peek16al(0x00b8));
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp5_U8);
-      /*$DEC4*/ branchTarget = true; block_id = (tmp1_U8 != tmp5_U8) ? 566 : 565;
+                tmp6_U8 = peek(ram_peek16al(0x00b8));
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp6_U8);
+      /*$DEC4*/ branchTarget = true; block_id = (tmp1_U8 != tmp6_U8) ? 566 : 565;
       break;
     case 565:  // $DEC6
       /*$DEC6*/ s_pc = 0xdec6; CYCLES(0xdec6, 6);
@@ -3727,8 +3730,8 @@ void func_t001(bool adjust_sp) {
       break;
     case 568:  // $DED0
       /*$DED0*/ s_pc = 0xded0; CYCLES(0xded0, 9);
-                tmp5_U8 = pop8();
-      /*$DED1*/ tmp5_U8 = pop8();
+                tmp1_U8 = pop8();
+      /*$DED1*/ tmp1_U8 = pop8();
       /*$DED2*/ branchTarget = true; block_id = 513;
       break;
     case 569:  // $DED5
@@ -3751,16 +3754,16 @@ void func_t001(bool adjust_sp) {
       break;
     case 572:  // $DEE5
       /*$DEE5*/ s_pc = 0xdee5; CYCLES(0xdee5, 7);
-                tmp5_U8 = ram_peek(0x0012);
-                s_x = tmp5_U8;
-      /*$DEE7*/ branchTarget = true; block_id = !(tmp5_U8 & 0x80) ? 574 : 573;
+                tmp1_U8 = ram_peek(0x0012);
+                s_x = tmp1_U8;
+      /*$DEE7*/ branchTarget = true; block_id = !(tmp1_U8 & 0x80) ? 574 : 573;
       break;
     case 573:  // $DEE9
       /*$DEE9*/ s_pc = 0xdee9; CYCLES(0xdee9, 23);
-      /*$DEEB*/ tmp5_U8 = peek(ram_peek16al(0x00a0));
+      /*$DEEB*/ tmp1_U8 = peek(ram_peek16al(0x00a0));
       /*$DEEF*/ tmp2_U8 = peek((ram_peek16al(0x00a0) + 0x0001));
       /*$DEF1*/ s_y = tmp2_U8;
-      /*$DEF2*/ s_a = tmp5_U8;
+      /*$DEF2*/ s_a = tmp1_U8;
       /*$DEF3*/ branchTarget = true; block_id = 739;
       break;
     case 574:  // $DEF6
@@ -3792,10 +3795,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 580:  // $DF10
       /*$DF10*/ s_pc = 0xdf10; CYCLES(0xdf10, 11);
-                tmp5_U8 = (uint8_t)(s_a << 0x01);
-                s_a = tmp5_U8;
-      /*$DF11*/ push8(tmp5_U8);
-      /*$DF12*/ s_x = tmp5_U8;
+                tmp1_U8 = (uint8_t)(s_a << 0x01);
+                s_a = tmp1_U8;
+      /*$DF11*/ push8(tmp1_U8);
+      /*$DF12*/ s_x = tmp1_U8;
       /*$DF13*/ branchTarget = true; push16(0xdf15); block_id = 2;
       break;
     case 581:  // $DF16
@@ -3822,18 +3825,18 @@ void func_t001(bool adjust_sp) {
       break;
     case 586:  // $DF26
       /*$DF26*/ s_pc = 0xdf26; CYCLES(0xdf26, 23);
-                tmp5_U8 = pop8();
-      /*$DF27*/ s_x = tmp5_U8;
+                tmp1_U8 = pop8();
+      /*$DF27*/ s_x = tmp1_U8;
       /*$DF2A*/ push8(ram_peek(0x00a1));
       /*$DF2D*/ push8(ram_peek(0x00a0));
-      /*$DF2E*/ s_a = tmp5_U8;
-      /*$DF2F*/ push8(tmp5_U8);
+      /*$DF2E*/ s_a = tmp1_U8;
+      /*$DF2F*/ push8(tmp1_U8);
       /*$DF30*/ branchTarget = true; push16(0xdf32); block_id = 856;
       break;
     case 587:  // $DF33
       /*$DF33*/ s_pc = 0xdf33; CYCLES(0xdf33, 12);
-                tmp5_U8 = pop8();
-      /*$DF34*/ s_y = tmp5_U8;
+                tmp1_U8 = pop8();
+      /*$DF34*/ s_y = tmp1_U8;
       /*$DF36*/ push8(s_x);
       /*$DF37*/ branchTarget = true; block_id = 590;
       break;
@@ -3849,14 +3852,14 @@ void func_t001(bool adjust_sp) {
       break;
     case 590:  // $DF3F
       /*$DF3F*/ s_pc = 0xdf3f; CYCLES(0xdf3f, 23);
-                tmp5_U8 = s_y;
-                tmp2_U8 = peek((0xcfdc + tmp5_U8));
+                tmp1_U8 = s_y;
+                tmp2_U8 = peek((0xcfdc + tmp1_U8));
       /*$DF42*/ ram_poke(0x0091, tmp2_U8);
-      /*$DF44*/ tmp5_U8 = peek((0xcfdd + tmp5_U8));
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$DF47*/ ram_poke(0x0092, tmp5_U8);
+      /*$DF44*/ tmp1_U8 = peek((0xcfdd + tmp1_U8));
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_a = tmp1_U8;
+      /*$DF47*/ ram_poke(0x0092, tmp1_U8);
       /*$DF49*/ branchTarget = true; push16(0xdf4b); block_id = 1;
       break;
     case 591:  // $DF4C
@@ -3880,9 +3883,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 595:  // $DF79
       /*$DF79*/ s_pc = 0xdf79; CYCLES(0xdf79, 7);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_x = tmp5_U8;
+                tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_x = tmp1_U8;
       /*$DF7A*/ branchTarget = true; block_id = 604;
       break;
     case 596:  // $DF7D
@@ -3898,26 +3901,26 @@ void func_t001(bool adjust_sp) {
       /*$DF88*/ ram_poke(0x009e, s_x);
       /*$DF8A*/ ram_poke(0x009f, s_y);
       /*$DF8C*/ s_a = ram_peek(0x00a8);
-      /*$DF8E*/ tmp5_U8 = ram_peek(0x00a9);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_y = tmp5_U8;
+      /*$DF8E*/ tmp1_U8 = ram_peek(0x00a9);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_y = tmp1_U8;
       /*$DF90*/ branchTarget = true; push16(0xdf92); block_id = 847;
       break;
     case 598:  // $DF93
       /*$DF93*/ s_pc = 0xdf93; CYCLES(0xdf93, 18);
                 ram_poke(0x00a8, s_x);
       /*$DF95*/ ram_poke(0x00a9, s_y);
-      /*$DF97*/ tmp5_U8 = s_a;
-                s_x = tmp5_U8;
-      /*$DF99*/ tmp3_U16 = tmp5_U8;
-                tmp4_U16 = ram_peek(0x009d);
-                tmp6_U16 = tmp3_U16 - tmp4_U16;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp6_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)(~tmp4_U16)) << 6);
-                tmp5_U8 = (uint8_t)tmp6_U16;
-                s_a = tmp5_U8;
-      /*$DF9B*/ branchTarget = true; block_id = !tmp5_U8 ? 601 : 599;
+      /*$DF97*/ tmp1_U8 = s_a;
+                s_x = tmp1_U8;
+      /*$DF99*/ tmp4_U16 = tmp1_U8;
+                tmp3_U16 = ram_peek(0x009d);
+                tmp5_U16 = tmp4_U16 - tmp3_U16;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp5_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)(~tmp3_U16)) << 6);
+                tmp1_U8 = (uint8_t)tmp5_U16;
+                s_a = tmp1_U8;
+      /*$DF9B*/ branchTarget = true; block_id = !tmp1_U8 ? 601 : 599;
       break;
     case 599:  // $DF9D
       /*$DF9D*/ s_pc = 0xdf9d; CYCLES(0xdf9d, 7);
@@ -3963,10 +3966,10 @@ void func_t001(bool adjust_sp) {
     case 606:  // $DFB5
       /*$DFB5*/ s_pc = 0xdfb5; CYCLES(0xdfb5, 11);
                 tmp2_U8 = s_y;
-                tmp5_U8 = peek((ram_peek16al(0x00a8) + tmp2_U8));
+                tmp1_U8 = peek((ram_peek16al(0x00a8) + tmp2_U8));
       /*$DFB7*/ tmp2_U8 = peek((ram_peek16al(0x009e) + tmp2_U8));
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= tmp2_U8);
-      /*$DFB9*/ branchTarget = true; block_id = !(tmp5_U8 != tmp2_U8) ? 602 : 607;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp2_U8);
+      /*$DFB9*/ branchTarget = true; block_id = !(tmp1_U8 != tmp2_U8) ? 602 : 607;
       break;
     case 607:  // $DFBB
       /*$DFBB*/ s_pc = 0xdfbb; CYCLES(0xdfbb, 7);
@@ -3980,9 +3983,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 609:  // $DFC1
       /*$DFC1*/ s_pc = 0xdfc1; CYCLES(0xdfc1, 12);
-      /*$DFC3*/ tmp6_U16 = ((uint8_t)(s_x + 0x01) << 0x01) | (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp6_U16 >> 8);
-      /*$DFC4*/ tmp2_U8 = ((uint8_t)tmp6_U16) & ram_peek(0x0016);
+      /*$DFC3*/ tmp5_U16 = ((uint8_t)(s_x + 0x01) << 0x01) | (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp5_U16 >> 8);
+      /*$DFC4*/ tmp2_U8 = ((uint8_t)tmp5_U16) & ram_peek(0x0016);
                 s_a = tmp2_U8;
       /*$DFC6*/ branchTarget = true; block_id = !tmp2_U8 ? 611 : 610;
       break;
@@ -4115,11 +4118,11 @@ void func_t001(bool adjust_sp) {
     case 636:  // $E03D
       /*$E03D*/ s_pc = 0xe03d; CYCLES(0xe03d, 16);
                 ram_poke(0x0082, s_x);
-      /*$E042*/ tmp4_U16 = (s_a | ram_peek(0x0014));
-                tmp3_U16 = tmp4_U16 - 0x0028;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0xffd7) << 6);
-                tmp1_U8 = (uint8_t)tmp3_U16;
+      /*$E042*/ tmp3_U16 = (s_a | ram_peek(0x0014));
+                tmp4_U16 = tmp3_U16 - 0x0028;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0xffd7) << 6);
+                tmp1_U8 = (uint8_t)tmp4_U16;
                 s_a = tmp1_U8;
       /*$E044*/ branchTarget = true; block_id = tmp1_U8 ? 638 : 637;
       break;
@@ -4179,11 +4182,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 647:  // $E073
       /*$E073*/ s_pc = 0xe073; CYCLES(0xe073, 12);
-      /*$E076*/ tmp6_U16 = ram_peek(0x009b);
-                tmp4_U16 = tmp6_U16 + 0x0007;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp6_U16, (uint8_t)0x0007) << 6);
-                s_a = ((uint8_t)tmp4_U16);
-      /*$E078*/ branchTarget = true; block_id = !(uint8_t)(tmp4_U16 >> 8) ? 642 : 648;
+      /*$E076*/ tmp5_U16 = ram_peek(0x009b);
+                tmp3_U16 = tmp5_U16 + 0x0007;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp5_U16, (uint8_t)0x0007) << 6);
+                s_a = ((uint8_t)tmp3_U16);
+      /*$E078*/ branchTarget = true; block_id = !(uint8_t)(tmp3_U16 >> 8) ? 642 : 648;
       break;
     case 648:  // $E07A
       /*$E07A*/ s_pc = 0xe07a; CYCLES(0xe07a, 6);
@@ -4195,18 +4198,19 @@ void func_t001(bool adjust_sp) {
       /*$E07D*/ s_pc = 0xe07d; CYCLES(0xe07d, 7);
                 tmp2_U8 = s_a;
                 s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != 0x41) ? 0 : STATUS_Z);
-                tmp5_U8 = tmp2_U8 >= 0x41;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
+                tmp1_U8 = tmp2_U8 >= 0x41;
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
                 s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - 0x41) & 0x80);
-      /*$E07F*/ branchTarget = true; block_id = !tmp5_U8 ? 651 : 650;
+      /*$E07F*/ branchTarget = true; block_id = !tmp1_U8 ? 651 : 650;
       break;
     case 650:  // $E081
       /*$E081*/ s_pc = 0xe081; CYCLES(0xe081, 9);
-      /*$E084*/ tmp6_U16 = ((s_a - 0x005b) - (uint8_t)(0x01 - (s_status & STATUS_C))) & 0x00ff;
-                tmp4_U16 = tmp6_U16 - 0x00a5;
+                tmp5_U16 = (s_a - 0x005b) - (uint8_t)(0x01 - (s_status & STATUS_C));
+      /*$E084*/ tmp3_U16 = tmp5_U16 & 0x00ff;
+                tmp4_U16 = tmp3_U16 - 0x00a5;
                 s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp6_U16, (uint8_t)0xff5a) << 6);
-                tmp2_U8 = (uint8_t)tmp4_U16;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0xff5a) << 6);
+                tmp2_U8 = (uint8_t)(tmp5_U16 - 0x00a5);
                 s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
                 s_a = tmp2_U8;
@@ -4243,15 +4247,15 @@ void func_t001(bool adjust_sp) {
       /*$E0A0*/ ram_poke(0x009b, ram_peek(0x006b));
       /*$E0A2*/ ram_poke(0x009c, ram_peek(0x006c));
       /*$E0A4*/ tmp2_U8 = ram_peek(0x006d);
-      /*$E0A6*/ tmp5_U8 = ram_peek(0x006e);
-                s_y = tmp5_U8;
+      /*$E0A6*/ tmp1_U8 = ram_peek(0x006e);
+                s_y = tmp1_U8;
       /*$E0A8*/ ram_poke(0x0096, tmp2_U8);
-      /*$E0AA*/ ram_poke(0x0097, tmp5_U8);
-      /*$E0AD*/ tmp4_U16 = tmp2_U8;
-                tmp6_U16 = tmp4_U16 + 0x0007;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp4_U16, (uint8_t)0x0007) << 6);
-                s_a = ((uint8_t)tmp6_U16);
-      /*$E0AF*/ branchTarget = true; block_id = !(uint8_t)(tmp6_U16 >> 8) ? 657 : 656;
+      /*$E0AA*/ ram_poke(0x0097, tmp1_U8);
+      /*$E0AD*/ tmp5_U16 = tmp2_U8;
+                tmp3_U16 = tmp5_U16 + 0x0007;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp5_U16, (uint8_t)0x0007) << 6);
+                s_a = ((uint8_t)tmp3_U16);
+      /*$E0AF*/ branchTarget = true; block_id = !(uint8_t)(tmp3_U16 >> 8) ? 657 : 656;
       break;
     case 656:  // $E0B1
       /*$E0B1*/ s_pc = 0xe0b1; CYCLES(0xe0b1, 2);
@@ -4279,16 +4283,16 @@ void func_t001(bool adjust_sp) {
       break;
     case 659:  // $E0DE
       /*$E0DE*/ s_pc = 0xe0de; CYCLES(0xe0de, 16);
-      /*$E0E1*/ tmp4_U16 = ram_peek(0x009b);
-                tmp6_U16 = tmp4_U16 + 0x0002;
-                tmp2_U8 = (uint8_t)(tmp6_U16 >> 8);
+      /*$E0E1*/ tmp3_U16 = ram_peek(0x009b);
+                tmp5_U16 = tmp3_U16 + 0x0002;
+                tmp2_U8 = (uint8_t)(tmp5_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp4_U16, (uint8_t)0x0002) << 6);
-                s_a = ((uint8_t)tmp6_U16);
-      /*$E0E3*/ tmp5_U8 = ram_peek(0x009c);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_y = tmp5_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp3_U16, (uint8_t)0x0002) << 6);
+                s_a = ((uint8_t)tmp5_U16);
+      /*$E0E3*/ tmp1_U8 = ram_peek(0x009c);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_y = tmp1_U8;
       /*$E0E5*/ branchTarget = true; block_id = !tmp2_U8 ? 661 : 660;
       break;
     case 660:  // $E0E7
@@ -4364,14 +4368,14 @@ void func_t001(bool adjust_sp) {
       /*$E13A*/ tmp2_U8 = pop8();
       /*$E13B*/ ram_poke(0x0082, tmp2_U8);
       /*$E13D*/ tmp2_U8 = pop8();
-      /*$E13F*/ tmp5_U8 = s_sp;
-                s_x = tmp5_U8;
-      /*$E143*/ push8(ram_peek((0x0102 + tmp5_U8)));
-      /*$E147*/ push8(ram_peek((0x0101 + tmp5_U8)));
-      /*$E14A*/ ram_poke((0x0102 + tmp5_U8), ram_peek(0x00a0));
-      /*$E14D*/ tmp1_U8 = ram_peek(0x00a1);
-                s_a = tmp1_U8;
-      /*$E14F*/ ram_poke((0x0101 + tmp5_U8), tmp1_U8);
+      /*$E13F*/ tmp1_U8 = s_sp;
+                s_x = tmp1_U8;
+      /*$E143*/ push8(ram_peek((0x0102 + tmp1_U8)));
+      /*$E147*/ push8(ram_peek((0x0101 + tmp1_U8)));
+      /*$E14A*/ ram_poke((0x0102 + tmp1_U8), ram_peek(0x00a0));
+      /*$E14D*/ tmp6_U8 = ram_peek(0x00a1);
+                s_a = tmp6_U8;
+      /*$E14F*/ ram_poke((0x0101 + tmp1_U8), tmp6_U8);
       /*$E152*/ s_y = (uint8_t)(tmp2_U8 + 0x01);
       /*$E153*/ branchTarget = true; push16(0xe155); block_id = 4;
       break;
@@ -4411,9 +4415,9 @@ void func_t001(bool adjust_sp) {
     case 677:  // $E175
       /*$E175*/ s_pc = 0xe175; CYCLES(0xe175, 7);
                 tmp2_U8 = s_x;
-                tmp5_U8 = ram_peek(0x006d);
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp5_U8);
-      /*$E177*/ branchTarget = true; block_id = !(tmp2_U8 != tmp5_U8) ? 689 : 678;
+                tmp1_U8 = ram_peek(0x006d);
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp1_U8);
+      /*$E177*/ branchTarget = true; block_id = !(tmp2_U8 != tmp1_U8) ? 689 : 678;
       break;
     case 678:  // $E179
       /*$E179*/ s_pc = 0xe179; CYCLES(0xe179, 16);
@@ -4423,28 +4427,28 @@ void func_t001(bool adjust_sp) {
       break;
     case 679:  // $E182
       /*$E182*/ s_pc = 0xe182; CYCLES(0xe182, 11);
-                tmp5_U8 = ram_peek(0x0082);
+                tmp1_U8 = ram_peek(0x0082);
       /*$E184*/ tmp2_U8 = peek((ram_peek16(0x009b) + s_y));
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= tmp2_U8);
-      /*$E186*/ branchTarget = true; block_id = !(tmp5_U8 != tmp2_U8) ? 684 : 680;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp2_U8);
+      /*$E186*/ branchTarget = true; block_id = !(tmp1_U8 != tmp2_U8) ? 684 : 680;
       break;
     case 680:  // $E188
       /*$E188*/ s_pc = 0xe188; CYCLES(0xe188, 24);
-                tmp5_U8 = s_y;
-      /*$E189*/ tmp2_U8 = peek((ram_peek16(0x009b) + (uint8_t)(tmp5_U8 + 0x01)));
-      /*$E18C*/ tmp6_U16 = tmp2_U8 + ram_peek(0x009b);
-      /*$E18E*/ s_x = ((uint8_t)tmp6_U16);
-      /*$E18F*/ tmp5_U8 = (uint8_t)(tmp5_U8 + 0x02);
-                s_y = tmp5_U8;
-      /*$E190*/ tmp5_U8 = peek((ram_peek16(0x009b) + tmp5_U8));
-      /*$E192*/ tmp4_U16 = tmp5_U8;
-                tmp3_U16 = ram_peek(0x009c);
-                tmp6_U16 = (tmp4_U16 + tmp3_U16) + (uint8_t)(tmp6_U16 >> 8);
-                tmp5_U8 = (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp4_U16, (uint8_t)tmp3_U16) << 6);
-                s_a = ((uint8_t)tmp6_U16);
-      /*$E194*/ branchTarget = true; block_id = !tmp5_U8 ? 676 : 681;
+                tmp1_U8 = s_y;
+      /*$E189*/ tmp2_U8 = peek((ram_peek16(0x009b) + (uint8_t)(tmp1_U8 + 0x01)));
+      /*$E18C*/ tmp3_U16 = tmp2_U8 + ram_peek(0x009b);
+      /*$E18E*/ s_x = ((uint8_t)tmp3_U16);
+      /*$E18F*/ tmp1_U8 = (uint8_t)(tmp1_U8 + 0x02);
+                s_y = tmp1_U8;
+      /*$E190*/ tmp1_U8 = peek((ram_peek16(0x009b) + tmp1_U8));
+      /*$E192*/ tmp5_U16 = tmp1_U8;
+                tmp4_U16 = ram_peek(0x009c);
+                tmp3_U16 = (tmp5_U16 + tmp4_U16) + (uint8_t)(tmp3_U16 >> 8);
+                tmp1_U8 = (uint8_t)(tmp3_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp5_U16, (uint8_t)tmp4_U16) << 6);
+                s_a = ((uint8_t)tmp3_U16);
+      /*$E194*/ branchTarget = true; block_id = !tmp1_U8 ? 676 : 681;
       break;
     case 681:  // $E196
       /*$E196*/ s_pc = 0xe196; CYCLES(0xe196, 9);
@@ -4487,9 +4491,9 @@ void func_t001(bool adjust_sp) {
                 tmp2_U8 = ram_peek(0x000f);
                 s_a = tmp2_U8;
       /*$E1AF*/ s_y = 0x04;
-      /*$E1B1*/ tmp5_U8 = peek((ram_peek16(0x009b) + 0x0004));
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp5_U8);
-      /*$E1B3*/ branchTarget = true; block_id = (tmp2_U8 != tmp5_U8) ? 681 : 688;
+      /*$E1B1*/ tmp1_U8 = peek((ram_peek16(0x009b) + 0x0004));
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp1_U8);
+      /*$E1B3*/ branchTarget = true; block_id = (tmp2_U8 != tmp1_U8) ? 681 : 688;
       break;
     case 688:  // $E1B5
       /*$E1B5*/ s_pc = 0xe1b5; CYCLES(0xe1b5, 6);
@@ -4497,9 +4501,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 689:  // $E1B8
       /*$E1B8*/ s_pc = 0xe1b8; CYCLES(0xe1b8, 7);
-                tmp5_U8 = ram_peek(0x0014);
-                s_a = tmp5_U8;
-      /*$E1BA*/ branchTarget = true; block_id = !tmp5_U8 ? 691 : 690;
+                tmp1_U8 = ram_peek(0x0014);
+                s_a = tmp1_U8;
+      /*$E1BA*/ branchTarget = true; block_id = !tmp1_U8 ? 691 : 690;
       break;
     case 690:  // $E1BC
       /*$E1BC*/ s_pc = 0xe1bc; CYCLES(0xe1bc, 9);
@@ -4517,9 +4521,9 @@ void func_t001(bool adjust_sp) {
       /*$E1C9*/ s_y = 0x00;
       /*$E1CA*/ ram_poke(0x00ae, 0x00);
       /*$E1CC*/ s_x = 0x05;
-      /*$E1CE*/ tmp5_U8 = ram_peek(0x0081);
-      /*$E1D0*/ poke(ram_peek16(0x009b), tmp5_U8);
-      /*$E1D2*/ branchTarget = true; block_id = !(tmp5_U8 & 0x80) ? 694 : 693;
+      /*$E1CE*/ tmp1_U8 = ram_peek(0x0081);
+      /*$E1D0*/ poke(ram_peek16(0x009b), tmp1_U8);
+      /*$E1D2*/ branchTarget = true; block_id = !(tmp1_U8 & 0x80) ? 694 : 693;
       break;
     case 693:  // $E1D4
       /*$E1D4*/ s_pc = 0xe1d4; CYCLES(0xe1d4, 2);
@@ -4528,10 +4532,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 694:  // $E1D5
       /*$E1D5*/ s_pc = 0xe1d5; CYCLES(0xe1d5, 12);
-                tmp5_U8 = (uint8_t)(s_y + 0x01);
-                s_y = tmp5_U8;
+                tmp1_U8 = (uint8_t)(s_y + 0x01);
+                s_y = tmp1_U8;
       /*$E1D6*/ tmp2_U8 = ram_peek(0x0082);
-      /*$E1D8*/ poke((ram_peek16(0x009b) + tmp5_U8), tmp2_U8);
+      /*$E1D8*/ poke((ram_peek16(0x009b) + tmp1_U8), tmp2_U8);
       /*$E1DA*/ branchTarget = true; block_id = !(tmp2_U8 & 0x80) ? 696 : 695;
       break;
     case 695:  // $E1DC
@@ -4558,14 +4562,14 @@ void func_t001(bool adjust_sp) {
     case 698:  // $E1EF
       /*$E1EF*/ s_pc = 0xe1ef; CYCLES(0xe1ef, 14);
                 tmp2_U8 = pop8();
-      /*$E1F1*/ tmp6_U16 = tmp2_U8 + 0x0001;
-      /*$E1F3*/ s_x = ((uint8_t)tmp6_U16);
+      /*$E1F1*/ tmp3_U16 = tmp2_U8 + 0x0001;
+      /*$E1F3*/ s_x = ((uint8_t)tmp3_U16);
       /*$E1F4*/ tmp2_U8 = pop8();
-      /*$E1F5*/ tmp3_U16 = tmp2_U8;
-                tmp6_U16 = tmp3_U16 + (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)0x0000) << 6);
-                s_a = ((uint8_t)tmp6_U16);
+      /*$E1F5*/ tmp4_U16 = tmp2_U8;
+                tmp3_U16 = tmp4_U16 + (uint8_t)(tmp3_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0x0000) << 6);
+                s_a = ((uint8_t)tmp3_U16);
                 block_id = 699;
       break;
     case 699:  // $E1F7
@@ -4574,9 +4578,9 @@ void func_t001(bool adjust_sp) {
       /*$E1F8*/ poke((ram_peek16(0x009b) + (uint8_t)(tmp2_U8 + 0x01)), s_a);
       /*$E1FA*/ tmp2_U8 = (uint8_t)(tmp2_U8 + 0x02);
                 s_y = tmp2_U8;
-      /*$E1FB*/ tmp5_U8 = s_x;
-                s_a = tmp5_U8;
-      /*$E1FC*/ poke((ram_peek16(0x009b) + tmp2_U8), tmp5_U8);
+      /*$E1FB*/ tmp1_U8 = s_x;
+                s_a = tmp1_U8;
+      /*$E1FC*/ poke((ram_peek16(0x009b) + tmp2_U8), tmp1_U8);
       /*$E1FE*/ branchTarget = true; push16(0xe200); block_id = 728;
       break;
     case 700:  // $E201
@@ -4590,10 +4594,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 701:  // $E20B
       /*$E20B*/ s_pc = 0xe20b; CYCLES(0xe20b, 7);
-                tmp6_U16 = (s_a + ram_peek(0x0095)) + (s_status & STATUS_C);
-                tmp2_U8 = (uint8_t)(tmp6_U16 >> 8);
+                tmp3_U16 = (s_a + ram_peek(0x0095)) + (s_status & STATUS_C);
+                tmp2_U8 = (uint8_t)(tmp3_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_a = ((uint8_t)tmp6_U16);
+                s_a = ((uint8_t)tmp3_U16);
       /*$E20D*/ branchTarget = true; block_id = tmp2_U8 ? 715 : 702;
       break;
     case 702:  // $E20F
@@ -4601,13 +4605,13 @@ void func_t001(bool adjust_sp) {
                 tmp2_U8 = s_a;
                 ram_poke(0x0095, tmp2_U8);
       /*$E211*/ s_y = tmp2_U8;
-      /*$E213*/ tmp6_U16 = s_x;
-                tmp3_U16 = ram_peek(0x0094);
-                tmp4_U16 = (tmp6_U16 + tmp3_U16) + (s_status & STATUS_C);
-                tmp2_U8 = (uint8_t)(tmp4_U16 >> 8);
+      /*$E213*/ tmp3_U16 = s_x;
+                tmp4_U16 = ram_peek(0x0094);
+                tmp5_U16 = (tmp3_U16 + tmp4_U16) + (s_status & STATUS_C);
+                tmp2_U8 = (uint8_t)(tmp5_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp6_U16, (uint8_t)tmp3_U16) << 6);
-                s_a = ((uint8_t)tmp4_U16);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp3_U16, (uint8_t)tmp4_U16) << 6);
+                s_a = ((uint8_t)tmp5_U16);
       /*$E215*/ branchTarget = true; block_id = !tmp2_U8 ? 704 : 703;
       break;
     case 703:  // $E217
@@ -4647,15 +4651,15 @@ void func_t001(bool adjust_sp) {
     case 708:  // $E234
       /*$E234*/ s_pc = 0xe234; CYCLES(0xe234, 38);
                 ram_poke(0x0095, (uint8_t)(ram_peek(0x0095) + 0x01));
-      /*$E239*/ tmp4_U16 = ram_peek(0x006d) - ram_peek(0x009b);
-      /*$E23D*/ poke((ram_peek16(0x009b) + 0x0002), ((uint8_t)tmp4_U16));
+      /*$E239*/ tmp5_U16 = ram_peek(0x006d) - ram_peek(0x009b);
+      /*$E23D*/ poke((ram_peek16(0x009b) + 0x0002), ((uint8_t)tmp5_U16));
       /*$E241*/ s_y = 0x03;
-      /*$E242*/ tmp3_U16 = ram_peek(0x006e);
-                tmp6_U16 = ram_peek(0x009c);
-                tmp4_U16 = (tmp3_U16 - tmp6_U16) - ((uint8_t)(tmp4_U16 >> 8) & 0x01);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)(~tmp6_U16)) << 6);
-      /*$E244*/ poke((ram_peek16(0x009b) + 0x0003), ((uint8_t)tmp4_U16));
+      /*$E242*/ tmp4_U16 = ram_peek(0x006e);
+                tmp3_U16 = ram_peek(0x009c);
+                tmp5_U16 = (tmp4_U16 - tmp3_U16) - ((uint8_t)(tmp5_U16 >> 8) & 0x01);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp5_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)(~tmp3_U16)) << 6);
+      /*$E244*/ poke((ram_peek16(0x009b) + 0x0003), ((uint8_t)tmp5_U16));
       /*$E246*/ tmp2_U8 = ram_peek(0x0010);
                 s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
@@ -4669,8 +4673,8 @@ void func_t001(bool adjust_sp) {
       break;
     case 710:  // $E24B
       /*$E24B*/ s_pc = 0xe24b; CYCLES(0xe24b, 14);
-                tmp5_U8 = peek((ram_peek16(0x009b) + s_y));
-      /*$E24D*/ ram_poke(0x000f, tmp5_U8);
+                tmp1_U8 = peek((ram_peek16(0x009b) + s_y));
+      /*$E24D*/ ram_poke(0x000f, tmp1_U8);
       /*$E24F*/ s_a = 0x00;
       /*$E251*/ ram_poke(0x00ad, 0x00);
                 block_id = 711;
@@ -4680,15 +4684,15 @@ void func_t001(bool adjust_sp) {
                 ram_poke(0x00ae, s_a);
       /*$E255*/ tmp2_U8 = (uint8_t)(s_y + 0x01);
                 s_y = tmp2_U8;
-      /*$E256*/ tmp5_U8 = pop8();
-      /*$E257*/ s_x = tmp5_U8;
-      /*$E258*/ ram_poke(0x00a0, tmp5_U8);
-      /*$E25A*/ tmp5_U8 = pop8();
-                s_a = tmp5_U8;
-      /*$E25B*/ ram_poke(0x00a1, tmp5_U8);
+      /*$E256*/ tmp1_U8 = pop8();
+      /*$E257*/ s_x = tmp1_U8;
+      /*$E258*/ ram_poke(0x00a0, tmp1_U8);
+      /*$E25A*/ tmp1_U8 = pop8();
+                s_a = tmp1_U8;
+      /*$E25B*/ ram_poke(0x00a1, tmp1_U8);
       /*$E25D*/ tmp2_U8 = peek((ram_peek16(0x009b) + tmp2_U8));
-                s_status = (s_status & ~STATUS_Z) | ((tmp5_U8 != tmp2_U8) ? 0 : STATUS_Z);
-                tmp2_U8 = tmp5_U8 >= tmp2_U8;
+                s_status = (s_status & ~STATUS_Z) | ((tmp1_U8 != tmp2_U8) ? 0 : STATUS_Z);
+                tmp2_U8 = tmp1_U8 >= tmp2_U8;
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
       /*$E25F*/ branchTarget = true; block_id = !tmp2_U8 ? 716 : 712;
       break;
@@ -4700,10 +4704,10 @@ void func_t001(bool adjust_sp) {
       /*$E263*/ s_pc = 0xe263; CYCLES(0xe263, 11);
                 tmp2_U8 = (uint8_t)(s_y + 0x01);
                 s_y = tmp2_U8;
-      /*$E264*/ tmp5_U8 = s_x;
-                s_a = tmp5_U8;
+      /*$E264*/ tmp1_U8 = s_x;
+                s_a = tmp1_U8;
       /*$E265*/ tmp2_U8 = peek((ram_peek16(0x009b) + tmp2_U8));
-                tmp2_U8 = tmp5_U8 >= tmp2_U8;
+                tmp2_U8 = tmp1_U8 >= tmp2_U8;
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
       /*$E267*/ branchTarget = true; block_id = !tmp2_U8 ? 717 : 714;
       break;
@@ -4733,21 +4737,21 @@ void func_t001(bool adjust_sp) {
       break;
     case 719:  // $E27A
       /*$E27A*/ s_pc = 0xe27a; CYCLES(0xe27a, 12);
-      /*$E27B*/ tmp3_U16 = (s_x + ram_peek(0x00a0)) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-      /*$E27D*/ s_x = ((uint8_t)tmp3_U16);
+      /*$E27B*/ tmp4_U16 = (s_x + ram_peek(0x00a0)) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+      /*$E27D*/ s_x = ((uint8_t)tmp4_U16);
       /*$E27E*/ s_a = s_y;
       /*$E27F*/ s_y = ram_peek(0x005e);
                 block_id = 720;
       break;
     case 720:  // $E281
       /*$E281*/ s_pc = 0xe281; CYCLES(0xe281, 14);
-                tmp4_U16 = s_a;
-                tmp6_U16 = ram_peek(0x00a1);
-                tmp3_U16 = (tmp4_U16 + tmp6_U16) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)tmp6_U16) << 6);
-                s_a = ((uint8_t)tmp3_U16);
+                tmp5_U16 = s_a;
+                tmp3_U16 = ram_peek(0x00a1);
+                tmp4_U16 = (tmp5_U16 + tmp3_U16) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)tmp3_U16) << 6);
+                s_a = ((uint8_t)tmp4_U16);
       /*$E283*/ ram_poke(0x00ad, s_x);
       /*$E285*/ tmp2_U8 = (uint8_t)(ram_peek(0x000f) - 0x01);
                 ram_poke(0x000f, tmp2_U8);
@@ -4781,14 +4785,14 @@ void func_t001(bool adjust_sp) {
       break;
     case 726:  // $E29F
       /*$E29F*/ s_pc = 0xe29f; CYCLES(0xe29f, 23);
-      /*$E2A0*/ tmp3_U16 = (s_x + ram_peek(0x0094)) + (s_status & STATUS_C);
-      /*$E2A2*/ ram_poke(0x0083, ((uint8_t)tmp3_U16));
-      /*$E2A5*/ tmp6_U16 = s_y;
-                tmp4_U16 = ram_peek(0x0095);
-                tmp3_U16 = (tmp6_U16 + tmp4_U16) + (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)tmp4_U16) << 6);
-                tmp2_U8 = (uint8_t)tmp3_U16;
+      /*$E2A0*/ tmp4_U16 = (s_x + ram_peek(0x0094)) + (s_status & STATUS_C);
+      /*$E2A2*/ ram_poke(0x0083, ((uint8_t)tmp4_U16));
+      /*$E2A5*/ tmp3_U16 = s_y;
+                tmp5_U16 = ram_peek(0x0095);
+                tmp4_U16 = (tmp3_U16 + tmp5_U16) + (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)tmp5_U16) << 6);
+                tmp2_U8 = (uint8_t)tmp4_U16;
       /*$E2A7*/ ram_poke(0x0084, tmp2_U8);
       /*$E2A9*/ s_y = tmp2_U8;
       /*$E2AA*/ tmp2_U8 = ram_peek(0x0083);
@@ -4805,8 +4809,8 @@ void func_t001(bool adjust_sp) {
       /*$E2AD*/ s_pc = 0xe2ad; CYCLES(0xe2ad, 16);
                 tmp2_U8 = s_y;
                 ram_poke(0x005e, tmp2_U8);
-      /*$E2AF*/ tmp5_U8 = peek((ram_peek16(0x009b) + tmp2_U8));
-      /*$E2B1*/ ram_poke(0x0064, tmp5_U8);
+      /*$E2AF*/ tmp1_U8 = peek((ram_peek16(0x009b) + tmp2_U8));
+      /*$E2B1*/ ram_poke(0x0064, tmp1_U8);
       /*$E2B4*/ tmp2_U8 = peek((ram_peek16(0x009b) + (uint8_t)(tmp2_U8 - 0x01)));
                 s_a = tmp2_U8;
                 block_id = 729;
@@ -4821,39 +4825,39 @@ void func_t001(bool adjust_sp) {
       break;
     case 730:  // $E2C0
       /*$E2C0*/ s_pc = 0xe2c0; CYCLES(0xe2c0, 14);
-      /*$E2C1*/ tmp3_U16 = s_x << 0x01;
-      /*$E2C2*/ s_x = ((uint8_t)tmp3_U16);
-      /*$E2C4*/ tmp3_U16 = (s_y << 0x01) | (uint8_t)(tmp3_U16 >> 8);
-                tmp2_U8 = (uint8_t)(tmp3_U16 >> 8);
+      /*$E2C1*/ tmp4_U16 = s_x << 0x01;
+      /*$E2C2*/ s_x = ((uint8_t)tmp4_U16);
+      /*$E2C4*/ tmp4_U16 = (s_y << 0x01) | (uint8_t)(tmp4_U16 >> 8);
+                tmp2_U8 = (uint8_t)(tmp4_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                tmp5_U8 = (uint8_t)tmp3_U16;
-                s_a = tmp5_U8;
-      /*$E2C5*/ s_y = tmp5_U8;
+                tmp1_U8 = (uint8_t)tmp4_U16;
+                s_a = tmp1_U8;
+      /*$E2C5*/ s_y = tmp1_U8;
       /*$E2C6*/ branchTarget = true; block_id = tmp2_U8 ? 715 : 731;
       break;
     case 731:  // $E2C8
       /*$E2C8*/ s_pc = 0xe2c8; CYCLES(0xe2c8, 11);
-                tmp3_U16 = ram_peek(0x00ad) << 0x01;
-                ram_poke(0x00ad, ((uint8_t)tmp3_U16));
-      /*$E2CA*/ tmp3_U16 = (ram_peek(0x00ae) << 0x01) | (uint8_t)(tmp3_U16 >> 8);
-                tmp2_U8 = (uint8_t)(tmp3_U16 >> 8);
+                tmp4_U16 = ram_peek(0x00ad) << 0x01;
+                ram_poke(0x00ad, ((uint8_t)tmp4_U16));
+      /*$E2CA*/ tmp4_U16 = (ram_peek(0x00ae) << 0x01) | (uint8_t)(tmp4_U16 >> 8);
+                tmp2_U8 = (uint8_t)(tmp4_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                ram_poke(0x00ae, ((uint8_t)tmp3_U16));
+                ram_poke(0x00ae, ((uint8_t)tmp4_U16));
       /*$E2CC*/ branchTarget = true; block_id = !tmp2_U8 ? 733 : 732;
       break;
     case 732:  // $E2CE
       /*$E2CE*/ s_pc = 0xe2ce; CYCLES(0xe2ce, 19);
-      /*$E2D0*/ tmp3_U16 = s_x + ram_peek(0x0064);
-      /*$E2D2*/ s_x = ((uint8_t)tmp3_U16);
-      /*$E2D4*/ tmp4_U16 = s_y;
-                tmp6_U16 = ram_peek(0x0065);
-                tmp3_U16 = (tmp4_U16 + tmp6_U16) + (uint8_t)(tmp3_U16 >> 8);
-                tmp2_U8 = (uint8_t)(tmp3_U16 >> 8);
+      /*$E2D0*/ tmp4_U16 = s_x + ram_peek(0x0064);
+      /*$E2D2*/ s_x = ((uint8_t)tmp4_U16);
+      /*$E2D4*/ tmp5_U16 = s_y;
+                tmp3_U16 = ram_peek(0x0065);
+                tmp4_U16 = (tmp5_U16 + tmp3_U16) + (uint8_t)(tmp4_U16 >> 8);
+                tmp2_U8 = (uint8_t)(tmp4_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)tmp6_U16) << 6);
-                tmp5_U8 = (uint8_t)tmp3_U16;
-                s_a = tmp5_U8;
-      /*$E2D6*/ s_y = tmp5_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)tmp3_U16) << 6);
+                tmp1_U8 = (uint8_t)tmp4_U16;
+                s_a = tmp1_U8;
+      /*$E2D6*/ s_y = tmp1_U8;
       /*$E2D7*/ branchTarget = true; block_id = tmp2_U8 ? 715 : 733;
       break;
     case 733:  // $E2D9
@@ -4882,14 +4886,14 @@ void func_t001(bool adjust_sp) {
       break;
     case 738:  // $E2E8
       /*$E2E8*/ s_pc = 0xe2e8; CYCLES(0xe2e8, 18);
-      /*$E2EB*/ tmp3_U16 = ram_peek(0x006f) - ram_peek(0x006d);
-      /*$E2ED*/ s_y = ((uint8_t)tmp3_U16);
-      /*$E2F0*/ tmp6_U16 = ram_peek(0x0070);
-                tmp4_U16 = ram_peek(0x006e);
-                tmp3_U16 = (tmp6_U16 - tmp4_U16) - ((uint8_t)(tmp3_U16 >> 8) & 0x01);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)(~tmp4_U16)) << 6);
-                s_a = ((uint8_t)tmp3_U16);
+      /*$E2EB*/ tmp4_U16 = ram_peek(0x006f) - ram_peek(0x006d);
+      /*$E2ED*/ s_y = ((uint8_t)tmp4_U16);
+      /*$E2F0*/ tmp3_U16 = ram_peek(0x0070);
+                tmp5_U16 = ram_peek(0x006e);
+                tmp4_U16 = (tmp3_U16 - tmp5_U16) - ((uint8_t)(tmp4_U16 >> 8) & 0x01);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)(~tmp5_U16)) << 6);
+                s_a = ((uint8_t)tmp4_U16);
                 block_id = 739;
       break;
     case 739:  // $E2F2
@@ -4977,8 +4981,8 @@ void func_t001(bool adjust_sp) {
     case 751:  // $E378
       /*$E378*/ s_pc = 0xe378; CYCLES(0xe378, 11);
                 tmp2_U8 = s_y;
-                tmp5_U8 = peek((ram_peek16(0x0083) + tmp2_U8));
-      /*$E37A*/ push8(tmp5_U8);
+                tmp1_U8 = peek((ram_peek16(0x0083) + tmp2_U8));
+      /*$E37A*/ push8(tmp1_U8);
       /*$E37B*/ tmp2_U8 = (uint8_t)(tmp2_U8 - 0x01);
                 s_y = tmp2_U8;
       /*$E37C*/ branchTarget = true; block_id = !(tmp2_U8 & 0x80) ? 751 : 752;
@@ -4993,8 +4997,8 @@ void func_t001(bool adjust_sp) {
       /*$E385*/ push8(ram_peek(0x00b9));
       /*$E388*/ push8(ram_peek(0x00b8));
       /*$E389*/ tmp2_U8 = s_y;
-                tmp5_U8 = peek((ram_peek16al(0x008a) + tmp2_U8));
-      /*$E38B*/ ram_poke(0x00b8, tmp5_U8);
+                tmp1_U8 = peek((ram_peek16al(0x008a) + tmp2_U8));
+      /*$E38B*/ ram_poke(0x00b8, tmp1_U8);
       /*$E38D*/ tmp2_U8 = (uint8_t)(tmp2_U8 + 0x01);
                 s_y = tmp2_U8;
       /*$E38E*/ tmp2_U8 = peek((ram_peek16al(0x008a) + tmp2_U8));
@@ -5049,12 +5053,12 @@ void func_t001(bool adjust_sp) {
       /*$E3D5*/ s_pc = 0xe3d5; CYCLES(0xe3d5, 19);
                 tmp2_U8 = ram_peek(0x00a0);
                 s_x = tmp2_U8;
-      /*$E3D7*/ tmp5_U8 = ram_peek(0x00a1);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_y = tmp5_U8;
+      /*$E3D7*/ tmp6_U8 = ram_peek(0x00a1);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_y = tmp6_U8;
       /*$E3D9*/ ram_poke(0x008c, tmp2_U8);
-      /*$E3DB*/ ram_poke(0x008d, tmp5_U8);
+      /*$E3DB*/ ram_poke(0x008d, tmp6_U8);
       /*$E3DD*/ branchTarget = true; push16(0xe3df); block_id = 777;
       break;
     case 759:  // $E3E0
@@ -5072,11 +5076,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 761:  // $E3ED
       /*$E3ED*/ s_pc = 0xe3ed; CYCLES(0xe3ed, 18);
-                tmp5_U8 = s_a;
-                ram_poke(0x00ab, tmp5_U8);
+                tmp1_U8 = s_a;
+                ram_poke(0x00ab, tmp1_U8);
       /*$E3EF*/ tmp2_U8 = s_y;
                 ram_poke(0x00ac, tmp2_U8);
-      /*$E3F1*/ ram_poke(0x009e, tmp5_U8);
+      /*$E3F1*/ ram_poke(0x009e, tmp1_U8);
       /*$E3F3*/ ram_poke(0x009f, tmp2_U8);
       /*$E3F5*/ s_y = 0xff;
                 block_id = 762;
@@ -5112,13 +5116,13 @@ void func_t001(bool adjust_sp) {
       /*$E409*/ s_pc = 0xe409; CYCLES(0xe409, 19);
                 tmp2_U8 = s_y;
                 ram_poke(0x009d, tmp2_U8);
-      /*$E40C*/ tmp3_U16 = tmp2_U8;
-                tmp4_U16 = ram_peek(0x00ab);
-                tmp6_U16 = (tmp3_U16 + tmp4_U16) + (s_status & STATUS_C);
-                tmp2_U8 = (uint8_t)(tmp6_U16 >> 8);
+      /*$E40C*/ tmp4_U16 = tmp2_U8;
+                tmp5_U16 = ram_peek(0x00ab);
+                tmp3_U16 = (tmp4_U16 + tmp5_U16) + (s_status & STATUS_C);
+                tmp2_U8 = (uint8_t)(tmp3_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)tmp4_U16) << 6);
-      /*$E40E*/ ram_poke(0x00ad, ((uint8_t)tmp6_U16));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)tmp5_U16) << 6);
+      /*$E40E*/ ram_poke(0x00ad, ((uint8_t)tmp3_U16));
       /*$E410*/ s_x = ram_peek(0x00ac);
       /*$E412*/ branchTarget = true; block_id = !tmp2_U8 ? 769 : 768;
       break;
@@ -5172,9 +5176,9 @@ void func_t001(bool adjust_sp) {
       /*$E437*/ tmp2_U8 = s_x;
                 ram_poke(tmp2_U8, ram_peek(0x009d));
       /*$E43B*/ ram_poke((uint8_t)(0x01 + tmp2_U8), ram_peek(0x009e));
-      /*$E43D*/ tmp5_U8 = ram_peek(0x009f);
-                s_a = tmp5_U8;
-      /*$E43F*/ ram_poke((uint8_t)(0x02 + tmp2_U8), tmp5_U8);
+      /*$E43D*/ tmp1_U8 = ram_peek(0x009f);
+                s_a = tmp1_U8;
+      /*$E43F*/ ram_poke((uint8_t)(0x02 + tmp2_U8), tmp1_U8);
       /*$E443*/ ram_poke(0x00a0, tmp2_U8);
       /*$E445*/ ram_poke(0x00a1, 0x00);
       /*$E447*/ s_y = 0xff;
@@ -5196,13 +5200,13 @@ void func_t001(bool adjust_sp) {
       /*$E454*/ s_pc = 0xe454; CYCLES(0xe454, 18);
                 tmp2_U8 = s_a;
                 push8(tmp2_U8);
-      /*$E458*/ tmp6_U16 = (tmp2_U8 ^ 0xff);
-                tmp4_U16 = ram_peek(0x006f);
-                tmp3_U16 = (tmp6_U16 + tmp4_U16) + 0x0001;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)tmp4_U16) << 6);
-                s_a = ((uint8_t)tmp3_U16);
+      /*$E458*/ tmp3_U16 = (tmp2_U8 ^ 0xff);
+                tmp5_U16 = ram_peek(0x006f);
+                tmp4_U16 = (tmp3_U16 + tmp5_U16) + 0x0001;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)tmp5_U16) << 6);
+                s_a = ((uint8_t)tmp4_U16);
       /*$E45A*/ s_y = ram_peek(0x0070);
-      /*$E45C*/ branchTarget = true; block_id = (uint8_t)(tmp3_U16 >> 8) ? 780 : 779;
+      /*$E45C*/ branchTarget = true; block_id = (uint8_t)(tmp4_U16 >> 8) ? 780 : 779;
       break;
     case 779:  // $E45E
       /*$E45E*/ s_pc = 0xe45e; CYCLES(0xe45e, 2);
@@ -5212,11 +5216,11 @@ void func_t001(bool adjust_sp) {
     case 780:  // $E45F
       /*$E45F*/ s_pc = 0xe45f; CYCLES(0xe45f, 7);
                 tmp2_U8 = s_y;
-                tmp5_U8 = ram_peek(0x006e);
-                s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != tmp5_U8) ? 0 : STATUS_Z);
-                tmp5_U8 = tmp2_U8 >= tmp5_U8;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$E461*/ branchTarget = true; block_id = !tmp5_U8 ? 784 : 781;
+                tmp1_U8 = ram_peek(0x006e);
+                s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != tmp1_U8) ? 0 : STATUS_Z);
+                tmp1_U8 = tmp2_U8 >= tmp1_U8;
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+      /*$E461*/ branchTarget = true; block_id = !tmp1_U8 ? 784 : 781;
       break;
     case 781:  // $E463
       /*$E463*/ s_pc = 0xe463; CYCLES(0xe463, 4);
@@ -5224,31 +5228,31 @@ void func_t001(bool adjust_sp) {
       break;
     case 782:  // $E465
       /*$E465*/ s_pc = 0xe465; CYCLES(0xe465, 7);
-                tmp5_U8 = s_a >= ram_peek(0x006d);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$E467*/ branchTarget = true; block_id = !tmp5_U8 ? 784 : 783;
+                tmp1_U8 = s_a >= ram_peek(0x006d);
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+      /*$E467*/ branchTarget = true; block_id = !tmp1_U8 ? 784 : 783;
       break;
     case 783:  // $E469
       /*$E469*/ s_pc = 0xe469; CYCLES(0xe469, 19);
-                tmp5_U8 = s_a;
-                ram_poke(0x006f, tmp5_U8);
+                tmp1_U8 = s_a;
+                ram_poke(0x006f, tmp1_U8);
       /*$E46B*/ tmp2_U8 = s_y;
                 ram_poke(0x0070, tmp2_U8);
-      /*$E46D*/ ram_poke(0x0071, tmp5_U8);
+      /*$E46D*/ ram_poke(0x0071, tmp1_U8);
       /*$E46F*/ ram_poke(0x0072, tmp2_U8);
-      /*$E471*/ s_x = tmp5_U8;
-      /*$E472*/ tmp5_U8 = pop8();
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
+      /*$E471*/ s_x = tmp1_U8;
+      /*$E472*/ tmp1_U8 = pop8();
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_a = tmp1_U8;
       /*$E473*/ branchTarget = true; block_id = find_block_id_func_t001(0xe473, pop16() + 1);;
       break;
     case 784:  // $E474
       /*$E474*/ s_pc = 0xe474; CYCLES(0xe474, 11);
                 s_x = 0x4d;
-      /*$E476*/ tmp5_U8 = ram_peek(0x0013);
-                s_a = tmp5_U8;
-      /*$E478*/ branchTarget = true; block_id = (tmp5_U8 & 0x80) ? 775 : 785;
+      /*$E476*/ tmp1_U8 = ram_peek(0x0013);
+                s_a = tmp1_U8;
+      /*$E478*/ branchTarget = true; block_id = (tmp1_U8 & 0x80) ? 775 : 785;
       break;
     case 785:  // $E47A
       /*$E47A*/ s_pc = 0xe47a; CYCLES(0xe47a, 6);
@@ -5257,9 +5261,9 @@ void func_t001(bool adjust_sp) {
     case 786:  // $E47D
       /*$E47D*/ s_pc = 0xe47d; CYCLES(0xe47d, 12);
       /*$E47F*/ ram_poke(0x0013, 0x80);
-      /*$E481*/ tmp5_U8 = pop8();
-                s_a = tmp5_U8;
-      /*$E482*/ branchTarget = true; block_id = tmp5_U8 ? 778 : 787;
+      /*$E481*/ tmp1_U8 = pop8();
+                s_a = tmp1_U8;
+      /*$E482*/ branchTarget = true; block_id = tmp1_U8 ? 778 : 787;
       break;
     case 787:  // $E484
       /*$E484*/ s_pc = 0xe484; CYCLES(0xe484, 7);
@@ -5282,9 +5286,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 789:  // $E4A0
       /*$E4A0*/ s_pc = 0xe4a0; CYCLES(0xe4a0, 7);
-                tmp5_U8 = s_a != ram_peek(0x0052);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-      /*$E4A2*/ branchTarget = true; block_id = !tmp5_U8 ? 792 : 790;
+                tmp1_U8 = s_a != ram_peek(0x0052);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+      /*$E4A2*/ branchTarget = true; block_id = !tmp1_U8 ? 792 : 790;
       break;
     case 790:  // $E4A4
       /*$E4A4*/ s_pc = 0xe4a4; CYCLES(0xe4a4, 6);
@@ -5297,11 +5301,11 @@ void func_t001(bool adjust_sp) {
     case 792:  // $E4A9
       /*$E4A9*/ s_pc = 0xe4a9; CYCLES(0xe4a9, 21);
       /*$E4AB*/ ram_poke(0x008f, 0x07);
-      /*$E4AD*/ tmp5_U8 = ram_peek(0x0069);
-                s_a = tmp5_U8;
+      /*$E4AD*/ tmp1_U8 = ram_peek(0x0069);
+                s_a = tmp1_U8;
       /*$E4AF*/ tmp2_U8 = ram_peek(0x006a);
                 s_x = tmp2_U8;
-      /*$E4B1*/ ram_poke(0x005e, tmp5_U8);
+      /*$E4B1*/ ram_poke(0x005e, tmp1_U8);
       /*$E4B3*/ ram_poke(0x005f, tmp2_U8);
                 block_id = 793;
       break;
@@ -5341,16 +5345,16 @@ void func_t001(bool adjust_sp) {
     case 799:  // $E4CE
       /*$E4CE*/ s_pc = 0xe4ce; CYCLES(0xe4ce, 7);
                 tmp2_U8 = s_x;
-                tmp5_U8 = ram_peek(0x006e);
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp5_U8);
-      /*$E4D0*/ branchTarget = true; block_id = (tmp2_U8 != tmp5_U8) ? 802 : 800;
+                tmp1_U8 = ram_peek(0x006e);
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp1_U8);
+      /*$E4D0*/ branchTarget = true; block_id = (tmp2_U8 != tmp1_U8) ? 802 : 800;
       break;
     case 800:  // $E4D2
       /*$E4D2*/ s_pc = 0xe4d2; CYCLES(0xe4d2, 7);
-                tmp5_U8 = s_a;
+                tmp1_U8 = s_a;
                 tmp2_U8 = ram_peek(0x006d);
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= tmp2_U8);
-      /*$E4D4*/ branchTarget = true; block_id = (tmp5_U8 != tmp2_U8) ? 802 : 801;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp2_U8);
+      /*$E4D4*/ branchTarget = true; block_id = (tmp1_U8 != tmp2_U8) ? 802 : 801;
       break;
     case 801:  // $E4D6
       /*$E4D6*/ s_pc = 0xe4d6; CYCLES(0xe4d6, 6);
@@ -5361,23 +5365,23 @@ void func_t001(bool adjust_sp) {
       /*$E4D9*/ s_pc = 0xe4d9; CYCLES(0xe4d9, 52);
                 ram_poke(0x005e, s_a);
       /*$E4DB*/ ram_poke(0x005f, s_x);
-      /*$E4DF*/ tmp5_U8 = peek(ram_peek16al(0x005e));
-      /*$E4E1*/ s_x = tmp5_U8;
-      /*$E4E3*/ tmp5_U8 = peek((ram_peek16al(0x005e) + 0x0001));
+      /*$E4DF*/ tmp1_U8 = peek(ram_peek16al(0x005e));
+      /*$E4E1*/ s_x = tmp1_U8;
+      /*$E4E3*/ tmp1_U8 = peek((ram_peek16al(0x005e) + 0x0001));
       /*$E4E5*/ tmp2_U8 = s_status & STATUS_C;
-                push8((tmp2_U8 | ((tmp5_U8 == 0) << 1) | (((s_status & STATUS_I) != 0) << 2) | (((s_status & STATUS_D) != 0) << 3) | STATUS_B | (((s_status & STATUS_V) != 0) << 6) | (tmp5_U8 & 0x80)));
-      /*$E4E7*/ tmp5_U8 = peek((ram_peek16al(0x005e) + 0x0002));
-      /*$E4E9*/ tmp3_U16 = (tmp5_U8 + ram_peek(0x0094)) + tmp2_U8;
-      /*$E4EB*/ ram_poke(0x0094, ((uint8_t)tmp3_U16));
+                push8((tmp2_U8 | ((tmp1_U8 == 0) << 1) | (((s_status & STATUS_I) != 0) << 2) | (((s_status & STATUS_D) != 0) << 3) | STATUS_B | (((s_status & STATUS_V) != 0) << 6) | (tmp1_U8 & 0x80)));
+      /*$E4E7*/ tmp1_U8 = peek((ram_peek16al(0x005e) + 0x0002));
+      /*$E4E9*/ tmp4_U16 = (tmp1_U8 + ram_peek(0x0094)) + tmp2_U8;
+      /*$E4EB*/ ram_poke(0x0094, ((uint8_t)tmp4_U16));
       /*$E4ED*/ s_y = 0x03;
-      /*$E4EE*/ tmp5_U8 = peek((ram_peek16al(0x005e) + 0x0003));
-      /*$E4F2*/ ram_poke(0x0095, (uint8_t)((tmp5_U8 + ram_peek(0x0095)) + (uint8_t)(tmp3_U16 >> 8)));
-      /*$E4F4*/ tmp5_U8 = pop8();
-                s_status = (s_status & ~STATUS_I) | (((tmp5_U8 & 0x04) != 0) << 2);
-                s_status = (s_status & ~STATUS_D) | (((tmp5_U8 & 0x08) != 0) << 3);
+      /*$E4EE*/ tmp1_U8 = peek((ram_peek16al(0x005e) + 0x0003));
+      /*$E4F2*/ ram_poke(0x0095, (uint8_t)((tmp1_U8 + ram_peek(0x0095)) + (uint8_t)(tmp4_U16 >> 8)));
+      /*$E4F4*/ tmp1_U8 = pop8();
+                s_status = (s_status & ~STATUS_I) | (((tmp1_U8 & 0x04) != 0) << 2);
+                s_status = (s_status & ~STATUS_D) | (((tmp1_U8 & 0x08) != 0) << 3);
                 s_status = (s_status & ~STATUS_B) | (0x00 << 4);
-                s_status = (s_status & ~STATUS_V) | (((tmp5_U8 & 0x40) != 0) << 6);
-      /*$E4F5*/ branchTarget = true; block_id = !(tmp5_U8 & 0x80) ? 798 : 803;
+                s_status = (s_status & ~STATUS_V) | (((tmp1_U8 & 0x40) != 0) << 6);
+      /*$E4F5*/ branchTarget = true; block_id = !(tmp1_U8 & 0x80) ? 798 : 803;
       break;
     case 803:  // $E4F7
       /*$E4F7*/ s_pc = 0xe4f7; CYCLES(0xe4f7, 6);
@@ -5387,16 +5391,16 @@ void func_t001(bool adjust_sp) {
       /*$E4FA*/ s_pc = 0xe4fa; CYCLES(0xe4fa, 24);
       /*$E4FB*/ tmp2_U8 = peek((ram_peek16al(0x005e) + (uint8_t)(s_y + 0x01)));
       /*$E4FD*/ s_y = 0x00;
-      /*$E4FF*/ tmp3_U16 = tmp2_U8 << 0x01;
-      /*$E500*/ tmp3_U16 = ((tmp3_U16 & 0x00ff) + 0x0005) + (uint8_t)(tmp3_U16 >> 8);
-      /*$E502*/ tmp4_U16 = tmp3_U16 & 0x00ff;
-                tmp6_U16 = ram_peek(0x005e);
-                tmp3_U16 = (tmp4_U16 + tmp6_U16) + (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)tmp6_U16) << 6);
-                tmp2_U8 = (uint8_t)tmp3_U16;
+      /*$E4FF*/ tmp4_U16 = tmp2_U8 << 0x01;
+      /*$E500*/ tmp4_U16 = ((tmp4_U16 & 0x00ff) + 0x0005) + (uint8_t)(tmp4_U16 >> 8);
+      /*$E502*/ tmp5_U16 = tmp4_U16 & 0x00ff;
+                tmp3_U16 = ram_peek(0x005e);
+                tmp4_U16 = (tmp5_U16 + tmp3_U16) + (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)tmp3_U16) << 6);
+                tmp2_U8 = (uint8_t)tmp4_U16;
                 s_a = tmp2_U8;
       /*$E504*/ ram_poke(0x005e, tmp2_U8);
-      /*$E506*/ branchTarget = true; block_id = !(uint8_t)(tmp3_U16 >> 8) ? 806 : 805;
+      /*$E506*/ branchTarget = true; block_id = !(uint8_t)(tmp4_U16 >> 8) ? 806 : 805;
       break;
     case 805:  // $E508
       /*$E508*/ s_pc = 0xe508; CYCLES(0xe508, 4);
@@ -5453,13 +5457,13 @@ void func_t001(bool adjust_sp) {
     case 815:  // $E527
       /*$E527*/ s_pc = 0xe527; CYCLES(0xe527, 19);
                 tmp2_U8 = s_y;
-      /*$E528*/ tmp5_U8 = peek((ram_peek16al(0x005e) + (uint8_t)(tmp2_U8 + 0x01)));
-      /*$E52A*/ s_x = tmp5_U8;
+      /*$E528*/ tmp1_U8 = peek((ram_peek16al(0x005e) + (uint8_t)(tmp2_U8 + 0x01)));
+      /*$E52A*/ s_x = tmp1_U8;
       /*$E52C*/ tmp2_U8 = peek((ram_peek16al(0x005e) + (uint8_t)(tmp2_U8 + 0x02)));
                 s_a = tmp2_U8;
-      /*$E52E*/ tmp5_U8 = ram_peek(0x0070);
-                s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != tmp5_U8) ? 0 : STATUS_Z);
-      /*$E530*/ branchTarget = true; block_id = !(tmp2_U8 >= tmp5_U8) ? 818 : 816;
+      /*$E52E*/ tmp1_U8 = ram_peek(0x0070);
+                s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != tmp1_U8) ? 0 : STATUS_Z);
+      /*$E530*/ branchTarget = true; block_id = !(tmp2_U8 >= tmp1_U8) ? 818 : 816;
       break;
     case 816:  // $E532
       /*$E532*/ s_pc = 0xe532; CYCLES(0xe532, 4);
@@ -5471,10 +5475,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 818:  // $E538
       /*$E538*/ s_pc = 0xe538; CYCLES(0xe538, 7);
-                tmp5_U8 = s_a;
+                tmp1_U8 = s_a;
                 tmp2_U8 = ram_peek(0x009c);
-                s_status = (s_status & ~STATUS_Z) | ((tmp5_U8 != tmp2_U8) ? 0 : STATUS_Z);
-      /*$E53A*/ branchTarget = true; block_id = !(tmp5_U8 >= tmp2_U8) ? 822 : 819;
+                s_status = (s_status & ~STATUS_Z) | ((tmp1_U8 != tmp2_U8) ? 0 : STATUS_Z);
+      /*$E53A*/ branchTarget = true; block_id = !(tmp1_U8 >= tmp2_U8) ? 822 : 819;
       break;
     case 819:  // $E53C
       /*$E53C*/ s_pc = 0xe53c; CYCLES(0xe53c, 4);
@@ -5495,15 +5499,15 @@ void func_t001(bool adjust_sp) {
       break;
     case 822:  // $E552
       /*$E552*/ s_pc = 0xe552; CYCLES(0xe552, 16);
-      /*$E555*/ tmp3_U16 = ram_peek(0x008f);
-                tmp6_U16 = ram_peek(0x005e);
-                tmp4_U16 = tmp3_U16 + tmp6_U16;
-                tmp2_U8 = (uint8_t)(tmp4_U16 >> 8);
+      /*$E555*/ tmp4_U16 = ram_peek(0x008f);
+                tmp3_U16 = ram_peek(0x005e);
+                tmp5_U16 = tmp4_U16 + tmp3_U16;
+                tmp2_U8 = (uint8_t)(tmp5_U16 >> 8);
                 s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)tmp6_U16) << 6);
-                tmp5_U8 = (uint8_t)tmp4_U16;
-                s_a = tmp5_U8;
-      /*$E557*/ ram_poke(0x005e, tmp5_U8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)tmp3_U16) << 6);
+                tmp1_U8 = (uint8_t)tmp5_U16;
+                s_a = tmp1_U8;
+      /*$E557*/ ram_poke(0x005e, tmp1_U8);
       /*$E559*/ branchTarget = true; block_id = !tmp2_U8 ? 824 : 823;
       break;
     case 823:  // $E55B
@@ -5521,30 +5525,29 @@ void func_t001(bool adjust_sp) {
       break;
     case 825:  // $E566
       /*$E566*/ s_pc = 0xe566; CYCLES(0xe566, 53);
-      /*$E568*/ tmp2_U8 = ram_peek(0x0091) & 0x04;
-      /*$E56A*/ tmp5_U8 = tmp2_U8 >> 0x01;
-      /*$E56C*/ ram_poke(0x0091, tmp5_U8);
-      /*$E56E*/ tmp5_U8 = peek((ram_peek16al(0x008a) + tmp5_U8));
-      /*$E570*/ tmp4_U16 = (tmp5_U8 + ram_peek(0x009b)) + (tmp2_U8 & 0x01);
-      /*$E572*/ ram_poke(0x0096, ((uint8_t)tmp4_U16));
-      /*$E576*/ tmp6_U16 = ram_peek(0x009c);
-                tmp4_U16 = tmp6_U16 + (uint8_t)(tmp4_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp6_U16, (uint8_t)0x0000) << 6);
-      /*$E578*/ ram_poke(0x0097, ((uint8_t)tmp4_U16));
+      /*$E56A*/ tmp2_U8 = (ram_peek(0x0091) & 0x04) >> 0x01;
+      /*$E56C*/ ram_poke(0x0091, tmp2_U8);
+      /*$E56E*/ tmp2_U8 = peek((ram_peek16al(0x008a) + tmp2_U8));
+      /*$E570*/ tmp5_U16 = tmp2_U8 + ram_peek(0x009b);
+      /*$E572*/ ram_poke(0x0096, ((uint8_t)tmp5_U16));
+      /*$E576*/ tmp3_U16 = ram_peek(0x009c);
+                tmp5_U16 = tmp3_U16 + (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp3_U16, (uint8_t)0x0000) << 6);
+      /*$E578*/ ram_poke(0x0097, ((uint8_t)tmp5_U16));
       /*$E57E*/ ram_poke(0x0094, ram_peek(0x006f));
       /*$E580*/ ram_poke(0x0095, ram_peek(0x0070));
       /*$E582*/ branchTarget = true; push16(0xe584); block_id = 19;
       break;
     case 826:  // $E585
       /*$E585*/ s_pc = 0xe585; CYCLES(0xe585, 31);
-                tmp5_U8 = ram_peek(0x0091);
-      /*$E588*/ tmp2_U8 = ram_peek(0x0094);
-      /*$E58A*/ poke((ram_peek16al(0x008a) + (uint8_t)(tmp5_U8 + 0x01)), tmp2_U8);
-      /*$E58C*/ s_x = tmp2_U8;
+                tmp2_U8 = ram_peek(0x0091);
+      /*$E588*/ tmp1_U8 = ram_peek(0x0094);
+      /*$E58A*/ poke((ram_peek16al(0x008a) + (uint8_t)(tmp2_U8 + 0x01)), tmp1_U8);
+      /*$E58C*/ s_x = tmp1_U8;
       /*$E58D*/ ram_poke(0x0095, (uint8_t)(ram_peek(0x0095) + 0x01));
-      /*$E58F*/ tmp2_U8 = ram_peek(0x0095);
-                s_a = tmp2_U8;
-      /*$E592*/ poke((ram_peek16al(0x008a) + (uint8_t)(tmp5_U8 + 0x02)), tmp2_U8);
+      /*$E58F*/ tmp1_U8 = ram_peek(0x0095);
+                s_a = tmp1_U8;
+      /*$E592*/ poke((ram_peek16al(0x008a) + (uint8_t)(tmp2_U8 + 0x02)), tmp1_U8);
       /*$E594*/ branchTarget = true; block_id = 788;
       break;
     case 827:  // $E5A0
@@ -5553,21 +5556,21 @@ void func_t001(bool adjust_sp) {
       break;
     case 828:  // $E5A3
       /*$E5A3*/ s_pc = 0xe5a3; CYCLES(0xe5a3, 26);
-                tmp5_U8 = pop8();
-      /*$E5A4*/ ram_poke(0x00ab, tmp5_U8);
-      /*$E5A6*/ tmp5_U8 = pop8();
-      /*$E5A7*/ ram_poke(0x00ac, tmp5_U8);
+                tmp2_U8 = pop8();
+      /*$E5A4*/ ram_poke(0x00ab, tmp2_U8);
+      /*$E5A6*/ tmp2_U8 = pop8();
+      /*$E5A7*/ ram_poke(0x00ac, tmp2_U8);
       /*$E5A9*/ s_y = 0x00;
-      /*$E5AB*/ tmp5_U8 = peek(ram_peek16(0x00ab));
-      /*$E5AE*/ tmp4_U16 = tmp5_U8;
-                tmp5_U8 = peek(ram_peek16al(0x00a0));
-                tmp6_U16 = tmp5_U8;
-                tmp3_U16 = tmp4_U16 + tmp6_U16;
-                tmp5_U8 = (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)tmp6_U16) << 6);
-                s_a = ((uint8_t)tmp3_U16);
-      /*$E5B0*/ branchTarget = true; block_id = !tmp5_U8 ? 830 : 829;
+      /*$E5AB*/ tmp2_U8 = peek(ram_peek16(0x00ab));
+      /*$E5AE*/ tmp5_U16 = tmp2_U8;
+                tmp2_U8 = peek(ram_peek16al(0x00a0));
+                tmp3_U16 = tmp2_U8;
+                tmp4_U16 = tmp5_U16 + tmp3_U16;
+                tmp2_U8 = (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)tmp3_U16) << 6);
+                s_a = ((uint8_t)tmp4_U16);
+      /*$E5B0*/ branchTarget = true; block_id = !tmp2_U8 ? 830 : 829;
       break;
     case 829:  // $E5B2
       /*$E5B2*/ s_pc = 0xe5b2; CYCLES(0xe5b2, 9);
@@ -5585,10 +5588,10 @@ void func_t001(bool adjust_sp) {
     case 832:  // $E5BD
       /*$E5BD*/ s_pc = 0xe5bd; CYCLES(0xe5bd, 12);
                 s_a = ram_peek(0x008c);
-      /*$E5BF*/ tmp5_U8 = ram_peek(0x008d);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_y = tmp5_U8;
+      /*$E5BF*/ tmp2_U8 = ram_peek(0x008d);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_y = tmp2_U8;
       /*$E5C1*/ branchTarget = true; push16(0xe5c3); block_id = 847;
       break;
     case 833:  // $E5C4
@@ -5598,10 +5601,10 @@ void func_t001(bool adjust_sp) {
     case 834:  // $E5C7
       /*$E5C7*/ s_pc = 0xe5c7; CYCLES(0xe5c7, 12);
                 s_a = ram_peek(0x00ab);
-      /*$E5C9*/ tmp5_U8 = ram_peek(0x00ac);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_y = tmp5_U8;
+      /*$E5C9*/ tmp2_U8 = ram_peek(0x00ac);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_y = tmp2_U8;
       /*$E5CB*/ branchTarget = true; push16(0xe5cd); block_id = 847;
       break;
     case 835:  // $E5CE
@@ -5614,14 +5617,14 @@ void func_t001(bool adjust_sp) {
       break;
     case 837:  // $E5D4
       /*$E5D4*/ s_pc = 0xe5d4; CYCLES(0xe5d4, 24);
-      /*$E5D6*/ tmp5_U8 = peek(ram_peek16(0x00ab));
-      /*$E5D8*/ push8(tmp5_U8);
-      /*$E5DA*/ tmp5_U8 = peek((ram_peek16(0x00ab) + 0x0001));
-      /*$E5DC*/ s_x = tmp5_U8;
-      /*$E5DE*/ tmp5_U8 = peek((ram_peek16(0x00ab) + 0x0002));
-      /*$E5E0*/ s_y = tmp5_U8;
-      /*$E5E1*/ tmp5_U8 = pop8();
-                s_a = tmp5_U8;
+      /*$E5D6*/ tmp6_U8 = peek(ram_peek16(0x00ab));
+      /*$E5D8*/ push8(tmp6_U8);
+      /*$E5DA*/ tmp6_U8 = peek((ram_peek16(0x00ab) + 0x0001));
+      /*$E5DC*/ s_x = tmp6_U8;
+      /*$E5DE*/ tmp6_U8 = peek((ram_peek16(0x00ab) + 0x0002));
+      /*$E5E0*/ s_y = tmp6_U8;
+      /*$E5E1*/ tmp6_U8 = pop8();
+                s_a = tmp6_U8;
                 block_id = 838;
       break;
     case 838:  // $E5E2
@@ -5632,9 +5635,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 839:  // $E5E6
       /*$E5E6*/ s_pc = 0xe5e6; CYCLES(0xe5e6, 6);
-                tmp5_U8 = s_a;
-                s_y = tmp5_U8;
-      /*$E5E7*/ branchTarget = true; block_id = !tmp5_U8 ? 843 : 840;
+                tmp2_U8 = s_a;
+                s_y = tmp2_U8;
+      /*$E5E7*/ branchTarget = true; block_id = !tmp2_U8 ? 843 : 840;
       break;
     case 840:  // $E5E9
       /*$E5E9*/ s_pc = 0xe5e9; CYCLES(0xe5e9, 2);
@@ -5643,39 +5646,39 @@ void func_t001(bool adjust_sp) {
       break;
     case 841:  // $E5EA
       /*$E5EA*/ s_pc = 0xe5ea; CYCLES(0xe5ea, 14);
-                tmp5_U8 = (uint8_t)(s_y - 0x01);
-                s_y = tmp5_U8;
-      /*$E5EB*/ tmp2_U8 = peek((ram_peek16al(0x005e) + tmp5_U8));
-      /*$E5ED*/ poke((ram_peek16(0x0071) + tmp5_U8), tmp2_U8);
-      /*$E5F0*/ branchTarget = true; block_id = tmp5_U8 ? 841 : 842;
+                tmp2_U8 = (uint8_t)(s_y - 0x01);
+                s_y = tmp2_U8;
+      /*$E5EB*/ tmp1_U8 = peek((ram_peek16al(0x005e) + tmp2_U8));
+      /*$E5ED*/ poke((ram_peek16(0x0071) + tmp2_U8), tmp1_U8);
+      /*$E5F0*/ branchTarget = true; block_id = tmp2_U8 ? 841 : 842;
       break;
     case 842:  // $E5F2
       /*$E5F2*/ s_pc = 0xe5f2; CYCLES(0xe5f2, 2);
-                tmp5_U8 = pop8();
-                s_a = tmp5_U8;
+                tmp2_U8 = pop8();
+                s_a = tmp2_U8;
                 block_id = 843;
       break;
     case 843:  // $E5F3
       /*$E5F3*/ s_pc = 0xe5f3; CYCLES(0xe5f3, 12);
-      /*$E5F4*/ tmp3_U16 = s_a;
-                tmp6_U16 = ram_peek(0x0071);
-                tmp4_U16 = tmp3_U16 + tmp6_U16;
-                tmp5_U8 = (uint8_t)(tmp4_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)tmp6_U16) << 6);
-                tmp2_U8 = (uint8_t)tmp4_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_a = tmp2_U8;
-      /*$E5F6*/ ram_poke(0x0071, tmp2_U8);
-      /*$E5F8*/ branchTarget = true; block_id = !tmp5_U8 ? 845 : 844;
+      /*$E5F4*/ tmp4_U16 = s_a;
+                tmp3_U16 = ram_peek(0x0071);
+                tmp5_U16 = tmp4_U16 + tmp3_U16;
+                tmp2_U8 = (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)tmp3_U16) << 6);
+                tmp1_U8 = (uint8_t)tmp5_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_a = tmp1_U8;
+      /*$E5F6*/ ram_poke(0x0071, tmp1_U8);
+      /*$E5F8*/ branchTarget = true; block_id = !tmp2_U8 ? 845 : 844;
       break;
     case 844:  // $E5FA
       /*$E5FA*/ s_pc = 0xe5fa; CYCLES(0xe5fa, 4);
-                tmp5_U8 = (uint8_t)(ram_peek(0x0072) + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                ram_poke(0x0072, tmp5_U8);
+                tmp2_U8 = (uint8_t)(ram_peek(0x0072) + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                ram_poke(0x0072, tmp2_U8);
                 block_id = 845;
       break;
     case 845:  // $E5FC
@@ -5685,10 +5688,10 @@ void func_t001(bool adjust_sp) {
     case 846:  // $E600
       /*$E600*/ s_pc = 0xe600; CYCLES(0xe600, 7);
                 s_a = ram_peek(0x00a0);
-      /*$E602*/ tmp5_U8 = ram_peek(0x00a1);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_y = tmp5_U8;
+      /*$E602*/ tmp1_U8 = ram_peek(0x00a1);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_y = tmp1_U8;
                 block_id = 847;
       break;
     case 847:  // $E604
@@ -5698,57 +5701,57 @@ void func_t001(bool adjust_sp) {
                 func_e635(true);
       /*$E60B*/ s_pc = 0xe60b; CYCLES(0xe60b, 31);
                 push8(((s_status & STATUS_C) | (((~s_status & STATUS_Z) == 0) << 1) | (((s_status & STATUS_I) != 0) << 2) | (((s_status & STATUS_D) != 0) << 3) | STATUS_B | (((s_status & STATUS_V) != 0) << 6) | (s_status & STATUS_N)));
-      /*$E60E*/ tmp5_U8 = peek(ram_peek16al(0x005e));
-      /*$E610*/ push8(tmp5_U8);
-      /*$E612*/ tmp5_U8 = peek((ram_peek16al(0x005e) + 0x0001));
-      /*$E614*/ s_x = tmp5_U8;
-      /*$E616*/ tmp5_U8 = peek((ram_peek16al(0x005e) + 0x0002));
-      /*$E618*/ s_y = tmp5_U8;
-      /*$E619*/ tmp5_U8 = pop8();
-                s_a = tmp5_U8;
-      /*$E61A*/ tmp5_U8 = pop8();
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 & 0x01);
-                tmp2_U8 = (~tmp5_U8 & 2);
+      /*$E60E*/ tmp1_U8 = peek(ram_peek16al(0x005e));
+      /*$E610*/ push8(tmp1_U8);
+      /*$E612*/ tmp1_U8 = peek((ram_peek16al(0x005e) + 0x0001));
+      /*$E614*/ s_x = tmp1_U8;
+      /*$E616*/ tmp1_U8 = peek((ram_peek16al(0x005e) + 0x0002));
+      /*$E618*/ s_y = tmp1_U8;
+      /*$E619*/ tmp1_U8 = pop8();
+                s_a = tmp1_U8;
+      /*$E61A*/ tmp1_U8 = pop8();
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 & 0x01);
+                tmp2_U8 = (~tmp1_U8 & 2);
                 s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_I) | (((tmp5_U8 & 0x04) != 0) << 2);
-                s_status = (s_status & ~STATUS_D) | (((tmp5_U8 & 0x08) != 0) << 3);
+                s_status = (s_status & ~STATUS_I) | (((tmp1_U8 & 0x04) != 0) << 2);
+                s_status = (s_status & ~STATUS_D) | (((tmp1_U8 & 0x08) != 0) << 3);
                 s_status = (s_status & ~STATUS_B) | (0x00 << 4);
-                s_status = (s_status & ~STATUS_V) | (((tmp5_U8 & 0x40) != 0) << 6);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
+                s_status = (s_status & ~STATUS_V) | (((tmp1_U8 & 0x40) != 0) << 6);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
       /*$E61B*/ branchTarget = true; block_id = tmp2_U8 ? 853 : 848;
       break;
     case 848:  // $E61D
       /*$E61D*/ s_pc = 0xe61d; CYCLES(0xe61d, 7);
-                tmp5_U8 = s_y;
-                tmp2_U8 = ram_peek(0x0070);
-                tmp1_U8 = tmp5_U8 != tmp2_U8;
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= tmp2_U8);
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp5_U8 - tmp2_U8) & 0x80);
-      /*$E61F*/ branchTarget = true; block_id = tmp1_U8 ? 853 : 849;
+                tmp2_U8 = s_y;
+                tmp1_U8 = ram_peek(0x0070);
+                tmp6_U8 = tmp2_U8 != tmp1_U8;
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp1_U8);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - tmp1_U8) & 0x80);
+      /*$E61F*/ branchTarget = true; block_id = tmp6_U8 ? 853 : 849;
       break;
     case 849:  // $E621
       /*$E621*/ s_pc = 0xe621; CYCLES(0xe621, 7);
-                tmp1_U8 = s_x;
-                tmp2_U8 = ram_peek(0x006f);
-                tmp5_U8 = tmp1_U8 != tmp2_U8;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp2_U8);
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - tmp2_U8) & 0x80);
-      /*$E623*/ branchTarget = true; block_id = tmp5_U8 ? 853 : 850;
+                tmp6_U8 = s_x;
+                tmp1_U8 = ram_peek(0x006f);
+                tmp2_U8 = tmp6_U8 != tmp1_U8;
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= tmp1_U8);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp6_U8 - tmp1_U8) & 0x80);
+      /*$E623*/ branchTarget = true; block_id = tmp2_U8 ? 853 : 850;
       break;
     case 850:  // $E625
       /*$E625*/ s_pc = 0xe625; CYCLES(0xe625, 14);
-                tmp5_U8 = s_a;
-                push8(tmp5_U8);
-      /*$E627*/ tmp4_U16 = tmp5_U8;
-                tmp6_U16 = ram_peek(0x006f);
-                tmp3_U16 = tmp4_U16 + tmp6_U16;
-                tmp5_U8 = (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)tmp6_U16) << 6);
-      /*$E629*/ ram_poke(0x006f, ((uint8_t)tmp3_U16));
-      /*$E62B*/ branchTarget = true; block_id = !tmp5_U8 ? 852 : 851;
+                tmp2_U8 = s_a;
+                push8(tmp2_U8);
+      /*$E627*/ tmp5_U16 = tmp2_U8;
+                tmp3_U16 = ram_peek(0x006f);
+                tmp4_U16 = tmp5_U16 + tmp3_U16;
+                tmp2_U8 = (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)tmp3_U16) << 6);
+      /*$E629*/ ram_poke(0x006f, ((uint8_t)tmp4_U16));
+      /*$E62B*/ branchTarget = true; block_id = !tmp2_U8 ? 852 : 851;
       break;
     case 851:  // $E62D
       /*$E62D*/ s_pc = 0xe62d; CYCLES(0xe62d, 4);
@@ -5757,10 +5760,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 852:  // $E62F
       /*$E62F*/ s_pc = 0xe62f; CYCLES(0xe62f, 2);
-                tmp5_U8 = pop8();
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
+                tmp2_U8 = pop8();
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
                 block_id = 853;
       break;
     case 853:  // $E630
@@ -5798,12 +5801,12 @@ void func_t001(bool adjust_sp) {
       /*$E73D*/ s_pc = 0xe73d; CYCLES(0xe73d, 16);
                 tmp2_U8 = ram_peek(0x00ad);
                 s_x = tmp2_U8;
-      /*$E73F*/ tmp5_U8 = ram_peek(0x00ae);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_y = tmp5_U8;
+      /*$E73F*/ tmp1_U8 = ram_peek(0x00ae);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_y = tmp1_U8;
       /*$E741*/ ram_poke(0x00b8, tmp2_U8);
-      /*$E743*/ ram_poke(0x00b9, tmp5_U8);
+      /*$E743*/ ram_poke(0x00b9, tmp1_U8);
       /*$E745*/ branchTarget = true; block_id = find_block_id_func_t001(0xe745, pop16() + 1);;
       break;
     case 861:  // $E746
@@ -5824,11 +5827,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 865:  // $E752
       /*$E752*/ s_pc = 0xe752; CYCLES(0xe752, 11);
-                tmp5_U8 = ram_peek(0x009d);
-                s_a = tmp5_U8;
-      /*$E754*/ tmp5_U8 = tmp5_U8 >= 0x91;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$E756*/ branchTarget = true; block_id = tmp5_U8 ? 854 : 866;
+                tmp2_U8 = ram_peek(0x009d);
+                s_a = tmp2_U8;
+      /*$E754*/ tmp2_U8 = tmp2_U8 >= 0x91;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+      /*$E756*/ branchTarget = true; block_id = tmp2_U8 ? 854 : 866;
       break;
     case 866:  // $E758
       /*$E758*/ s_pc = 0xe758; CYCLES(0xe758, 6);
@@ -5836,14 +5839,14 @@ void func_t001(bool adjust_sp) {
       break;
     case 867:  // $E75B
       /*$E75B*/ s_pc = 0xe75b; CYCLES(0xe75b, 16);
-                tmp5_U8 = ram_peek(0x00a0);
-                s_a = tmp5_U8;
-      /*$E75D*/ tmp2_U8 = ram_peek(0x00a1);
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_y = tmp2_U8;
-      /*$E75F*/ ram_poke(0x0050, tmp2_U8);
-      /*$E761*/ ram_poke(0x0051, tmp5_U8);
+                tmp2_U8 = ram_peek(0x00a0);
+                s_a = tmp2_U8;
+      /*$E75D*/ tmp1_U8 = ram_peek(0x00a1);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_y = tmp1_U8;
+      /*$E75F*/ ram_poke(0x0050, tmp1_U8);
+      /*$E761*/ ram_poke(0x0051, tmp2_U8);
       /*$E763*/ branchTarget = true; block_id = find_block_id_func_t001(0xe763, pop16() + 1);;
       break;
     case 868:  // $E764
@@ -5854,12 +5857,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 869:  // $E76D
       /*$E76D*/ s_pc = 0xe76d; CYCLES(0xe76d, 24);
-      /*$E76F*/ tmp5_U8 = peek(ram_peek16al(0x0050));
-      /*$E771*/ s_y = tmp5_U8;
-      /*$E772*/ tmp5_U8 = pop8();
-      /*$E773*/ ram_poke(0x0051, tmp5_U8);
-      /*$E775*/ tmp5_U8 = pop8();
-      /*$E776*/ ram_poke(0x0050, tmp5_U8);
+      /*$E76F*/ tmp2_U8 = peek(ram_peek16al(0x0050));
+      /*$E771*/ s_y = tmp2_U8;
+      /*$E772*/ tmp2_U8 = pop8();
+      /*$E773*/ ram_poke(0x0051, tmp2_U8);
+      /*$E775*/ tmp2_U8 = pop8();
+      /*$E776*/ ram_poke(0x0050, tmp2_U8);
       /*$E778*/ branchTarget = true; block_id = 740;
       break;
     case 870:  // $E77B
@@ -5920,22 +5923,22 @@ void func_t001(bool adjust_sp) {
       break;
     case 880:  // $E7CE
       /*$E7CE*/ s_pc = 0xe7ce; CYCLES(0xe7ce, 6);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_y = tmp5_U8;
-      /*$E7CF*/ branchTarget = true; block_id = !tmp5_U8 ? 872 : 881;
+                tmp2_U8 = s_a;
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_y = tmp2_U8;
+      /*$E7CF*/ branchTarget = true; block_id = !tmp2_U8 ? 872 : 881;
       break;
     case 881:  // $E7D1
       /*$E7D1*/ s_pc = 0xe7d1; CYCLES(0xe7d1, 9);
-      /*$E7D2*/ tmp4_U16 = s_a;
-                tmp6_U16 = ram_peek(0x009d);
-                tmp3_U16 = tmp4_U16 - tmp6_U16;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)(~tmp6_U16)) << 6);
-                tmp5_U8 = (uint8_t)tmp3_U16;
-                s_a = tmp5_U8;
-      /*$E7D4*/ branchTarget = true; block_id = !tmp5_U8 ? 887 : 882;
+      /*$E7D2*/ tmp5_U16 = s_a;
+                tmp3_U16 = ram_peek(0x009d);
+                tmp4_U16 = tmp5_U16 - tmp3_U16;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)(~tmp3_U16)) << 6);
+                tmp2_U8 = (uint8_t)tmp4_U16;
+                s_a = tmp2_U8;
+      /*$E7D4*/ branchTarget = true; block_id = !tmp2_U8 ? 887 : 882;
       break;
     case 882:  // $E7D6
       /*$E7D6*/ s_pc = 0xe7d6; CYCLES(0xe7d6, 4);
@@ -5945,10 +5948,10 @@ void func_t001(bool adjust_sp) {
       /*$E7D8*/ s_pc = 0xe7d8; CYCLES(0xe7d8, 31);
                 ram_poke(0x009d, s_y);
       /*$E7DC*/ ram_poke(0x00a2, ram_peek(0x00aa));
-      /*$E7E0*/ tmp3_U16 = (s_a ^ 0xff);
-                tmp6_U16 = tmp3_U16 + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)0x0000) << 6);
-                s_a = ((uint8_t)tmp6_U16);
+      /*$E7E0*/ tmp4_U16 = (s_a ^ 0xff);
+                tmp3_U16 = tmp4_U16 + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0x0000) << 6);
+                s_a = ((uint8_t)tmp3_U16);
       /*$E7E2*/ s_y = 0x00;
       /*$E7E4*/ ram_poke(0x0092, 0x00);
       /*$E7E6*/ s_x = 0x9d;
@@ -5962,19 +5965,19 @@ void func_t001(bool adjust_sp) {
       break;
     case 885:  // $E7EE
       /*$E7EE*/ s_pc = 0xe7ee; CYCLES(0xe7ee, 7);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_Z) | ((tmp5_U8 != 0xf9) ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0xf9);
-      /*$E7F0*/ branchTarget = true; block_id = ((uint8_t)(tmp5_U8 - 0xf9) & 0x80) ? 874 : 886;
+                tmp2_U8 = s_a;
+                s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != 0xf9) ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0xf9);
+      /*$E7F0*/ branchTarget = true; block_id = ((uint8_t)(tmp2_U8 - 0xf9) & 0x80) ? 874 : 886;
       break;
     case 886:  // $E7F2
       /*$E7F2*/ s_pc = 0xe7f2; CYCLES(0xe7f2, 14);
                 s_y = s_a;
       /*$E7F3*/ s_a = ram_peek(0x00ac);
-      /*$E7F5*/ tmp6_U16 = (uint8_t)(0x01 + s_x);
-                tmp5_U8 = ram_peek(tmp6_U16);
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 & 0x01);
-                ram_poke(tmp6_U16, (tmp5_U8 >> 0x01));
+      /*$E7F5*/ tmp3_U16 = (uint8_t)(0x01 + s_x);
+                tmp2_U8 = ram_peek(tmp3_U16);
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 & 0x01);
+                ram_poke(tmp3_U16, (tmp2_U8 >> 0x01));
       /*$E7F7*/ branchTarget = true; push16(0xe7f9); block_id = 922;
       break;
     case 887:  // $E7FA
@@ -5993,22 +5996,22 @@ void func_t001(bool adjust_sp) {
       break;
     case 890:  // $E806
       /*$E806*/ s_pc = 0xe806; CYCLES(0xe806, 60);
-      /*$E809*/ tmp6_U16 = ((s_a ^ 0xff) + ram_peek(0x0092)) + 0x0001;
-      /*$E80B*/ ram_poke(0x00ac, ((uint8_t)tmp6_U16));
-      /*$E80D*/ tmp5_U8 = s_y;
-      /*$E810*/ tmp1_U8 = s_x;
-                tmp6_U16 = (ram_peek((0x0004 + tmp5_U8)) - ram_peek((uint8_t)(0x04 + tmp1_U8))) - (uint8_t)(0x01 - (uint8_t)(tmp6_U16 >> 8));
-      /*$E812*/ ram_poke(0x00a1, ((uint8_t)tmp6_U16));
-      /*$E817*/ tmp6_U16 = (ram_peek((0x0003 + tmp5_U8)) - ram_peek((uint8_t)(0x03 + tmp1_U8))) - ((uint8_t)(tmp6_U16 >> 8) & 0x01);
-      /*$E819*/ ram_poke(0x00a0, ((uint8_t)tmp6_U16));
-      /*$E81E*/ tmp6_U16 = (ram_peek((0x0002 + tmp5_U8)) - ram_peek((uint8_t)(0x02 + tmp1_U8))) - ((uint8_t)(tmp6_U16 >> 8) & 0x01);
-      /*$E820*/ ram_poke(0x009f, ((uint8_t)tmp6_U16));
-      /*$E825*/ tmp4_U16 = ram_peek((0x0001 + tmp5_U8));
-                tmp3_U16 = ram_peek((uint8_t)(0x01 + tmp1_U8));
-                tmp6_U16 = (tmp4_U16 - tmp3_U16) - ((uint8_t)(tmp6_U16 >> 8) & 0x01);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp6_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp4_U16, (uint8_t)(~tmp3_U16)) << 6);
-      /*$E827*/ ram_poke(0x009e, ((uint8_t)tmp6_U16));
+      /*$E809*/ tmp3_U16 = ((s_a ^ 0xff) + ram_peek(0x0092)) + 0x0001;
+      /*$E80B*/ ram_poke(0x00ac, ((uint8_t)tmp3_U16));
+      /*$E80D*/ tmp2_U8 = s_y;
+      /*$E810*/ tmp6_U8 = s_x;
+                tmp3_U16 = (ram_peek((0x0004 + tmp2_U8)) - ram_peek((uint8_t)(0x04 + tmp6_U8))) - (uint8_t)(0x01 - (uint8_t)(tmp3_U16 >> 8));
+      /*$E812*/ ram_poke(0x00a1, ((uint8_t)tmp3_U16));
+      /*$E817*/ tmp3_U16 = (ram_peek((0x0003 + tmp2_U8)) - ram_peek((uint8_t)(0x03 + tmp6_U8))) - ((uint8_t)(tmp3_U16 >> 8) & 0x01);
+      /*$E819*/ ram_poke(0x00a0, ((uint8_t)tmp3_U16));
+      /*$E81E*/ tmp3_U16 = (ram_peek((0x0002 + tmp2_U8)) - ram_peek((uint8_t)(0x02 + tmp6_U8))) - ((uint8_t)(tmp3_U16 >> 8) & 0x01);
+      /*$E820*/ ram_poke(0x009f, ((uint8_t)tmp3_U16));
+      /*$E825*/ tmp5_U16 = ram_peek((0x0001 + tmp2_U8));
+                tmp4_U16 = ram_peek((uint8_t)(0x01 + tmp6_U8));
+                tmp3_U16 = (tmp5_U16 - tmp4_U16) - ((uint8_t)(tmp3_U16 >> 8) & 0x01);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp5_U16, (uint8_t)(~tmp4_U16)) << 6);
+      /*$E827*/ ram_poke(0x009e, ((uint8_t)tmp3_U16));
                 block_id = 891;
       break;
     case 891:  // $E829
@@ -6028,27 +6031,27 @@ void func_t001(bool adjust_sp) {
       break;
     case 894:  // $E832
       /*$E832*/ s_pc = 0xe832; CYCLES(0xe832, 7);
-                tmp1_U8 = ram_peek(0x009e);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                s_x = tmp1_U8;
-      /*$E834*/ branchTarget = true; block_id = tmp1_U8 ? 900 : 895;
+                tmp6_U8 = ram_peek(0x009e);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_x = tmp6_U8;
+      /*$E834*/ branchTarget = true; block_id = tmp6_U8 ? 900 : 895;
       break;
     case 895:  // $E836
       /*$E836*/ s_pc = 0xe836; CYCLES(0xe836, 41);
       /*$E838*/ ram_poke(0x009e, ram_peek(0x009f));
       /*$E83C*/ ram_poke(0x009f, ram_peek(0x00a0));
       /*$E840*/ ram_poke(0x00a0, ram_peek(0x00a1));
-      /*$E842*/ tmp1_U8 = ram_peek(0x00ac);
-                s_x = tmp1_U8;
-      /*$E844*/ ram_poke(0x00a1, tmp1_U8);
+      /*$E842*/ tmp6_U8 = ram_peek(0x00ac);
+                s_x = tmp6_U8;
+      /*$E844*/ ram_poke(0x00a1, tmp6_U8);
       /*$E846*/ ram_poke(0x00ac, s_y);
-      /*$E848*/ tmp6_U16 = s_a;
-                tmp3_U16 = (tmp6_U16 + 0x0008) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)0x0008) << 6);
-                tmp1_U8 = (uint8_t)tmp3_U16;
-                s_a = tmp1_U8;
-      /*$E84A*/ s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x20);
-      /*$E84C*/ branchTarget = true; block_id = (tmp1_U8 != 0x20) ? 894 : 896;
+      /*$E848*/ tmp3_U16 = s_a;
+                tmp4_U16 = (tmp3_U16 + 0x0008) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0x0008) << 6);
+                tmp6_U8 = (uint8_t)tmp4_U16;
+                s_a = tmp6_U8;
+      /*$E84A*/ s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= 0x20);
+      /*$E84C*/ branchTarget = true; block_id = (tmp6_U8 != 0x20) ? 894 : 896;
       break;
     case 896:  // $E84E
       /*$E84E*/ s_pc = 0xe84e; CYCLES(0xe84e, 7);
@@ -6065,42 +6068,42 @@ void func_t001(bool adjust_sp) {
       break;
     case 898:  // $E855
       /*$E855*/ s_pc = 0xe855; CYCLES(0xe855, 53);
-                tmp6_U16 = (s_a + ram_peek(0x0092)) + (s_status & STATUS_C);
-      /*$E857*/ ram_poke(0x00ac, ((uint8_t)tmp6_U16));
-      /*$E85B*/ tmp6_U16 = (ram_peek(0x00a1) + ram_peek(0x00a9)) + (uint8_t)(tmp6_U16 >> 8);
-      /*$E85D*/ ram_poke(0x00a1, ((uint8_t)tmp6_U16));
-      /*$E861*/ tmp6_U16 = (ram_peek(0x00a0) + ram_peek(0x00a8)) + (uint8_t)(tmp6_U16 >> 8);
-      /*$E863*/ ram_poke(0x00a0, ((uint8_t)tmp6_U16));
-      /*$E867*/ tmp6_U16 = (ram_peek(0x009f) + ram_peek(0x00a7)) + (uint8_t)(tmp6_U16 >> 8);
-      /*$E869*/ ram_poke(0x009f, ((uint8_t)tmp6_U16));
-      /*$E86D*/ tmp3_U16 = ram_peek(0x009e);
-                tmp4_U16 = ram_peek(0x00a6);
-                tmp6_U16 = (tmp3_U16 + tmp4_U16) + (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)tmp4_U16) << 6);
-                tmp5_U8 = (uint8_t)tmp6_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$E86F*/ ram_poke(0x009e, tmp5_U8);
+                tmp3_U16 = (s_a + ram_peek(0x0092)) + (s_status & STATUS_C);
+      /*$E857*/ ram_poke(0x00ac, ((uint8_t)tmp3_U16));
+      /*$E85B*/ tmp3_U16 = (ram_peek(0x00a1) + ram_peek(0x00a9)) + (uint8_t)(tmp3_U16 >> 8);
+      /*$E85D*/ ram_poke(0x00a1, ((uint8_t)tmp3_U16));
+      /*$E861*/ tmp3_U16 = (ram_peek(0x00a0) + ram_peek(0x00a8)) + (uint8_t)(tmp3_U16 >> 8);
+      /*$E863*/ ram_poke(0x00a0, ((uint8_t)tmp3_U16));
+      /*$E867*/ tmp3_U16 = (ram_peek(0x009f) + ram_peek(0x00a7)) + (uint8_t)(tmp3_U16 >> 8);
+      /*$E869*/ ram_poke(0x009f, ((uint8_t)tmp3_U16));
+      /*$E86D*/ tmp4_U16 = ram_peek(0x009e);
+                tmp5_U16 = ram_peek(0x00a6);
+                tmp3_U16 = (tmp4_U16 + tmp5_U16) + (uint8_t)(tmp3_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)tmp5_U16) << 6);
+                tmp2_U8 = (uint8_t)tmp3_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
+      /*$E86F*/ ram_poke(0x009e, tmp2_U8);
       /*$E871*/ branchTarget = true; block_id = 903;
       break;
     case 899:  // $E874
       /*$E874*/ s_pc = 0xe874; CYCLES(0xe874, 21);
                 s_a = (uint8_t)((s_a + 0x0001) + (s_status & STATUS_C));
-      /*$E876*/ tmp3_U16 = ram_peek(0x00ac) << 0x01;
-                ram_poke(0x00ac, ((uint8_t)tmp3_U16));
-      /*$E878*/ tmp3_U16 = (ram_peek(0x00a1) << 0x01) | (uint8_t)(tmp3_U16 >> 8);
-                ram_poke(0x00a1, ((uint8_t)tmp3_U16));
-      /*$E87A*/ tmp3_U16 = (ram_peek(0x00a0) << 0x01) | (uint8_t)(tmp3_U16 >> 8);
-                ram_poke(0x00a0, ((uint8_t)tmp3_U16));
-      /*$E87C*/ tmp3_U16 = (ram_peek(0x009f) << 0x01) | (uint8_t)(tmp3_U16 >> 8);
-                ram_poke(0x009f, ((uint8_t)tmp3_U16));
-      /*$E87E*/ tmp3_U16 = (ram_peek(0x009e) << 0x01) | (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-                tmp1_U8 = (uint8_t)tmp3_U16;
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                ram_poke(0x009e, tmp1_U8);
+      /*$E876*/ tmp4_U16 = ram_peek(0x00ac) << 0x01;
+                ram_poke(0x00ac, ((uint8_t)tmp4_U16));
+      /*$E878*/ tmp4_U16 = (ram_peek(0x00a1) << 0x01) | (uint8_t)(tmp4_U16 >> 8);
+                ram_poke(0x00a1, ((uint8_t)tmp4_U16));
+      /*$E87A*/ tmp4_U16 = (ram_peek(0x00a0) << 0x01) | (uint8_t)(tmp4_U16 >> 8);
+                ram_poke(0x00a0, ((uint8_t)tmp4_U16));
+      /*$E87C*/ tmp4_U16 = (ram_peek(0x009f) << 0x01) | (uint8_t)(tmp4_U16 >> 8);
+                ram_poke(0x009f, ((uint8_t)tmp4_U16));
+      /*$E87E*/ tmp4_U16 = (ram_peek(0x009e) << 0x01) | (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+                tmp6_U8 = (uint8_t)tmp4_U16;
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                ram_poke(0x009e, tmp6_U8);
                 block_id = 900;
       break;
     case 900:  // $E880
@@ -6109,26 +6112,26 @@ void func_t001(bool adjust_sp) {
       break;
     case 901:  // $E882
       /*$E882*/ s_pc = 0xe882; CYCLES(0xe882, 9);
-      /*$E883*/ tmp3_U16 = s_a;
-                tmp6_U16 = ram_peek(0x009d);
-                tmp4_U16 = tmp3_U16 - tmp6_U16;
-                tmp1_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)(~tmp6_U16)) << 6);
-                s_a = ((uint8_t)tmp4_U16);
-      /*$E885*/ branchTarget = true; block_id = tmp1_U8 ? 896 : 902;
+      /*$E883*/ tmp4_U16 = s_a;
+                tmp3_U16 = ram_peek(0x009d);
+                tmp5_U16 = tmp4_U16 - tmp3_U16;
+                tmp6_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp5_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)(~tmp3_U16)) << 6);
+                s_a = ((uint8_t)tmp5_U16);
+      /*$E885*/ branchTarget = true; block_id = tmp6_U8 ? 896 : 902;
       break;
     case 902:  // $E887
       /*$E887*/ s_pc = 0xe887; CYCLES(0xe887, 11);
-      /*$E889*/ tmp4_U16 = (s_a ^ 0xff);
-                tmp6_U16 = (tmp4_U16 + 0x0001) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp4_U16, (uint8_t)0x0001) << 6);
-                tmp1_U8 = (uint8_t)tmp6_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                s_a = tmp1_U8;
-      /*$E88B*/ ram_poke(0x009d, tmp1_U8);
+      /*$E889*/ tmp5_U16 = (s_a ^ 0xff);
+                tmp3_U16 = (tmp5_U16 + 0x0001) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp5_U16, (uint8_t)0x0001) << 6);
+                tmp6_U8 = (uint8_t)tmp3_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_a = tmp6_U8;
+      /*$E88B*/ ram_poke(0x009d, tmp6_U8);
                 block_id = 903;
       break;
     case 903:  // $E88D
@@ -6137,26 +6140,26 @@ void func_t001(bool adjust_sp) {
       break;
     case 904:  // $E88F
       /*$E88F*/ s_pc = 0xe88f; CYCLES(0xe88f, 7);
-                tmp1_U8 = (uint8_t)(ram_peek(0x009d) + 0x01);
-                ram_poke(0x009d, tmp1_U8);
-      /*$E891*/ branchTarget = true; block_id = !tmp1_U8 ? 914 : 905;
+                tmp6_U8 = (uint8_t)(ram_peek(0x009d) + 0x01);
+                ram_poke(0x009d, tmp6_U8);
+      /*$E891*/ branchTarget = true; block_id = !tmp6_U8 ? 914 : 905;
       break;
     case 905:  // $E893
       /*$E893*/ s_pc = 0xe893; CYCLES(0xe893, 18);
-                tmp1_U8 = ram_peek(0x009e);
-                ram_poke(0x009e, (uint8_t)((tmp1_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01));
-      /*$E895*/ tmp5_U8 = ram_peek(0x009f);
-                ram_poke(0x009f, (uint8_t)((tmp5_U8 | (0x00 + ((tmp1_U8 & 0x01) << 8))) >> 0x01));
-      /*$E897*/ tmp1_U8 = ram_peek(0x00a0);
-                ram_poke(0x00a0, (uint8_t)((tmp1_U8 | (0x00 + ((tmp5_U8 & 0x01) << 8))) >> 0x01));
-      /*$E899*/ tmp5_U8 = ram_peek(0x00a1);
-                ram_poke(0x00a1, (uint8_t)((tmp5_U8 | (0x00 + ((tmp1_U8 & 0x01) << 8))) >> 0x01));
-      /*$E89B*/ tmp1_U8 = ram_peek(0x00ac);
-                tmp5_U8 = (uint8_t)((tmp1_U8 | (0x00 + ((tmp5_U8 & 0x01) << 8))) >> 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                ram_poke(0x00ac, tmp5_U8);
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 & 0x01);
+                tmp6_U8 = ram_peek(0x009e);
+                ram_poke(0x009e, (uint8_t)((tmp6_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01));
+      /*$E895*/ tmp2_U8 = ram_peek(0x009f);
+                ram_poke(0x009f, (uint8_t)((tmp2_U8 | (0x00 + ((tmp6_U8 & 0x01) << 8))) >> 0x01));
+      /*$E897*/ tmp6_U8 = ram_peek(0x00a0);
+                ram_poke(0x00a0, (uint8_t)((tmp6_U8 | (0x00 + ((tmp2_U8 & 0x01) << 8))) >> 0x01));
+      /*$E899*/ tmp2_U8 = ram_peek(0x00a1);
+                ram_poke(0x00a1, (uint8_t)((tmp2_U8 | (0x00 + ((tmp6_U8 & 0x01) << 8))) >> 0x01));
+      /*$E89B*/ tmp6_U8 = ram_peek(0x00ac);
+                tmp2_U8 = (uint8_t)((tmp6_U8 | (0x00 + ((tmp2_U8 & 0x01) << 8))) >> 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                ram_poke(0x00ac, tmp2_U8);
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 & 0x01);
                 block_id = 906;
       break;
     case 906:  // $E89D
@@ -6174,45 +6177,45 @@ void func_t001(bool adjust_sp) {
       /*$E8AE*/ ram_poke(0x009f, (ram_peek(0x009f) ^ 0xff));
       /*$E8B4*/ ram_poke(0x00a0, (ram_peek(0x00a0) ^ 0xff));
       /*$E8BA*/ ram_poke(0x00a1, (ram_peek(0x00a1) ^ 0xff));
-      /*$E8BE*/ tmp1_U8 = ram_peek(0x00ac) ^ 0xff;
-                s_a = tmp1_U8;
-      /*$E8C0*/ ram_poke(0x00ac, tmp1_U8);
-      /*$E8C2*/ tmp1_U8 = (uint8_t)(ram_peek(0x00ac) + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                ram_poke(0x00ac, tmp1_U8);
-      /*$E8C4*/ branchTarget = true; block_id = tmp1_U8 ? 913 : 909;
+      /*$E8BE*/ tmp6_U8 = ram_peek(0x00ac) ^ 0xff;
+                s_a = tmp6_U8;
+      /*$E8C0*/ ram_poke(0x00ac, tmp6_U8);
+      /*$E8C2*/ tmp6_U8 = (uint8_t)(ram_peek(0x00ac) + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                ram_poke(0x00ac, tmp6_U8);
+      /*$E8C4*/ branchTarget = true; block_id = tmp6_U8 ? 913 : 909;
       break;
     case 909:  // $E8C6
       /*$E8C6*/ s_pc = 0xe8c6; CYCLES(0xe8c6, 7);
-                tmp1_U8 = (uint8_t)(ram_peek(0x00a1) + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                ram_poke(0x00a1, tmp1_U8);
-      /*$E8C8*/ branchTarget = true; block_id = tmp1_U8 ? 913 : 910;
+                tmp6_U8 = (uint8_t)(ram_peek(0x00a1) + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                ram_poke(0x00a1, tmp6_U8);
+      /*$E8C8*/ branchTarget = true; block_id = tmp6_U8 ? 913 : 910;
       break;
     case 910:  // $E8CA
       /*$E8CA*/ s_pc = 0xe8ca; CYCLES(0xe8ca, 7);
-                tmp1_U8 = (uint8_t)(ram_peek(0x00a0) + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                ram_poke(0x00a0, tmp1_U8);
-      /*$E8CC*/ branchTarget = true; block_id = tmp1_U8 ? 913 : 911;
+                tmp6_U8 = (uint8_t)(ram_peek(0x00a0) + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                ram_poke(0x00a0, tmp6_U8);
+      /*$E8CC*/ branchTarget = true; block_id = tmp6_U8 ? 913 : 911;
       break;
     case 911:  // $E8CE
       /*$E8CE*/ s_pc = 0xe8ce; CYCLES(0xe8ce, 7);
-                tmp1_U8 = (uint8_t)(ram_peek(0x009f) + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                ram_poke(0x009f, tmp1_U8);
-      /*$E8D0*/ branchTarget = true; block_id = tmp1_U8 ? 913 : 912;
+                tmp6_U8 = (uint8_t)(ram_peek(0x009f) + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                ram_poke(0x009f, tmp6_U8);
+      /*$E8D0*/ branchTarget = true; block_id = tmp6_U8 ? 913 : 912;
       break;
     case 912:  // $E8D2
       /*$E8D2*/ s_pc = 0xe8d2; CYCLES(0xe8d2, 4);
-                tmp1_U8 = (uint8_t)(ram_peek(0x009e) + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                ram_poke(0x009e, tmp1_U8);
+                tmp6_U8 = (uint8_t)(ram_peek(0x009e) + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                ram_poke(0x009e, tmp6_U8);
                 block_id = 913;
       break;
     case 913:  // $E8D4
@@ -6226,22 +6229,22 @@ void func_t001(bool adjust_sp) {
       break;
     case 915:  // $E8DC
       /*$E8DC*/ s_pc = 0xe8dc; CYCLES(0xe8dc, 35);
-                tmp1_U8 = s_x;
-      /*$E8DE*/ ram_poke(0x00ac, ram_peek((uint8_t)(0x04 + tmp1_U8)));
-      /*$E8E2*/ ram_poke((uint8_t)(0x04 + tmp1_U8), ram_peek((uint8_t)(0x03 + tmp1_U8)));
-      /*$E8E6*/ ram_poke((uint8_t)(0x03 + tmp1_U8), ram_peek((uint8_t)(0x02 + tmp1_U8)));
-      /*$E8EA*/ ram_poke((uint8_t)(0x02 + tmp1_U8), ram_peek((uint8_t)(0x01 + tmp1_U8)));
-      /*$E8EE*/ ram_poke((uint8_t)(0x01 + tmp1_U8), ram_peek(0x00a4));
+                tmp6_U8 = s_x;
+      /*$E8DE*/ ram_poke(0x00ac, ram_peek((uint8_t)(0x04 + tmp6_U8)));
+      /*$E8E2*/ ram_poke((uint8_t)(0x04 + tmp6_U8), ram_peek((uint8_t)(0x03 + tmp6_U8)));
+      /*$E8E6*/ ram_poke((uint8_t)(0x03 + tmp6_U8), ram_peek((uint8_t)(0x02 + tmp6_U8)));
+      /*$E8EA*/ ram_poke((uint8_t)(0x02 + tmp6_U8), ram_peek((uint8_t)(0x01 + tmp6_U8)));
+      /*$E8EE*/ ram_poke((uint8_t)(0x01 + tmp6_U8), ram_peek(0x00a4));
                 block_id = 916;
       break;
     case 916:  // $E8F0
       /*$E8F0*/ s_pc = 0xe8f0; CYCLES(0xe8f0, 7);
-                tmp4_U16 = (s_a + 0x0008) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
-                tmp5_U8 = (uint8_t)tmp4_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_a = tmp5_U8;
-      /*$E8F2*/ branchTarget = true; block_id = (tmp5_U8 & 0x80) ? 915 : 917;
+                tmp5_U16 = (s_a + 0x0008) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp5_U16 >> 8);
+                tmp2_U8 = (uint8_t)tmp5_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_a = tmp2_U8;
+      /*$E8F2*/ branchTarget = true; block_id = (tmp2_U8 & 0x80) ? 915 : 917;
       break;
     case 917:  // $E8F4
       /*$E8F4*/ s_pc = 0xe8f4; CYCLES(0xe8f4, 4);
@@ -6249,61 +6252,61 @@ void func_t001(bool adjust_sp) {
       break;
     case 918:  // $E8F6
       /*$E8F6*/ s_pc = 0xe8f6; CYCLES(0xe8f6, 12);
-                tmp6_U16 = s_a;
-                tmp4_U16 = (tmp6_U16 - 0x0008) - (uint8_t)(0x01 - (s_status & STATUS_C));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp6_U16, (uint8_t)0xfff7) << 6);
-      /*$E8F8*/ s_y = ((uint8_t)tmp4_U16);
-      /*$E8F9*/ tmp1_U8 = ram_peek(0x00ac);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                s_a = tmp1_U8;
-      /*$E8FB*/ branchTarget = true; block_id = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01)) ? 923 : 919;
+                tmp3_U16 = s_a;
+                tmp5_U16 = (tmp3_U16 - 0x0008) - (uint8_t)(0x01 - (s_status & STATUS_C));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp3_U16, (uint8_t)0xfff7) << 6);
+      /*$E8F8*/ s_y = ((uint8_t)tmp5_U16);
+      /*$E8F9*/ tmp6_U8 = ram_peek(0x00ac);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_a = tmp6_U8;
+      /*$E8FB*/ branchTarget = true; block_id = (uint8_t)(0x01 - ((uint8_t)(tmp5_U16 >> 8) & 0x01)) ? 923 : 919;
       break;
     case 919:  // $E8FD
       /*$E8FD*/ s_pc = 0xe8fd; CYCLES(0xe8fd, 7);
-                tmp4_U16 = (uint8_t)(0x01 + s_x);
-                tmp6_U16 = ram_peek(tmp4_U16) << 0x01;
-                tmp1_U8 = (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                ram_poke(tmp4_U16, ((uint8_t)tmp6_U16));
-      /*$E8FF*/ branchTarget = true; block_id = !tmp1_U8 ? 921 : 920;
+                tmp5_U16 = (uint8_t)(0x01 + s_x);
+                tmp3_U16 = ram_peek(tmp5_U16) << 0x01;
+                tmp6_U8 = (uint8_t)(tmp3_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+                ram_poke(tmp5_U16, ((uint8_t)tmp3_U16));
+      /*$E8FF*/ branchTarget = true; block_id = !tmp6_U8 ? 921 : 920;
       break;
     case 920:  // $E901
       /*$E901*/ s_pc = 0xe901; CYCLES(0xe901, 4);
-                tmp6_U16 = (uint8_t)(0x01 + s_x);
-                ram_poke(tmp6_U16, (uint8_t)(ram_peek(tmp6_U16) + 0x01));
+                tmp3_U16 = (uint8_t)(0x01 + s_x);
+                ram_poke(tmp3_U16, (uint8_t)(ram_peek(tmp3_U16) + 0x01));
                 block_id = 921;
       break;
     case 921:  // $E903
       /*$E903*/ s_pc = 0xe903; CYCLES(0xe903, 7);
-                tmp1_U8 = s_x;
-                tmp6_U16 = (uint8_t)(0x01 + tmp1_U8);
-                tmp5_U8 = ram_peek(tmp6_U16);
-                ram_poke(tmp6_U16, (uint8_t)((tmp5_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01));
-      /*$E905*/ tmp6_U16 = (uint8_t)(0x01 + tmp1_U8);
-                tmp1_U8 = ram_peek(tmp6_U16);
-                ram_poke(tmp6_U16, (uint8_t)((tmp1_U8 | (0x00 + ((tmp5_U8 & 0x01) << 8))) >> 0x01));
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 & 0x01);
+                tmp6_U8 = s_x;
+                tmp3_U16 = (uint8_t)(0x01 + tmp6_U8);
+                tmp2_U8 = ram_peek(tmp3_U16);
+                ram_poke(tmp3_U16, (uint8_t)((tmp2_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01));
+      /*$E905*/ tmp3_U16 = (uint8_t)(0x01 + tmp6_U8);
+                tmp6_U8 = ram_peek(tmp3_U16);
+                ram_poke(tmp3_U16, (uint8_t)((tmp6_U8 | (0x00 + ((tmp2_U8 & 0x01) << 8))) >> 0x01));
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 & 0x01);
                 block_id = 922;
       break;
     case 922:  // $E907
       /*$E907*/ s_pc = 0xe907; CYCLES(0xe907, 18);
-                tmp5_U8 = s_x;
-                tmp6_U16 = (uint8_t)(0x02 + tmp5_U8);
-                tmp2_U8 = ram_peek(tmp6_U16);
-                ram_poke(tmp6_U16, (uint8_t)((tmp2_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01));
-      /*$E909*/ tmp6_U16 = (uint8_t)(0x03 + tmp5_U8);
-                tmp1_U8 = ram_peek(tmp6_U16);
-                ram_poke(tmp6_U16, (uint8_t)((tmp1_U8 | (0x00 + ((tmp2_U8 & 0x01) << 8))) >> 0x01));
-      /*$E90B*/ tmp6_U16 = (uint8_t)(0x04 + tmp5_U8);
-                tmp5_U8 = ram_peek(tmp6_U16);
-                ram_poke(tmp6_U16, (uint8_t)((tmp5_U8 | (0x00 + ((tmp1_U8 & 0x01) << 8))) >> 0x01));
-      /*$E90D*/ s_a = (uint8_t)((s_a | (0x00 + ((tmp5_U8 & 0x01) << 8))) >> 0x01);
-      /*$E90E*/ tmp5_U8 = (uint8_t)(s_y + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_y = tmp5_U8;
-      /*$E90F*/ branchTarget = true; block_id = tmp5_U8 ? 919 : 923;
+                tmp2_U8 = s_x;
+                tmp3_U16 = (uint8_t)(0x02 + tmp2_U8);
+                tmp1_U8 = ram_peek(tmp3_U16);
+                ram_poke(tmp3_U16, (uint8_t)((tmp1_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01));
+      /*$E909*/ tmp3_U16 = (uint8_t)(0x03 + tmp2_U8);
+                tmp6_U8 = ram_peek(tmp3_U16);
+                ram_poke(tmp3_U16, (uint8_t)((tmp6_U8 | (0x00 + ((tmp1_U8 & 0x01) << 8))) >> 0x01));
+      /*$E90B*/ tmp3_U16 = (uint8_t)(0x04 + tmp2_U8);
+                tmp2_U8 = ram_peek(tmp3_U16);
+                ram_poke(tmp3_U16, (uint8_t)((tmp2_U8 | (0x00 + ((tmp6_U8 & 0x01) << 8))) >> 0x01));
+      /*$E90D*/ s_a = (uint8_t)((s_a | (0x00 + ((tmp2_U8 & 0x01) << 8))) >> 0x01);
+      /*$E90E*/ tmp2_U8 = (uint8_t)(s_y + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_y = tmp2_U8;
+      /*$E90F*/ branchTarget = true; block_id = tmp2_U8 ? 919 : 923;
       break;
     case 923:  // $E911
       /*$E911*/ s_pc = 0xe911; CYCLES(0xe911, 4);
@@ -6330,30 +6333,30 @@ void func_t001(bool adjust_sp) {
       /*$E98E*/ ram_poke(0x0063, 0x00);
       /*$E990*/ ram_poke(0x0064, 0x00);
       /*$E992*/ ram_poke(0x0065, 0x00);
-      /*$E994*/ tmp1_U8 = ram_peek(0x00ac);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_a = tmp1_U8;
+      /*$E994*/ tmp6_U8 = ram_peek(0x00ac);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_a = tmp6_U8;
       /*$E996*/ branchTarget = true; push16(0xe998); block_id = 933;
       break;
     case 928:  // $E999
       /*$E999*/ s_pc = 0xe999; CYCLES(0xe999, 9);
-                tmp1_U8 = ram_peek(0x00a1);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_a = tmp1_U8;
+                tmp6_U8 = ram_peek(0x00a1);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_a = tmp6_U8;
       /*$E99B*/ branchTarget = true; push16(0xe99d); block_id = 933;
       break;
     case 929:  // $E99E
       /*$E99E*/ s_pc = 0xe99e; CYCLES(0xe99e, 9);
-                tmp1_U8 = ram_peek(0x00a0);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_a = tmp1_U8;
+                tmp6_U8 = ram_peek(0x00a0);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_a = tmp6_U8;
       /*$E9A0*/ branchTarget = true; push16(0xe9a2); block_id = 933;
       break;
     case 930:  // $E9A3
       /*$E9A3*/ s_pc = 0xe9a3; CYCLES(0xe9a3, 9);
-                tmp1_U8 = ram_peek(0x009f);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_a = tmp1_U8;
+                tmp6_U8 = ram_peek(0x009f);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_a = tmp6_U8;
       /*$E9A5*/ branchTarget = true; push16(0xe9a7); block_id = 933;
       break;
     case 931:  // $E9A8
@@ -6377,9 +6380,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 935:  // $E9B5
       /*$E9B5*/ s_pc = 0xe9b5; CYCLES(0xe9b5, 6);
-                tmp1_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 & 0x01);
-      /*$E9B6*/ s_a = ((tmp1_U8 >> 0x01) | 0x80);
+                tmp6_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 & 0x01);
+      /*$E9B6*/ s_a = ((tmp6_U8 >> 0x01) | 0x80);
                 block_id = 936;
       break;
     case 936:  // $E9B8
@@ -6389,38 +6392,38 @@ void func_t001(bool adjust_sp) {
       break;
     case 937:  // $E9BB
       /*$E9BB*/ s_pc = 0xe9bb; CYCLES(0xe9bb, 43);
-      /*$E9BE*/ tmp6_U16 = ram_peek(0x0065) + ram_peek(0x00a9);
-      /*$E9C0*/ ram_poke(0x0065, ((uint8_t)tmp6_U16));
-      /*$E9C4*/ tmp6_U16 = (ram_peek(0x0064) + ram_peek(0x00a8)) + (uint8_t)(tmp6_U16 >> 8);
-      /*$E9C6*/ ram_poke(0x0064, ((uint8_t)tmp6_U16));
-      /*$E9CA*/ tmp6_U16 = (ram_peek(0x0063) + ram_peek(0x00a7)) + (uint8_t)(tmp6_U16 >> 8);
-      /*$E9CC*/ ram_poke(0x0063, ((uint8_t)tmp6_U16));
-      /*$E9D0*/ tmp4_U16 = ram_peek(0x0062);
-                tmp3_U16 = ram_peek(0x00a6);
-                tmp6_U16 = (tmp4_U16 + tmp3_U16) + (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp4_U16, (uint8_t)tmp3_U16) << 6);
-      /*$E9D2*/ ram_poke(0x0062, ((uint8_t)tmp6_U16));
+      /*$E9BE*/ tmp3_U16 = ram_peek(0x0065) + ram_peek(0x00a9);
+      /*$E9C0*/ ram_poke(0x0065, ((uint8_t)tmp3_U16));
+      /*$E9C4*/ tmp3_U16 = (ram_peek(0x0064) + ram_peek(0x00a8)) + (uint8_t)(tmp3_U16 >> 8);
+      /*$E9C6*/ ram_poke(0x0064, ((uint8_t)tmp3_U16));
+      /*$E9CA*/ tmp3_U16 = (ram_peek(0x0063) + ram_peek(0x00a7)) + (uint8_t)(tmp3_U16 >> 8);
+      /*$E9CC*/ ram_poke(0x0063, ((uint8_t)tmp3_U16));
+      /*$E9D0*/ tmp5_U16 = ram_peek(0x0062);
+                tmp4_U16 = ram_peek(0x00a6);
+                tmp3_U16 = (tmp5_U16 + tmp4_U16) + (uint8_t)(tmp3_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp5_U16, (uint8_t)tmp4_U16) << 6);
+      /*$E9D2*/ ram_poke(0x0062, ((uint8_t)tmp3_U16));
                 block_id = 938;
       break;
     case 938:  // $E9D4
       /*$E9D4*/ s_pc = 0xe9d4; CYCLES(0xe9d4, 24);
-                tmp1_U8 = ram_peek(0x0062);
-                ram_poke(0x0062, (uint8_t)((tmp1_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01));
-      /*$E9D6*/ tmp5_U8 = ram_peek(0x0063);
-                ram_poke(0x0063, (uint8_t)((tmp5_U8 | (0x00 + ((tmp1_U8 & 0x01) << 8))) >> 0x01));
-      /*$E9D8*/ tmp1_U8 = ram_peek(0x0064);
-                ram_poke(0x0064, (uint8_t)((tmp1_U8 | (0x00 + ((tmp5_U8 & 0x01) << 8))) >> 0x01));
-      /*$E9DA*/ tmp5_U8 = ram_peek(0x0065);
-                ram_poke(0x0065, (uint8_t)((tmp5_U8 | (0x00 + ((tmp1_U8 & 0x01) << 8))) >> 0x01));
-      /*$E9DC*/ ram_poke(0x00ac, (uint8_t)((ram_peek(0x00ac) | (0x00 + ((tmp5_U8 & 0x01) << 8))) >> 0x01));
-      /*$E9DE*/ tmp5_U8 = s_y;
-      /*$E9DF*/ s_status = (s_status & ~STATUS_C) | (tmp5_U8 & 0x01);
-                tmp5_U8 = tmp5_U8 >> 0x01;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$E9E0*/ branchTarget = true; block_id = tmp5_U8 ? 936 : 939;
+                tmp6_U8 = ram_peek(0x0062);
+                ram_poke(0x0062, (uint8_t)((tmp6_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01));
+      /*$E9D6*/ tmp2_U8 = ram_peek(0x0063);
+                ram_poke(0x0063, (uint8_t)((tmp2_U8 | (0x00 + ((tmp6_U8 & 0x01) << 8))) >> 0x01));
+      /*$E9D8*/ tmp6_U8 = ram_peek(0x0064);
+                ram_poke(0x0064, (uint8_t)((tmp6_U8 | (0x00 + ((tmp2_U8 & 0x01) << 8))) >> 0x01));
+      /*$E9DA*/ tmp2_U8 = ram_peek(0x0065);
+                ram_poke(0x0065, (uint8_t)((tmp2_U8 | (0x00 + ((tmp6_U8 & 0x01) << 8))) >> 0x01));
+      /*$E9DC*/ ram_poke(0x00ac, (uint8_t)((ram_peek(0x00ac) | (0x00 + ((tmp2_U8 & 0x01) << 8))) >> 0x01));
+      /*$E9DE*/ tmp2_U8 = s_y;
+      /*$E9DF*/ s_status = (s_status & ~STATUS_C) | (tmp2_U8 & 0x01);
+                tmp2_U8 = tmp2_U8 >> 0x01;
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
+      /*$E9E0*/ branchTarget = true; block_id = tmp2_U8 ? 936 : 939;
       break;
     case 939:  // $E9E2
       /*$E9E2*/ s_pc = 0xe9e2; CYCLES(0xe9e2, 2);
@@ -6428,22 +6431,22 @@ void func_t001(bool adjust_sp) {
       break;
     case 940:  // $EA0E
       /*$EA0E*/ s_pc = 0xea0e; CYCLES(0xea0e, 7);
-                tmp1_U8 = ram_peek(0x00a5);
-                s_a = tmp1_U8;
-      /*$EA10*/ branchTarget = true; block_id = !tmp1_U8 ? 948 : 941;
+                tmp6_U8 = ram_peek(0x00a5);
+                s_a = tmp6_U8;
+      /*$EA10*/ branchTarget = true; block_id = !tmp6_U8 ? 948 : 941;
       break;
     case 941:  // $EA12
       /*$EA12*/ s_pc = 0xea12; CYCLES(0xea12, 9);
-      /*$EA13*/ tmp6_U16 = s_a;
-                tmp3_U16 = ram_peek(0x009d);
-                tmp4_U16 = tmp6_U16 + tmp3_U16;
-                tmp5_U8 = (uint8_t)(tmp4_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp6_U16, (uint8_t)tmp3_U16) << 6);
-                tmp1_U8 = (uint8_t)tmp4_U16;
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                s_a = tmp1_U8;
-      /*$EA15*/ branchTarget = true; block_id = !tmp5_U8 ? 944 : 942;
+      /*$EA13*/ tmp3_U16 = s_a;
+                tmp4_U16 = ram_peek(0x009d);
+                tmp5_U16 = tmp3_U16 + tmp4_U16;
+                tmp2_U8 = (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp3_U16, (uint8_t)tmp4_U16) << 6);
+                tmp6_U8 = (uint8_t)tmp5_U16;
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_a = tmp6_U8;
+      /*$EA15*/ branchTarget = true; block_id = !tmp2_U8 ? 944 : 942;
       break;
     case 942:  // $EA17
       /*$EA17*/ s_pc = 0xea17; CYCLES(0xea17, 4);
@@ -6460,16 +6463,16 @@ void func_t001(bool adjust_sp) {
       break;
     case 945:  // $EA1D
       /*$EA1D*/ s_pc = 0xea1d; CYCLES(0xea1d, 11);
-                tmp4_U16 = s_a;
-                tmp3_U16 = (tmp4_U16 + 0x0080) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0x0080) << 6);
-                tmp5_U8 = (uint8_t)tmp3_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$EA1F*/ ram_poke(0x009d, tmp5_U8);
-      /*$EA21*/ branchTarget = true; block_id = tmp5_U8 ? 947 : 946;
+                tmp5_U16 = s_a;
+                tmp4_U16 = (tmp5_U16 + 0x0080) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)0x0080) << 6);
+                tmp2_U8 = (uint8_t)tmp4_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
+      /*$EA1F*/ ram_poke(0x009d, tmp2_U8);
+      /*$EA21*/ branchTarget = true; block_id = tmp2_U8 ? 947 : 946;
       break;
     case 946:  // $EA23
       /*$EA23*/ s_pc = 0xea23; CYCLES(0xea23, 6);
@@ -6477,17 +6480,17 @@ void func_t001(bool adjust_sp) {
       break;
     case 947:  // $EA26
       /*$EA26*/ s_pc = 0xea26; CYCLES(0xea26, 9);
-                tmp5_U8 = ram_peek(0x00ab);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$EA28*/ ram_poke(0x00a2, tmp5_U8);
+                tmp2_U8 = ram_peek(0x00ab);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
+      /*$EA28*/ ram_poke(0x00a2, tmp2_U8);
       /*$EA2A*/ branchTarget = true; block_id = find_block_id_func_t001(0xea2a, pop16() + 1);;
       break;
     case 948:  // $EA31
       /*$EA31*/ s_pc = 0xea31; CYCLES(0xea31, 9);
-                tmp5_U8 = pop8();
-      /*$EA32*/ tmp5_U8 = pop8();
+                tmp2_U8 = pop8();
+      /*$EA32*/ tmp2_U8 = pop8();
       /*$EA33*/ branchTarget = true; block_id = 896;
       break;
     case 949:  // $EA36
@@ -6500,21 +6503,21 @@ void func_t001(bool adjust_sp) {
       break;
     case 951:  // $EA3C
       /*$EA3C*/ s_pc = 0xea3c; CYCLES(0xea3c, 6);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_x = tmp5_U8;
-      /*$EA3D*/ branchTarget = true; block_id = !tmp5_U8 ? 955 : 952;
+                tmp2_U8 = s_a;
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_x = tmp2_U8;
+      /*$EA3D*/ branchTarget = true; block_id = !tmp2_U8 ? 955 : 952;
       break;
     case 952:  // $EA3F
       /*$EA3F*/ s_pc = 0xea3f; CYCLES(0xea3f, 9);
-      /*$EA40*/ tmp3_U16 = s_a;
-                tmp4_U16 = tmp3_U16 + 0x0002;
-                tmp5_U8 = (uint8_t)(tmp4_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0x0002) << 6);
-                s_a = ((uint8_t)tmp4_U16);
-      /*$EA42*/ branchTarget = true; block_id = tmp5_U8 ? 949 : 953;
+      /*$EA40*/ tmp4_U16 = s_a;
+                tmp5_U16 = tmp4_U16 + 0x0002;
+                tmp2_U8 = (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)0x0002) << 6);
+                s_a = ((uint8_t)tmp5_U16);
+      /*$EA42*/ branchTarget = true; block_id = tmp2_U8 ? 949 : 953;
       break;
     case 953:  // $EA44
       /*$EA44*/ s_pc = 0xea44; CYCLES(0xea44, 12);
@@ -6524,11 +6527,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 954:  // $EA4B
       /*$EA4B*/ s_pc = 0xea4b; CYCLES(0xea4b, 7);
-                tmp1_U8 = (uint8_t)(ram_peek(0x009d) + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                ram_poke(0x009d, tmp1_U8);
-      /*$EA4D*/ branchTarget = true; block_id = !tmp1_U8 ? 949 : 955;
+                tmp6_U8 = (uint8_t)(ram_peek(0x009d) + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                ram_poke(0x009d, tmp6_U8);
+      /*$EA4D*/ branchTarget = true; block_id = !tmp6_U8 ? 949 : 955;
       break;
     case 955:  // $EA4F
       /*$EA4F*/ s_pc = 0xea4f; CYCLES(0xea4f, 2);
@@ -6561,20 +6564,20 @@ void func_t001(bool adjust_sp) {
       break;
     case 961:  // $EA6E
       /*$EA6E*/ s_pc = 0xea6e; CYCLES(0xea6e, 18);
-      /*$EA71*/ tmp3_U16 = ram_peek(0x009d);
-                tmp4_U16 = 0x0000 - tmp3_U16;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)0x0000, (uint8_t)(~tmp3_U16)) << 6);
-                tmp5_U8 = (uint8_t)tmp4_U16;
-                s_a = tmp5_U8;
-      /*$EA73*/ ram_poke(0x009d, tmp5_U8);
+      /*$EA71*/ tmp4_U16 = ram_peek(0x009d);
+                tmp5_U16 = 0x0000 - tmp4_U16;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp5_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)0x0000, (uint8_t)(~tmp4_U16)) << 6);
+                tmp2_U8 = (uint8_t)tmp5_U16;
+                s_a = tmp2_U8;
+      /*$EA73*/ ram_poke(0x009d, tmp2_U8);
       /*$EA75*/ branchTarget = true; push16(0xea77); block_id = 940;
       break;
     case 962:  // $EA78
       /*$EA78*/ s_pc = 0xea78; CYCLES(0xea78, 7);
-                tmp5_U8 = (uint8_t)(ram_peek(0x009d) + 0x01);
-                ram_poke(0x009d, tmp5_U8);
-      /*$EA7A*/ branchTarget = true; block_id = !tmp5_U8 ? 949 : 963;
+                tmp2_U8 = (uint8_t)(ram_peek(0x009d) + 0x01);
+                ram_poke(0x009d, tmp2_U8);
+      /*$EA7A*/ branchTarget = true; block_id = !tmp2_U8 ? 949 : 963;
       break;
     case 963:  // $EA7C
       /*$EA7C*/ s_pc = 0xea7c; CYCLES(0xea7c, 7);
@@ -6584,59 +6587,59 @@ void func_t001(bool adjust_sp) {
       break;
     case 964:  // $EA80
       /*$EA80*/ s_pc = 0xea80; CYCLES(0xea80, 11);
-                tmp5_U8 = ram_peek(0x00a6);
-      /*$EA82*/ tmp1_U8 = ram_peek(0x009e);
-                tmp2_U8 = tmp5_U8 != tmp1_U8;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= tmp1_U8);
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp5_U8 - tmp1_U8) & 0x80);
-      /*$EA84*/ branchTarget = true; block_id = tmp2_U8 ? 968 : 965;
+                tmp2_U8 = ram_peek(0x00a6);
+      /*$EA82*/ tmp6_U8 = ram_peek(0x009e);
+                tmp1_U8 = tmp2_U8 != tmp6_U8;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp6_U8);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - tmp6_U8) & 0x80);
+      /*$EA84*/ branchTarget = true; block_id = tmp1_U8 ? 968 : 965;
       break;
     case 965:  // $EA86
       /*$EA86*/ s_pc = 0xea86; CYCLES(0xea86, 11);
-                tmp2_U8 = ram_peek(0x00a7);
-      /*$EA88*/ tmp1_U8 = ram_peek(0x009f);
-                tmp5_U8 = tmp2_U8 != tmp1_U8;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp1_U8);
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - tmp1_U8) & 0x80);
-      /*$EA8A*/ branchTarget = true; block_id = tmp5_U8 ? 968 : 966;
+                tmp1_U8 = ram_peek(0x00a7);
+      /*$EA88*/ tmp6_U8 = ram_peek(0x009f);
+                tmp2_U8 = tmp1_U8 != tmp6_U8;
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp6_U8);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - tmp6_U8) & 0x80);
+      /*$EA8A*/ branchTarget = true; block_id = tmp2_U8 ? 968 : 966;
       break;
     case 966:  // $EA8C
       /*$EA8C*/ s_pc = 0xea8c; CYCLES(0xea8c, 11);
-                tmp5_U8 = ram_peek(0x00a8);
-      /*$EA8E*/ tmp1_U8 = ram_peek(0x00a0);
-                tmp2_U8 = tmp5_U8 != tmp1_U8;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= tmp1_U8);
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp5_U8 - tmp1_U8) & 0x80);
-      /*$EA90*/ branchTarget = true; block_id = tmp2_U8 ? 968 : 967;
+                tmp2_U8 = ram_peek(0x00a8);
+      /*$EA8E*/ tmp6_U8 = ram_peek(0x00a0);
+                tmp1_U8 = tmp2_U8 != tmp6_U8;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp6_U8);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - tmp6_U8) & 0x80);
+      /*$EA90*/ branchTarget = true; block_id = tmp1_U8 ? 968 : 967;
       break;
     case 967:  // $EA92
       /*$EA92*/ s_pc = 0xea92; CYCLES(0xea92, 7);
-                tmp2_U8 = ram_peek(0x00a9);
-      /*$EA94*/ tmp1_U8 = ram_peek(0x00a1);
-                s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != tmp1_U8) ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp1_U8);
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - tmp1_U8) & 0x80);
+                tmp1_U8 = ram_peek(0x00a9);
+      /*$EA94*/ tmp6_U8 = ram_peek(0x00a1);
+                s_status = (s_status & ~STATUS_Z) | ((tmp1_U8 != tmp6_U8) ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp6_U8);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - tmp6_U8) & 0x80);
                 block_id = 968;
       break;
     case 968:  // $EA96
       /*$EA96*/ s_pc = 0xea96; CYCLES(0xea96, 7);
-                tmp2_U8 = s_status & STATUS_C;
-                push8((tmp2_U8 | (((~s_status & STATUS_Z) == 0) << 1) | (((s_status & STATUS_I) != 0) << 2) | (((s_status & STATUS_D) != 0) << 3) | STATUS_B | (((s_status & STATUS_V) != 0) << 6) | (s_status & STATUS_N)));
-      /*$EA97*/ tmp4_U16 = (s_a << 0x01) | tmp2_U8;
-                s_a = ((uint8_t)tmp4_U16);
-      /*$EA98*/ branchTarget = true; block_id = !(uint8_t)(tmp4_U16 >> 8) ? 972 : 969;
+                tmp1_U8 = s_status & STATUS_C;
+                push8((tmp1_U8 | (((~s_status & STATUS_Z) == 0) << 1) | (((s_status & STATUS_I) != 0) << 2) | (((s_status & STATUS_D) != 0) << 3) | STATUS_B | (((s_status & STATUS_V) != 0) << 6) | (s_status & STATUS_N)));
+      /*$EA97*/ tmp5_U16 = (s_a << 0x01) | tmp1_U8;
+                s_a = ((uint8_t)tmp5_U16);
+      /*$EA98*/ branchTarget = true; block_id = !(uint8_t)(tmp5_U16 >> 8) ? 972 : 969;
       break;
     case 969:  // $EA9A
       /*$EA9A*/ s_pc = 0xea9a; CYCLES(0xea9a, 9);
-                tmp2_U8 = s_x;
-                tmp1_U8 = (uint8_t)(tmp2_U8 + 0x01);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                s_x = tmp1_U8;
-      /*$EA9B*/ ram_poke((uint8_t)(tmp2_U8 + 0x66), s_a);
-      /*$EA9D*/ branchTarget = true; block_id = !tmp1_U8 ? 977 : 970;
+                tmp1_U8 = s_x;
+                tmp6_U8 = (uint8_t)(tmp1_U8 + 0x01);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_x = tmp6_U8;
+      /*$EA9B*/ ram_poke((uint8_t)(tmp1_U8 + 0x66), s_a);
+      /*$EA9D*/ branchTarget = true; block_id = !tmp6_U8 ? 977 : 970;
       break;
     case 970:  // $EA9F
       /*$EA9F*/ s_pc = 0xea9f; CYCLES(0xea9f, 4);
@@ -6649,30 +6652,30 @@ void func_t001(bool adjust_sp) {
       break;
     case 972:  // $EAA3
       /*$EAA3*/ s_pc = 0xeaa3; CYCLES(0xeaa3, 6);
-                tmp1_U8 = pop8();
-                tmp2_U8 = tmp1_U8 & 0x01;
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_I) | (((tmp1_U8 & 0x04) != 0) << 2);
-                s_status = (s_status & ~STATUS_D) | (((tmp1_U8 & 0x08) != 0) << 3);
-                s_status = (s_status & ~STATUS_V) | (((tmp1_U8 & 0x40) != 0) << 6);
-      /*$EAA4*/ branchTarget = true; block_id = tmp2_U8 ? 976 : 973;
+                tmp6_U8 = pop8();
+                tmp1_U8 = tmp6_U8 & 0x01;
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+                s_status = (s_status & ~STATUS_I) | (((tmp6_U8 & 0x04) != 0) << 2);
+                s_status = (s_status & ~STATUS_D) | (((tmp6_U8 & 0x08) != 0) << 3);
+                s_status = (s_status & ~STATUS_V) | (((tmp6_U8 & 0x40) != 0) << 6);
+      /*$EAA4*/ branchTarget = true; block_id = tmp1_U8 ? 976 : 973;
       break;
     case 973:  // $EAA6
       /*$EAA6*/ s_pc = 0xeaa6; CYCLES(0xeaa6, 18);
-                tmp4_U16 = ram_peek(0x00a9) << 0x01;
-                ram_poke(0x00a9, ((uint8_t)tmp4_U16));
-      /*$EAA8*/ tmp4_U16 = (ram_peek(0x00a8) << 0x01) | (uint8_t)(tmp4_U16 >> 8);
-                ram_poke(0x00a8, ((uint8_t)tmp4_U16));
-      /*$EAAA*/ tmp4_U16 = (ram_peek(0x00a7) << 0x01) | (uint8_t)(tmp4_U16 >> 8);
-                ram_poke(0x00a7, ((uint8_t)tmp4_U16));
-      /*$EAAC*/ tmp4_U16 = (ram_peek(0x00a6) << 0x01) | (uint8_t)(tmp4_U16 >> 8);
-                tmp1_U8 = (uint8_t)(tmp4_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                tmp2_U8 = (uint8_t)tmp4_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                ram_poke(0x00a6, tmp2_U8);
-      /*$EAAE*/ branchTarget = true; block_id = tmp1_U8 ? 968 : 974;
+                tmp5_U16 = ram_peek(0x00a9) << 0x01;
+                ram_poke(0x00a9, ((uint8_t)tmp5_U16));
+      /*$EAA8*/ tmp5_U16 = (ram_peek(0x00a8) << 0x01) | (uint8_t)(tmp5_U16 >> 8);
+                ram_poke(0x00a8, ((uint8_t)tmp5_U16));
+      /*$EAAA*/ tmp5_U16 = (ram_peek(0x00a7) << 0x01) | (uint8_t)(tmp5_U16 >> 8);
+                ram_poke(0x00a7, ((uint8_t)tmp5_U16));
+      /*$EAAC*/ tmp5_U16 = (ram_peek(0x00a6) << 0x01) | (uint8_t)(tmp5_U16 >> 8);
+                tmp6_U8 = (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+                tmp1_U8 = (uint8_t)tmp5_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                ram_poke(0x00a6, tmp1_U8);
+      /*$EAAE*/ branchTarget = true; block_id = tmp6_U8 ? 968 : 974;
       break;
     case 974:  // $EAB0
       /*$EAB0*/ s_pc = 0xeab0; CYCLES(0xeab0, 4);
@@ -6684,17 +6687,17 @@ void func_t001(bool adjust_sp) {
       break;
     case 976:  // $EAB4
       /*$EAB4*/ s_pc = 0xeab4; CYCLES(0xeab4, 50);
-      /*$EAB7*/ tmp4_U16 = (ram_peek(0x00a9) - ram_peek(0x00a1)) - (uint8_t)(0x01 - (s_status & STATUS_C));
-      /*$EAB9*/ ram_poke(0x00a9, ((uint8_t)tmp4_U16));
-      /*$EABD*/ tmp4_U16 = (ram_peek(0x00a8) - ram_peek(0x00a0)) - ((uint8_t)(tmp4_U16 >> 8) & 0x01);
-      /*$EABF*/ ram_poke(0x00a8, ((uint8_t)tmp4_U16));
-      /*$EAC3*/ tmp4_U16 = (ram_peek(0x00a7) - ram_peek(0x009f)) - ((uint8_t)(tmp4_U16 >> 8) & 0x01);
-      /*$EAC5*/ ram_poke(0x00a7, ((uint8_t)tmp4_U16));
-      /*$EAC9*/ tmp3_U16 = ram_peek(0x00a6);
-                tmp6_U16 = ram_peek(0x009e);
-                tmp4_U16 = (tmp3_U16 - tmp6_U16) - ((uint8_t)(tmp4_U16 >> 8) & 0x01);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)(~tmp6_U16)) << 6);
-      /*$EACB*/ ram_poke(0x00a6, ((uint8_t)tmp4_U16));
+      /*$EAB7*/ tmp5_U16 = (ram_peek(0x00a9) - ram_peek(0x00a1)) - (uint8_t)(0x01 - (s_status & STATUS_C));
+      /*$EAB9*/ ram_poke(0x00a9, ((uint8_t)tmp5_U16));
+      /*$EABD*/ tmp5_U16 = (ram_peek(0x00a8) - ram_peek(0x00a0)) - ((uint8_t)(tmp5_U16 >> 8) & 0x01);
+      /*$EABF*/ ram_poke(0x00a8, ((uint8_t)tmp5_U16));
+      /*$EAC3*/ tmp5_U16 = (ram_peek(0x00a7) - ram_peek(0x009f)) - ((uint8_t)(tmp5_U16 >> 8) & 0x01);
+      /*$EAC5*/ ram_poke(0x00a7, ((uint8_t)tmp5_U16));
+      /*$EAC9*/ tmp4_U16 = ram_peek(0x00a6);
+                tmp3_U16 = ram_peek(0x009e);
+                tmp5_U16 = (tmp4_U16 - tmp3_U16) - ((uint8_t)(tmp5_U16 >> 8) & 0x01);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)(~tmp3_U16)) << 6);
+      /*$EACB*/ ram_poke(0x00a6, ((uint8_t)tmp5_U16));
       /*$EACD*/ s_a = s_a;
       /*$EACE*/ branchTarget = true; block_id = 973;
       break;
@@ -6705,10 +6708,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 978:  // $EAD5
       /*$EAD5*/ s_pc = 0xead5; CYCLES(0xead5, 21);
-      /*$EADB*/ ram_poke(0x00ac, (uint8_t)(((((((((((s_a << 0x01) & 0x00ff) << 0x01) & 0x00ff) << 0x01) & 0x00ff) << 0x01) & 0x00ff) << 0x01) & 0x00ff) << 0x01));
-      /*$EADD*/ tmp1_U8 = pop8();
-                s_status = (s_status & ~STATUS_I) | (((tmp1_U8 & 0x04) != 0) << 2);
-                s_status = (s_status & ~STATUS_D) | (((tmp1_U8 & 0x08) != 0) << 3);
+      /*$EADB*/ ram_poke(0x00ac, (uint8_t)(s_a << 0x06));
+      /*$EADD*/ tmp6_U8 = pop8();
+                s_status = (s_status & ~STATUS_I) | (((tmp6_U8 & 0x04) != 0) << 2);
+                s_status = (s_status & ~STATUS_D) | (((tmp6_U8 & 0x08) != 0) << 3);
                 s_status = (s_status & ~STATUS_B) | (0x00 << 4);
       /*$EADE*/ branchTarget = true; block_id = 980;
       break;
@@ -6729,21 +6732,21 @@ void func_t001(bool adjust_sp) {
       /*$EAF9*/ s_pc = 0xeaf9; CYCLES(0xeaf9, 63);
                 ram_poke(0x005e, s_a);
       /*$EAFB*/ ram_poke(0x005f, s_y);
-      /*$EAFF*/ tmp5_U8 = peek((ram_peek16al(0x005e) + 0x0004));
-      /*$EB01*/ ram_poke(0x00a1, tmp5_U8);
-      /*$EB04*/ tmp5_U8 = peek((ram_peek16al(0x005e) + 0x0003));
-      /*$EB06*/ ram_poke(0x00a0, tmp5_U8);
-      /*$EB09*/ tmp5_U8 = peek((ram_peek16al(0x005e) + 0x0002));
-      /*$EB0B*/ ram_poke(0x009f, tmp5_U8);
-      /*$EB0E*/ tmp5_U8 = peek((ram_peek16al(0x005e) + 0x0001));
-      /*$EB10*/ ram_poke(0x00a2, tmp5_U8);
-      /*$EB14*/ ram_poke(0x009e, (tmp5_U8 | 0x80));
+      /*$EAFF*/ tmp6_U8 = peek((ram_peek16al(0x005e) + 0x0004));
+      /*$EB01*/ ram_poke(0x00a1, tmp6_U8);
+      /*$EB04*/ tmp6_U8 = peek((ram_peek16al(0x005e) + 0x0003));
+      /*$EB06*/ ram_poke(0x00a0, tmp6_U8);
+      /*$EB09*/ tmp6_U8 = peek((ram_peek16al(0x005e) + 0x0002));
+      /*$EB0B*/ ram_poke(0x009f, tmp6_U8);
+      /*$EB0E*/ tmp6_U8 = peek((ram_peek16al(0x005e) + 0x0001));
+      /*$EB10*/ ram_poke(0x00a2, tmp6_U8);
+      /*$EB14*/ ram_poke(0x009e, (tmp6_U8 | 0x80));
       /*$EB16*/ s_y = 0x00;
-      /*$EB17*/ tmp5_U8 = peek(ram_peek16al(0x005e));
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$EB19*/ ram_poke(0x009d, tmp5_U8);
+      /*$EB17*/ tmp6_U8 = peek(ram_peek16al(0x005e));
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_a = tmp6_U8;
+      /*$EB19*/ ram_poke(0x009d, tmp6_U8);
       /*$EB1B*/ ram_poke(0x00ac, 0x00);
       /*$EB1D*/ branchTarget = true; block_id = find_block_id_func_t001(0xeb1d, pop16() + 1);;
       break;
@@ -6766,25 +6769,25 @@ void func_t001(bool adjust_sp) {
       /*$EB40*/ poke((ram_peek16al(0x005e) + 0x0002), ram_peek(0x009f));
       /*$EB49*/ poke((ram_peek16al(0x005e) + 0x0001), ((ram_peek(0x00a2) | 0x7f) & ram_peek(0x009e)));
       /*$EB4B*/ s_y = 0x00;
-      /*$EB4C*/ tmp1_U8 = ram_peek(0x009d);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                s_a = tmp1_U8;
-      /*$EB4E*/ poke(ram_peek16al(0x005e), tmp1_U8);
+      /*$EB4C*/ tmp6_U8 = ram_peek(0x009d);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_a = tmp6_U8;
+      /*$EB4E*/ poke(ram_peek16al(0x005e), tmp6_U8);
       /*$EB50*/ ram_poke(0x00ac, 0x00);
       /*$EB52*/ branchTarget = true; block_id = find_block_id_func_t001(0xeb52, pop16() + 1);;
       break;
     case 985:  // $EB59
       /*$EB59*/ s_pc = 0xeb59; CYCLES(0xeb59, 12);
-                tmp1_U8 = s_x;
-                tmp2_U8 = ram_peek((uint8_t)(0xa4 + tmp1_U8));
-                s_a = tmp2_U8;
-      /*$EB5B*/ ram_poke((uint8_t)(0x9c + tmp1_U8), tmp2_U8);
-      /*$EB5D*/ tmp1_U8 = (uint8_t)(tmp1_U8 - 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                s_x = tmp1_U8;
-      /*$EB5E*/ branchTarget = true; block_id = tmp1_U8 ? 985 : 986;
+                tmp6_U8 = s_x;
+                tmp1_U8 = ram_peek((uint8_t)(0xa4 + tmp6_U8));
+                s_a = tmp1_U8;
+      /*$EB5B*/ ram_poke((uint8_t)(0x9c + tmp6_U8), tmp1_U8);
+      /*$EB5D*/ tmp6_U8 = (uint8_t)(tmp6_U8 - 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_x = tmp6_U8;
+      /*$EB5E*/ branchTarget = true; block_id = tmp6_U8 ? 985 : 986;
       break;
     case 986:  // $EB60
       /*$EB60*/ s_pc = 0xeb60; CYCLES(0xeb60, 6);
@@ -6802,15 +6805,15 @@ void func_t001(bool adjust_sp) {
       break;
     case 989:  // $EB68
       /*$EB68*/ s_pc = 0xeb68; CYCLES(0xeb68, 12);
-                tmp1_U8 = s_x;
-                tmp2_U8 = ram_peek((uint8_t)(0x9c + tmp1_U8));
-                s_a = tmp2_U8;
-      /*$EB6A*/ ram_poke((uint8_t)(0xa4 + tmp1_U8), tmp2_U8);
-      /*$EB6C*/ tmp1_U8 = (uint8_t)(tmp1_U8 - 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                s_x = tmp1_U8;
-      /*$EB6D*/ branchTarget = true; block_id = tmp1_U8 ? 989 : 990;
+                tmp6_U8 = s_x;
+                tmp1_U8 = ram_peek((uint8_t)(0x9c + tmp6_U8));
+                s_a = tmp1_U8;
+      /*$EB6A*/ ram_poke((uint8_t)(0xa4 + tmp6_U8), tmp1_U8);
+      /*$EB6C*/ tmp6_U8 = (uint8_t)(tmp6_U8 - 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_x = tmp6_U8;
+      /*$EB6D*/ branchTarget = true; block_id = tmp6_U8 ? 989 : 990;
       break;
     case 990:  // $EB6F
       /*$EB6F*/ s_pc = 0xeb6f; CYCLES(0xeb6f, 4);
@@ -6831,14 +6834,14 @@ void func_t001(bool adjust_sp) {
       break;
     case 993:  // $EB76
       /*$EB76*/ s_pc = 0xeb76; CYCLES(0xeb76, 7);
-                tmp4_U16 = ram_peek(0x00ac) << 0x01;
-                tmp1_U8 = (uint8_t)(tmp4_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                tmp2_U8 = (uint8_t)tmp4_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                ram_poke(0x00ac, tmp2_U8);
-      /*$EB78*/ branchTarget = true; block_id = !tmp1_U8 ? 991 : 994;
+                tmp5_U16 = ram_peek(0x00ac) << 0x01;
+                tmp6_U8 = (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+                tmp1_U8 = (uint8_t)tmp5_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                ram_poke(0x00ac, tmp1_U8);
+      /*$EB78*/ branchTarget = true; block_id = !tmp6_U8 ? 991 : 994;
       break;
     case 994:  // $EB7A
       /*$EB7A*/ s_pc = 0xeb7a; CYCLES(0xeb7a, 6);
@@ -6854,11 +6857,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 997:  // $EB82
       /*$EB82*/ s_pc = 0xeb82; CYCLES(0xeb82, 7);
-                tmp5_U8 = ram_peek(0x009d);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$EB84*/ branchTarget = true; block_id = !tmp5_U8 ? 1001 : 998;
+                tmp6_U8 = ram_peek(0x009d);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_a = tmp6_U8;
+      /*$EB84*/ branchTarget = true; block_id = !tmp6_U8 ? 1001 : 998;
       break;
     case 998:  // $EB86
       /*$EB86*/ s_pc = 0xeb86; CYCLES(0xeb86, 4);
@@ -6867,12 +6870,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 999:  // $EB88
       /*$EB88*/ s_pc = 0xeb88; CYCLES(0xeb88, 9);
-                tmp1_U8 = (uint8_t)(((s_a << 0x01) | (s_status & STATUS_C)) >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+                tmp6_U8 = (uint8_t)(((s_a << 0x01) | (s_status & STATUS_C)) >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
       /*$EB89*/ s_status = (s_status & ~STATUS_Z) | (0xff ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_N) | 0x80;
                 s_a = 0xff;
-      /*$EB8B*/ branchTarget = true; block_id = tmp1_U8 ? 1001 : 1000;
+      /*$EB8B*/ branchTarget = true; block_id = tmp6_U8 ? 1001 : 1000;
       break;
     case 1000:  // $EB8D
       /*$EB8D*/ s_pc = 0xeb8d; CYCLES(0xeb8d, 4);
@@ -6921,57 +6924,57 @@ void func_t001(bool adjust_sp) {
       break;
     case 1007:  // $EBBE
       /*$EBBE*/ s_pc = 0xebbe; CYCLES(0xebbe, 11);
-                tmp1_U8 = peek((ram_peek16al(0x0060) + s_y));
-      /*$EBC2*/ branchTarget = true; block_id = ((tmp1_U8 ^ ram_peek(0x00a2)) & 0x80) ? 998 : 1008;
+                tmp6_U8 = peek((ram_peek16al(0x0060) + s_y));
+      /*$EBC2*/ branchTarget = true; block_id = ((tmp6_U8 ^ ram_peek(0x00a2)) & 0x80) ? 998 : 1008;
       break;
     case 1008:  // $EBC4
       /*$EBC4*/ s_pc = 0xebc4; CYCLES(0xebc4, 7);
-                tmp1_U8 = s_x;
-                tmp2_U8 = ram_peek(0x009d);
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp2_U8);
-      /*$EBC6*/ branchTarget = true; block_id = (tmp1_U8 != tmp2_U8) ? 1013 : 1009;
+                tmp6_U8 = s_x;
+                tmp1_U8 = ram_peek(0x009d);
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= tmp1_U8);
+      /*$EBC6*/ branchTarget = true; block_id = (tmp6_U8 != tmp1_U8) ? 1013 : 1009;
       break;
     case 1009:  // $EBC8
       /*$EBC8*/ s_pc = 0xebc8; CYCLES(0xebc8, 14);
-                tmp2_U8 = peek((ram_peek16al(0x0060) + s_y));
-      /*$EBCA*/ tmp2_U8 = tmp2_U8 | 0x80;
-      /*$EBCC*/ tmp1_U8 = ram_peek(0x009e);
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp1_U8);
-      /*$EBCE*/ branchTarget = true; block_id = (tmp2_U8 != tmp1_U8) ? 1013 : 1010;
+                tmp1_U8 = peek((ram_peek16al(0x0060) + s_y));
+      /*$EBCA*/ tmp1_U8 = tmp1_U8 | 0x80;
+      /*$EBCC*/ tmp6_U8 = ram_peek(0x009e);
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp6_U8);
+      /*$EBCE*/ branchTarget = true; block_id = (tmp1_U8 != tmp6_U8) ? 1013 : 1010;
       break;
     case 1010:  // $EBD0
       /*$EBD0*/ s_pc = 0xebd0; CYCLES(0xebd0, 12);
-                tmp1_U8 = (uint8_t)(s_y + 0x01);
-                s_y = tmp1_U8;
-      /*$EBD1*/ tmp1_U8 = peek((ram_peek16al(0x0060) + tmp1_U8));
-      /*$EBD3*/ tmp2_U8 = ram_peek(0x009f);
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp2_U8);
-      /*$EBD5*/ branchTarget = true; block_id = (tmp1_U8 != tmp2_U8) ? 1013 : 1011;
+                tmp6_U8 = (uint8_t)(s_y + 0x01);
+                s_y = tmp6_U8;
+      /*$EBD1*/ tmp6_U8 = peek((ram_peek16al(0x0060) + tmp6_U8));
+      /*$EBD3*/ tmp1_U8 = ram_peek(0x009f);
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= tmp1_U8);
+      /*$EBD5*/ branchTarget = true; block_id = (tmp6_U8 != tmp1_U8) ? 1013 : 1011;
       break;
     case 1011:  // $EBD7
       /*$EBD7*/ s_pc = 0xebd7; CYCLES(0xebd7, 12);
-                tmp2_U8 = (uint8_t)(s_y + 0x01);
-                s_y = tmp2_U8;
-      /*$EBD8*/ tmp2_U8 = peek((ram_peek16al(0x0060) + tmp2_U8));
-      /*$EBDA*/ tmp1_U8 = ram_peek(0x00a0);
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp1_U8);
-      /*$EBDC*/ branchTarget = true; block_id = (tmp2_U8 != tmp1_U8) ? 1013 : 1012;
+                tmp1_U8 = (uint8_t)(s_y + 0x01);
+                s_y = tmp1_U8;
+      /*$EBD8*/ tmp1_U8 = peek((ram_peek16al(0x0060) + tmp1_U8));
+      /*$EBDA*/ tmp6_U8 = ram_peek(0x00a0);
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp6_U8);
+      /*$EBDC*/ branchTarget = true; block_id = (tmp1_U8 != tmp6_U8) ? 1013 : 1012;
       break;
     case 1012:  // $EBDE
       /*$EBDE*/ s_pc = 0xebde; CYCLES(0xebde, 19);
-                tmp1_U8 = (uint8_t)(s_y + 0x01);
-                s_y = tmp1_U8;
-      /*$EBE3*/ tmp1_U8 = peek((ram_peek16al(0x0060) + tmp1_U8));
-      /*$EBE5*/ tmp4_U16 = tmp1_U8;
-                tmp6_U16 = ram_peek(0x00a1);
-                tmp3_U16 = (tmp4_U16 - tmp6_U16) - (0x7f < ram_peek(0x00ac));
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)(~tmp6_U16)) << 6);
-                tmp1_U8 = (uint8_t)tmp3_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                s_a = tmp1_U8;
-      /*$EBE7*/ branchTarget = true; block_id = !tmp1_U8 ? 1023 : 1013;
+                tmp6_U8 = (uint8_t)(s_y + 0x01);
+                s_y = tmp6_U8;
+      /*$EBE3*/ tmp6_U8 = peek((ram_peek16al(0x0060) + tmp6_U8));
+      /*$EBE5*/ tmp5_U16 = tmp6_U8;
+                tmp3_U16 = ram_peek(0x00a1);
+                tmp4_U16 = (tmp5_U16 - tmp3_U16) - (0x7f < ram_peek(0x00ac));
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)(~tmp3_U16)) << 6);
+                tmp6_U8 = (uint8_t)tmp4_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_a = tmp6_U8;
+      /*$EBE7*/ branchTarget = true; block_id = !tmp6_U8 ? 1023 : 1013;
       break;
     case 1013:  // $EBE9
       /*$EBE9*/ s_pc = 0xebe9; CYCLES(0xebe9, 7);
@@ -6995,12 +6998,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 1017:  // $EBF6
       /*$EBF6*/ s_pc = 0xebf6; CYCLES(0xebf6, 12);
-      /*$EBF7*/ tmp3_U16 = s_a - 0x00a0;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
-                s_a = ((uint8_t)tmp3_U16);
-      /*$EBF9*/ tmp1_U8 = ram_peek(0x00a2);
-                s_status = (s_status & ~STATUS_V) | (((tmp1_U8 >> 0x06) & 0x01) << 6);
-      /*$EBFB*/ branchTarget = true; block_id = !(tmp1_U8 & 0x80) ? 1020 : 1018;
+      /*$EBF7*/ tmp4_U16 = s_a - 0x00a0;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+                s_a = ((uint8_t)tmp4_U16);
+      /*$EBF9*/ tmp6_U8 = ram_peek(0x00a2);
+                s_status = (s_status & ~STATUS_V) | (((tmp6_U8 >> 0x06) & 0x01) << 6);
+      /*$EBFB*/ branchTarget = true; block_id = !(tmp6_U8 & 0x80) ? 1020 : 1018;
       break;
     case 1018:  // $EBFD
       /*$EBFD*/ s_pc = 0xebfd; CYCLES(0xebfd, 14);
@@ -7016,12 +7019,12 @@ void func_t001(bool adjust_sp) {
     case 1020:  // $EC06
       /*$EC06*/ s_pc = 0xec06; CYCLES(0xec06, 11);
                 s_x = 0x9d;
-      /*$EC08*/ tmp1_U8 = s_a;
-                s_status = (s_status & ~STATUS_Z) | ((tmp1_U8 != 0xf9) ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0xf9);
-                tmp1_U8 = (uint8_t)(tmp1_U8 - 0xf9) & 0x80;
-                s_status = (s_status & ~STATUS_N) | tmp1_U8;
-      /*$EC0A*/ branchTarget = true; block_id = !tmp1_U8 ? 1024 : 1021;
+      /*$EC08*/ tmp6_U8 = s_a;
+                s_status = (s_status & ~STATUS_Z) | ((tmp6_U8 != 0xf9) ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= 0xf9);
+                tmp6_U8 = (uint8_t)(tmp6_U8 - 0xf9) & 0x80;
+                s_status = (s_status & ~STATUS_N) | tmp6_U8;
+      /*$EC0A*/ branchTarget = true; block_id = !tmp6_U8 ? 1024 : 1021;
       break;
     case 1021:  // $EC0C
       /*$EC0C*/ s_pc = 0xec0c; CYCLES(0xec0c, 6);
@@ -7039,14 +7042,14 @@ void func_t001(bool adjust_sp) {
     case 1024:  // $EC12
       /*$EC12*/ s_pc = 0xec12; CYCLES(0xec12, 24);
                 s_y = s_a;
-      /*$EC17*/ tmp1_U8 = ram_peek(0x009e);
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 & 0x01);
-                ram_poke(0x009e, (tmp1_U8 >> 0x01));
-      /*$EC19*/ tmp1_U8 = (ram_peek(0x00a2) & 0x80) | ram_peek(0x009e);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                s_a = tmp1_U8;
-      /*$EC1B*/ ram_poke(0x009e, tmp1_U8);
+      /*$EC17*/ tmp6_U8 = ram_peek(0x009e);
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 & 0x01);
+                ram_poke(0x009e, (tmp6_U8 >> 0x01));
+      /*$EC19*/ tmp6_U8 = (ram_peek(0x00a2) & 0x80) | ram_peek(0x009e);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_a = tmp6_U8;
+      /*$EC1B*/ ram_poke(0x009e, tmp6_U8);
       /*$EC1D*/ branchTarget = true; push16(0xec1f); block_id = 922;
       break;
     case 1025:  // $EC20
@@ -7056,14 +7059,14 @@ void func_t001(bool adjust_sp) {
       break;
     case 1026:  // $EC40
       /*$EC40*/ s_pc = 0xec40; CYCLES(0xec40, 18);
-                tmp1_U8 = s_a;
-                ram_poke(0x009e, tmp1_U8);
-      /*$EC42*/ ram_poke(0x009f, tmp1_U8);
-      /*$EC44*/ ram_poke(0x00a0, tmp1_U8);
-      /*$EC46*/ ram_poke(0x00a1, tmp1_U8);
-      /*$EC48*/ s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                s_y = tmp1_U8;
+                tmp6_U8 = s_a;
+                ram_poke(0x009e, tmp6_U8);
+      /*$EC42*/ ram_poke(0x009f, tmp6_U8);
+      /*$EC44*/ ram_poke(0x00a0, tmp6_U8);
+      /*$EC46*/ ram_poke(0x00a1, tmp6_U8);
+      /*$EC48*/ s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_y = tmp6_U8;
       /*$EC49*/ branchTarget = true; block_id = find_block_id_func_t001(0xec49, pop16() + 1);;
       break;
     case 1027:  // $EC4A
@@ -7074,11 +7077,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 1028:  // $EC4E
       /*$EC4E*/ s_pc = 0xec4e; CYCLES(0xec4e, 9);
-                tmp1_U8 = s_x;
-                ram_poke((uint8_t)(0x99 + tmp1_U8), s_y);
-      /*$EC50*/ tmp1_U8 = (uint8_t)(tmp1_U8 - 0x01);
-                s_x = tmp1_U8;
-      /*$EC51*/ branchTarget = true; block_id = !(tmp1_U8 & 0x80) ? 1028 : 1029;
+                tmp6_U8 = s_x;
+                ram_poke((uint8_t)(0x99 + tmp6_U8), s_y);
+      /*$EC50*/ tmp6_U8 = (uint8_t)(tmp6_U8 - 0x01);
+                s_x = tmp6_U8;
+      /*$EC51*/ branchTarget = true; block_id = !(tmp6_U8 & 0x80) ? 1028 : 1029;
       break;
     case 1029:  // $EC53
       /*$EC53*/ s_pc = 0xec53; CYCLES(0xec53, 4);
@@ -7086,11 +7089,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 1030:  // $EC55
       /*$EC55*/ s_pc = 0xec55; CYCLES(0xec55, 7);
-                tmp1_U8 = s_a;
-                tmp2_U8 = tmp1_U8 != 0x2d;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x2d);
-      /*$EC57*/ branchTarget = true; block_id = tmp2_U8 ? 1032 : 1031;
+                tmp6_U8 = s_a;
+                tmp1_U8 = tmp6_U8 != 0x2d;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= 0x2d);
+      /*$EC57*/ branchTarget = true; block_id = tmp1_U8 ? 1032 : 1031;
       break;
     case 1031:  // $EC59
       /*$EC59*/ s_pc = 0xec59; CYCLES(0xec59, 7);
@@ -7099,9 +7102,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1032:  // $EC5D
       /*$EC5D*/ s_pc = 0xec5d; CYCLES(0xec5d, 7);
-                tmp2_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x2b);
-      /*$EC5F*/ branchTarget = true; block_id = (tmp2_U8 != 0x2b) ? 1035 : 1033;
+                tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x2b);
+      /*$EC5F*/ branchTarget = true; block_id = (tmp1_U8 != 0x2b) ? 1035 : 1033;
       break;
     case 1033:  // $EC61
       /*$EC61*/ s_pc = 0xec61; CYCLES(0xec61, 6);
@@ -7113,15 +7116,15 @@ void func_t001(bool adjust_sp) {
       break;
     case 1035:  // $EC66
       /*$EC66*/ s_pc = 0xec66; CYCLES(0xec66, 7);
-                tmp2_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x2e);
-      /*$EC68*/ branchTarget = true; block_id = !(tmp2_U8 != 0x2e) ? 1049 : 1036;
+                tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x2e);
+      /*$EC68*/ branchTarget = true; block_id = !(tmp1_U8 != 0x2e) ? 1049 : 1036;
       break;
     case 1036:  // $EC6A
       /*$EC6A*/ s_pc = 0xec6a; CYCLES(0xec6a, 7);
-                tmp2_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x45);
-      /*$EC6C*/ branchTarget = true; block_id = (tmp2_U8 != 0x45) ? 1050 : 1037;
+                tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x45);
+      /*$EC6C*/ branchTarget = true; block_id = (tmp1_U8 != 0x45) ? 1050 : 1037;
       break;
     case 1037:  // $EC6E
       /*$EC6E*/ s_pc = 0xec6e; CYCLES(0xec6e, 6);
@@ -7133,29 +7136,29 @@ void func_t001(bool adjust_sp) {
       break;
     case 1039:  // $EC73
       /*$EC73*/ s_pc = 0xec73; CYCLES(0xec73, 7);
-                tmp2_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0xc9);
-      /*$EC75*/ branchTarget = true; block_id = !(tmp2_U8 != 0xc9) ? 1044 : 1040;
+                tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0xc9);
+      /*$EC75*/ branchTarget = true; block_id = !(tmp1_U8 != 0xc9) ? 1044 : 1040;
       break;
     case 1040:  // $EC77
       /*$EC77*/ s_pc = 0xec77; CYCLES(0xec77, 7);
-                tmp2_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x2d);
-      /*$EC79*/ branchTarget = true; block_id = !(tmp2_U8 != 0x2d) ? 1044 : 1041;
+                tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x2d);
+      /*$EC79*/ branchTarget = true; block_id = !(tmp1_U8 != 0x2d) ? 1044 : 1041;
       break;
     case 1041:  // $EC7B
       /*$EC7B*/ s_pc = 0xec7b; CYCLES(0xec7b, 7);
-                tmp2_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0xc8);
-      /*$EC7D*/ branchTarget = true; block_id = !(tmp2_U8 != 0xc8) ? 1045 : 1042;
+                tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0xc8);
+      /*$EC7D*/ branchTarget = true; block_id = !(tmp1_U8 != 0xc8) ? 1045 : 1042;
       break;
     case 1042:  // $EC7F
       /*$EC7F*/ s_pc = 0xec7f; CYCLES(0xec7f, 7);
-                tmp2_U8 = s_a;
-                tmp1_U8 = tmp2_U8 != 0x2b;
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x2b);
-      /*$EC81*/ branchTarget = true; block_id = !tmp1_U8 ? 1045 : 1043;
+                tmp1_U8 = s_a;
+                tmp6_U8 = tmp1_U8 != 0x2b;
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x2b);
+      /*$EC81*/ branchTarget = true; block_id = !tmp6_U8 ? 1045 : 1043;
       break;
     case 1043:  // $EC83
       /*$EC83*/ s_pc = 0xec83; CYCLES(0xec83, 4);
@@ -7163,9 +7166,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1044:  // $EC85
       /*$EC85*/ s_pc = 0xec85; CYCLES(0xec85, 4);
-                tmp2_U8 = ram_peek(0x009c);
-                ram_poke(0x009c, (uint8_t)((tmp2_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01));
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 & 0x01);
+                tmp1_U8 = ram_peek(0x009c);
+                ram_poke(0x009c, (uint8_t)((tmp1_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01));
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 & 0x01);
                 block_id = 1045;
       break;
     case 1045:  // $EC87
@@ -7187,12 +7190,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 1049:  // $EC98
       /*$EC98*/ s_pc = 0xec98; CYCLES(0xec98, 11);
-                tmp2_U8 = ram_peek(0x009b);
-                ram_poke(0x009b, (uint8_t)((tmp2_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01));
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 & 0x01);
-      /*$EC9A*/ tmp2_U8 = (ram_peek(0x009b) >> 0x06) & 0x01;
-                s_status = (s_status & ~STATUS_V) | (tmp2_U8 << 6);
-      /*$EC9C*/ branchTarget = true; block_id = !tmp2_U8 ? 1033 : 1050;
+                tmp1_U8 = ram_peek(0x009b);
+                ram_poke(0x009b, (uint8_t)((tmp1_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01));
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 & 0x01);
+      /*$EC9A*/ tmp1_U8 = (ram_peek(0x009b) >> 0x06) & 0x01;
+                s_status = (s_status & ~STATUS_V) | (tmp1_U8 << 6);
+      /*$EC9C*/ branchTarget = true; block_id = !tmp1_U8 ? 1033 : 1050;
       break;
     case 1050:  // $EC9E
       /*$EC9E*/ s_pc = 0xec9e; CYCLES(0xec9e, 4);
@@ -7201,16 +7204,16 @@ void func_t001(bool adjust_sp) {
       break;
     case 1051:  // $ECA0
       /*$ECA0*/ s_pc = 0xeca0; CYCLES(0xeca0, 12);
-      /*$ECA1*/ tmp3_U16 = s_a;
-                tmp6_U16 = ram_peek(0x0099);
-                tmp4_U16 = tmp3_U16 - tmp6_U16;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)(~tmp6_U16)) << 6);
-                tmp1_U8 = (uint8_t)tmp4_U16;
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                s_a = tmp1_U8;
-      /*$ECA3*/ ram_poke(0x009a, tmp1_U8);
-      /*$ECA5*/ branchTarget = true; block_id = !tmp1_U8 ? 1058 : 1052;
+      /*$ECA1*/ tmp4_U16 = s_a;
+                tmp3_U16 = ram_peek(0x0099);
+                tmp5_U16 = tmp4_U16 - tmp3_U16;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp5_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)(~tmp3_U16)) << 6);
+                tmp6_U8 = (uint8_t)tmp5_U16;
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_a = tmp6_U8;
+      /*$ECA3*/ ram_poke(0x009a, tmp6_U8);
+      /*$ECA5*/ branchTarget = true; block_id = !tmp6_U8 ? 1058 : 1052;
       break;
     case 1052:  // $ECA7
       /*$ECA7*/ s_pc = 0xeca7; CYCLES(0xeca7, 4);
@@ -7222,10 +7225,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 1054:  // $ECAC
       /*$ECAC*/ s_pc = 0xecac; CYCLES(0xecac, 7);
-                tmp2_U8 = (uint8_t)(ram_peek(0x009a) + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                ram_poke(0x009a, tmp2_U8);
-      /*$ECAE*/ branchTarget = true; block_id = tmp2_U8 ? 1053 : 1055;
+                tmp1_U8 = (uint8_t)(ram_peek(0x009a) + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                ram_poke(0x009a, tmp1_U8);
+      /*$ECAE*/ branchTarget = true; block_id = tmp1_U8 ? 1053 : 1055;
       break;
     case 1055:  // $ECB0
       /*$ECB0*/ s_pc = 0xecb0; CYCLES(0xecb0, 4);
@@ -7237,18 +7240,18 @@ void func_t001(bool adjust_sp) {
       break;
     case 1057:  // $ECB5
       /*$ECB5*/ s_pc = 0xecb5; CYCLES(0xecb5, 7);
-                tmp2_U8 = (uint8_t)(ram_peek(0x009a) - 0x01);
-                ram_poke(0x009a, tmp2_U8);
-      /*$ECB7*/ branchTarget = true; block_id = tmp2_U8 ? 1056 : 1058;
+                tmp1_U8 = (uint8_t)(ram_peek(0x009a) - 0x01);
+                ram_poke(0x009a, tmp1_U8);
+      /*$ECB7*/ branchTarget = true; block_id = tmp1_U8 ? 1056 : 1058;
       break;
     case 1058:  // $ECB9
       /*$ECB9*/ s_pc = 0xecb9; CYCLES(0xecb9, 7);
-                tmp1_U8 = ram_peek(0x00a3);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                tmp2_U8 = tmp1_U8 & 0x80;
-                s_status = (s_status & ~STATUS_N) | tmp2_U8;
-                s_a = tmp1_U8;
-      /*$ECBB*/ branchTarget = true; block_id = tmp2_U8 ? 1060 : 1059;
+                tmp6_U8 = ram_peek(0x00a3);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                tmp1_U8 = tmp6_U8 & 0x80;
+                s_status = (s_status & ~STATUS_N) | tmp1_U8;
+                s_a = tmp6_U8;
+      /*$ECBB*/ branchTarget = true; block_id = tmp1_U8 ? 1060 : 1059;
       break;
     case 1059:  // $ECBD
       /*$ECBD*/ s_pc = 0xecbd; CYCLES(0xecbd, 2);
@@ -7261,9 +7264,9 @@ void func_t001(bool adjust_sp) {
     case 1061:  // $ECC1
       /*$ECC1*/ s_pc = 0xecc1; CYCLES(0xecc1, 9);
                 push8(s_a);
-      /*$ECC2*/ tmp2_U8 = ram_peek(0x009b);
-                s_status = (s_status & ~STATUS_V) | (((tmp2_U8 >> 0x06) & 0x01) << 6);
-      /*$ECC4*/ branchTarget = true; block_id = !(tmp2_U8 & 0x80) ? 1063 : 1062;
+      /*$ECC2*/ tmp1_U8 = ram_peek(0x009b);
+                s_status = (s_status & ~STATUS_V) | (((tmp1_U8 >> 0x06) & 0x01) << 6);
+      /*$ECC4*/ branchTarget = true; block_id = !(tmp1_U8 & 0x80) ? 1063 : 1062;
       break;
     case 1062:  // $ECC6
       /*$ECC6*/ s_pc = 0xecc6; CYCLES(0xecc6, 4);
@@ -7276,12 +7279,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 1064:  // $ECCB
       /*$ECCB*/ s_pc = 0xeccb; CYCLES(0xeccb, 12);
-                tmp5_U8 = pop8();
-      /*$ECCD*/ tmp4_U16 = tmp5_U8;
-                tmp3_U16 = tmp4_U16 - 0x0030;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0xffcf) << 6);
-                s_a = ((uint8_t)tmp3_U16);
+                tmp2_U8 = pop8();
+      /*$ECCD*/ tmp5_U16 = tmp2_U8;
+                tmp4_U16 = tmp5_U16 - 0x0030;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)0xffcf) << 6);
+                s_a = ((uint8_t)tmp4_U16);
       /*$ECCF*/ branchTarget = true; push16(0xecd1); block_id = 1066;
       break;
     case 1065:  // $ECD2
@@ -7295,8 +7298,8 @@ void func_t001(bool adjust_sp) {
       break;
     case 1067:  // $ECD9
       /*$ECD9*/ s_pc = 0xecd9; CYCLES(0xecd9, 7);
-                tmp1_U8 = pop8();
-                s_a = tmp1_U8;
+                tmp6_U8 = pop8();
+                s_a = tmp6_U8;
       /*$ECDA*/ branchTarget = true; push16(0xecdc); block_id = 1002;
       break;
     case 1068:  // $ECDD
@@ -7307,18 +7310,18 @@ void func_t001(bool adjust_sp) {
       break;
     case 1069:  // $ECE8
       /*$ECE8*/ s_pc = 0xece8; CYCLES(0xece8, 11);
-                tmp1_U8 = ram_peek(0x009a);
-                s_a = tmp1_U8;
-      /*$ECEA*/ tmp1_U8 = tmp1_U8 >= 0x0a;
-                s_status = (s_status & ~STATUS_C) | tmp1_U8;
-      /*$ECEC*/ branchTarget = true; block_id = !tmp1_U8 ? 1072 : 1070;
+                tmp6_U8 = ram_peek(0x009a);
+                s_a = tmp6_U8;
+      /*$ECEA*/ tmp6_U8 = tmp6_U8 >= 0x0a;
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+      /*$ECEC*/ branchTarget = true; block_id = !tmp6_U8 ? 1072 : 1070;
       break;
     case 1070:  // $ECEE
       /*$ECEE*/ s_pc = 0xecee; CYCLES(0xecee, 11);
                 s_a = 0x64;
-      /*$ECF0*/ tmp2_U8 = ram_peek(0x009c);
-                s_status = (s_status & ~STATUS_V) | (((tmp2_U8 >> 0x06) & 0x01) << 6);
-      /*$ECF2*/ branchTarget = true; block_id = (tmp2_U8 & 0x80) ? 1073 : 1071;
+      /*$ECF0*/ tmp1_U8 = ram_peek(0x009c);
+                s_status = (s_status & ~STATUS_V) | (((tmp1_U8 >> 0x06) & 0x01) << 6);
+      /*$ECF2*/ branchTarget = true; block_id = (tmp1_U8 & 0x80) ? 1073 : 1071;
       break;
     case 1071:  // $ECF4
       /*$ECF4*/ s_pc = 0xecf4; CYCLES(0xecf4, 6);
@@ -7327,12 +7330,13 @@ void func_t001(bool adjust_sp) {
     case 1072:  // $ECF7
       /*$ECF7*/ s_pc = 0xecf7; CYCLES(0xecf7, 24);
       /*$ECFE*/ s_y = 0x00;
-      /*$ED00*/ tmp2_U8 = peek(ram_peek16al(0x00b8));
-      /*$ED03*/ tmp4_U16 = (((((((((s_a << 0x01) & 0x00ff) << 0x01) & 0x00ff) + ram_peek(0x009a)) & 0x00ff) << 0x01) & 0x00ff) + tmp2_U8) & 0x00ff;
-                tmp6_U16 = tmp4_U16 - 0x0030;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp6_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp4_U16, (uint8_t)0xffcf) << 6);
-                s_a = ((uint8_t)tmp6_U16);
+      /*$ED00*/ tmp1_U8 = peek(ram_peek16al(0x00b8));
+                tmp5_U16 = (((s_a << 0x02) + ram_peek(0x009a)) << 0x01) + tmp1_U8;
+      /*$ED03*/ tmp3_U16 = tmp5_U16 & 0x00ff;
+                tmp4_U16 = tmp3_U16 - 0x0030;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0xffcf) << 6);
+                s_a = (uint8_t)(tmp5_U16 - 0x0030);
                 block_id = 1073;
       break;
     case 1073:  // $ED05
@@ -7378,21 +7382,21 @@ void func_t001(bool adjust_sp) {
       break;
     case 1080:  // $ED3D
       /*$ED3D*/ s_pc = 0xed3d; CYCLES(0xed3d, 7);
-                tmp2_U8 = (uint8_t)(s_y + 0x01);
-                s_y = tmp2_U8;
-      /*$ED3E*/ ram_poke((0x00ff + tmp2_U8), s_a);
+                tmp1_U8 = (uint8_t)(s_y + 0x01);
+                s_y = tmp1_U8;
+      /*$ED3E*/ ram_poke((0x00ff + tmp1_U8), s_a);
                 block_id = 1081;
       break;
     case 1081:  // $ED41
       /*$ED41*/ s_pc = 0xed41; CYCLES(0xed41, 19);
                 ram_poke(0x00a2, s_a);
-      /*$ED43*/ tmp2_U8 = s_y;
-                ram_poke(0x00ad, tmp2_U8);
-      /*$ED45*/ s_y = (uint8_t)(tmp2_U8 + 0x01);
+      /*$ED43*/ tmp1_U8 = s_y;
+                ram_poke(0x00ad, tmp1_U8);
+      /*$ED45*/ s_y = (uint8_t)(tmp1_U8 + 0x01);
       /*$ED46*/ s_a = 0x30;
-      /*$ED48*/ tmp2_U8 = ram_peek(0x009d);
-                s_x = tmp2_U8;
-      /*$ED4A*/ branchTarget = true; block_id = tmp2_U8 ? 1083 : 1082;
+      /*$ED48*/ tmp1_U8 = ram_peek(0x009d);
+                s_x = tmp1_U8;
+      /*$ED4A*/ branchTarget = true; block_id = tmp1_U8 ? 1083 : 1082;
       break;
     case 1082:  // $ED4C
       /*$ED4C*/ s_pc = 0xed4c; CYCLES(0xed4c, 6);
@@ -7403,9 +7407,9 @@ void func_t001(bool adjust_sp) {
     case 1083:  // $ED4F
       /*$ED4F*/ s_pc = 0xed4f; CYCLES(0xed4f, 11);
                 s_a = 0x00;
-      /*$ED51*/ tmp2_U8 = s_x;
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x80);
-      /*$ED53*/ branchTarget = true; block_id = !(tmp2_U8 != 0x80) ? 1085 : 1084;
+      /*$ED51*/ tmp1_U8 = s_x;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x80);
+      /*$ED53*/ branchTarget = true; block_id = !(tmp1_U8 != 0x80) ? 1085 : 1084;
       break;
     case 1084:  // $ED55
       /*$ED55*/ s_pc = 0xed55; CYCLES(0xed55, 4);
@@ -7467,9 +7471,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1095:  // $ED7B
       /*$ED7B*/ s_pc = 0xed7b; CYCLES(0xed7b, 7);
-                tmp5_U8 = (uint8_t)(ram_peek(0x0099) - 0x01);
-                ram_poke(0x0099, tmp5_U8);
-      /*$ED7D*/ branchTarget = true; block_id = tmp5_U8 ? 1091 : 1096;
+                tmp2_U8 = (uint8_t)(ram_peek(0x0099) - 0x01);
+                ram_poke(0x0099, tmp2_U8);
+      /*$ED7D*/ branchTarget = true; block_id = tmp2_U8 ? 1091 : 1096;
       break;
     case 1096:  // $ED7F
       /*$ED7F*/ s_pc = 0xed7f; CYCLES(0xed7f, 6);
@@ -7477,9 +7481,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1097:  // $ED82
       /*$ED82*/ s_pc = 0xed82; CYCLES(0xed82, 7);
-                tmp2_U8 = (uint8_t)(ram_peek(0x0099) + 0x01);
-                ram_poke(0x0099, tmp2_U8);
-      /*$ED84*/ branchTarget = true; block_id = tmp2_U8 ? 1088 : 1098;
+                tmp1_U8 = (uint8_t)(ram_peek(0x0099) + 0x01);
+                ram_poke(0x0099, tmp1_U8);
+      /*$ED84*/ branchTarget = true; block_id = tmp1_U8 ? 1088 : 1098;
       break;
     case 1098:  // $ED86
       /*$ED86*/ s_pc = 0xed86; CYCLES(0xed86, 6);
@@ -7492,15 +7496,15 @@ void func_t001(bool adjust_sp) {
     case 1100:  // $ED8C
       /*$ED8C*/ s_pc = 0xed8c; CYCLES(0xed8c, 16);
                 s_x = 0x01;
-      /*$ED91*/ tmp1_U8 = (uint8_t)(ram_peek(0x0099) + 0x000a);
-                s_a = tmp1_U8;
-      /*$ED93*/ branchTarget = true; block_id = (tmp1_U8 & 0x80) ? 1103 : 1101;
+      /*$ED91*/ tmp6_U8 = (uint8_t)(ram_peek(0x0099) + 0x000a);
+                s_a = tmp6_U8;
+      /*$ED93*/ branchTarget = true; block_id = (tmp6_U8 & 0x80) ? 1103 : 1101;
       break;
     case 1101:  // $ED95
       /*$ED95*/ s_pc = 0xed95; CYCLES(0xed95, 7);
-                tmp2_U8 = s_a >= 0x0b;
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-      /*$ED97*/ branchTarget = true; block_id = tmp2_U8 ? 1104 : 1102;
+                tmp1_U8 = s_a >= 0x0b;
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+      /*$ED97*/ branchTarget = true; block_id = tmp1_U8 ? 1104 : 1102;
       break;
     case 1102:  // $ED99
       /*$ED99*/ s_pc = 0xed99; CYCLES(0xed99, 9);
@@ -7516,10 +7520,10 @@ void func_t001(bool adjust_sp) {
     case 1104:  // $ED9F
       /*$ED9F*/ s_pc = 0xed9f; CYCLES(0xed9f, 16);
       /*$EDA1*/ ram_poke(0x009a, (uint8_t)((s_a - 0x0002) - (uint8_t)(0x01 - (s_status & STATUS_C))));
-      /*$EDA3*/ tmp2_U8 = s_x;
-                ram_poke(0x0099, tmp2_U8);
-      /*$EDA5*/ s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-      /*$EDA6*/ branchTarget = true; block_id = !tmp2_U8 ? 1106 : 1105;
+      /*$EDA3*/ tmp1_U8 = s_x;
+                ram_poke(0x0099, tmp1_U8);
+      /*$EDA5*/ s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+      /*$EDA6*/ branchTarget = true; block_id = !tmp1_U8 ? 1106 : 1105;
       break;
     case 1105:  // $EDA8
       /*$EDA8*/ s_pc = 0xeda8; CYCLES(0xeda8, 4);
@@ -7527,16 +7531,16 @@ void func_t001(bool adjust_sp) {
       break;
     case 1106:  // $EDAA
       /*$EDAA*/ s_pc = 0xedaa; CYCLES(0xedaa, 19);
-      /*$EDAE*/ tmp2_U8 = (uint8_t)(ram_peek(0x00ad) + 0x01);
-                s_y = tmp2_U8;
-      /*$EDAF*/ ram_poke((0x00ff + tmp2_U8), 0x2e);
+      /*$EDAE*/ tmp1_U8 = (uint8_t)(ram_peek(0x00ad) + 0x01);
+                s_y = tmp1_U8;
+      /*$EDAF*/ ram_poke((0x00ff + tmp1_U8), 0x2e);
       /*$EDB3*/ branchTarget = true; block_id = !s_x ? 1108 : 1107;
       break;
     case 1107:  // $EDB5
       /*$EDB5*/ s_pc = 0xedb5; CYCLES(0xedb5, 11);
-      /*$EDB7*/ tmp2_U8 = (uint8_t)(s_y + 0x01);
-                s_y = tmp2_U8;
-      /*$EDB8*/ ram_poke((0x00ff + tmp2_U8), 0x30);
+      /*$EDB7*/ tmp1_U8 = (uint8_t)(s_y + 0x01);
+                s_y = tmp1_U8;
+      /*$EDB8*/ ram_poke((0x00ff + tmp1_U8), 0x30);
                 block_id = 1108;
       break;
     case 1108:  // $EDBB
@@ -7552,21 +7556,21 @@ void func_t001(bool adjust_sp) {
       break;
     case 1110:  // $EDC1
       /*$EDC1*/ s_pc = 0xedc1; CYCLES(0xedc1, 55);
-      /*$EDC4*/ tmp2_U8 = s_y;
-                tmp6_U16 = ram_peek(0x00a1) + ram_peek((0xee6c + tmp2_U8));
-      /*$EDC7*/ ram_poke(0x00a1, ((uint8_t)tmp6_U16));
-      /*$EDCB*/ tmp6_U16 = (ram_peek(0x00a0) + ram_peek((0xee6b + tmp2_U8))) + (uint8_t)(tmp6_U16 >> 8);
-      /*$EDCE*/ ram_poke(0x00a0, ((uint8_t)tmp6_U16));
-      /*$EDD2*/ tmp6_U16 = (ram_peek(0x009f) + ram_peek((0xee6a + tmp2_U8))) + (uint8_t)(tmp6_U16 >> 8);
-      /*$EDD5*/ ram_poke(0x009f, ((uint8_t)tmp6_U16));
-      /*$EDD9*/ tmp6_U16 = (ram_peek(0x009e) + ram_peek((0xee69 + tmp2_U8))) + (uint8_t)(tmp6_U16 >> 8);
-                tmp2_U8 = (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-      /*$EDDC*/ ram_poke(0x009e, ((uint8_t)tmp6_U16));
-      /*$EDDE*/ tmp1_U8 = (uint8_t)(s_x + 0x01);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                s_x = tmp1_U8;
-      /*$EDDF*/ branchTarget = true; block_id = tmp2_U8 ? 1113 : 1111;
+      /*$EDC4*/ tmp1_U8 = s_y;
+                tmp5_U16 = ram_peek(0x00a1) + ram_peek((0xee6c + tmp1_U8));
+      /*$EDC7*/ ram_poke(0x00a1, ((uint8_t)tmp5_U16));
+      /*$EDCB*/ tmp5_U16 = (ram_peek(0x00a0) + ram_peek((0xee6b + tmp1_U8))) + (uint8_t)(tmp5_U16 >> 8);
+      /*$EDCE*/ ram_poke(0x00a0, ((uint8_t)tmp5_U16));
+      /*$EDD2*/ tmp5_U16 = (ram_peek(0x009f) + ram_peek((0xee6a + tmp1_U8))) + (uint8_t)(tmp5_U16 >> 8);
+      /*$EDD5*/ ram_poke(0x009f, ((uint8_t)tmp5_U16));
+      /*$EDD9*/ tmp5_U16 = (ram_peek(0x009e) + ram_peek((0xee69 + tmp1_U8))) + (uint8_t)(tmp5_U16 >> 8);
+                tmp1_U8 = (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+      /*$EDDC*/ ram_poke(0x009e, ((uint8_t)tmp5_U16));
+      /*$EDDE*/ tmp6_U8 = (uint8_t)(s_x + 0x01);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_x = tmp6_U8;
+      /*$EDDF*/ branchTarget = true; block_id = tmp1_U8 ? 1113 : 1111;
       break;
     case 1111:  // $EDE1
       /*$EDE1*/ s_pc = 0xede1; CYCLES(0xede1, 4);
@@ -7587,40 +7591,40 @@ void func_t001(bool adjust_sp) {
       break;
     case 1115:  // $EDEA
       /*$EDEA*/ s_pc = 0xedea; CYCLES(0xedea, 7);
-      /*$EDEC*/ tmp4_U16 = ((s_a ^ 0xff) + 0x000a) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
-                s_a = ((uint8_t)tmp4_U16);
+      /*$EDEC*/ tmp3_U16 = ((s_a ^ 0xff) + 0x000a) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
+                s_a = ((uint8_t)tmp3_U16);
                 block_id = 1116;
       break;
     case 1116:  // $EDEE
       /*$EDEE*/ s_pc = 0xedee; CYCLES(0xedee, 36);
-                tmp6_U16 = s_a;
-                tmp4_U16 = (tmp6_U16 + 0x002f) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp6_U16, (uint8_t)0x002f) << 6);
-                tmp2_U8 = (uint8_t)tmp4_U16;
+                tmp5_U16 = s_a;
+                tmp3_U16 = (tmp5_U16 + 0x002f) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp5_U16, (uint8_t)0x002f) << 6);
+                tmp1_U8 = (uint8_t)tmp3_U16;
       /*$EDF4*/ ram_poke(0x0083, (uint8_t)(s_y + 0x04));
-      /*$EDF8*/ tmp1_U8 = (uint8_t)(ram_peek(0x00ad) + 0x01);
-                s_y = tmp1_U8;
-      /*$EDF9*/ s_x = tmp2_U8;
-      /*$EDFC*/ ram_poke((0x00ff + tmp1_U8), (tmp2_U8 & 0x7f));
-      /*$EDFF*/ tmp1_U8 = (uint8_t)(ram_peek(0x0099) - 0x01);
-                ram_poke(0x0099, tmp1_U8);
-      /*$EE01*/ branchTarget = true; block_id = tmp1_U8 ? 1118 : 1117;
+      /*$EDF8*/ tmp6_U8 = (uint8_t)(ram_peek(0x00ad) + 0x01);
+                s_y = tmp6_U8;
+      /*$EDF9*/ s_x = tmp1_U8;
+      /*$EDFC*/ ram_poke((0x00ff + tmp6_U8), (tmp1_U8 & 0x7f));
+      /*$EDFF*/ tmp6_U8 = (uint8_t)(ram_peek(0x0099) - 0x01);
+                ram_poke(0x0099, tmp6_U8);
+      /*$EE01*/ branchTarget = true; block_id = tmp6_U8 ? 1118 : 1117;
       break;
     case 1117:  // $EE03
       /*$EE03*/ s_pc = 0xee03; CYCLES(0xee03, 11);
-      /*$EE05*/ tmp1_U8 = (uint8_t)(s_y + 0x01);
-                s_y = tmp1_U8;
-      /*$EE06*/ ram_poke((0x00ff + tmp1_U8), 0x2e);
+      /*$EE05*/ tmp6_U8 = (uint8_t)(s_y + 0x01);
+                s_y = tmp6_U8;
+      /*$EE06*/ ram_poke((0x00ff + tmp6_U8), 0x2e);
                 block_id = 1118;
       break;
     case 1118:  // $EE09
       /*$EE09*/ s_pc = 0xee09; CYCLES(0xee09, 24);
                 ram_poke(0x00ad, s_y);
-      /*$EE0B*/ tmp1_U8 = ram_peek(0x0083);
-                s_y = tmp1_U8;
+      /*$EE0B*/ tmp6_U8 = ram_peek(0x0083);
+                s_y = tmp6_U8;
       /*$EE12*/ s_x = ((s_x ^ 0xff) & 0x80);
-      /*$EE15*/ branchTarget = true; block_id = (tmp1_U8 != 0x24) ? 1110 : 1119;
+      /*$EE15*/ branchTarget = true; block_id = (tmp6_U8 != 0x24) ? 1110 : 1119;
       break;
     case 1119:  // $EE17
       /*$EE17*/ s_pc = 0xee17; CYCLES(0xee17, 4);
@@ -7629,17 +7633,17 @@ void func_t001(bool adjust_sp) {
       break;
     case 1120:  // $EE19
       /*$EE19*/ s_pc = 0xee19; CYCLES(0xee19, 14);
-                tmp1_U8 = s_y;
-                tmp2_U8 = ram_peek((0x00ff + tmp1_U8));
-                s_a = tmp2_U8;
-      /*$EE1C*/ s_y = (uint8_t)(tmp1_U8 - 0x01);
-      /*$EE1F*/ branchTarget = true; block_id = !(tmp2_U8 != 0x30) ? 1120 : 1121;
+                tmp6_U8 = s_y;
+                tmp1_U8 = ram_peek((0x00ff + tmp6_U8));
+                s_a = tmp1_U8;
+      /*$EE1C*/ s_y = (uint8_t)(tmp6_U8 - 0x01);
+      /*$EE1F*/ branchTarget = true; block_id = !(tmp1_U8 != 0x30) ? 1120 : 1121;
       break;
     case 1121:  // $EE21
       /*$EE21*/ s_pc = 0xee21; CYCLES(0xee21, 7);
-                tmp2_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x2e);
-      /*$EE23*/ branchTarget = true; block_id = !(tmp2_U8 != 0x2e) ? 1123 : 1122;
+                tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x2e);
+      /*$EE23*/ branchTarget = true; block_id = !(tmp1_U8 != 0x2e) ? 1123 : 1122;
       break;
     case 1122:  // $EE25
       /*$EE25*/ s_pc = 0xee25; CYCLES(0xee25, 2);
@@ -7649,10 +7653,10 @@ void func_t001(bool adjust_sp) {
     case 1123:  // $EE26
       /*$EE26*/ s_pc = 0xee26; CYCLES(0xee26, 11);
                 s_a = 0x2b;
-      /*$EE28*/ tmp2_U8 = ram_peek(0x009a);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_x = tmp2_U8;
-      /*$EE2A*/ branchTarget = true; block_id = !tmp2_U8 ? 1129 : 1124;
+      /*$EE28*/ tmp1_U8 = ram_peek(0x009a);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_x = tmp1_U8;
+      /*$EE2A*/ branchTarget = true; block_id = !tmp1_U8 ? 1129 : 1124;
       break;
     case 1124:  // $EE2C
       /*$EE2C*/ s_pc = 0xee2c; CYCLES(0xee2c, 4);
@@ -7666,9 +7670,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1126:  // $EE36
       /*$EE36*/ s_pc = 0xee36; CYCLES(0xee36, 21);
-                tmp2_U8 = s_y;
-                ram_poke((0x0101 + tmp2_U8), s_a);
-      /*$EE3B*/ ram_poke((0x0100 + tmp2_U8), 0x45);
+                tmp1_U8 = s_y;
+                ram_poke((0x0101 + tmp1_U8), s_a);
+      /*$EE3B*/ ram_poke((0x0100 + tmp1_U8), 0x45);
       /*$EE3E*/ s_a = s_x;
       /*$EE3F*/ s_x = 0x2f;
       /*$EE41*/ s_status = (s_status & ~STATUS_C) | 0x01;
@@ -7677,23 +7681,23 @@ void func_t001(bool adjust_sp) {
     case 1127:  // $EE42
       /*$EE42*/ s_pc = 0xee42; CYCLES(0xee42, 9);
                 s_x = (uint8_t)(s_x + 0x01);
-      /*$EE43*/ tmp4_U16 = (s_a - 0x000a) - (uint8_t)(0x01 - (s_status & STATUS_C));
-                tmp2_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_a = ((uint8_t)tmp4_U16);
-      /*$EE45*/ branchTarget = true; block_id = tmp2_U8 ? 1127 : 1128;
+      /*$EE43*/ tmp3_U16 = (s_a - 0x000a) - (uint8_t)(0x01 - (s_status & STATUS_C));
+                tmp1_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+                s_a = ((uint8_t)tmp3_U16);
+      /*$EE45*/ branchTarget = true; block_id = tmp1_U8 ? 1127 : 1128;
       break;
     case 1128:  // $EE47
       /*$EE47*/ s_pc = 0xee47; CYCLES(0xee47, 28);
-                tmp4_U16 = s_a;
-                tmp6_U16 = (tmp4_U16 + 0x003a) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp4_U16, (uint8_t)0x003a) << 6);
-      /*$EE49*/ tmp2_U8 = s_y;
-                ram_poke((0x0103 + tmp2_U8), ((uint8_t)tmp6_U16));
-      /*$EE4D*/ ram_poke((0x0102 + tmp2_U8), s_x);
+                tmp3_U16 = s_a;
+                tmp5_U16 = (tmp3_U16 + 0x003a) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp3_U16, (uint8_t)0x003a) << 6);
+      /*$EE49*/ tmp1_U8 = s_y;
+                ram_poke((0x0103 + tmp1_U8), ((uint8_t)tmp5_U16));
+      /*$EE4D*/ ram_poke((0x0102 + tmp1_U8), s_x);
       /*$EE50*/ s_a = 0x00;
-      /*$EE52*/ ram_poke((0x0104 + tmp2_U8), 0x00);
+      /*$EE52*/ ram_poke((0x0104 + tmp1_U8), 0x00);
       /*$EE55*/ branchTarget = true; block_id = 1130;
       break;
     case 1129:  // $EE5A
@@ -7719,11 +7723,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 1132:  // $EED4
       /*$EED4*/ s_pc = 0xeed4; CYCLES(0xeed4, 11);
-      /*$EED6*/ tmp2_U8 = ram_peek(0x00a2) ^ 0xff;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_a = tmp2_U8;
-      /*$EED8*/ ram_poke(0x00a2, tmp2_U8);
+      /*$EED6*/ tmp1_U8 = ram_peek(0x00a2) ^ 0xff;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_a = tmp1_U8;
+      /*$EED8*/ ram_poke(0x00a2, tmp1_U8);
                 block_id = 1133;
       break;
     case 1133:  // $EEDA
@@ -7744,20 +7748,20 @@ void func_t001(bool adjust_sp) {
       break;
     case 1135:  // $F152
       /*$F152*/ s_pc = 0xf152; CYCLES(0xf152, 18);
-                tmp2_U8 = s_x;
-      /*$F155*/ ram_poke((uint8_t)(0xb0 + tmp2_U8), ram_peek((0xf10a + tmp2_U8)));
-      /*$F157*/ ram_poke(0x00f1, tmp2_U8);
-      /*$F159*/ tmp2_U8 = (uint8_t)(tmp2_U8 - 0x01);
-                s_x = tmp2_U8;
-      /*$F15A*/ branchTarget = true; block_id = tmp2_U8 ? 1135 : 1136;
+                tmp1_U8 = s_x;
+      /*$F155*/ ram_poke((uint8_t)(0xb0 + tmp1_U8), ram_peek((0xf10a + tmp1_U8)));
+      /*$F157*/ ram_poke(0x00f1, tmp1_U8);
+      /*$F159*/ tmp1_U8 = (uint8_t)(tmp1_U8 - 0x01);
+                s_x = tmp1_U8;
+      /*$F15A*/ branchTarget = true; block_id = tmp1_U8 ? 1135 : 1136;
       break;
     case 1136:  // $F15C
       /*$F15C*/ s_pc = 0xf15c; CYCLES(0xf15c, 26);
-                tmp2_U8 = s_x;
-                ram_poke(0x00f2, tmp2_U8);
-      /*$F15F*/ ram_poke(0x00a4, tmp2_U8);
-      /*$F161*/ ram_poke(0x0054, tmp2_U8);
-      /*$F163*/ push8(tmp2_U8);
+                tmp1_U8 = s_x;
+                ram_poke(0x00f2, tmp1_U8);
+      /*$F15F*/ ram_poke(0x00a4, tmp1_U8);
+      /*$F161*/ ram_poke(0x0054, tmp1_U8);
+      /*$F163*/ push8(tmp1_U8);
       /*$F166*/ ram_poke(0x008f, 0x03);
       /*$F168*/ branchTarget = true; push16(0xf16a); block_id = 358;
       break;
@@ -7774,40 +7778,40 @@ void func_t001(bool adjust_sp) {
     case 1138:  // $F181
       /*$F181*/ s_pc = 0xf181; CYCLES(0xf181, 21);
                 ram_poke(0x0051, (uint8_t)(ram_peek(0x0051) + 0x01));
-      /*$F183*/ tmp2_U8 = s_y;
-                tmp1_U8 = peek((ram_peek16al(0x0050) + tmp2_U8));
-      /*$F185*/ tmp1_U8 = tmp1_U8 ^ 0xff;
-                s_a = tmp1_U8;
-      /*$F187*/ poke((ram_peek16al(0x0050) + tmp2_U8), tmp1_U8);
-      /*$F189*/ tmp2_U8 = peek((ram_peek16al(0x0050) + tmp2_U8));
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp2_U8);
-      /*$F18B*/ branchTarget = true; block_id = (tmp1_U8 != tmp2_U8) ? 1140 : 1139;
+      /*$F183*/ tmp1_U8 = s_y;
+                tmp6_U8 = peek((ram_peek16al(0x0050) + tmp1_U8));
+      /*$F185*/ tmp6_U8 = tmp6_U8 ^ 0xff;
+                s_a = tmp6_U8;
+      /*$F187*/ poke((ram_peek16al(0x0050) + tmp1_U8), tmp6_U8);
+      /*$F189*/ tmp1_U8 = peek((ram_peek16al(0x0050) + tmp1_U8));
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= tmp1_U8);
+      /*$F18B*/ branchTarget = true; block_id = (tmp6_U8 != tmp1_U8) ? 1140 : 1139;
       break;
     case 1139:  // $F18D
       /*$F18D*/ s_pc = 0xf18d; CYCLES(0xf18d, 14);
-                tmp1_U8 = s_a ^ 0xff;
-      /*$F18F*/ tmp2_U8 = s_y;
-                poke((ram_peek16al(0x0050) + tmp2_U8), tmp1_U8);
-      /*$F191*/ tmp2_U8 = peek((ram_peek16al(0x0050) + tmp2_U8));
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp2_U8);
-      /*$F193*/ branchTarget = true; block_id = !(tmp1_U8 != tmp2_U8) ? 1138 : 1140;
+                tmp6_U8 = s_a ^ 0xff;
+      /*$F18F*/ tmp1_U8 = s_y;
+                poke((ram_peek16al(0x0050) + tmp1_U8), tmp6_U8);
+      /*$F191*/ tmp1_U8 = peek((ram_peek16al(0x0050) + tmp1_U8));
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= tmp1_U8);
+      /*$F193*/ branchTarget = true; block_id = !(tmp6_U8 != tmp1_U8) ? 1138 : 1140;
       break;
     case 1140:  // $F195
       /*$F195*/ s_pc = 0xf195; CYCLES(0xf195, 57);
-                tmp2_U8 = ram_peek(0x0050);
-      /*$F199*/ tmp1_U8 = ram_peek(0x0051) & 0xf0;
-      /*$F19B*/ ram_poke(0x0073, tmp2_U8);
-      /*$F19D*/ ram_poke(0x0074, tmp1_U8);
-      /*$F19F*/ ram_poke(0x006f, tmp2_U8);
-      /*$F1A1*/ ram_poke(0x0070, tmp1_U8);
+                tmp1_U8 = ram_peek(0x0050);
+      /*$F199*/ tmp6_U8 = ram_peek(0x0051) & 0xf0;
+      /*$F19B*/ ram_poke(0x0073, tmp1_U8);
+      /*$F19D*/ ram_poke(0x0074, tmp6_U8);
+      /*$F19F*/ ram_poke(0x006f, tmp1_U8);
+      /*$F1A1*/ ram_poke(0x0070, tmp6_U8);
       /*$F1A3*/ s_x = 0x00;
       /*$F1A7*/ ram_poke(0x0067, 0x00);
       /*$F1A9*/ ram_poke(0x0068, 0x08);
       /*$F1AD*/ ram_poke(0x00d6, 0x00);
       /*$F1B0*/ poke(ram_peek16(0x0067), 0x00);
-      /*$F1B2*/ tmp1_U8 = (uint8_t)(ram_peek(0x0067) + 0x01);
-                ram_poke(0x0067, tmp1_U8);
-      /*$F1B4*/ branchTarget = true; block_id = tmp1_U8 ? 1142 : 1141;
+      /*$F1B2*/ tmp6_U8 = (uint8_t)(ram_peek(0x0067) + 0x01);
+                ram_poke(0x0067, tmp6_U8);
+      /*$F1B4*/ branchTarget = true; block_id = tmp6_U8 ? 1142 : 1141;
       break;
     case 1141:  // $F1B6
       /*$F1B6*/ s_pc = 0xf1b6; CYCLES(0xf1b6, 4);
@@ -7879,9 +7883,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1153:  // $F201
       /*$F201*/ s_pc = 0xf201; CYCLES(0xf201, 9);
-                tmp2_U8 = s_x;
-                ram_poke(0x002c, tmp2_U8);
-      /*$F203*/ ram_poke(0x002d, tmp2_U8);
+                tmp1_U8 = s_x;
+                ram_poke(0x002c, tmp1_U8);
+      /*$F203*/ ram_poke(0x002d, tmp1_U8);
       /*$F205*/ branchTarget = true; block_id = find_block_id_func_t001(0xf205, pop16() + 1);;
       break;
     case 1154:  // $F206
@@ -7894,15 +7898,15 @@ void func_t001(bool adjust_sp) {
       break;
     case 1156:  // $F20C
       /*$F20C*/ s_pc = 0xf20c; CYCLES(0xf20c, 7);
-                tmp2_U8 = s_x >= ram_peek(0x00f0);
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-      /*$F20E*/ branchTarget = true; block_id = tmp2_U8 ? 1158 : 1157;
+                tmp1_U8 = s_x >= ram_peek(0x00f0);
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+      /*$F20E*/ branchTarget = true; block_id = tmp1_U8 ? 1158 : 1157;
       break;
     case 1157:  // $F210
       /*$F210*/ s_pc = 0xf210; CYCLES(0xf210, 14);
-                tmp2_U8 = ram_peek(0x00f0);
-      /*$F212*/ ram_poke(0x002c, tmp2_U8);
-      /*$F214*/ ram_poke(0x002d, tmp2_U8);
+                tmp1_U8 = ram_peek(0x00f0);
+      /*$F212*/ ram_poke(0x002c, tmp1_U8);
+      /*$F214*/ ram_poke(0x002d, tmp1_U8);
       /*$F216*/ ram_poke(0x00f0, s_x);
                 block_id = 1158;
       break;
@@ -7935,11 +7939,11 @@ void func_t001(bool adjust_sp) {
     case 1163:  // $F228
       /*$F228*/ s_pc = 0xf228; CYCLES(0xf228, 12);
                 s_a = s_x;
-      /*$F229*/ tmp2_U8 = ram_peek(0x00f0);
-                s_y = tmp2_U8;
-      /*$F22B*/ tmp2_U8 = tmp2_U8 >= 0x28;
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-      /*$F22D*/ branchTarget = true; block_id = tmp2_U8 ? 1154 : 1164;
+      /*$F229*/ tmp1_U8 = ram_peek(0x00f0);
+                s_y = tmp1_U8;
+      /*$F22B*/ tmp1_U8 = tmp1_U8 >= 0x28;
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+      /*$F22D*/ branchTarget = true; block_id = tmp1_U8 ? 1154 : 1164;
       break;
     case 1164:  // $F22F
       /*$F22F*/ s_pc = 0xf22f; CYCLES(0xf22f, 6);
@@ -7952,11 +7956,11 @@ void func_t001(bool adjust_sp) {
     case 1166:  // $F235
       /*$F235*/ s_pc = 0xf235; CYCLES(0xf235, 12);
                 s_a = s_x;
-      /*$F236*/ tmp2_U8 = ram_peek(0x002c);
-                s_y = tmp2_U8;
-      /*$F238*/ tmp2_U8 = tmp2_U8 >= 0x28;
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-      /*$F23A*/ branchTarget = true; block_id = tmp2_U8 ? 1154 : 1167;
+      /*$F236*/ tmp1_U8 = ram_peek(0x002c);
+                s_y = tmp1_U8;
+      /*$F238*/ tmp1_U8 = tmp1_U8 >= 0x28;
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+      /*$F23A*/ branchTarget = true; block_id = tmp1_U8 ? 1154 : 1167;
       break;
     case 1167:  // $F23C
       /*$F23C*/ s_pc = 0xf23c; CYCLES(0xf23c, 9);
@@ -7970,12 +7974,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 1169:  // $F244
       /*$F244*/ s_pc = 0xf244; CYCLES(0xf244, 11);
-                tmp2_U8 = s_x;
-                s_a = tmp2_U8;
-      /*$F245*/ s_y = tmp2_U8;
-      /*$F246*/ tmp2_U8 = tmp2_U8 >= 0x28;
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-      /*$F248*/ branchTarget = true; block_id = tmp2_U8 ? 1154 : 1170;
+                tmp1_U8 = s_x;
+                s_a = tmp1_U8;
+      /*$F245*/ s_y = tmp1_U8;
+      /*$F246*/ tmp1_U8 = tmp1_U8 >= 0x28;
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+      /*$F248*/ branchTarget = true; block_id = tmp1_U8 ? 1154 : 1170;
       break;
     case 1170:  // $F24A
       /*$F24A*/ s_pc = 0xf24a; CYCLES(0xf24a, 9);
@@ -7992,9 +7996,9 @@ void func_t001(bool adjust_sp) {
       /*$F864*/ s_pc = 0xf864; CYCLES(0xf864, 23);
                 tmp1_U8 = s_a & 0x0f;
       /*$F866*/ ram_poke(0x0030, tmp1_U8);
-      /*$F86B*/ tmp3_U16 = ((((((tmp1_U8 << 0x01) & 0x00ff) << 0x01) & 0x00ff) << 0x01) & 0x00ff) << 0x01;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-      /*$F86C*/ tmp1_U8 = ((uint8_t)tmp3_U16) | ram_peek(0x0030);
+      /*$F86B*/ tmp4_U16 = tmp1_U8 << 0x04;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)((tmp4_U16 & 0x01ff) >> 8);
+      /*$F86C*/ tmp1_U8 = ((uint8_t)tmp4_U16) | ram_peek(0x0030);
                 s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
                 s_a = tmp1_U8;
@@ -8030,12 +8034,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 1178:  // $F270
       /*$F270*/ s_pc = 0xf270; CYCLES(0xf270, 6);
-                tmp1_U8 = ram_peek(0x00f2);
-                tmp2_U8 = (uint8_t)((tmp1_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                ram_poke(0x00f2, tmp2_U8);
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 & 0x01);
+                tmp6_U8 = ram_peek(0x00f2);
+                tmp1_U8 = (uint8_t)((tmp6_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                ram_poke(0x00f2, tmp1_U8);
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 & 0x01);
       /*$F272*/ branchTarget = true; block_id = find_block_id_func_t001(0xf272, pop16() + 1);;
       break;
     case 1179:  // $F273
@@ -8083,14 +8087,14 @@ void func_t001(bool adjust_sp) {
       break;
     case 1187:  // $F28C
       /*$F28C*/ s_pc = 0xf28c; CYCLES(0xf28c, 18);
-      /*$F292*/ tmp3_U16 = ram_peek(0x0051);
-                tmp6_U16 = ram_peek(0x006e);
-                tmp4_U16 = (tmp3_U16 - tmp6_U16) - (ram_peek(0x0050) < ram_peek(0x006d));
-                tmp5_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)(~tmp6_U16)) << 6);
-                s_a = ((uint8_t)tmp4_U16);
-      /*$F294*/ branchTarget = true; block_id = tmp5_U8 ? 1189 : 1188;
+      /*$F292*/ tmp4_U16 = ram_peek(0x0051);
+                tmp3_U16 = ram_peek(0x006e);
+                tmp5_U16 = (tmp4_U16 - tmp3_U16) - (ram_peek(0x0050) < ram_peek(0x006d));
+                tmp2_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp5_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)(~tmp3_U16)) << 6);
+                s_a = ((uint8_t)tmp5_U16);
+      /*$F294*/ branchTarget = true; block_id = tmp2_U8 ? 1189 : 1188;
       break;
     case 1188:  // $F296
       /*$F296*/ s_pc = 0xf296; CYCLES(0xf296, 6);
@@ -8098,15 +8102,15 @@ void func_t001(bool adjust_sp) {
       break;
     case 1189:  // $F299
       /*$F299*/ s_pc = 0xf299; CYCLES(0xf299, 23);
-                tmp1_U8 = ram_peek(0x0050);
-      /*$F29B*/ ram_poke(0x0073, tmp1_U8);
-      /*$F29D*/ ram_poke(0x006f, tmp1_U8);
-      /*$F29F*/ tmp1_U8 = ram_peek(0x0051);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                s_a = tmp1_U8;
-      /*$F2A1*/ ram_poke(0x0074, tmp1_U8);
-      /*$F2A3*/ ram_poke(0x0070, tmp1_U8);
+                tmp6_U8 = ram_peek(0x0050);
+      /*$F29B*/ ram_poke(0x0073, tmp6_U8);
+      /*$F29D*/ ram_poke(0x006f, tmp6_U8);
+      /*$F29F*/ tmp6_U8 = ram_peek(0x0051);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp6_U8 & 0x80);
+                s_a = tmp6_U8;
+      /*$F2A1*/ ram_poke(0x0074, tmp6_U8);
+      /*$F2A3*/ ram_poke(0x0070, tmp6_U8);
       /*$F2A5*/ branchTarget = true; block_id = find_block_id_func_t001(0xf2a5, pop16() + 1);;
       break;
     case 1190:  // $F2A6
@@ -8119,22 +8123,22 @@ void func_t001(bool adjust_sp) {
       break;
     case 1192:  // $F2AC
       /*$F2AC*/ s_pc = 0xf2ac; CYCLES(0xf2ac, 18);
-      /*$F2B2*/ tmp4_U16 = (ram_peek(0x0051) - ram_peek(0x0074)) - (ram_peek(0x0050) < ram_peek(0x0073));
-                tmp5_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_a = ((uint8_t)tmp4_U16);
-      /*$F2B4*/ branchTarget = true; block_id = tmp5_U8 ? 1188 : 1193;
+      /*$F2B2*/ tmp5_U16 = (ram_peek(0x0051) - ram_peek(0x0074)) - (ram_peek(0x0050) < ram_peek(0x0073));
+                tmp2_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp5_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_a = ((uint8_t)tmp5_U16);
+      /*$F2B4*/ branchTarget = true; block_id = tmp2_U8 ? 1188 : 1193;
       break;
     case 1193:  // $F2B6
       /*$F2B6*/ s_pc = 0xf2b6; CYCLES(0xf2b6, 18);
-      /*$F2BC*/ tmp6_U16 = ram_peek(0x0051);
-                tmp4_U16 = ram_peek(0x006a);
-                tmp3_U16 = (tmp6_U16 - tmp4_U16) - (ram_peek(0x0050) < ram_peek(0x0069));
-                tmp1_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)(~tmp4_U16)) << 6);
-                s_a = ((uint8_t)tmp3_U16);
-      /*$F2BE*/ branchTarget = true; block_id = !tmp1_U8 ? 1188 : 1194;
+      /*$F2BC*/ tmp5_U16 = ram_peek(0x0051);
+                tmp3_U16 = ram_peek(0x006a);
+                tmp4_U16 = (tmp5_U16 - tmp3_U16) - (ram_peek(0x0050) < ram_peek(0x0069));
+                tmp6_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)(~tmp3_U16)) << 6);
+                s_a = ((uint8_t)tmp4_U16);
+      /*$F2BE*/ branchTarget = true; block_id = !tmp6_U8 ? 1188 : 1194;
       break;
     case 1194:  // $F2C0
       /*$F2C0*/ s_pc = 0xf2c0; CYCLES(0xf2c0, 19);
@@ -8230,8 +8234,8 @@ void func_t001(bool adjust_sp) {
     case 1206:  // $F3EA
       /*$F3EA*/ s_pc = 0xf3ea; CYCLES(0xf3ea, 35);
                 ram_poke(0x00e6, s_a);
-      /*$F3EC*/ tmp1_U8 = io_peek(0xc057);
-      /*$F3EF*/ tmp1_U8 = io_peek(0xc050);
+      /*$F3EC*/ tmp6_U8 = io_peek(0xc057);
+      /*$F3EF*/ tmp6_U8 = io_peek(0xc050);
       /*$F3F4*/ ram_poke(0x001c, 0x00);
       /*$F3F8*/ ram_poke(0x001b, ram_peek(0x00e6));
       /*$F3FA*/ s_y = 0x00;
@@ -8240,25 +8244,25 @@ void func_t001(bool adjust_sp) {
       break;
     case 1207:  // $F3FE
       /*$F3FE*/ s_pc = 0xf3fe; CYCLES(0xf3fe, 12);
-                tmp1_U8 = ram_peek(0x001c);
-                s_a = tmp1_U8;
-      /*$F400*/ poke((ram_peek16al(0x001a) + s_y), tmp1_U8);
+                tmp6_U8 = ram_peek(0x001c);
+                s_a = tmp6_U8;
+      /*$F400*/ poke((ram_peek16al(0x001a) + s_y), tmp6_U8);
       /*$F402*/ branchTarget = true; push16(0xf404); block_id = 1227;
       break;
     case 1208:  // $F405
       /*$F405*/ s_pc = 0xf405; CYCLES(0xf405, 6);
-                tmp1_U8 = (uint8_t)(s_y + 0x01);
-                s_y = tmp1_U8;
-      /*$F406*/ branchTarget = true; block_id = tmp1_U8 ? 1207 : 1209;
+                tmp6_U8 = (uint8_t)(s_y + 0x01);
+                s_y = tmp6_U8;
+      /*$F406*/ branchTarget = true; block_id = tmp6_U8 ? 1207 : 1209;
       break;
     case 1209:  // $F408
       /*$F408*/ s_pc = 0xf408; CYCLES(0xf408, 14);
                 ram_poke(0x001b, (uint8_t)(ram_peek(0x001b) + 0x01));
-      /*$F40C*/ tmp1_U8 = ram_peek(0x001b) & 0x1f;
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
-                s_a = tmp1_U8;
-      /*$F40E*/ branchTarget = true; block_id = tmp1_U8 ? 1207 : 1210;
+      /*$F40C*/ tmp6_U8 = ram_peek(0x001b) & 0x1f;
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | 0x00;
+                s_a = tmp6_U8;
+      /*$F40E*/ branchTarget = true; block_id = tmp6_U8 ? 1207 : 1210;
       break;
     case 1210:  // $F410
       /*$F410*/ s_pc = 0xf410; CYCLES(0xf410, 2);
@@ -8266,34 +8270,33 @@ void func_t001(bool adjust_sp) {
       break;
     case 1211:  // $F411
       /*$F411*/ s_pc = 0xf411; CYCLES(0xf411, 75);
-                tmp1_U8 = s_a;
-                ram_poke(0x00e2, tmp1_U8);
-      /*$F413*/ tmp2_U8 = s_x;
-                ram_poke(0x00e0, tmp2_U8);
-      /*$F415*/ tmp5_U8 = s_y;
-                ram_poke(0x00e1, tmp5_U8);
-      /*$F417*/ push8(tmp1_U8);
-      /*$F418*/ tmp1_U8 = tmp1_U8 & 0xc0;
-      /*$F41A*/ ram_poke(0x0026, tmp1_U8);
-      /*$F420*/ ram_poke(0x0026, (((tmp1_U8 >> 0x01) >> 0x01) | ram_peek(0x0026)));
-      /*$F422*/ tmp1_U8 = pop8();
-      /*$F423*/ ram_poke(0x0027, tmp1_U8);
-      /*$F427*/ tmp3_U16 = ((((tmp1_U8 << 0x01) & 0x00ff) << 0x01) & 0x00ff) << 0x01;
-      /*$F428*/ ram_poke(0x0027, (uint8_t)((ram_peek(0x0027) << 0x01) | (uint8_t)(tmp3_U16 >> 8)));
-      /*$F42A*/ tmp3_U16 = (tmp3_U16 & 0x00ff) << 0x01;
-      /*$F42B*/ ram_poke(0x0027, (uint8_t)((ram_peek(0x0027) << 0x01) | (uint8_t)(tmp3_U16 >> 8)));
-      /*$F42E*/ ram_poke(0x0026, (uint8_t)((ram_peek(0x0026) | (0x00 + ((uint8_t)(((tmp3_U16 & 0x00ff) << 0x01) >> 8) << 8))) >> 0x01));
+                tmp6_U8 = s_a;
+                ram_poke(0x00e2, tmp6_U8);
+      /*$F413*/ tmp1_U8 = s_x;
+                ram_poke(0x00e0, tmp1_U8);
+      /*$F415*/ tmp2_U8 = s_y;
+                ram_poke(0x00e1, tmp2_U8);
+      /*$F417*/ push8(tmp6_U8);
+      /*$F418*/ tmp6_U8 = tmp6_U8 & 0xc0;
+      /*$F41A*/ ram_poke(0x0026, tmp6_U8);
+      /*$F420*/ ram_poke(0x0026, ((tmp6_U8 >> 0x02) | ram_peek(0x0026)));
+      /*$F422*/ tmp6_U8 = pop8();
+      /*$F423*/ ram_poke(0x0027, tmp6_U8);
+      /*$F425*/ tmp4_U16 = tmp6_U8;
+      /*$F428*/ ram_poke(0x0027, (uint8_t)((ram_peek(0x0027) << 0x01) | (uint8_t)(((tmp4_U16 << 0x03) & 0x01ff) >> 8)));
+      /*$F42B*/ ram_poke(0x0027, (uint8_t)((ram_peek(0x0027) << 0x01) | (uint8_t)(((tmp4_U16 << 0x04) & 0x01ff) >> 8)));
+      /*$F42E*/ ram_poke(0x0026, (uint8_t)((ram_peek(0x0026) | (0x00 + ((uint8_t)(((tmp4_U16 << 0x05) & 0x01ff) >> 8) << 8))) >> 0x01));
       /*$F436*/ ram_poke(0x0027, ((ram_peek(0x0027) & 0x1f) | ram_peek(0x00e6)));
-      /*$F438*/ s_a = tmp2_U8;
-      /*$F439*/ s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0x00);
-      /*$F43B*/ branchTarget = true; block_id = !(tmp5_U8 != 0x00) ? 1214 : 1212;
+      /*$F438*/ s_a = tmp1_U8;
+      /*$F439*/ s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x00);
+      /*$F43B*/ branchTarget = true; block_id = !(tmp2_U8 != 0x00) ? 1214 : 1212;
       break;
     case 1212:  // $F43D
       /*$F43D*/ s_pc = 0xf43d; CYCLES(0xf43d, 7);
                 s_y = 0x23;
-      /*$F43F*/ tmp4_U16 = (s_a + 0x0004) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
-                s_a = ((uint8_t)tmp4_U16);
+      /*$F43F*/ tmp3_U16 = (s_a + 0x0004) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
+                s_a = ((uint8_t)tmp3_U16);
                 block_id = 1213;
       break;
     case 1213:  // $F441
@@ -8303,29 +8306,29 @@ void func_t001(bool adjust_sp) {
       break;
     case 1214:  // $F442
       /*$F442*/ s_pc = 0xf442; CYCLES(0xf442, 7);
-                tmp3_U16 = s_a;
-                tmp4_U16 = (tmp3_U16 - 0x0007) - (uint8_t)(0x01 - (s_status & STATUS_C));
-                tmp5_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0xfff8) << 6);
-                s_a = ((uint8_t)tmp4_U16);
-      /*$F444*/ branchTarget = true; block_id = tmp5_U8 ? 1213 : 1215;
+                tmp4_U16 = s_a;
+                tmp3_U16 = (tmp4_U16 - 0x0007) - (uint8_t)(0x01 - (s_status & STATUS_C));
+                tmp2_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0xfff8) << 6);
+                s_a = ((uint8_t)tmp3_U16);
+      /*$F444*/ branchTarget = true; block_id = tmp2_U8 ? 1213 : 1215;
       break;
     case 1215:  // $F446
       /*$F446*/ s_pc = 0xf446; CYCLES(0xf446, 28);
-                tmp5_U8 = s_y;
-                ram_poke(0x00e5, tmp5_U8);
-      /*$F448*/ tmp2_U8 = s_a;
-                s_x = tmp2_U8;
-      /*$F44C*/ ram_poke(0x0030, ram_peek((0xf4b9 + tmp2_U8)));
-      /*$F44F*/ tmp5_U8 = tmp5_U8 & 0x01;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$F450*/ tmp2_U8 = ram_peek(0x00e4);
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_a = tmp2_U8;
-      /*$F452*/ ram_poke(0x001c, tmp2_U8);
-      /*$F454*/ branchTarget = true; block_id = tmp5_U8 ? 1227 : 1216;
+                tmp2_U8 = s_y;
+                ram_poke(0x00e5, tmp2_U8);
+      /*$F448*/ tmp1_U8 = s_a;
+                s_x = tmp1_U8;
+      /*$F44C*/ ram_poke(0x0030, ram_peek((0xf4b9 + tmp1_U8)));
+      /*$F44F*/ tmp2_U8 = tmp2_U8 & 0x01;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+      /*$F450*/ tmp1_U8 = ram_peek(0x00e4);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_a = tmp1_U8;
+      /*$F452*/ ram_poke(0x001c, tmp1_U8);
+      /*$F454*/ branchTarget = true; block_id = tmp2_U8 ? 1227 : 1216;
       break;
     case 1216:  // $F456
       /*$F456*/ s_pc = 0xf456; CYCLES(0xf456, 2);
@@ -8337,14 +8340,14 @@ void func_t001(bool adjust_sp) {
       break;
     case 1218:  // $F45A
       /*$F45A*/ s_pc = 0xf45a; CYCLES(0xf45a, 19);
-      /*$F45C*/ tmp5_U8 = s_y;
-                tmp2_U8 = peek((ram_peek16al(0x0026) + tmp5_U8));
-      /*$F460*/ tmp1_U8 = peek((ram_peek16al(0x0026) + tmp5_U8));
-                tmp2_U8 = ((ram_peek(0x001c) ^ tmp2_U8) & ram_peek(0x0030)) ^ tmp1_U8;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_a = tmp2_U8;
-      /*$F462*/ poke((ram_peek16al(0x0026) + tmp5_U8), tmp2_U8);
+      /*$F45C*/ tmp2_U8 = s_y;
+                tmp1_U8 = peek((ram_peek16al(0x0026) + tmp2_U8));
+      /*$F460*/ tmp6_U8 = peek((ram_peek16al(0x0026) + tmp2_U8));
+                tmp1_U8 = ((ram_peek(0x001c) ^ tmp1_U8) & ram_peek(0x0030)) ^ tmp6_U8;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_a = tmp1_U8;
+      /*$F462*/ poke((ram_peek16al(0x0026) + tmp2_U8), tmp1_U8);
       /*$F464*/ branchTarget = true; block_id = find_block_id_func_t001(0xf464, pop16() + 1);;
       break;
     case 1219:  // $F465
@@ -8353,18 +8356,18 @@ void func_t001(bool adjust_sp) {
       break;
     case 1220:  // $F467
       /*$F467*/ s_pc = 0xf467; CYCLES(0xf467, 9);
-                tmp2_U8 = ram_peek(0x0030);
-      /*$F469*/ tmp5_U8 = tmp2_U8 & 0x01;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_a = (tmp2_U8 >> 0x01);
-      /*$F46A*/ branchTarget = true; block_id = tmp5_U8 ? 1223 : 1221;
+                tmp1_U8 = ram_peek(0x0030);
+      /*$F469*/ tmp2_U8 = tmp1_U8 & 0x01;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_a = (tmp1_U8 >> 0x01);
+      /*$F46A*/ branchTarget = true; block_id = tmp2_U8 ? 1223 : 1221;
       break;
     case 1221:  // $F46C
       /*$F46C*/ s_pc = 0xf46c; CYCLES(0xf46c, 4);
-                tmp5_U8 = s_a ^ 0xc0;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
+                tmp2_U8 = s_a ^ 0xc0;
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
                 block_id = 1222;
       break;
     case 1222:  // $F46E
@@ -8374,9 +8377,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1223:  // $F471
       /*$F471*/ s_pc = 0xf471; CYCLES(0xf471, 6);
-                tmp5_U8 = (uint8_t)(s_y - 0x01);
-                s_y = tmp5_U8;
-      /*$F472*/ branchTarget = true; block_id = !(tmp5_U8 & 0x80) ? 1225 : 1224;
+                tmp2_U8 = (uint8_t)(s_y - 0x01);
+                s_y = tmp2_U8;
+      /*$F472*/ branchTarget = true; block_id = !(tmp2_U8 & 0x80) ? 1225 : 1224;
       break;
     case 1224:  // $F474
       /*$F474*/ s_pc = 0xf474; CYCLES(0xf474, 4);
@@ -8397,21 +8400,21 @@ void func_t001(bool adjust_sp) {
       break;
     case 1227:  // $F47E
       /*$F47E*/ s_pc = 0xf47e; CYCLES(0xf47e, 9);
-                tmp1_U8 = (uint8_t)(s_a << 0x01);
-                s_a = tmp1_U8;
-      /*$F47F*/ s_status = (s_status & ~STATUS_Z) | ((tmp1_U8 != 0xc0) ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0xc0);
-                tmp1_U8 = (uint8_t)(tmp1_U8 - 0xc0) & 0x80;
-                s_status = (s_status & ~STATUS_N) | tmp1_U8;
-      /*$F481*/ branchTarget = true; block_id = !tmp1_U8 ? 1229 : 1228;
+                tmp6_U8 = (uint8_t)(s_a << 0x01);
+                s_a = tmp6_U8;
+      /*$F47F*/ s_status = (s_status & ~STATUS_Z) | ((tmp6_U8 != 0xc0) ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= 0xc0);
+                tmp6_U8 = (uint8_t)(tmp6_U8 - 0xc0) & 0x80;
+                s_status = (s_status & ~STATUS_N) | tmp6_U8;
+      /*$F481*/ branchTarget = true; block_id = !tmp6_U8 ? 1229 : 1228;
       break;
     case 1228:  // $F483
       /*$F483*/ s_pc = 0xf483; CYCLES(0xf483, 11);
-      /*$F485*/ tmp5_U8 = ram_peek(0x001c) ^ 0x7f;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$F487*/ ram_poke(0x001c, tmp5_U8);
+      /*$F485*/ tmp2_U8 = ram_peek(0x001c) ^ 0x7f;
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
+      /*$F487*/ ram_poke(0x001c, tmp2_U8);
                 block_id = 1229;
       break;
     case 1229:  // $F489
@@ -8420,23 +8423,23 @@ void func_t001(bool adjust_sp) {
       break;
     case 1230:  // $F48A
       /*$F48A*/ s_pc = 0xf48a; CYCLES(0xf48a, 12);
-      /*$F48C*/ tmp4_U16 = ram_peek(0x0030) << 0x01;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
-      /*$F48D*/ tmp5_U8 = ((uint8_t)tmp4_U16) ^ 0x80;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                tmp2_U8 = tmp5_U8 & 0x80;
-                s_status = (s_status & ~STATUS_N) | tmp2_U8;
-                s_a = tmp5_U8;
-      /*$F48F*/ branchTarget = true; block_id = tmp2_U8 ? 1222 : 1231;
+      /*$F48C*/ tmp3_U16 = ram_peek(0x0030) << 0x01;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
+      /*$F48D*/ tmp2_U8 = ((uint8_t)tmp3_U16) ^ 0x80;
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                tmp1_U8 = tmp2_U8 & 0x80;
+                s_status = (s_status & ~STATUS_N) | tmp1_U8;
+                s_a = tmp2_U8;
+      /*$F48F*/ branchTarget = true; block_id = tmp1_U8 ? 1222 : 1231;
       break;
     case 1231:  // $F491
       /*$F491*/ s_pc = 0xf491; CYCLES(0xf491, 12);
                 s_a = 0x81;
-      /*$F493*/ tmp5_U8 = (uint8_t)(s_y + 0x01);
-                s_y = tmp5_U8;
-      /*$F494*/ tmp5_U8 = tmp5_U8 >= 0x28;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$F496*/ branchTarget = true; block_id = !tmp5_U8 ? 1226 : 1232;
+      /*$F493*/ tmp2_U8 = (uint8_t)(s_y + 0x01);
+                s_y = tmp2_U8;
+      /*$F494*/ tmp2_U8 = tmp2_U8 >= 0x28;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+      /*$F496*/ branchTarget = true; block_id = !tmp2_U8 ? 1226 : 1232;
       break;
     case 1232:  // $F498
       /*$F498*/ s_pc = 0xf498; CYCLES(0xf498, 7);
@@ -8454,17 +8457,16 @@ void func_t001(bool adjust_sp) {
       break;
     case 1235:  // $F4A3
       /*$F4A3*/ s_pc = 0xf4a3; CYCLES(0xf4a3, 14);
-      /*$F4A7*/ tmp5_U8 = peek((ram_peek16al(0x0026) + s_y));
-                tmp5_U8 = (0x7f & ram_peek(0x0030)) & tmp5_U8;
-                s_a = tmp5_U8;
-      /*$F4A9*/ branchTarget = true; block_id = tmp5_U8 ? 1241 : 1236;
+      /*$F4A7*/ tmp2_U8 = peek((ram_peek16al(0x0026) + s_y));
+                tmp2_U8 = (0x7f & ram_peek(0x0030)) & tmp2_U8;
+                s_a = tmp2_U8;
+      /*$F4A9*/ branchTarget = true; block_id = tmp2_U8 ? 1241 : 1236;
       break;
     case 1236:  // $F4AB
       /*$F4AB*/ s_pc = 0xf4ab; CYCLES(0xf4ab, 14);
                 ram_poke(0x00ea, (uint8_t)(ram_peek(0x00ea) + 0x01));
-      /*$F4AF*/ tmp5_U8 = 0x7f & ram_peek(0x0030);
-                s_a = tmp5_U8;
-      /*$F4B1*/ branchTarget = true; block_id = !(tmp5_U8 & 0x80) ? 1241 : 1237;
+      /*$F4AF*/ s_a = (0x7f & ram_peek(0x0030));
+      /*$F4B1*/ branchTarget = true; block_id = 1241;
       break;
     case 1237:  // $F4B3
       /*$F4B3*/ s_pc = 0xf4b3; CYCLES(0xf4b3, 2);
@@ -8477,10 +8479,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 1239:  // $F4BA
       /*$F4BA*/ s_pc = 0xf4ba; CYCLES(0xf4ba, 14);
-                tmp5_U8 = peek((ram_peek16al(0x0026) + s_y));
-      /*$F4BE*/ tmp5_U8 = (tmp5_U8 ^ ram_peek(0x001c)) & ram_peek(0x0030);
-                s_a = tmp5_U8;
-      /*$F4C0*/ branchTarget = true; block_id = tmp5_U8 ? 1241 : 1240;
+                tmp2_U8 = peek((ram_peek16al(0x0026) + s_y));
+      /*$F4BE*/ tmp2_U8 = (tmp2_U8 ^ ram_peek(0x001c)) & ram_peek(0x0030);
+                s_a = tmp2_U8;
+      /*$F4C0*/ branchTarget = true; block_id = tmp2_U8 ? 1241 : 1240;
       break;
     case 1240:  // $F4C2
       /*$F4C2*/ s_pc = 0xf4c2; CYCLES(0xf4c2, 4);
@@ -8489,22 +8491,23 @@ void func_t001(bool adjust_sp) {
       break;
     case 1241:  // $F4C4
       /*$F4C4*/ s_pc = 0xf4c4; CYCLES(0xf4c4, 7);
-                tmp5_U8 = s_y;
-                tmp2_U8 = peek((ram_peek16al(0x0026) + tmp5_U8));
-      /*$F4C6*/ poke((ram_peek16al(0x0026) + tmp5_U8), (s_a ^ tmp2_U8));
+                tmp2_U8 = s_y;
+                tmp1_U8 = peek((ram_peek16al(0x0026) + tmp2_U8));
+      /*$F4C6*/ poke((ram_peek16al(0x0026) + tmp2_U8), (s_a ^ tmp1_U8));
                 block_id = 1242;
       break;
     case 1242:  // $F4C8
       /*$F4C8*/ s_pc = 0xf4c8; CYCLES(0xf4c8, 19);
-      /*$F4CA*/ tmp4_U16 = ram_peek(0x00d1);
-                tmp3_U16 = ram_peek(0x00d3);
-                tmp6_U16 = (tmp4_U16 + tmp3_U16) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp4_U16, (uint8_t)tmp3_U16) << 6);
-      /*$F4CC*/ tmp5_U8 = ((uint8_t)tmp6_U16) & 0x03;
-      /*$F4D0*/ s_status = (s_status & ~STATUS_N) | ((uint8_t)((tmp5_U8 | (0x00 + ((tmp5_U8 >= 0x02) << 8))) >> 0x01) & 0x80);
-                tmp5_U8 = tmp5_U8 & 0x01;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$F4D1*/ branchTarget = true; block_id = tmp5_U8 ? 1219 : 1243;
+      /*$F4CA*/ tmp3_U16 = ram_peek(0x00d1);
+                tmp4_U16 = ram_peek(0x00d3);
+                tmp5_U16 = (tmp3_U16 + tmp4_U16) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp3_U16, (uint8_t)tmp4_U16) << 6);
+                tmp2_U8 = (uint8_t)tmp5_U16;
+      /*$F4CC*/ tmp1_U8 = tmp2_U8 & 0x03;
+      /*$F4D0*/ s_status = (s_status & ~STATUS_N) | ((uint8_t)((tmp1_U8 | (0x00 + ((tmp1_U8 >= 0x02) << 8))) >> 0x01) & 0x80);
+                tmp2_U8 = tmp2_U8 & 0x01;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+      /*$F4D1*/ branchTarget = true; block_id = tmp2_U8 ? 1219 : 1243;
       break;
     case 1243:  // $F4D3
       /*$F4D3*/ s_pc = 0xf4d3; CYCLES(0xf4d3, 4);
@@ -8513,17 +8516,17 @@ void func_t001(bool adjust_sp) {
     case 1244:  // $F4D5
       /*$F4D5*/ s_pc = 0xf4d5; CYCLES(0xf4d5, 14);
                 s_status = (s_status & ~STATUS_C) | 0x00;
-      /*$F4D6*/ tmp2_U8 = ram_peek(0x0027);
-                s_a = tmp2_U8;
-      /*$F4DB*/ branchTarget = true; block_id = (tmp2_U8 & ram_peek(0xf5b9)) ? 1253 : 1245;
+      /*$F4D6*/ tmp1_U8 = ram_peek(0x0027);
+                s_a = tmp1_U8;
+      /*$F4DB*/ branchTarget = true; block_id = (tmp1_U8 & ram_peek(0xf5b9)) ? 1253 : 1245;
       break;
     case 1245:  // $F4DD
       /*$F4DD*/ s_pc = 0xf4dd; CYCLES(0xf4dd, 7);
-                tmp3_U16 = ram_peek(0x0026) << 0x01;
-                tmp2_U8 = (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                ram_poke(0x0026, ((uint8_t)tmp3_U16));
-      /*$F4DF*/ branchTarget = true; block_id = tmp2_U8 ? 1251 : 1246;
+                tmp4_U16 = ram_peek(0x0026) << 0x01;
+                tmp1_U8 = (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+                ram_poke(0x0026, ((uint8_t)tmp4_U16));
+      /*$F4DF*/ branchTarget = true; block_id = tmp1_U8 ? 1251 : 1246;
       break;
     case 1246:  // $F4E1
       /*$F4E1*/ s_pc = 0xf4e1; CYCLES(0xf4e1, 9);
@@ -8537,52 +8540,52 @@ void func_t001(bool adjust_sp) {
       break;
     case 1248:  // $F4EB
       /*$F4EB*/ s_pc = 0xf4eb; CYCLES(0xf4eb, 16);
-                tmp3_U16 = (s_a + 0x0023) + (s_status & STATUS_C);
-      /*$F4ED*/ push8(((uint8_t)tmp3_U16));
-      /*$F4F0*/ tmp3_U16 = (ram_peek(0x0026) + 0x00b0) + (uint8_t)(tmp3_U16 >> 8);
-                tmp2_U8 = (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_a = ((uint8_t)tmp3_U16);
-      /*$F4F2*/ branchTarget = true; block_id = tmp2_U8 ? 1250 : 1249;
+                tmp4_U16 = (s_a + 0x0023) + (s_status & STATUS_C);
+      /*$F4ED*/ push8(((uint8_t)tmp4_U16));
+      /*$F4F0*/ tmp4_U16 = (ram_peek(0x0026) + 0x00b0) + (uint8_t)(tmp4_U16 >> 8);
+                tmp1_U8 = (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+                s_a = ((uint8_t)tmp4_U16);
+      /*$F4F2*/ branchTarget = true; block_id = tmp1_U8 ? 1250 : 1249;
       break;
     case 1249:  // $F4F4
       /*$F4F4*/ s_pc = 0xf4f4; CYCLES(0xf4f4, 4);
-                tmp3_U16 = (s_a + 0x00f0) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-                s_a = ((uint8_t)tmp3_U16);
+                tmp4_U16 = (s_a + 0x00f0) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+                s_a = ((uint8_t)tmp4_U16);
                 block_id = 1250;
       break;
     case 1250:  // $F4F6
       /*$F4F6*/ s_pc = 0xf4f6; CYCLES(0xf4f6, 9);
                 ram_poke(0x0026, s_a);
-      /*$F4F8*/ tmp2_U8 = pop8();
-                s_a = tmp2_U8;
+      /*$F4F8*/ tmp1_U8 = pop8();
+                s_a = tmp1_U8;
       /*$F4F9*/ branchTarget = true; block_id = (s_status & STATUS_C) ? 1252 : 1251;
       break;
     case 1251:  // $F4FB
       /*$F4FB*/ s_pc = 0xf4fb; CYCLES(0xf4fb, 4);
-                tmp3_U16 = (s_a + 0x001f) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-                s_a = ((uint8_t)tmp3_U16);
+                tmp4_U16 = (s_a + 0x001f) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+                s_a = ((uint8_t)tmp4_U16);
                 block_id = 1252;
       break;
     case 1252:  // $F4FD
       /*$F4FD*/ s_pc = 0xf4fd; CYCLES(0xf4fd, 4);
-                tmp2_U8 = ram_peek(0x0026);
-                ram_poke(0x0026, (uint8_t)((tmp2_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01));
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 & 0x01);
+                tmp1_U8 = ram_peek(0x0026);
+                ram_poke(0x0026, (uint8_t)((tmp1_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01));
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 & 0x01);
                 block_id = 1253;
       break;
     case 1253:  // $F4FF
       /*$F4FF*/ s_pc = 0xf4ff; CYCLES(0xf4ff, 4);
-                tmp6_U16 = s_a;
-                tmp3_U16 = (tmp6_U16 + 0x00fc) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)0x00fc) << 6);
-                tmp2_U8 = (uint8_t)tmp3_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_a = tmp2_U8;
+                tmp5_U16 = s_a;
+                tmp4_U16 = (tmp5_U16 + 0x00fc) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)0x00fc) << 6);
+                tmp1_U8 = (uint8_t)tmp4_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_a = tmp1_U8;
                 block_id = 1254;
       break;
     case 1254:  // $F501
@@ -8592,43 +8595,43 @@ void func_t001(bool adjust_sp) {
       break;
     case 1255:  // $F505
       /*$F505*/ s_pc = 0xf505; CYCLES(0xf505, 16);
-      /*$F507*/ tmp6_U16 = (ram_peek(0x0027) + 0x0004) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp6_U16 >> 8);
-                tmp5_U8 = (uint8_t)tmp6_U16;
-                s_a = tmp5_U8;
-      /*$F509*/ tmp2_U8 = ram_peek(0xf5b9);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_status = (s_status & ~STATUS_V) | (((tmp2_U8 >> 0x06) & 0x01) << 6);
-                tmp2_U8 = tmp5_U8 & tmp2_U8;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-      /*$F50C*/ branchTarget = true; block_id = tmp2_U8 ? 1254 : 1256;
+      /*$F507*/ tmp5_U16 = (ram_peek(0x0027) + 0x0004) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp5_U16 >> 8);
+                tmp2_U8 = (uint8_t)tmp5_U16;
+                s_a = tmp2_U8;
+      /*$F509*/ tmp1_U8 = ram_peek(0xf5b9);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_status = (s_status & ~STATUS_V) | (((tmp1_U8 >> 0x06) & 0x01) << 6);
+                tmp1_U8 = tmp2_U8 & tmp1_U8;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+      /*$F50C*/ branchTarget = true; block_id = tmp1_U8 ? 1254 : 1256;
       break;
     case 1256:  // $F50E
       /*$F50E*/ s_pc = 0xf50e; CYCLES(0xf50e, 7);
-                tmp3_U16 = ram_peek(0x0026) << 0x01;
-                tmp2_U8 = (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                ram_poke(0x0026, ((uint8_t)tmp3_U16));
-      /*$F510*/ branchTarget = true; block_id = !tmp2_U8 ? 1261 : 1257;
+                tmp4_U16 = ram_peek(0x0026) << 0x01;
+                tmp1_U8 = (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+                ram_poke(0x0026, ((uint8_t)tmp4_U16));
+      /*$F510*/ branchTarget = true; block_id = !tmp1_U8 ? 1261 : 1257;
       break;
     case 1257:  // $F512
       /*$F512*/ s_pc = 0xf512; CYCLES(0xf512, 14);
-                tmp2_U8 = (uint8_t)((s_a + 0x00e0) + (s_status & STATUS_C));
-                s_a = tmp2_U8;
+                tmp1_U8 = (uint8_t)((s_a + 0x00e0) + (s_status & STATUS_C));
+                s_a = tmp1_U8;
       /*$F514*/ s_status = (s_status & ~STATUS_C) | 0x00;
-      /*$F515*/ tmp5_U8 = ram_peek(0xf508);
-                s_status = (s_status & ~STATUS_V) | (((tmp5_U8 >> 0x06) & 0x01) << 6);
-      /*$F518*/ branchTarget = true; block_id = !(tmp2_U8 & tmp5_U8) ? 1262 : 1258;
+      /*$F515*/ tmp2_U8 = ram_peek(0xf508);
+                s_status = (s_status & ~STATUS_V) | (((tmp2_U8 >> 0x06) & 0x01) << 6);
+      /*$F518*/ branchTarget = true; block_id = !(tmp1_U8 & tmp2_U8) ? 1262 : 1258;
       break;
     case 1258:  // $F51A
       /*$F51A*/ s_pc = 0xf51a; CYCLES(0xf51a, 14);
-      /*$F51C*/ tmp4_U16 = ram_peek(0x0026);
-                tmp3_U16 = (tmp4_U16 + 0x0050) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0x0050) << 6);
-      /*$F51E*/ tmp5_U8 = ((uint8_t)tmp3_U16) ^ 0xf0;
-                s_a = tmp5_U8;
-      /*$F520*/ branchTarget = true; block_id = !tmp5_U8 ? 1260 : 1259;
+      /*$F51C*/ tmp3_U16 = ram_peek(0x0026);
+                tmp4_U16 = (tmp3_U16 + 0x0050) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0x0050) << 6);
+      /*$F51E*/ tmp2_U8 = ((uint8_t)tmp4_U16) ^ 0xf0;
+                s_a = tmp2_U8;
+      /*$F520*/ branchTarget = true; block_id = !tmp2_U8 ? 1260 : 1259;
       break;
     case 1259:  // $F522
       /*$F522*/ s_pc = 0xf522; CYCLES(0xf522, 4);
@@ -8643,23 +8646,23 @@ void func_t001(bool adjust_sp) {
       break;
     case 1261:  // $F52A
       /*$F52A*/ s_pc = 0xf52a; CYCLES(0xf52a, 4);
-                tmp3_U16 = s_a;
-                tmp4_U16 = (tmp3_U16 + 0x00e0) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0x00e0) << 6);
-                s_a = ((uint8_t)tmp4_U16);
+                tmp4_U16 = s_a;
+                tmp3_U16 = (tmp4_U16 + 0x00e0) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0x00e0) << 6);
+                s_a = ((uint8_t)tmp3_U16);
                 block_id = 1262;
       break;
     case 1262:  // $F52C
       /*$F52C*/ s_pc = 0xf52c; CYCLES(0xf52c, 7);
-                tmp5_U8 = ram_peek(0x0026);
-                tmp2_U8 = (uint8_t)((tmp5_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                ram_poke(0x0026, tmp2_U8);
-                tmp5_U8 = tmp5_U8 & 0x01;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$F52E*/ branchTarget = true; block_id = !tmp5_U8 ? 1254 : 1263;
+                tmp2_U8 = ram_peek(0x0026);
+                tmp1_U8 = (uint8_t)((tmp2_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                ram_poke(0x0026, tmp1_U8);
+                tmp2_U8 = tmp2_U8 & 0x01;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+      /*$F52E*/ branchTarget = true; block_id = !tmp2_U8 ? 1254 : 1263;
       break;
     case 1263:  // $F530
       /*$F530*/ s_pc = 0xf530; CYCLES(0xf530, 18);
@@ -8667,48 +8670,48 @@ void func_t001(bool adjust_sp) {
       /*$F533*/ ram_poke(0x00e0, 0x00);
       /*$F535*/ ram_poke(0x00e1, 0x00);
       /*$F537*/ ram_poke(0x00e2, 0x00);
-      /*$F539*/ tmp5_U8 = pop8();
-                s_a = tmp5_U8;
+      /*$F539*/ tmp2_U8 = pop8();
+                s_a = tmp2_U8;
                 block_id = 1264;
       break;
     case 1264:  // $F53A
       /*$F53A*/ s_pc = 0xf53a; CYCLES(0xf53a, 21);
-                tmp5_U8 = s_a;
-                push8(tmp5_U8);
-      /*$F53C*/ tmp3_U16 = tmp5_U8 - ram_peek(0x00e0);
-      /*$F53E*/ push8(((uint8_t)tmp3_U16));
-      /*$F540*/ tmp3_U16 = (s_x - ram_peek(0x00e1)) - ((uint8_t)(tmp3_U16 >> 8) & 0x01);
-                tmp5_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                tmp2_U8 = (uint8_t)tmp3_U16;
-                s_a = tmp2_U8;
-      /*$F542*/ ram_poke(0x00d3, tmp2_U8);
-      /*$F544*/ branchTarget = true; block_id = tmp5_U8 ? 1266 : 1265;
+                tmp2_U8 = s_a;
+                push8(tmp2_U8);
+      /*$F53C*/ tmp4_U16 = tmp2_U8 - ram_peek(0x00e0);
+      /*$F53E*/ push8(((uint8_t)tmp4_U16));
+      /*$F540*/ tmp4_U16 = (s_x - ram_peek(0x00e1)) - ((uint8_t)(tmp4_U16 >> 8) & 0x01);
+                tmp2_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                tmp1_U8 = (uint8_t)tmp4_U16;
+                s_a = tmp1_U8;
+      /*$F542*/ ram_poke(0x00d3, tmp1_U8);
+      /*$F544*/ branchTarget = true; block_id = tmp2_U8 ? 1266 : 1265;
       break;
     case 1265:  // $F546
       /*$F546*/ s_pc = 0xf546; CYCLES(0xf546, 18);
-                tmp5_U8 = pop8();
-      /*$F549*/ tmp3_U16 = ((tmp5_U8 ^ 0xff) + 0x0001) + (s_status & STATUS_C);
-      /*$F54B*/ push8(((uint8_t)tmp3_U16));
-      /*$F54E*/ s_a = (uint8_t)((0x0000 - ram_peek(0x00d3)) - (uint8_t)(0x01 - (uint8_t)(tmp3_U16 >> 8)));
+                tmp2_U8 = pop8();
+      /*$F549*/ tmp4_U16 = ((tmp2_U8 ^ 0xff) + 0x0001) + (s_status & STATUS_C);
+      /*$F54B*/ push8(((uint8_t)tmp4_U16));
+      /*$F54E*/ s_a = (uint8_t)((0x0000 - ram_peek(0x00d3)) - (uint8_t)(0x01 - (uint8_t)(tmp4_U16 >> 8)));
                 block_id = 1266;
       break;
     case 1266:  // $F550
       /*$F550*/ s_pc = 0xf550; CYCLES(0xf550, 35);
-                tmp5_U8 = s_a;
-                ram_poke(0x00d1, tmp5_U8);
-      /*$F552*/ ram_poke(0x00d5, tmp5_U8);
-      /*$F554*/ tmp5_U8 = pop8();
-      /*$F555*/ ram_poke(0x00d0, tmp5_U8);
-      /*$F557*/ ram_poke(0x00d4, tmp5_U8);
-      /*$F559*/ tmp5_U8 = pop8();
-      /*$F55A*/ ram_poke(0x00e0, tmp5_U8);
+                tmp2_U8 = s_a;
+                ram_poke(0x00d1, tmp2_U8);
+      /*$F552*/ ram_poke(0x00d5, tmp2_U8);
+      /*$F554*/ tmp2_U8 = pop8();
+      /*$F555*/ ram_poke(0x00d0, tmp2_U8);
+      /*$F557*/ ram_poke(0x00d4, tmp2_U8);
+      /*$F559*/ tmp2_U8 = pop8();
+      /*$F55A*/ ram_poke(0x00e0, tmp2_U8);
       /*$F55C*/ ram_poke(0x00e1, s_x);
-      /*$F560*/ tmp3_U16 = (s_y - ram_peek(0x00e2)) - 0x0001;
-                tmp5_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_a = ((uint8_t)tmp3_U16);
-      /*$F562*/ block_id = !tmp5_U8 ? 1269 : 1268;
+      /*$F560*/ tmp4_U16 = (s_y - ram_peek(0x00e2)) - 0x0001;
+                tmp2_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_a = ((uint8_t)tmp4_U16);
+      /*$F562*/ block_id = !tmp2_U8 ? 1269 : 1268;
       break;
     case 1267:  // $F558
       /*$F558*/ s_pc = 0xf558; CYCLES(0xf558, 2);
@@ -8716,29 +8719,29 @@ void func_t001(bool adjust_sp) {
       break;
     case 1268:  // $F564
       /*$F564*/ s_pc = 0xf564; CYCLES(0xf564, 7);
-      /*$F566*/ tmp3_U16 = ((s_a ^ 0xff) + 0x00fe) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-                s_a = ((uint8_t)tmp3_U16);
+      /*$F566*/ tmp4_U16 = ((s_a ^ 0xff) + 0x00fe) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+                s_a = ((uint8_t)tmp4_U16);
                 block_id = 1269;
       break;
     case 1269:  // $F568
       /*$F568*/ s_pc = 0xf568; CYCLES(0xf568, 35);
-                tmp5_U8 = s_a;
-                ram_poke(0x00d2, tmp5_U8);
+                tmp2_U8 = s_a;
+                ram_poke(0x00d2, tmp2_U8);
       /*$F56A*/ ram_poke(0x00e2, s_y);
       /*$F56C*/ ram_poke(0x00d3, (uint8_t)((ram_peek(0x00d3) | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01));
-      /*$F56F*/ tmp3_U16 = tmp5_U8 - ram_peek(0x00d0);
-      /*$F571*/ s_x = ((uint8_t)tmp3_U16);
-      /*$F574*/ tmp4_U16 = ram_peek(0x00d1);
-                tmp3_U16 = (0x00ff - tmp4_U16) - ((uint8_t)(tmp3_U16 >> 8) & 0x01);
-                tmp5_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)0x00ff, (uint8_t)(~tmp4_U16)) << 6);
-                tmp2_U8 = (uint8_t)tmp3_U16;
-                s_a = tmp2_U8;
-      /*$F576*/ ram_poke(0x001d, tmp2_U8);
+      /*$F56F*/ tmp4_U16 = tmp2_U8 - ram_peek(0x00d0);
+      /*$F571*/ s_x = ((uint8_t)tmp4_U16);
+      /*$F574*/ tmp3_U16 = ram_peek(0x00d1);
+                tmp4_U16 = (0x00ff - tmp3_U16) - ((uint8_t)(tmp4_U16 >> 8) & 0x01);
+                tmp2_U8 = (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)0x00ff, (uint8_t)(~tmp3_U16)) << 6);
+                tmp1_U8 = (uint8_t)tmp4_U16;
+                s_a = tmp1_U8;
+      /*$F576*/ ram_poke(0x001d, tmp1_U8);
       /*$F578*/ s_y = ram_peek(0x00e5);
-      /*$F57A*/ branchTarget = true; block_id = tmp5_U8 ? 1272 : 1270;
+      /*$F57A*/ branchTarget = true; block_id = tmp2_U8 ? 1272 : 1270;
       break;
     case 1270:  // $F57C
       /*$F57C*/ s_pc = 0xf57c; CYCLES(0xf57c, 7);
@@ -8752,41 +8755,41 @@ void func_t001(bool adjust_sp) {
       break;
     case 1272:  // $F581
       /*$F581*/ s_pc = 0xf581; CYCLES(0xf581, 18);
-      /*$F583*/ tmp3_U16 = (ram_peek(0x00d4) + ram_peek(0x00d2)) + (s_status & STATUS_C);
-      /*$F585*/ ram_poke(0x00d4, ((uint8_t)tmp3_U16));
-      /*$F589*/ tmp4_U16 = ram_peek(0x00d5);
-                tmp3_U16 = tmp4_U16 - (uint8_t)(0x01 - (uint8_t)(tmp3_U16 >> 8));
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0xffff) << 6);
-                s_a = ((uint8_t)tmp3_U16);
+      /*$F583*/ tmp4_U16 = (ram_peek(0x00d4) + ram_peek(0x00d2)) + (s_status & STATUS_C);
+      /*$F585*/ ram_poke(0x00d4, ((uint8_t)tmp4_U16));
+      /*$F589*/ tmp3_U16 = ram_peek(0x00d5);
+                tmp4_U16 = tmp3_U16 - (uint8_t)(0x01 - (uint8_t)(tmp4_U16 >> 8));
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0xffff) << 6);
+                s_a = ((uint8_t)tmp4_U16);
                 block_id = 1273;
       break;
     case 1273:  // $F58B
       /*$F58B*/ s_pc = 0xf58b; CYCLES(0xf58b, 26);
                 ram_poke(0x00d5, s_a);
-      /*$F58D*/ tmp5_U8 = s_y;
-                tmp2_U8 = peek((ram_peek16al(0x0026) + tmp5_U8));
-      /*$F593*/ tmp1_U8 = peek((ram_peek16al(0x0026) + tmp5_U8));
-                tmp2_U8 = ((tmp2_U8 ^ ram_peek(0x001c)) & ram_peek(0x0030)) ^ tmp1_U8;
-                s_a = tmp2_U8;
-      /*$F595*/ poke((ram_peek16al(0x0026) + tmp5_U8), tmp2_U8);
-      /*$F597*/ tmp5_U8 = (uint8_t)(s_x + 0x01);
-                s_x = tmp5_U8;
-      /*$F598*/ branchTarget = true; block_id = tmp5_U8 ? 1275 : 1274;
+      /*$F58D*/ tmp2_U8 = s_y;
+                tmp1_U8 = peek((ram_peek16al(0x0026) + tmp2_U8));
+      /*$F593*/ tmp6_U8 = peek((ram_peek16al(0x0026) + tmp2_U8));
+                tmp1_U8 = ((tmp1_U8 ^ ram_peek(0x001c)) & ram_peek(0x0030)) ^ tmp6_U8;
+                s_a = tmp1_U8;
+      /*$F595*/ poke((ram_peek16al(0x0026) + tmp2_U8), tmp1_U8);
+      /*$F597*/ tmp2_U8 = (uint8_t)(s_x + 0x01);
+                s_x = tmp2_U8;
+      /*$F598*/ branchTarget = true; block_id = tmp2_U8 ? 1275 : 1274;
       break;
     case 1274:  // $F59A
       /*$F59A*/ s_pc = 0xf59a; CYCLES(0xf59a, 7);
-                tmp5_U8 = (uint8_t)(ram_peek(0x001d) + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                ram_poke(0x001d, tmp5_U8);
-      /*$F59C*/ branchTarget = true; block_id = !tmp5_U8 ? 1280 : 1275;
+                tmp2_U8 = (uint8_t)(ram_peek(0x001d) + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                ram_poke(0x001d, tmp2_U8);
+      /*$F59C*/ branchTarget = true; block_id = !tmp2_U8 ? 1280 : 1275;
       break;
     case 1275:  // $F59E
       /*$F59E*/ s_pc = 0xf59e; CYCLES(0xf59e, 7);
-                tmp5_U8 = ram_peek(0x00d3);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
+                tmp2_U8 = ram_peek(0x00d3);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
       /*$F5A0*/ branchTarget = true; block_id = (s_status & STATUS_C) ? 1270 : 1276;
       break;
     case 1276:  // $F5A2
@@ -8795,21 +8798,21 @@ void func_t001(bool adjust_sp) {
       break;
     case 1277:  // $F5A5
       /*$F5A5*/ s_pc = 0xf5a5; CYCLES(0xf5a5, 23);
-      /*$F5A8*/ tmp3_U16 = ram_peek(0x00d4) + ram_peek(0x00d0);
-      /*$F5AA*/ ram_poke(0x00d4, ((uint8_t)tmp3_U16));
-      /*$F5AE*/ tmp6_U16 = ram_peek(0x00d5);
-                tmp4_U16 = ram_peek(0x00d1);
-                tmp3_U16 = (tmp6_U16 + tmp4_U16) + (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-                tmp2_U8 = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)tmp4_U16);
-                s_status = (s_status & ~STATUS_V) | (tmp2_U8 << 6);
-                s_a = ((uint8_t)tmp3_U16);
-      /*$F5B0*/ branchTarget = true; block_id = !tmp2_U8 ? 1273 : 1278;
+      /*$F5A8*/ tmp4_U16 = ram_peek(0x00d4) + ram_peek(0x00d0);
+      /*$F5AA*/ ram_poke(0x00d4, ((uint8_t)tmp4_U16));
+      /*$F5AE*/ tmp5_U16 = ram_peek(0x00d5);
+                tmp3_U16 = ram_peek(0x00d1);
+                tmp4_U16 = (tmp5_U16 + tmp3_U16) + (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+                tmp1_U8 = ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)tmp3_U16);
+                s_status = (s_status & ~STATUS_V) | (tmp1_U8 << 6);
+                s_a = ((uint8_t)tmp4_U16);
+      /*$F5B0*/ branchTarget = true; block_id = !tmp1_U8 ? 1273 : 1278;
       break;
     case 1278:  // $F5B2
       /*$F5B2*/ s_pc = 0xf5b2; CYCLES(0xf5b2, 11);
-                tmp5_U8 = s_x;
-                poke((ram_peek((uint8_t)(0x82 + tmp5_U8)) + (ram_peek((uint8_t)(0x83 + tmp5_U8)) << 8)), s_a);
+                tmp2_U8 = s_x;
+                poke((ram_peek((uint8_t)(0x82 + tmp2_U8)) + (ram_peek((uint8_t)(0x83 + tmp2_U8)) << 8)), s_a);
       /*$F5B4*/ ram_poke(0x0088, s_y);
       /*$F5B6*/ branchTarget = true; block_id = !(s_status & STATUS_C) ? 1267 : 1279;
       break;
@@ -8831,11 +8834,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 1282:  // $F630
       /*$F630*/ s_pc = 0xf630; CYCLES(0xf630, 16);
-      /*$F633*/ tmp3_U16 = (ram_peek(0x00d4) + ram_peek(0x00d0)) + 0x0001;
-                tmp5_U8 = (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$F635*/ ram_poke(0x00d4, ((uint8_t)tmp3_U16));
-      /*$F637*/ branchTarget = true; block_id = !tmp5_U8 ? 1285 : 1283;
+      /*$F633*/ tmp4_U16 = (ram_peek(0x00d4) + ram_peek(0x00d0)) + 0x0001;
+                tmp2_U8 = (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+      /*$F635*/ ram_poke(0x00d4, ((uint8_t)tmp4_U16));
+      /*$F637*/ branchTarget = true; block_id = !tmp2_U8 ? 1285 : 1283;
       break;
     case 1283:  // $F639
       /*$F639*/ s_pc = 0xf639; CYCLES(0xf639, 6);
@@ -8848,14 +8851,14 @@ void func_t001(bool adjust_sp) {
       break;
     case 1285:  // $F63D
       /*$F63D*/ s_pc = 0xf63d; CYCLES(0xf63d, 14);
-      /*$F63F*/ tmp3_U16 = ram_peek(0x00d5);
-                tmp4_U16 = ram_peek(0x00d2);
-                tmp6_U16 = (tmp3_U16 + tmp4_U16) + (s_status & STATUS_C);
-                tmp5_U8 = (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)tmp4_U16) << 6);
-      /*$F641*/ ram_poke(0x00d5, ((uint8_t)tmp6_U16));
-      /*$F643*/ branchTarget = true; block_id = !tmp5_U8 ? 1287 : 1286;
+      /*$F63F*/ tmp4_U16 = ram_peek(0x00d5);
+                tmp3_U16 = ram_peek(0x00d2);
+                tmp5_U16 = (tmp4_U16 + tmp3_U16) + (s_status & STATUS_C);
+                tmp2_U8 = (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)tmp3_U16) << 6);
+      /*$F641*/ ram_poke(0x00d5, ((uint8_t)tmp5_U16));
+      /*$F643*/ branchTarget = true; block_id = !tmp2_U8 ? 1287 : 1286;
       break;
     case 1286:  // $F645
       /*$F645*/ s_pc = 0xf645; CYCLES(0xf645, 6);
@@ -8863,23 +8866,23 @@ void func_t001(bool adjust_sp) {
       break;
     case 1287:  // $F648
       /*$F648*/ s_pc = 0xf648; CYCLES(0xf648, 6);
-                tmp5_U8 = (uint8_t)(s_x - 0x01);
-                s_x = tmp5_U8;
-      /*$F649*/ branchTarget = true; block_id = tmp5_U8 ? 1282 : 1288;
+                tmp2_U8 = (uint8_t)(s_x - 0x01);
+                s_x = tmp2_U8;
+      /*$F649*/ branchTarget = true; block_id = tmp2_U8 ? 1282 : 1288;
       break;
     case 1288:  // $F64B
       /*$F64B*/ s_pc = 0xf64b; CYCLES(0xf64b, 12);
-      /*$F64E*/ tmp5_U8 = (ram_peek(0x00d1) >> 0x01) >> 0x01;
-      /*$F64F*/ s_status = (s_status & ~STATUS_C) | (tmp5_U8 & 0x01);
-                tmp5_U8 = tmp5_U8 >> 0x01;
-                s_a = tmp5_U8;
-      /*$F650*/ branchTarget = true; block_id = tmp5_U8 ? 1281 : 1289;
+                tmp2_U8 = ram_peek(0x00d1);
+      /*$F64F*/ s_status = (s_status & ~STATUS_C) | ((tmp2_U8 >> 0x02) & 0x01);
+                tmp2_U8 = tmp2_U8 >> 0x03;
+                s_a = tmp2_U8;
+      /*$F650*/ branchTarget = true; block_id = tmp2_U8 ? 1281 : 1289;
       break;
     case 1289:  // $F652
       /*$F652*/ s_pc = 0xf652; CYCLES(0xf652, 7);
-                tmp5_U8 = (uint8_t)(ram_peek(0x001a) + 0x01);
-                ram_poke(0x001a, tmp5_U8);
-      /*$F654*/ branchTarget = true; block_id = tmp5_U8 ? 1291 : 1290;
+                tmp2_U8 = (uint8_t)(ram_peek(0x001a) + 0x01);
+                ram_poke(0x001a, tmp2_U8);
+      /*$F654*/ branchTarget = true; block_id = tmp2_U8 ? 1291 : 1290;
       break;
     case 1290:  // $F656
       /*$F656*/ s_pc = 0xf656; CYCLES(0xf656, 4);
@@ -8888,12 +8891,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 1291:  // $F658
       /*$F658*/ s_pc = 0xf658; CYCLES(0xf658, 7);
-                tmp5_U8 = s_x;
-                tmp5_U8 = peek((ram_peek((uint8_t)(0x1a + tmp5_U8)) + (ram_peek((uint8_t)(0x1b + tmp5_U8)) << 8)));
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$F65A*/ branchTarget = true; block_id = tmp5_U8 ? 1281 : 1292;
+                tmp2_U8 = s_x;
+                tmp2_U8 = peek((ram_peek((uint8_t)(0x1a + tmp2_U8)) + (ram_peek((uint8_t)(0x1b + tmp2_U8)) << 8)));
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
+      /*$F65A*/ branchTarget = true; block_id = tmp2_U8 ? 1281 : 1292;
       break;
     case 1292:  // $F65C
       /*$F65C*/ s_pc = 0xf65c; CYCLES(0xf65c, 2);
@@ -8909,11 +8912,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 1294:  // $F68C
       /*$F68C*/ s_pc = 0xf68c; CYCLES(0xf68c, 16);
-      /*$F68F*/ tmp6_U16 = (ram_peek(0x00d4) + ram_peek(0x00d0)) + 0x0001;
-                tmp5_U8 = (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$F691*/ ram_poke(0x00d4, ((uint8_t)tmp6_U16));
-      /*$F693*/ branchTarget = true; block_id = !tmp5_U8 ? 1297 : 1295;
+      /*$F68F*/ tmp5_U16 = (ram_peek(0x00d4) + ram_peek(0x00d0)) + 0x0001;
+                tmp2_U8 = (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+      /*$F691*/ ram_poke(0x00d4, ((uint8_t)tmp5_U16));
+      /*$F693*/ branchTarget = true; block_id = !tmp2_U8 ? 1297 : 1295;
       break;
     case 1295:  // $F695
       /*$F695*/ s_pc = 0xf695; CYCLES(0xf695, 6);
@@ -8926,14 +8929,14 @@ void func_t001(bool adjust_sp) {
       break;
     case 1297:  // $F699
       /*$F699*/ s_pc = 0xf699; CYCLES(0xf699, 14);
-      /*$F69B*/ tmp6_U16 = ram_peek(0x00d5);
-                tmp4_U16 = ram_peek(0x00d2);
-                tmp3_U16 = (tmp6_U16 + tmp4_U16) + (s_status & STATUS_C);
-                tmp5_U8 = (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)tmp4_U16) << 6);
-      /*$F69D*/ ram_poke(0x00d5, ((uint8_t)tmp3_U16));
-      /*$F69F*/ branchTarget = true; block_id = !tmp5_U8 ? 1299 : 1298;
+      /*$F69B*/ tmp5_U16 = ram_peek(0x00d5);
+                tmp3_U16 = ram_peek(0x00d2);
+                tmp4_U16 = (tmp5_U16 + tmp3_U16) + (s_status & STATUS_C);
+                tmp2_U8 = (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)tmp3_U16) << 6);
+      /*$F69D*/ ram_poke(0x00d5, ((uint8_t)tmp4_U16));
+      /*$F69F*/ branchTarget = true; block_id = !tmp2_U8 ? 1299 : 1298;
       break;
     case 1298:  // $F6A1
       /*$F6A1*/ s_pc = 0xf6a1; CYCLES(0xf6a1, 6);
@@ -8941,23 +8944,23 @@ void func_t001(bool adjust_sp) {
       break;
     case 1299:  // $F6A4
       /*$F6A4*/ s_pc = 0xf6a4; CYCLES(0xf6a4, 6);
-                tmp5_U8 = (uint8_t)(s_x - 0x01);
-                s_x = tmp5_U8;
-      /*$F6A5*/ branchTarget = true; block_id = tmp5_U8 ? 1294 : 1300;
+                tmp2_U8 = (uint8_t)(s_x - 0x01);
+                s_x = tmp2_U8;
+      /*$F6A5*/ branchTarget = true; block_id = tmp2_U8 ? 1294 : 1300;
       break;
     case 1300:  // $F6A7
       /*$F6A7*/ s_pc = 0xf6a7; CYCLES(0xf6a7, 12);
-      /*$F6AA*/ tmp5_U8 = (ram_peek(0x00d1) >> 0x01) >> 0x01;
-      /*$F6AB*/ s_status = (s_status & ~STATUS_C) | (tmp5_U8 & 0x01);
-                tmp5_U8 = tmp5_U8 >> 0x01;
-                s_a = tmp5_U8;
-      /*$F6AC*/ branchTarget = true; block_id = tmp5_U8 ? 1293 : 1301;
+                tmp2_U8 = ram_peek(0x00d1);
+      /*$F6AB*/ s_status = (s_status & ~STATUS_C) | ((tmp2_U8 >> 0x02) & 0x01);
+                tmp2_U8 = tmp2_U8 >> 0x03;
+                s_a = tmp2_U8;
+      /*$F6AC*/ branchTarget = true; block_id = tmp2_U8 ? 1293 : 1301;
       break;
     case 1301:  // $F6AE
       /*$F6AE*/ s_pc = 0xf6ae; CYCLES(0xf6ae, 7);
-                tmp5_U8 = (uint8_t)(ram_peek(0x001a) + 0x01);
-                ram_poke(0x001a, tmp5_U8);
-      /*$F6B0*/ branchTarget = true; block_id = tmp5_U8 ? 1303 : 1302;
+                tmp2_U8 = (uint8_t)(ram_peek(0x001a) + 0x01);
+                ram_poke(0x001a, tmp2_U8);
+      /*$F6B0*/ branchTarget = true; block_id = tmp2_U8 ? 1303 : 1302;
       break;
     case 1302:  // $F6B2
       /*$F6B2*/ s_pc = 0xf6b2; CYCLES(0xf6b2, 4);
@@ -8966,12 +8969,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 1303:  // $F6B4
       /*$F6B4*/ s_pc = 0xf6b4; CYCLES(0xf6b4, 7);
-                tmp5_U8 = s_x;
-                tmp5_U8 = peek((ram_peek((uint8_t)(0x1a + tmp5_U8)) + (ram_peek((uint8_t)(0x1b + tmp5_U8)) << 8)));
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$F6B6*/ branchTarget = true; block_id = tmp5_U8 ? 1293 : 1304;
+                tmp2_U8 = s_x;
+                tmp2_U8 = peek((ram_peek((uint8_t)(0x1a + tmp2_U8)) + (ram_peek((uint8_t)(0x1b + tmp2_U8)) << 8)));
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
+      /*$F6B6*/ branchTarget = true; block_id = tmp2_U8 ? 1293 : 1304;
       break;
     case 1304:  // $F6B8
       /*$F6B8*/ s_pc = 0xf6b8; CYCLES(0xf6b8, 2);
@@ -8987,13 +8990,13 @@ void func_t001(bool adjust_sp) {
       break;
     case 1307:  // $F6BF
       /*$F6BF*/ s_pc = 0xf6bf; CYCLES(0xf6bf, 14);
-                tmp5_U8 = ram_peek(0x0051);
-                s_y = tmp5_U8;
+                tmp2_U8 = ram_peek(0x0051);
+                s_y = tmp2_U8;
       /*$F6C1*/ s_x = ram_peek(0x0050);
-      /*$F6C3*/ s_status = (s_status & ~STATUS_Z) | ((tmp5_U8 != 0x01) ? 0 : STATUS_Z);
-                tmp5_U8 = tmp5_U8 >= 0x01;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$F6C5*/ branchTarget = true; block_id = !tmp5_U8 ? 1310 : 1308;
+      /*$F6C3*/ s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != 0x01) ? 0 : STATUS_Z);
+                tmp2_U8 = tmp2_U8 >= 0x01;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+      /*$F6C5*/ branchTarget = true; block_id = !tmp2_U8 ? 1310 : 1308;
       break;
     case 1308:  // $F6C7
       /*$F6C7*/ s_pc = 0xf6c7; CYCLES(0xf6c7, 4);
@@ -9001,9 +9004,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1309:  // $F6C9
       /*$F6C9*/ s_pc = 0xf6c9; CYCLES(0xf6c9, 7);
-                tmp5_U8 = s_x >= 0x18;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$F6CB*/ branchTarget = true; block_id = tmp5_U8 ? 1314 : 1310;
+                tmp2_U8 = s_x >= 0x18;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+      /*$F6CB*/ branchTarget = true; block_id = tmp2_U8 ? 1314 : 1310;
       break;
     case 1310:  // $F6CD
       /*$F6CD*/ s_pc = 0xf6cd; CYCLES(0xf6cd, 16);
@@ -9025,14 +9028,14 @@ void func_t001(bool adjust_sp) {
     case 1313:  // $F6DD
       /*$F6DD*/ s_pc = 0xf6dd; CYCLES(0xf6dd, 16);
                 ram_poke(0x009d, s_x);
-      /*$F6DF*/ tmp5_U8 = pop8();
-      /*$F6E0*/ s_y = tmp5_U8;
-      /*$F6E1*/ tmp5_U8 = pop8();
-      /*$F6E2*/ s_x = tmp5_U8;
-      /*$F6E3*/ tmp5_U8 = ram_peek(0x009d);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
+      /*$F6DF*/ tmp2_U8 = pop8();
+      /*$F6E0*/ s_y = tmp2_U8;
+      /*$F6E1*/ tmp2_U8 = pop8();
+      /*$F6E2*/ s_x = tmp2_U8;
+      /*$F6E3*/ tmp2_U8 = ram_peek(0x009d);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
       /*$F6E5*/ branchTarget = true; block_id = find_block_id_func_t001(0xf6e5, pop16() + 1);;
       break;
     case 1314:  // $F6E6
@@ -9051,11 +9054,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 1317:  // $F6F0
       /*$F6F0*/ s_pc = 0xf6f0; CYCLES(0xf6f0, 9);
-                tmp5_U8 = ram_peek((0xf6f6 + s_x));
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$F6F3*/ ram_poke(0x00e4, tmp5_U8);
+                tmp2_U8 = ram_peek((0xf6f6 + s_x));
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
+      /*$F6F3*/ ram_poke(0x00e4, tmp2_U8);
                 block_id = 1318;
       break;
     case 1318:  // $F6F5
@@ -9147,11 +9150,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 1335:  // $F741
       /*$F741*/ s_pc = 0xf741; CYCLES(0xf741, 6);
-                tmp3_U16 = s_a << 0x01;
-                tmp5_U8 = (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_a = ((uint8_t)tmp3_U16);
-      /*$F742*/ branchTarget = true; block_id = !tmp5_U8 ? 1337 : 1336;
+                tmp4_U16 = s_a << 0x01;
+                tmp2_U8 = (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_a = ((uint8_t)tmp4_U16);
+      /*$F742*/ branchTarget = true; block_id = !tmp2_U8 ? 1337 : 1336;
       break;
     case 1336:  // $F744
       /*$F744*/ s_pc = 0xf744; CYCLES(0xf744, 6);
@@ -9161,22 +9164,22 @@ void func_t001(bool adjust_sp) {
       break;
     case 1337:  // $F747
       /*$F747*/ s_pc = 0xf747; CYCLES(0xf747, 31);
-                tmp5_U8 = s_a;
-      /*$F748*/ tmp2_U8 = peek((ram_peek16al(0x001a) + tmp5_U8));
-      /*$F74A*/ tmp3_U16 = (tmp2_U8 + ram_peek(0x001a)) + (s_status & STATUS_C);
-                tmp2_U8 = (uint8_t)tmp3_U16;
-      /*$F74C*/ s_x = tmp2_U8;
-      /*$F74D*/ tmp5_U8 = (uint8_t)(tmp5_U8 + 0x01);
-                s_y = tmp5_U8;
-      /*$F74E*/ tmp5_U8 = peek((ram_peek16al(0x001a) + tmp5_U8));
-      /*$F750*/ tmp4_U16 = tmp5_U8;
-                tmp6_U16 = ram_peek(0x00e9);
-                tmp3_U16 = (tmp4_U16 + tmp6_U16) + (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)tmp6_U16) << 6);
-                tmp5_U8 = (uint8_t)tmp3_U16;
-                s_a = tmp5_U8;
-      /*$F752*/ ram_poke(0x001b, tmp5_U8);
-      /*$F754*/ ram_poke(0x001a, tmp2_U8);
+                tmp2_U8 = s_a;
+      /*$F748*/ tmp1_U8 = peek((ram_peek16al(0x001a) + tmp2_U8));
+      /*$F74A*/ tmp4_U16 = (tmp1_U8 + ram_peek(0x001a)) + (s_status & STATUS_C);
+                tmp1_U8 = (uint8_t)tmp4_U16;
+      /*$F74C*/ s_x = tmp1_U8;
+      /*$F74D*/ tmp2_U8 = (uint8_t)(tmp2_U8 + 0x01);
+                s_y = tmp2_U8;
+      /*$F74E*/ tmp2_U8 = peek((ram_peek16al(0x001a) + tmp2_U8));
+      /*$F750*/ tmp3_U16 = tmp2_U8;
+                tmp5_U16 = ram_peek(0x00e9);
+                tmp4_U16 = (tmp3_U16 + tmp5_U16) + (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)tmp5_U16) << 6);
+                tmp2_U8 = (uint8_t)tmp4_U16;
+                s_a = tmp2_U8;
+      /*$F752*/ ram_poke(0x001b, tmp2_U8);
+      /*$F754*/ ram_poke(0x001a, tmp1_U8);
       /*$F756*/ branchTarget = true; push16(0xf758); block_id = 4;
       break;
     case 1338:  // $F759
@@ -9199,10 +9202,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 1342:  // $F766
       /*$F766*/ s_pc = 0xf766; CYCLES(0xf766, 6);
-                tmp5_U8 = ram_peek(0x00f9);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
+                tmp2_U8 = ram_peek(0x00f9);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
       /*$F768*/ branchTarget = true; block_id = find_block_id_func_t001(0xf768, pop16() + 1);;
       break;
     case 1343:  // $F769
@@ -9212,15 +9215,15 @@ void func_t001(bool adjust_sp) {
     case 1344:  // $F76C
       /*$F76C*/ s_pc = 0xf76c; CYCLES(0xf76c, 6);
       /*$F605*/ s_pc = 0xf605; CYCLES(0xf605, 57);
-                tmp2_U8 = s_a;
-      /*$F60A*/ ram_poke(0x00d3, ((((tmp2_U8 >> 0x01) >> 0x01) >> 0x01) >> 0x01));
-      /*$F60D*/ tmp2_U8 = tmp2_U8 & 0x0f;
-      /*$F613*/ ram_poke(0x00d0, ram_peek((0xf5ba + tmp2_U8)));
-      /*$F61C*/ ram_poke(0x00d2, (uint8_t)(ram_peek((0xf5bb + (tmp2_U8 ^ 0x0f))) + 0x01));
+                tmp1_U8 = s_a;
+      /*$F60A*/ ram_poke(0x00d3, (tmp1_U8 >> 0x04));
+      /*$F60D*/ tmp1_U8 = tmp1_U8 & 0x0f;
+      /*$F613*/ ram_poke(0x00d0, ram_peek((0xf5ba + tmp1_U8)));
+      /*$F61C*/ ram_poke(0x00d2, (uint8_t)(ram_peek((0xf5bb + (tmp1_U8 ^ 0x0f))) + 0x01));
       /*$F61E*/ s_y = ram_peek(0x00e5);
       /*$F622*/ ram_poke(0x00ea, 0x00);
-      /*$F624*/ tmp2_U8 = peek((ram_peek(0x001a) + (ram_peek(0x001b) << 8)));
-                s_a = tmp2_U8;
+      /*$F624*/ tmp1_U8 = peek((ram_peek(0x001a) + (ram_peek(0x001b) << 8)));
+                s_a = tmp1_U8;
                 block_id = 1281;
       break;
     case 1345:  // $F76F
@@ -9230,15 +9233,15 @@ void func_t001(bool adjust_sp) {
     case 1346:  // $F772
       /*$F772*/ s_pc = 0xf772; CYCLES(0xf772, 6);
       /*$F661*/ s_pc = 0xf661; CYCLES(0xf661, 57);
-                tmp2_U8 = s_a;
-      /*$F666*/ ram_poke(0x00d3, ((((tmp2_U8 >> 0x01) >> 0x01) >> 0x01) >> 0x01));
-      /*$F669*/ tmp2_U8 = tmp2_U8 & 0x0f;
-      /*$F66F*/ ram_poke(0x00d0, ram_peek((0xf5ba + tmp2_U8)));
-      /*$F678*/ ram_poke(0x00d2, (uint8_t)(ram_peek((0xf5bb + (tmp2_U8 ^ 0x0f))) + 0x01));
+                tmp1_U8 = s_a;
+      /*$F666*/ ram_poke(0x00d3, (tmp1_U8 >> 0x04));
+      /*$F669*/ tmp1_U8 = tmp1_U8 & 0x0f;
+      /*$F66F*/ ram_poke(0x00d0, ram_peek((0xf5ba + tmp1_U8)));
+      /*$F678*/ ram_poke(0x00d2, (uint8_t)(ram_peek((0xf5bb + (tmp1_U8 ^ 0x0f))) + 0x01));
       /*$F67A*/ s_y = ram_peek(0x00e5);
       /*$F67E*/ ram_poke(0x00ea, 0x00);
-      /*$F680*/ tmp2_U8 = peek((ram_peek(0x001a) + (ram_peek(0x001b) << 8)));
-                s_a = tmp2_U8;
+      /*$F680*/ tmp1_U8 = peek((ram_peek(0x001a) + (ram_peek(0x001b) << 8)));
+                s_a = tmp1_U8;
                 block_id = 1293;
       break;
     case 1347:  // $F7E7
@@ -9254,26 +9257,26 @@ void func_t001(bool adjust_sp) {
       break;
     case 1349:  // $F7EC
       /*$F7EC*/ s_pc = 0xf7ec; CYCLES(0xf7ec, 7);
-                tmp2_U8 = s_a;
-                s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != 0x28) ? 0 : STATUS_Z);
-                tmp5_U8 = tmp2_U8 >= 0x28;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - 0x28) & 0x80);
-      /*$F7EE*/ branchTarget = true; block_id = !tmp5_U8 ? 1352 : 1350;
+                tmp1_U8 = s_a;
+                s_status = (s_status & ~STATUS_Z) | ((tmp1_U8 != 0x28) ? 0 : STATUS_Z);
+                tmp2_U8 = tmp1_U8 >= 0x28;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - 0x28) & 0x80);
+      /*$F7EE*/ branchTarget = true; block_id = !tmp2_U8 ? 1352 : 1350;
       break;
     case 1350:  // $F7F0
       /*$F7F0*/ s_pc = 0xf7f0; CYCLES(0xf7f0, 11);
-                tmp3_U16 = s_a;
-                tmp6_U16 = (tmp3_U16 - 0x0028) - (uint8_t)(0x01 - (s_status & STATUS_C));
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp6_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)0xffd7) << 6);
-      /*$F7F2*/ push8(((uint8_t)tmp6_U16));
+                tmp4_U16 = s_a;
+                tmp5_U16 = (tmp4_U16 - 0x0028) - (uint8_t)(0x01 - (s_status & STATUS_C));
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp5_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)0xffd7) << 6);
+      /*$F7F2*/ push8(((uint8_t)tmp5_U16));
       /*$F7F3*/ branchTarget = true; push16(0xf7f5); block_id = 358;
       break;
     case 1351:  // $F7F6
       /*$F7F6*/ s_pc = 0xf7f6; CYCLES(0xf7f6, 7);
-                tmp5_U8 = pop8();
-                s_a = tmp5_U8;
+                tmp2_U8 = pop8();
+                s_a = tmp2_U8;
       /*$F7F7*/ branchTarget = true; block_id = 1349;
       break;
     case 1352:  // $F7FA
@@ -9283,29 +9286,29 @@ void func_t001(bool adjust_sp) {
       break;
     case 1353:  // $F800
       /*$F800*/ s_pc = 0xf800; CYCLES(0xf800, 9);
-                tmp2_U8 = s_a;
-                tmp1_U8 = tmp2_U8 >> 0x01;
-                s_a = tmp1_U8;
-      /*$F801*/ push8(((tmp2_U8 & 0x01) | ((tmp1_U8 == 0) << 1) | (((s_status & STATUS_I) != 0) << 2) | (((s_status & STATUS_D) != 0) << 3) | STATUS_B | (((s_status & STATUS_V) != 0) << 6) | (tmp1_U8 & 0x80)));
+                tmp1_U8 = s_a;
+                tmp6_U8 = tmp1_U8 >> 0x01;
+                s_a = tmp6_U8;
+      /*$F801*/ push8(((tmp1_U8 & 0x01) | ((tmp6_U8 == 0) << 1) | (((s_status & STATUS_I) != 0) << 2) | (((s_status & STATUS_D) != 0) << 3) | STATUS_B | (((s_status & STATUS_V) != 0) << 6) | (tmp6_U8 & 0x80)));
                 func_f847(true);
       /*$F805*/ s_pc = 0xf805; CYCLES(0xf805, 9);
-                tmp2_U8 = pop8();
-                tmp1_U8 = tmp2_U8 & 0x01;
-                s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_I) | (((tmp2_U8 & 0x04) != 0) << 2);
-                s_status = (s_status & ~STATUS_D) | (((tmp2_U8 & 0x08) != 0) << 3);
+                tmp1_U8 = pop8();
+                tmp6_U8 = tmp1_U8 & 0x01;
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+                s_status = (s_status & ~STATUS_I) | (((tmp1_U8 & 0x04) != 0) << 2);
+                s_status = (s_status & ~STATUS_D) | (((tmp1_U8 & 0x08) != 0) << 3);
                 s_status = (s_status & ~STATUS_B) | (0x00 << 4);
-                s_status = (s_status & ~STATUS_V) | (((tmp2_U8 & 0x40) != 0) << 6);
+                s_status = (s_status & ~STATUS_V) | (((tmp1_U8 & 0x40) != 0) << 6);
       /*$F806*/ s_a = 0x0f;
-      /*$F808*/ branchTarget = true; block_id = !tmp1_U8 ? 1355 : 1354;
+      /*$F808*/ branchTarget = true; block_id = !tmp6_U8 ? 1355 : 1354;
       break;
     case 1354:  // $F80A
       /*$F80A*/ s_pc = 0xf80a; CYCLES(0xf80a, 4);
-                tmp6_U16 = s_a;
-                tmp3_U16 = (tmp6_U16 + 0x00e0) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)0x00e0) << 6);
-                s_a = ((uint8_t)tmp3_U16);
+                tmp5_U16 = s_a;
+                tmp4_U16 = (tmp5_U16 + 0x00e0) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)0x00e0) << 6);
+                s_a = ((uint8_t)tmp4_U16);
                 block_id = 1355;
       break;
     case 1355:  // $F80C
@@ -9315,25 +9318,25 @@ void func_t001(bool adjust_sp) {
       break;
     case 1356:  // $F80E
       /*$F80E*/ s_pc = 0xf80e; CYCLES(0xf80e, 19);
-                tmp5_U8 = s_y;
-                tmp2_U8 = peek((ram_peek16al(0x0026) + tmp5_U8));
-      /*$F814*/ tmp1_U8 = peek((ram_peek16al(0x0026) + tmp5_U8));
-                tmp2_U8 = ((tmp2_U8 ^ ram_peek(0x0030)) & ram_peek(0x002e)) ^ tmp1_U8;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_a = tmp2_U8;
-      /*$F816*/ poke((ram_peek16al(0x0026) + tmp5_U8), tmp2_U8);
+                tmp2_U8 = s_y;
+                tmp1_U8 = peek((ram_peek16al(0x0026) + tmp2_U8));
+      /*$F814*/ tmp6_U8 = peek((ram_peek16al(0x0026) + tmp2_U8));
+                tmp1_U8 = ((tmp1_U8 ^ ram_peek(0x0030)) & ram_peek(0x002e)) ^ tmp6_U8;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_a = tmp1_U8;
+      /*$F816*/ poke((ram_peek16al(0x0026) + tmp2_U8), tmp1_U8);
       /*$F818*/ branchTarget = true; block_id = find_block_id_func_t001(0xf818, pop16() + 1);;
       break;
     case 1357:  // $F81C
       /*$F81C*/ s_pc = 0xf81c; CYCLES(0xf81c, 7);
-                tmp5_U8 = s_y;
-                tmp2_U8 = ram_peek(0x002c);
-                s_status = (s_status & ~STATUS_Z) | ((tmp5_U8 != tmp2_U8) ? 0 : STATUS_Z);
-                tmp1_U8 = tmp5_U8 >= tmp2_U8;
-                s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp5_U8 - tmp2_U8) & 0x80);
-      /*$F81E*/ branchTarget = true; block_id = tmp1_U8 ? 1363 : 1358;
+                tmp2_U8 = s_y;
+                tmp1_U8 = ram_peek(0x002c);
+                s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != tmp1_U8) ? 0 : STATUS_Z);
+                tmp6_U8 = tmp2_U8 >= tmp1_U8;
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - tmp1_U8) & 0x80);
+      /*$F81E*/ branchTarget = true; block_id = tmp6_U8 ? 1363 : 1358;
       break;
     case 1358:  // $F820
       /*$F820*/ s_pc = 0xf820; CYCLES(0xf820, 7);
@@ -9346,10 +9349,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 1360:  // $F826
       /*$F826*/ s_pc = 0xf826; CYCLES(0xf826, 4);
-                tmp3_U16 = s_a;
-                tmp6_U16 = (tmp3_U16 + 0x0001) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)0x0001) << 6);
-                s_a = ((uint8_t)tmp6_U16);
+                tmp4_U16 = s_a;
+                tmp5_U16 = (tmp4_U16 + 0x0001) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)0x0001) << 6);
+                s_a = ((uint8_t)tmp5_U16);
                 block_id = 1361;
       break;
     case 1361:  // $F828
@@ -9359,14 +9362,14 @@ void func_t001(bool adjust_sp) {
       break;
     case 1362:  // $F82C
       /*$F82C*/ s_pc = 0xf82c; CYCLES(0xf82c, 9);
-                tmp1_U8 = pop8();
-                s_a = tmp1_U8;
-      /*$F82D*/ tmp2_U8 = ram_peek(0x002d);
-                s_status = (s_status & ~STATUS_Z) | ((tmp1_U8 != tmp2_U8) ? 0 : STATUS_Z);
-                tmp5_U8 = tmp1_U8 >= tmp2_U8;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - tmp2_U8) & 0x80);
-      /*$F82F*/ branchTarget = true; block_id = !tmp5_U8 ? 1360 : 1363;
+                tmp6_U8 = pop8();
+                s_a = tmp6_U8;
+      /*$F82D*/ tmp1_U8 = ram_peek(0x002d);
+                s_status = (s_status & ~STATUS_Z) | ((tmp6_U8 != tmp1_U8) ? 0 : STATUS_Z);
+                tmp2_U8 = tmp6_U8 >= tmp1_U8;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp6_U8 - tmp1_U8) & 0x80);
+      /*$F82F*/ branchTarget = true; block_id = !tmp2_U8 ? 1360 : 1363;
       break;
     case 1363:  // $F831
       /*$F831*/ s_pc = 0xf831; CYCLES(0xf831, 2);
@@ -9386,12 +9389,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 1366:  // $F843
       /*$F843*/ s_pc = 0xf843; CYCLES(0xf843, 6);
-                tmp5_U8 = (uint8_t)(s_y - 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                tmp2_U8 = tmp5_U8 & 0x80;
-                s_status = (s_status & ~STATUS_N) | tmp2_U8;
-                s_y = tmp5_U8;
-      /*$F844*/ branchTarget = true; block_id = !tmp2_U8 ? 1365 : 1367;
+                tmp2_U8 = (uint8_t)(s_y - 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                tmp1_U8 = tmp2_U8 & 0x80;
+                s_status = (s_status & ~STATUS_N) | tmp1_U8;
+                s_y = tmp2_U8;
+      /*$F844*/ branchTarget = true; block_id = !tmp1_U8 ? 1365 : 1367;
       break;
     case 1367:  // $F846
       /*$F846*/ s_pc = 0xf846; CYCLES(0xf846, 2);
@@ -9399,20 +9402,20 @@ void func_t001(bool adjust_sp) {
       break;
     case 1368:  // $F871
       /*$F871*/ s_pc = 0xf871; CYCLES(0xf871, 9);
-                tmp5_U8 = s_a;
-                tmp2_U8 = tmp5_U8 >> 0x01;
+                tmp1_U8 = s_a;
+                tmp2_U8 = tmp1_U8 >> 0x01;
                 s_a = tmp2_U8;
-      /*$F872*/ push8(((tmp5_U8 & 0x01) | ((tmp2_U8 == 0) << 1) | (((s_status & STATUS_I) != 0) << 2) | (((s_status & STATUS_D) != 0) << 3) | STATUS_B | (((s_status & STATUS_V) != 0) << 6) | (tmp2_U8 & 0x80)));
+      /*$F872*/ push8(((tmp1_U8 & 0x01) | ((tmp2_U8 == 0) << 1) | (((s_status & STATUS_I) != 0) << 2) | (((s_status & STATUS_D) != 0) << 3) | STATUS_B | (((s_status & STATUS_V) != 0) << 6) | (tmp2_U8 & 0x80)));
                 func_f847(true);
       /*$F876*/ s_pc = 0xf876; CYCLES(0xf876, 6);
-                tmp5_U8 = peek((ram_peek16al(0x0026) + s_y));
-                s_a = tmp5_U8;
-      /*$F878*/ tmp5_U8 = pop8();
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 & 0x01);
-                s_status = (s_status & ~STATUS_I) | (((tmp5_U8 & 0x04) != 0) << 2);
-                s_status = (s_status & ~STATUS_D) | (((tmp5_U8 & 0x08) != 0) << 3);
+                tmp1_U8 = peek((ram_peek16al(0x0026) + s_y));
+                s_a = tmp1_U8;
+      /*$F878*/ tmp1_U8 = pop8();
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 & 0x01);
+                s_status = (s_status & ~STATUS_I) | (((tmp1_U8 & 0x04) != 0) << 2);
+                s_status = (s_status & ~STATUS_D) | (((tmp1_U8 & 0x08) != 0) << 3);
                 s_status = (s_status & ~STATUS_B) | (0x00 << 4);
-                s_status = (s_status & ~STATUS_V) | (((tmp5_U8 & 0x40) != 0) << 6);
+                s_status = (s_status & ~STATUS_V) | (((tmp1_U8 & 0x40) != 0) << 6);
                 block_id = 1369;
       break;
     case 1369:  // $F879
@@ -9421,17 +9424,17 @@ void func_t001(bool adjust_sp) {
       break;
     case 1370:  // $F87B
       /*$F87B*/ s_pc = 0xf87b; CYCLES(0xf87b, 7);
-      /*$F87D*/ tmp2_U8 = ((s_a >> 0x01) >> 0x01) >> 0x01;
-      /*$F87E*/ s_status = (s_status & ~STATUS_C) | (tmp2_U8 & 0x01);
-                s_a = (tmp2_U8 >> 0x01);
+                tmp1_U8 = s_a;
+      /*$F87E*/ s_status = (s_status & ~STATUS_C) | ((tmp1_U8 >> 0x03) & 0x01);
+                s_a = (tmp1_U8 >> 0x04);
                 block_id = 1371;
       break;
     case 1371:  // $F87F
       /*$F87F*/ s_pc = 0xf87f; CYCLES(0xf87f, 6);
-                tmp2_U8 = s_a & 0x0f;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_a = tmp2_U8;
+                tmp1_U8 = s_a & 0x0f;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | 0x00;
+                s_a = tmp1_U8;
       /*$F881*/ branchTarget = true; block_id = find_block_id_func_t001(0xf881, pop16() + 1);;
       break;
     case 1372:  // $F882
@@ -9446,19 +9449,19 @@ void func_t001(bool adjust_sp) {
       break;
     case 1374:  // $F88C
       /*$F88C*/ s_pc = 0xf88c; CYCLES(0xf88c, 11);
-                tmp2_U8 = s_x;
-                tmp2_U8 = peek((ram_peek((uint8_t)(0x3a + tmp2_U8)) + (ram_peek((uint8_t)(0x3b + tmp2_U8)) << 8)));
-      /*$F88E*/ s_y = tmp2_U8;
-      /*$F88F*/ tmp5_U8 = tmp2_U8 & 0x01;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_a = (tmp2_U8 >> 0x01);
-      /*$F890*/ branchTarget = true; block_id = !tmp5_U8 ? 1378 : 1375;
+                tmp1_U8 = s_x;
+                tmp1_U8 = peek((ram_peek((uint8_t)(0x3a + tmp1_U8)) + (ram_peek((uint8_t)(0x3b + tmp1_U8)) << 8)));
+      /*$F88E*/ s_y = tmp1_U8;
+      /*$F88F*/ tmp2_U8 = tmp1_U8 & 0x01;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_a = (tmp1_U8 >> 0x01);
+      /*$F890*/ branchTarget = true; block_id = !tmp2_U8 ? 1378 : 1375;
       break;
     case 1375:  // $F892
       /*$F892*/ s_pc = 0xf892; CYCLES(0xf892, 6);
-                tmp5_U8 = s_a;
-                s_a = (uint8_t)((tmp5_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01);
-      /*$F893*/ branchTarget = true; block_id = (tmp5_U8 & 0x01) ? 1380 : 1376;
+                tmp2_U8 = s_a;
+                s_a = (uint8_t)((tmp2_U8 | (0x00 + ((s_status & STATUS_C) << 8))) >> 0x01);
+      /*$F893*/ branchTarget = true; block_id = (tmp2_U8 & 0x01) ? 1380 : 1376;
       break;
     case 1376:  // $F895
       /*$F895*/ s_pc = 0xf895; CYCLES(0xf895, 7);
@@ -9471,13 +9474,13 @@ void func_t001(bool adjust_sp) {
       break;
     case 1378:  // $F89B
       /*$F89B*/ s_pc = 0xf89b; CYCLES(0xf89b, 14);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 & 0x01);
-                tmp5_U8 = tmp5_U8 >> 0x01;
-      /*$F89C*/ s_x = tmp5_U8;
-      /*$F89D*/ tmp5_U8 = ram_peek((0xf962 + tmp5_U8));
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_a = tmp5_U8;
+                tmp2_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 & 0x01);
+                tmp2_U8 = tmp2_U8 >> 0x01;
+      /*$F89C*/ s_x = tmp2_U8;
+      /*$F89D*/ tmp2_U8 = ram_peek((0xf962 + tmp2_U8));
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_a = tmp2_U8;
       /*$F8A0*/ branchTarget = true; push16(0xf8a2); block_id = 1369;
       break;
     case 1379:  // $F8A3
@@ -9492,24 +9495,24 @@ void func_t001(bool adjust_sp) {
       break;
     case 1381:  // $F8A9
       /*$F8A9*/ s_pc = 0xf8a9; CYCLES(0xf8a9, 36);
-      /*$F8AA*/ tmp5_U8 = ram_peek((0xf9a6 + s_a));
-      /*$F8AD*/ ram_poke(0x002e, tmp5_U8);
-      /*$F8B1*/ ram_poke(0x002f, (tmp5_U8 & 0x03));
-      /*$F8B3*/ tmp5_U8 = s_y;
-      /*$F8B4*/ tmp2_U8 = tmp5_U8 & 0x8f;
-      /*$F8B6*/ s_x = tmp2_U8;
-      /*$F8B7*/ s_a = tmp5_U8;
+      /*$F8AA*/ tmp2_U8 = ram_peek((0xf9a6 + s_a));
+      /*$F8AD*/ ram_poke(0x002e, tmp2_U8);
+      /*$F8B1*/ ram_poke(0x002f, (tmp2_U8 & 0x03));
+      /*$F8B3*/ tmp2_U8 = s_y;
+      /*$F8B4*/ tmp1_U8 = tmp2_U8 & 0x8f;
+      /*$F8B6*/ s_x = tmp1_U8;
+      /*$F8B7*/ s_a = tmp2_U8;
       /*$F8B8*/ s_y = 0x03;
-      /*$F8BA*/ s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x8a);
-      /*$F8BC*/ branchTarget = true; block_id = !(tmp2_U8 != 0x8a) ? 1386 : 1382;
+      /*$F8BA*/ s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x8a);
+      /*$F8BC*/ branchTarget = true; block_id = !(tmp1_U8 != 0x8a) ? 1386 : 1382;
       break;
     case 1382:  // $F8BE
       /*$F8BE*/ s_pc = 0xf8be; CYCLES(0xf8be, 6);
-                tmp2_U8 = s_a;
-                tmp5_U8 = tmp2_U8 & 0x01;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_a = (tmp2_U8 >> 0x01);
-      /*$F8BF*/ branchTarget = true; block_id = !tmp5_U8 ? 1386 : 1383;
+                tmp1_U8 = s_a;
+                tmp2_U8 = tmp1_U8 & 0x01;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_a = (tmp1_U8 >> 0x01);
+      /*$F8BF*/ branchTarget = true; block_id = !tmp2_U8 ? 1386 : 1383;
       break;
     case 1383:  // $F8C1
       /*$F8C1*/ s_pc = 0xf8c1; CYCLES(0xf8c1, 2);
@@ -9518,12 +9521,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 1384:  // $F8C2
       /*$F8C2*/ s_pc = 0xf8c2; CYCLES(0xf8c2, 11);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 & 0x01);
-      /*$F8C3*/ s_a = ((tmp5_U8 >> 0x01) | 0x20);
-      /*$F8C5*/ tmp5_U8 = (uint8_t)(s_y - 0x01);
-                s_y = tmp5_U8;
-      /*$F8C6*/ branchTarget = true; block_id = tmp5_U8 ? 1384 : 1385;
+                tmp2_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 & 0x01);
+      /*$F8C3*/ s_a = ((tmp2_U8 >> 0x01) | 0x20);
+      /*$F8C5*/ tmp2_U8 = (uint8_t)(s_y - 0x01);
+                s_y = tmp2_U8;
+      /*$F8C6*/ branchTarget = true; block_id = tmp2_U8 ? 1384 : 1385;
       break;
     case 1385:  // $F8C8
       /*$F8C8*/ s_pc = 0xf8c8; CYCLES(0xf8c8, 2);
@@ -9532,11 +9535,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 1386:  // $F8C9
       /*$F8C9*/ s_pc = 0xf8c9; CYCLES(0xf8c9, 6);
-                tmp2_U8 = (uint8_t)(s_y - 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_y = tmp2_U8;
-      /*$F8CA*/ branchTarget = true; block_id = tmp2_U8 ? 1382 : 1387;
+                tmp1_U8 = (uint8_t)(s_y - 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_y = tmp1_U8;
+      /*$F8CA*/ branchTarget = true; block_id = tmp1_U8 ? 1382 : 1387;
       break;
     case 1387:  // $F8CC
       /*$F8CC*/ s_pc = 0xf8cc; CYCLES(0xf8cc, 2);
@@ -9553,8 +9556,8 @@ void func_t001(bool adjust_sp) {
       break;
     case 1390:  // $F8D4
       /*$F8D4*/ s_pc = 0xf8d4; CYCLES(0xf8d4, 9);
-                tmp5_U8 = peek((ram_peek16al(0x003a) + s_y));
-                s_a = tmp5_U8;
+                tmp2_U8 = peek((ram_peek16al(0x003a) + s_y));
+                s_a = tmp2_U8;
       /*$F8D6*/ branchTarget = true; push16(0xf8d8); block_id = 1587;
       break;
     case 1391:  // $F8D9
@@ -9568,24 +9571,24 @@ void func_t001(bool adjust_sp) {
       break;
     case 1393:  // $F8DE
       /*$F8DE*/ s_pc = 0xf8de; CYCLES(0xf8de, 9);
-                tmp5_U8 = s_y;
-                tmp2_U8 = tmp5_U8 >= ram_peek(0x002f);
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-      /*$F8E0*/ s_y = (uint8_t)(tmp5_U8 + 0x01);
-      /*$F8E1*/ branchTarget = true; block_id = !tmp2_U8 ? 1390 : 1394;
+                tmp2_U8 = s_y;
+                tmp1_U8 = tmp2_U8 >= ram_peek(0x002f);
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+      /*$F8E0*/ s_y = (uint8_t)(tmp2_U8 + 0x01);
+      /*$F8E1*/ branchTarget = true; block_id = !tmp1_U8 ? 1390 : 1394;
       break;
     case 1394:  // $F8E3
       /*$F8E3*/ s_pc = 0xf8e3; CYCLES(0xf8e3, 11);
                 s_x = 0x03;
-      /*$F8E5*/ tmp2_U8 = s_y >= 0x04;
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-      /*$F8E7*/ branchTarget = true; block_id = !tmp2_U8 ? 1392 : 1395;
+      /*$F8E5*/ tmp1_U8 = s_y >= 0x04;
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+      /*$F8E7*/ branchTarget = true; block_id = !tmp1_U8 ? 1392 : 1395;
       break;
     case 1395:  // $F8E9
       /*$F8E9*/ s_pc = 0xf8e9; CYCLES(0xf8e9, 21);
-                tmp2_U8 = pop8();
-      /*$F8EE*/ ram_poke(0x002c, ram_peek((0xf9c0 + tmp2_U8)));
-      /*$F8F3*/ ram_poke(0x002d, ram_peek((0xfa00 + tmp2_U8)));
+                tmp1_U8 = pop8();
+      /*$F8EE*/ ram_poke(0x002c, ram_peek((0xf9c0 + tmp1_U8)));
+      /*$F8F3*/ ram_poke(0x002d, ram_peek((0xfa00 + tmp1_U8)));
                 block_id = 1396;
       break;
     case 1396:  // $F8F5
@@ -9596,34 +9599,34 @@ void func_t001(bool adjust_sp) {
       break;
     case 1397:  // $F8F9
       /*$F8F9*/ s_pc = 0xf8f9; CYCLES(0xf8f9, 14);
-                tmp6_U16 = ram_peek(0x002d) << 0x01;
-                ram_poke(0x002d, ((uint8_t)tmp6_U16));
-      /*$F8FB*/ tmp6_U16 = (ram_peek(0x002c) << 0x01) | (uint8_t)(tmp6_U16 >> 8);
-                ram_poke(0x002c, ((uint8_t)tmp6_U16));
-      /*$F8FD*/ tmp6_U16 = (s_a << 0x01) | (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp6_U16 >> 8);
-                s_a = ((uint8_t)tmp6_U16);
-      /*$F8FE*/ tmp2_U8 = (uint8_t)(s_y - 0x01);
-                s_y = tmp2_U8;
-      /*$F8FF*/ branchTarget = true; block_id = tmp2_U8 ? 1397 : 1398;
+                tmp5_U16 = ram_peek(0x002d) << 0x01;
+                ram_poke(0x002d, ((uint8_t)tmp5_U16));
+      /*$F8FB*/ tmp5_U16 = (ram_peek(0x002c) << 0x01) | (uint8_t)(tmp5_U16 >> 8);
+                ram_poke(0x002c, ((uint8_t)tmp5_U16));
+      /*$F8FD*/ tmp5_U16 = (s_a << 0x01) | (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp5_U16 >> 8);
+                s_a = ((uint8_t)tmp5_U16);
+      /*$F8FE*/ tmp1_U8 = (uint8_t)(s_y - 0x01);
+                s_y = tmp1_U8;
+      /*$F8FF*/ branchTarget = true; block_id = tmp1_U8 ? 1397 : 1398;
       break;
     case 1398:  // $F901
       /*$F901*/ s_pc = 0xf901; CYCLES(0xf901, 9);
-                tmp6_U16 = s_a;
-                tmp3_U16 = (tmp6_U16 + 0x00bf) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)0x00bf) << 6);
-                tmp2_U8 = (uint8_t)tmp3_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_a = tmp2_U8;
+                tmp5_U16 = s_a;
+                tmp4_U16 = (tmp5_U16 + 0x00bf) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)0x00bf) << 6);
+                tmp1_U8 = (uint8_t)tmp4_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_a = tmp1_U8;
       /*$F903*/ branchTarget = true; push16(0xf905); block_id = 1591;
       break;
     case 1399:  // $F906
       /*$F906*/ s_pc = 0xf906; CYCLES(0xf906, 6);
-                tmp2_U8 = (uint8_t)(s_x - 0x01);
-                s_x = tmp2_U8;
-      /*$F907*/ branchTarget = true; block_id = tmp2_U8 ? 1396 : 1400;
+                tmp1_U8 = (uint8_t)(s_x - 0x01);
+                s_x = tmp1_U8;
+      /*$F907*/ branchTarget = true; block_id = tmp1_U8 ? 1396 : 1400;
       break;
     case 1400:  // $F909
       /*$F909*/ s_pc = 0xf909; CYCLES(0xf909, 6);
@@ -9641,27 +9644,27 @@ void func_t001(bool adjust_sp) {
       break;
     case 1403:  // $F914
       /*$F914*/ s_pc = 0xf914; CYCLES(0xf914, 7);
-                tmp3_U16 = ram_peek(0x002e) << 0x01;
-                tmp2_U8 = (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                ram_poke(0x002e, ((uint8_t)tmp3_U16));
-      /*$F916*/ branchTarget = true; block_id = !tmp2_U8 ? 1407 : 1404;
+                tmp4_U16 = ram_peek(0x002e) << 0x01;
+                tmp1_U8 = (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+                ram_poke(0x002e, ((uint8_t)tmp4_U16));
+      /*$F916*/ branchTarget = true; block_id = !tmp1_U8 ? 1407 : 1404;
       break;
     case 1404:  // $F918
       /*$F918*/ s_pc = 0xf918; CYCLES(0xf918, 11);
-                tmp2_U8 = ram_peek((0xf9b3 + s_x));
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_a = tmp2_U8;
+                tmp1_U8 = ram_peek((0xf9b3 + s_x));
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_a = tmp1_U8;
       /*$F91B*/ branchTarget = true; push16(0xf91d); block_id = 1591;
       break;
     case 1405:  // $F91E
       /*$F91E*/ s_pc = 0xf91e; CYCLES(0xf91e, 9);
-                tmp2_U8 = ram_peek((0xf9b9 + s_x));
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_a = tmp2_U8;
-      /*$F921*/ branchTarget = true; block_id = !tmp2_U8 ? 1407 : 1406;
+                tmp1_U8 = ram_peek((0xf9b9 + s_x));
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_a = tmp1_U8;
+      /*$F921*/ branchTarget = true; block_id = !tmp1_U8 ? 1407 : 1406;
       break;
     case 1406:  // $F923
       /*$F923*/ s_pc = 0xf923; CYCLES(0xf923, 6);
@@ -9669,11 +9672,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 1407:  // $F926
       /*$F926*/ s_pc = 0xf926; CYCLES(0xf926, 6);
-                tmp2_U8 = (uint8_t)(s_x - 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_x = tmp2_U8;
-      /*$F927*/ branchTarget = true; block_id = tmp2_U8 ? 1402 : 1408;
+                tmp1_U8 = (uint8_t)(s_x - 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_x = tmp1_U8;
+      /*$F927*/ branchTarget = true; block_id = tmp1_U8 ? 1402 : 1408;
       break;
     case 1408:  // $F929
       /*$F929*/ s_pc = 0xf929; CYCLES(0xf929, 2);
@@ -9681,9 +9684,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1409:  // $F92A
       /*$F92A*/ s_pc = 0xf92a; CYCLES(0xf92a, 6);
-                tmp2_U8 = (uint8_t)(s_y - 0x01);
-                s_y = tmp2_U8;
-      /*$F92B*/ branchTarget = true; block_id = (tmp2_U8 & 0x80) ? 1403 : 1410;
+                tmp1_U8 = (uint8_t)(s_y - 0x01);
+                s_y = tmp1_U8;
+      /*$F92B*/ branchTarget = true; block_id = (tmp1_U8 & 0x80) ? 1403 : 1410;
       break;
     case 1410:  // $F92D
       /*$F92D*/ s_pc = 0xf92d; CYCLES(0xf92d, 6);
@@ -9691,11 +9694,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 1411:  // $F930
       /*$F930*/ s_pc = 0xf930; CYCLES(0xf930, 14);
-      /*$F932*/ tmp2_U8 = ram_peek(0x002e) >= 0xe8;
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-      /*$F934*/ tmp5_U8 = peek((ram_peek16al(0x003a) + s_y));
-                s_a = tmp5_U8;
-      /*$F936*/ branchTarget = true; block_id = !tmp2_U8 ? 1409 : 1412;
+      /*$F932*/ tmp1_U8 = ram_peek(0x002e) >= 0xe8;
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+      /*$F934*/ tmp2_U8 = peek((ram_peek16al(0x003a) + s_y));
+                s_a = tmp2_U8;
+      /*$F936*/ branchTarget = true; block_id = !tmp1_U8 ? 1409 : 1412;
       break;
     case 1412:  // $F938
       /*$F938*/ s_pc = 0xf938; CYCLES(0xf938, 6);
@@ -9703,9 +9706,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1413:  // $F93B
       /*$F93B*/ s_pc = 0xf93b; CYCLES(0xf93b, 7);
-      /*$F93C*/ tmp2_U8 = (uint8_t)(s_a + 0x01);
-                s_x = tmp2_U8;
-      /*$F93D*/ branchTarget = true; block_id = tmp2_U8 ? 1415 : 1414;
+      /*$F93C*/ tmp1_U8 = (uint8_t)(s_a + 0x01);
+                s_x = tmp1_U8;
+      /*$F93D*/ branchTarget = true; block_id = tmp1_U8 ? 1415 : 1414;
       break;
     case 1414:  // $F93F
       /*$F93F*/ s_pc = 0xf93f; CYCLES(0xf93f, 2);
@@ -9736,11 +9739,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 1419:  // $F94F
       /*$F94F*/ s_pc = 0xf94f; CYCLES(0xf94f, 6);
-                tmp2_U8 = (uint8_t)(s_x - 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_x = tmp2_U8;
-      /*$F950*/ branchTarget = true; block_id = tmp2_U8 ? 1418 : 1420;
+                tmp1_U8 = (uint8_t)(s_x - 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_x = tmp1_U8;
+      /*$F950*/ branchTarget = true; block_id = tmp1_U8 ? 1418 : 1420;
       break;
     case 1420:  // $F952
       /*$F952*/ s_pc = 0xf952; CYCLES(0xf952, 2);
@@ -9755,9 +9758,9 @@ void func_t001(bool adjust_sp) {
     case 1422:  // $F956
       /*$F956*/ s_pc = 0xf956; CYCLES(0xf956, 9);
                 s_y = ram_peek(0x003b);
-      /*$F958*/ tmp2_U8 = s_a;
-                s_x = tmp2_U8;
-      /*$F959*/ branchTarget = true; block_id = !(tmp2_U8 & 0x80) ? 1424 : 1423;
+      /*$F958*/ tmp1_U8 = s_a;
+                s_x = tmp1_U8;
+      /*$F959*/ branchTarget = true; block_id = !(tmp1_U8 & 0x80) ? 1424 : 1423;
       break;
     case 1423:  // $F95B
       /*$F95B*/ s_pc = 0xf95b; CYCLES(0xf95b, 2);
@@ -9766,24 +9769,24 @@ void func_t001(bool adjust_sp) {
       break;
     case 1424:  // $F95C
       /*$F95C*/ s_pc = 0xf95c; CYCLES(0xf95c, 7);
-                tmp3_U16 = s_a;
-                tmp6_U16 = ram_peek(0x003a);
-                tmp4_U16 = (tmp3_U16 + tmp6_U16) + (s_status & STATUS_C);
-                tmp2_U8 = (uint8_t)(tmp4_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)tmp6_U16) << 6);
-                tmp5_U8 = (uint8_t)tmp4_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$F95E*/ branchTarget = true; block_id = !tmp2_U8 ? 1426 : 1425;
+                tmp4_U16 = s_a;
+                tmp5_U16 = ram_peek(0x003a);
+                tmp3_U16 = (tmp4_U16 + tmp5_U16) + (s_status & STATUS_C);
+                tmp1_U8 = (uint8_t)(tmp3_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)tmp5_U16) << 6);
+                tmp2_U8 = (uint8_t)tmp3_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
+      /*$F95E*/ branchTarget = true; block_id = !tmp1_U8 ? 1426 : 1425;
       break;
     case 1425:  // $F960
       /*$F960*/ s_pc = 0xf960; CYCLES(0xf960, 2);
-                tmp2_U8 = (uint8_t)(s_y + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_y = tmp2_U8;
+                tmp1_U8 = (uint8_t)(s_y + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_y = tmp1_U8;
                 block_id = 1426;
       break;
     case 1426:  // $F961
@@ -9804,40 +9807,40 @@ void func_t001(bool adjust_sp) {
       break;
     case 1430:  // $FA6F
       /*$FA6F*/ s_pc = 0xfa6f; CYCLES(0xfa6f, 38);
-                tmp2_U8 = io_peek(0xc058);
-      /*$FA72*/ tmp2_U8 = io_peek(0xc05a);
-      /*$FA75*/ tmp2_U8 = io_peek(0xc05d);
-      /*$FA78*/ tmp2_U8 = io_peek(0xc05f);
-      /*$FA7B*/ tmp2_U8 = io_peek(0xcfff);
-      /*$FA7E*/ tmp2_U8 = io_peek(0xc010);
-                s_status = (s_status & ~STATUS_V) | (((tmp2_U8 >> 0x06) & 0x01) << 6);
+                tmp1_U8 = io_peek(0xc058);
+      /*$FA72*/ tmp1_U8 = io_peek(0xc05a);
+      /*$FA75*/ tmp1_U8 = io_peek(0xc05d);
+      /*$FA78*/ tmp1_U8 = io_peek(0xc05f);
+      /*$FA7B*/ tmp1_U8 = io_peek(0xcfff);
+      /*$FA7E*/ tmp1_U8 = io_peek(0xc010);
+                s_status = (s_status & ~STATUS_V) | (((tmp1_U8 >> 0x06) & 0x01) << 6);
       /*$FA81*/ s_status = (s_status & ~STATUS_D) | (0x00 << 3);
       /*$FA82*/ branchTarget = true; push16(0xfa84); block_id = 1631;
       break;
     case 1431:  // $FA85
       /*$FA85*/ s_pc = 0xfa85; CYCLES(0xfa85, 18);
-      /*$FA88*/ tmp2_U8 = ram_peek(0x03f3) ^ 0xa5;
-      /*$FA8A*/ tmp5_U8 = ram_peek(0x03f4);
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp5_U8);
-      /*$FA8D*/ branchTarget = true; block_id = (tmp2_U8 != tmp5_U8) ? 1436 : 1432;
+      /*$FA88*/ tmp1_U8 = ram_peek(0x03f3) ^ 0xa5;
+      /*$FA8A*/ tmp2_U8 = ram_peek(0x03f4);
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp2_U8);
+      /*$FA8D*/ branchTarget = true; block_id = (tmp1_U8 != tmp2_U8) ? 1436 : 1432;
       break;
     case 1432:  // $FA8F
       /*$FA8F*/ s_pc = 0xfa8f; CYCLES(0xfa8f, 9);
-                tmp5_U8 = ram_peek(0x03f2);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$FA92*/ branchTarget = true; block_id = tmp5_U8 ? 1435 : 1433;
+                tmp2_U8 = ram_peek(0x03f2);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
+      /*$FA92*/ branchTarget = true; block_id = tmp2_U8 ? 1435 : 1433;
       break;
     case 1433:  // $FA94
       /*$FA94*/ s_pc = 0xfa94; CYCLES(0xfa94, 12);
                 s_a = 0xe0;
-      /*$FA96*/ tmp5_U8 = ram_peek(0x03f3);
-                tmp2_U8 = 0xe0 != tmp5_U8;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (0xe0 >= tmp5_U8);
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(0xe0 - tmp5_U8) & 0x80);
-      /*$FA99*/ branchTarget = true; block_id = tmp2_U8 ? 1435 : 1434;
+      /*$FA96*/ tmp2_U8 = ram_peek(0x03f3);
+                tmp1_U8 = 0xe0 != tmp2_U8;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_C) | (0xe0 >= tmp2_U8);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(0xe0 - tmp2_U8) & 0x80);
+      /*$FA99*/ branchTarget = true; block_id = tmp1_U8 ? 1435 : 1434;
       break;
     case 1434:  // $FA9B
       /*$FA9B*/ s_pc = 0xfa9b; CYCLES(0xfa9b, 14);
@@ -9868,11 +9871,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 1438:  // $FAAB
       /*$FAAB*/ s_pc = 0xfaab; CYCLES(0xfaab, 16);
-                tmp2_U8 = s_x;
-      /*$FAAE*/ ram_poke((0x03ef + tmp2_U8), ram_peek((0xfafc + tmp2_U8)));
-      /*$FAB1*/ tmp2_U8 = (uint8_t)(tmp2_U8 - 0x01);
-                s_x = tmp2_U8;
-      /*$FAB2*/ branchTarget = true; block_id = tmp2_U8 ? 1438 : 1439;
+                tmp1_U8 = s_x;
+      /*$FAAE*/ ram_poke((0x03ef + tmp1_U8), ram_peek((0xfafc + tmp1_U8)));
+      /*$FAB1*/ tmp1_U8 = (uint8_t)(tmp1_U8 - 0x01);
+                s_x = tmp1_U8;
+      /*$FAB2*/ branchTarget = true; block_id = tmp1_U8 ? 1438 : 1439;
       break;
     case 1439:  // $FAB4
       /*$FAB4*/ s_pc = 0xfab4; CYCLES(0xfab4, 11);
@@ -9884,10 +9887,10 @@ void func_t001(bool adjust_sp) {
       /*$FABA*/ s_pc = 0xfaba; CYCLES(0xfaba, 18);
                 s_y = 0x07;
       /*$FABC*/ ram_poke(0x0001, (uint8_t)(ram_peek(0x0001) - 0x01));
-      /*$FABE*/ tmp2_U8 = ram_peek(0x0001);
-                s_a = tmp2_U8;
-      /*$FAC0*/ s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0xc0);
-      /*$FAC2*/ branchTarget = true; block_id = !(tmp2_U8 != 0xc0) ? 1434 : 1441;
+      /*$FABE*/ tmp1_U8 = ram_peek(0x0001);
+                s_a = tmp1_U8;
+      /*$FAC0*/ s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0xc0);
+      /*$FAC2*/ branchTarget = true; block_id = !(tmp1_U8 != 0xc0) ? 1434 : 1441;
       break;
     case 1441:  // $FAC4
       /*$FAC4*/ s_pc = 0xfac4; CYCLES(0xfac4, 6);
@@ -9896,21 +9899,21 @@ void func_t001(bool adjust_sp) {
       break;
     case 1442:  // $FAC7
       /*$FAC7*/ s_pc = 0xfac7; CYCLES(0xfac7, 12);
-                tmp2_U8 = s_y;
-                tmp5_U8 = peek((ram_peek16al(0x0000) + tmp2_U8));
-                s_a = tmp5_U8;
-      /*$FAC9*/ tmp2_U8 = ram_peek((0xfb01 + tmp2_U8));
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= tmp2_U8);
-      /*$FACC*/ branchTarget = true; block_id = (tmp5_U8 != tmp2_U8) ? 1440 : 1443;
+                tmp1_U8 = s_y;
+                tmp2_U8 = peek((ram_peek16al(0x0000) + tmp1_U8));
+                s_a = tmp2_U8;
+      /*$FAC9*/ tmp1_U8 = ram_peek((0xfb01 + tmp1_U8));
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp1_U8);
+      /*$FACC*/ branchTarget = true; block_id = (tmp2_U8 != tmp1_U8) ? 1440 : 1443;
       break;
     case 1443:  // $FACE
       /*$FACE*/ s_pc = 0xface; CYCLES(0xface, 7);
-      /*$FACF*/ tmp2_U8 = (uint8_t)(s_y - 0x02);
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                tmp5_U8 = tmp2_U8 & 0x80;
-                s_status = (s_status & ~STATUS_N) | tmp5_U8;
-                s_y = tmp2_U8;
-      /*$FAD0*/ branchTarget = true; block_id = !tmp5_U8 ? 1442 : 1444;
+      /*$FACF*/ tmp1_U8 = (uint8_t)(s_y - 0x02);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                tmp2_U8 = tmp1_U8 & 0x80;
+                s_status = (s_status & ~STATUS_N) | tmp2_U8;
+                s_y = tmp1_U8;
+      /*$FAD0*/ branchTarget = true; block_id = !tmp2_U8 ? 1442 : 1444;
       break;
     case 1444:  // $FAD2
       /*$FAD2*/ s_pc = 0xfad2; CYCLES(0xfad2, 6);
@@ -9919,13 +9922,13 @@ void func_t001(bool adjust_sp) {
     case 1445:  // $FB2F
       /*$FB2F*/ s_pc = 0xfb2f; CYCLES(0xfb2f, 18);
       /*$FB31*/ ram_poke(0x0048, 0x00);
-      /*$FB33*/ tmp2_U8 = io_peek(0xc056);
-      /*$FB36*/ tmp2_U8 = io_peek(0xc054);
+      /*$FB33*/ tmp1_U8 = io_peek(0xc056);
+      /*$FB36*/ tmp1_U8 = io_peek(0xc054);
                 block_id = 1446;
       break;
     case 1446:  // $FB39
       /*$FB39*/ s_pc = 0xfb39; CYCLES(0xfb39, 12);
-                tmp1_U8 = io_peek(0xc051);
+                tmp6_U8 = io_peek(0xc051);
       /*$FB3C*/ s_a = 0x00;
       /*$FB3E*/ branchTarget = true; block_id = 1448;
       break;
@@ -9959,15 +9962,15 @@ void func_t001(bool adjust_sp) {
       break;
     case 1452:  // $FB65
       /*$FB65*/ s_pc = 0xfb65; CYCLES(0xfb65, 16);
-                tmp5_U8 = s_y;
-                tmp2_U8 = ram_peek((0xfb08 + tmp5_U8));
-                s_a = tmp2_U8;
-      /*$FB68*/ ram_poke((0x040e + tmp5_U8), tmp2_U8);
-      /*$FB6B*/ tmp5_U8 = (uint8_t)(tmp5_U8 - 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_y = tmp5_U8;
-      /*$FB6C*/ branchTarget = true; block_id = tmp5_U8 ? 1452 : 1453;
+                tmp2_U8 = s_y;
+                tmp1_U8 = ram_peek((0xfb08 + tmp2_U8));
+                s_a = tmp1_U8;
+      /*$FB68*/ ram_poke((0x040e + tmp2_U8), tmp1_U8);
+      /*$FB6B*/ tmp2_U8 = (uint8_t)(tmp2_U8 - 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_y = tmp2_U8;
+      /*$FB6C*/ branchTarget = true; block_id = tmp2_U8 ? 1452 : 1453;
       break;
     case 1453:  // $FB6E
       /*$FB6E*/ s_pc = 0xfb6e; CYCLES(0xfb6e, 2);
@@ -9979,9 +9982,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1455:  // $FB7C
       /*$FB7C*/ s_pc = 0xfb7c; CYCLES(0xfb7c, 9);
-                tmp5_U8 = io_peek(0xc000);
-                s_y = tmp5_U8;
-      /*$FB7F*/ branchTarget = true; block_id = !(tmp5_U8 & 0x80) ? 1461 : 1456;
+                tmp2_U8 = io_peek(0xc000);
+                s_y = tmp2_U8;
+      /*$FB7F*/ branchTarget = true; block_id = !(tmp2_U8 & 0x80) ? 1461 : 1456;
       break;
     case 1456:  // $FB81
       /*$FB81*/ s_pc = 0xfb81; CYCLES(0xfb81, 7);
@@ -9989,15 +9992,15 @@ void func_t001(bool adjust_sp) {
       break;
     case 1457:  // $FB85
       /*$FB85*/ s_pc = 0xfb85; CYCLES(0xfb85, 6);
-                tmp5_U8 = io_peek(0xc010);
-                s_status = (s_status & ~STATUS_V) | (((tmp5_U8 >> 0x06) & 0x01) << 6);
+                tmp2_U8 = io_peek(0xc010);
+                s_status = (s_status & ~STATUS_V) | (((tmp2_U8 >> 0x06) & 0x01) << 6);
                 block_id = 1458;
       break;
     case 1458:  // $FB88
       /*$FB88*/ s_pc = 0xfb88; CYCLES(0xfb88, 9);
-                tmp5_U8 = io_peek(0xc000);
-                s_y = tmp5_U8;
-      /*$FB8B*/ branchTarget = true; block_id = !(tmp5_U8 & 0x80) ? 1458 : 1459;
+                tmp2_U8 = io_peek(0xc000);
+                s_y = tmp2_U8;
+      /*$FB8B*/ branchTarget = true; block_id = !(tmp2_U8 & 0x80) ? 1458 : 1459;
       break;
     case 1459:  // $FB8D
       /*$FB8D*/ s_pc = 0xfb8d; CYCLES(0xfb8d, 7);
@@ -10005,8 +10008,8 @@ void func_t001(bool adjust_sp) {
       break;
     case 1460:  // $FB91
       /*$FB91*/ s_pc = 0xfb91; CYCLES(0xfb91, 6);
-                tmp5_U8 = io_peek(0xc010);
-                s_status = (s_status & ~STATUS_V) | (((tmp5_U8 >> 0x06) & 0x01) << 6);
+                tmp2_U8 = io_peek(0xc010);
+                s_status = (s_status & ~STATUS_V) | (((tmp2_U8 >> 0x06) & 0x01) << 6);
                 block_id = 1461;
       break;
     case 1461:  // $FB94
@@ -10018,15 +10021,15 @@ void func_t001(bool adjust_sp) {
       /*$FB97*/ s_pc = 0xfb97; CYCLES(0xfb97, 7);
                 s_status = (s_status & ~STATUS_C) | 0x01;
       /*$FC2C*/ s_pc = 0xfc2c; CYCLES(0xfc2c, 7);
-                tmp5_U8 = s_a ^ 0xc0;
-                s_a = tmp5_U8;
-      /*$FC2E*/ branchTarget = true; block_id = !tmp5_U8 ? 1505 : 1494;
+                tmp2_U8 = s_a ^ 0xc0;
+                s_a = tmp2_U8;
+      /*$FC2E*/ branchTarget = true; block_id = !tmp2_U8 ? 1505 : 1494;
       break;
     case 1463:  // $FB9B
       /*$FB9B*/ s_pc = 0xfb9b; CYCLES(0xfb9b, 12);
-                tmp5_U8 = s_a;
-                s_y = tmp5_U8;
-      /*$FB9C*/ s_a = ram_peek((0xfa48 + tmp5_U8));
+                tmp2_U8 = s_a;
+                s_y = tmp2_U8;
+      /*$FB9C*/ s_a = ram_peek((0xfa48 + tmp2_U8));
       /*$FB9F*/ branchTarget = true; push16(0xfba1); block_id = 1462;
       break;
     case 1464:  // $FBA2
@@ -10043,11 +10046,11 @@ void func_t001(bool adjust_sp) {
       break;
     case 1467:  // $FBAD
       /*$FBAD*/ s_pc = 0xfbad; CYCLES(0xfbad, 7);
-                tmp5_U8 = s_a;
-                tmp2_U8 = tmp5_U8 != 0xcc;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0xcc);
-      /*$FBAF*/ branchTarget = true; block_id = !tmp2_U8 ? 1462 : 1468;
+                tmp2_U8 = s_a;
+                tmp1_U8 = tmp2_U8 != 0xcc;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0xcc);
+      /*$FBAF*/ branchTarget = true; block_id = !tmp1_U8 ? 1462 : 1468;
       break;
     case 1468:  // $FBB1
       /*$FBB1*/ s_pc = 0xfbb1; CYCLES(0xfbb1, 4);
@@ -10059,44 +10062,44 @@ void func_t001(bool adjust_sp) {
       break;
     case 1470:  // $FBC1
       /*$FBC1*/ s_pc = 0xfbc1; CYCLES(0xfbc1, 23);
-                tmp2_U8 = s_a;
-                push8(tmp2_U8);
-      /*$FBC2*/ tmp5_U8 = tmp2_U8 & 0x01;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$FBC7*/ ram_poke(0x0029, (((tmp2_U8 >> 0x01) & 0x03) | 0x04));
-      /*$FBC9*/ tmp2_U8 = pop8();
-      /*$FBCA*/ s_a = (tmp2_U8 & 0x18);
-      /*$FBCC*/ branchTarget = true; block_id = !tmp5_U8 ? 1472 : 1471;
+                tmp1_U8 = s_a;
+                push8(tmp1_U8);
+      /*$FBC2*/ tmp2_U8 = tmp1_U8 & 0x01;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+      /*$FBC7*/ ram_poke(0x0029, (((tmp1_U8 >> 0x01) & 0x03) | 0x04));
+      /*$FBC9*/ tmp1_U8 = pop8();
+      /*$FBCA*/ s_a = (tmp1_U8 & 0x18);
+      /*$FBCC*/ branchTarget = true; block_id = !tmp2_U8 ? 1472 : 1471;
       break;
     case 1471:  // $FBCE
       /*$FBCE*/ s_pc = 0xfbce; CYCLES(0xfbce, 4);
-                tmp6_U16 = s_a;
-                tmp4_U16 = (tmp6_U16 + 0x007f) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp6_U16, (uint8_t)0x007f) << 6);
-                s_a = ((uint8_t)tmp4_U16);
+                tmp5_U16 = s_a;
+                tmp3_U16 = (tmp5_U16 + 0x007f) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp5_U16, (uint8_t)0x007f) << 6);
+                s_a = ((uint8_t)tmp3_U16);
                 block_id = 1472;
       break;
     case 1472:  // $FBD0
       /*$FBD0*/ s_pc = 0xfbd0; CYCLES(0xfbd0, 16);
-                tmp5_U8 = s_a;
-                ram_poke(0x0028, tmp5_U8);
-      /*$FBD3*/ tmp6_U16 = ((tmp5_U8 << 0x01) & 0x00ff) << 0x01;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp6_U16 >> 8);
-      /*$FBD4*/ tmp5_U8 = ((uint8_t)tmp6_U16) | ram_peek(0x0028);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$FBD6*/ ram_poke(0x0028, tmp5_U8);
+                tmp2_U8 = s_a;
+                ram_poke(0x0028, tmp2_U8);
+      /*$FBD3*/ tmp5_U16 = tmp2_U8 << 0x02;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)((tmp5_U16 & 0x01ff) >> 8);
+      /*$FBD4*/ tmp2_U8 = ((uint8_t)tmp5_U16) | ram_peek(0x0028);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
+      /*$FBD6*/ ram_poke(0x0028, tmp2_U8);
       /*$FBD8*/ branchTarget = true; block_id = find_block_id_func_t001(0xfbd8, pop16() + 1);;
       break;
     case 1473:  // $FBD9
       /*$FBD9*/ s_pc = 0xfbd9; CYCLES(0xfbd9, 7);
-                tmp5_U8 = s_a;
-                tmp2_U8 = tmp5_U8 != 0x87;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0x87);
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp5_U8 - 0x87) & 0x80);
-      /*$FBDB*/ branchTarget = true; block_id = tmp2_U8 ? 1478 : 1474;
+                tmp2_U8 = s_a;
+                tmp1_U8 = tmp2_U8 != 0x87;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x87);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - 0x87) & 0x80);
+      /*$FBDB*/ branchTarget = true; block_id = tmp1_U8 ? 1478 : 1474;
       break;
     case 1474:  // $FBDD
       /*$FBDD*/ s_pc = 0xfbdd; CYCLES(0xfbdd, 9);
@@ -10115,13 +10118,13 @@ void func_t001(bool adjust_sp) {
       break;
     case 1477:  // $FBE9
       /*$FBE9*/ s_pc = 0xfbe9; CYCLES(0xfbe9, 11);
-                tmp2_U8 = io_peek(0xc030);
-                s_a = tmp2_U8;
-      /*$FBEC*/ tmp2_U8 = (uint8_t)(s_y - 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_y = tmp2_U8;
-      /*$FBED*/ branchTarget = true; block_id = tmp2_U8 ? 1476 : 1478;
+                tmp1_U8 = io_peek(0xc030);
+                s_a = tmp1_U8;
+      /*$FBEC*/ tmp1_U8 = (uint8_t)(s_y - 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_y = tmp1_U8;
+      /*$FBED*/ branchTarget = true; block_id = tmp1_U8 ? 1476 : 1478;
       break;
     case 1478:  // $FBEF
       /*$FBEF*/ s_pc = 0xfbef; CYCLES(0xfbef, 2);
@@ -10129,22 +10132,22 @@ void func_t001(bool adjust_sp) {
       break;
     case 1479:  // $FBF0
       /*$FBF0*/ s_pc = 0xfbf0; CYCLES(0xfbf0, 7);
-                tmp2_U8 = ram_peek(0x0024);
-                s_y = tmp2_U8;
-      /*$FBF2*/ poke((ram_peek16al(0x0028) + tmp2_U8), s_a);
+                tmp1_U8 = ram_peek(0x0024);
+                s_y = tmp1_U8;
+      /*$FBF2*/ poke((ram_peek16al(0x0028) + tmp1_U8), s_a);
                 block_id = 1480;
       break;
     case 1480:  // $FBF4
       /*$FBF4*/ s_pc = 0xfbf4; CYCLES(0xfbf4, 14);
                 ram_poke(0x0024, (uint8_t)(ram_peek(0x0024) + 0x01));
-      /*$FBF6*/ tmp2_U8 = ram_peek(0x0024);
-                s_a = tmp2_U8;
-      /*$FBF8*/ tmp5_U8 = ram_peek(0x0021);
-                s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != tmp5_U8) ? 0 : STATUS_Z);
-                tmp1_U8 = tmp2_U8 >= tmp5_U8;
-                s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - tmp5_U8) & 0x80);
-      /*$FBFA*/ branchTarget = true; block_id = tmp1_U8 ? 1506 : 1481;
+      /*$FBF6*/ tmp1_U8 = ram_peek(0x0024);
+                s_a = tmp1_U8;
+      /*$FBF8*/ tmp2_U8 = ram_peek(0x0021);
+                s_status = (s_status & ~STATUS_Z) | ((tmp1_U8 != tmp2_U8) ? 0 : STATUS_Z);
+                tmp6_U8 = tmp1_U8 >= tmp2_U8;
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - tmp2_U8) & 0x80);
+      /*$FBFA*/ branchTarget = true; block_id = tmp6_U8 ? 1506 : 1481;
       break;
     case 1481:  // $FBFC
       /*$FBFC*/ s_pc = 0xfbfc; CYCLES(0xfbfc, 2);
@@ -10152,9 +10155,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1482:  // $FC01
       /*$FC01*/ s_pc = 0xfc01; CYCLES(0xfc01, 6);
-                tmp1_U8 = s_a;
-                s_y = tmp1_U8;
-      /*$FC02*/ branchTarget = true; block_id = !(tmp1_U8 & 0x80) ? 1479 : 1483;
+                tmp6_U8 = s_a;
+                s_y = tmp6_U8;
+      /*$FC02*/ branchTarget = true; block_id = !(tmp6_U8 & 0x80) ? 1479 : 1483;
       break;
     case 1483:  // $FC04
       /*$FC04*/ s_pc = 0xfc04; CYCLES(0xfc04, 7);
@@ -10166,18 +10169,18 @@ void func_t001(bool adjust_sp) {
       break;
     case 1485:  // $FC0C
       /*$FC0C*/ s_pc = 0xfc0c; CYCLES(0xfc0c, 7);
-                tmp1_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x88);
-      /*$FC0E*/ branchTarget = true; block_id = (tmp1_U8 != 0x88) ? 1473 : 1486;
+                tmp6_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp6_U8 >= 0x88);
+      /*$FC0E*/ branchTarget = true; block_id = (tmp6_U8 != 0x88) ? 1473 : 1486;
       break;
     case 1486:  // $FC10
       /*$FC10*/ s_pc = 0xfc10; CYCLES(0xfc10, 7);
-                tmp1_U8 = (uint8_t)(ram_peek(0x0024) - 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
-                tmp5_U8 = tmp1_U8 & 0x80;
-                s_status = (s_status & ~STATUS_N) | tmp5_U8;
-                ram_poke(0x0024, tmp1_U8);
-      /*$FC12*/ branchTarget = true; block_id = !tmp5_U8 ? 1481 : 1487;
+                tmp6_U8 = (uint8_t)(ram_peek(0x0024) - 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp6_U8 ? 0 : STATUS_Z);
+                tmp2_U8 = tmp6_U8 & 0x80;
+                s_status = (s_status & ~STATUS_N) | tmp2_U8;
+                ram_poke(0x0024, tmp6_U8);
+      /*$FC12*/ branchTarget = true; block_id = !tmp2_U8 ? 1481 : 1487;
       break;
     case 1487:  // $FC14
       /*$FC14*/ s_pc = 0xfc14; CYCLES(0xfc14, 11);
@@ -10187,14 +10190,14 @@ void func_t001(bool adjust_sp) {
       break;
     case 1488:  // $FC1A
       /*$FC1A*/ s_pc = 0xfc1a; CYCLES(0xfc1a, 11);
-                tmp5_U8 = ram_peek(0x0022);
-                s_a = tmp5_U8;
-      /*$FC1C*/ tmp1_U8 = ram_peek(0x0025);
-                s_status = (s_status & ~STATUS_Z) | ((tmp5_U8 != tmp1_U8) ? 0 : STATUS_Z);
-                tmp2_U8 = tmp5_U8 >= tmp1_U8;
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp5_U8 - tmp1_U8) & 0x80);
-      /*$FC1E*/ branchTarget = true; block_id = tmp2_U8 ? 1493 : 1489;
+                tmp2_U8 = ram_peek(0x0022);
+                s_a = tmp2_U8;
+      /*$FC1C*/ tmp6_U8 = ram_peek(0x0025);
+                s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != tmp6_U8) ? 0 : STATUS_Z);
+                tmp1_U8 = tmp2_U8 >= tmp6_U8;
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - tmp6_U8) & 0x80);
+      /*$FC1E*/ branchTarget = true; block_id = tmp1_U8 ? 1493 : 1489;
       break;
     case 1489:  // $FC20
       /*$FC20*/ s_pc = 0xfc20; CYCLES(0xfc20, 4);
@@ -10212,16 +10215,16 @@ void func_t001(bool adjust_sp) {
       break;
     case 1492:  // $FC27
       /*$FC27*/ s_pc = 0xfc27; CYCLES(0xfc27, 7);
-                tmp4_U16 = s_a;
-                tmp6_U16 = ram_peek(0x0020);
-                tmp3_U16 = (tmp4_U16 + tmp6_U16) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)tmp6_U16) << 6);
-                tmp5_U8 = (uint8_t)tmp3_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$FC29*/ ram_poke(0x0028, tmp5_U8);
+                tmp3_U16 = s_a;
+                tmp5_U16 = ram_peek(0x0020);
+                tmp4_U16 = (tmp3_U16 + tmp5_U16) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)tmp5_U16) << 6);
+                tmp2_U8 = (uint8_t)tmp4_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
+      /*$FC29*/ ram_poke(0x0028, tmp2_U8);
                 block_id = 1493;
       break;
     case 1493:  // $FC2B
@@ -10230,15 +10233,15 @@ void func_t001(bool adjust_sp) {
       break;
     case 1494:  // $FC30
       /*$FC30*/ s_pc = 0xfc30; CYCLES(0xfc30, 7);
-                tmp6_U16 = s_a;
-                tmp3_U16 = (tmp6_U16 + 0x00fd) + (s_status & STATUS_C);
-                tmp1_U8 = (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)0x00fd) << 6);
-                tmp2_U8 = (uint8_t)tmp3_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_a = tmp2_U8;
-      /*$FC32*/ branchTarget = true; block_id = !tmp1_U8 ? 1480 : 1495;
+                tmp5_U16 = s_a;
+                tmp4_U16 = (tmp5_U16 + 0x00fd) + (s_status & STATUS_C);
+                tmp6_U8 = (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)0x00fd) << 6);
+                tmp1_U8 = (uint8_t)tmp4_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_a = tmp1_U8;
+      /*$FC32*/ branchTarget = true; block_id = !tmp6_U8 ? 1480 : 1495;
       break;
     case 1495:  // $FC34
       /*$FC34*/ s_pc = 0xfc34; CYCLES(0xfc34, 4);
@@ -10246,15 +10249,15 @@ void func_t001(bool adjust_sp) {
       break;
     case 1496:  // $FC36
       /*$FC36*/ s_pc = 0xfc36; CYCLES(0xfc36, 7);
-                tmp3_U16 = s_a;
-                tmp6_U16 = (tmp3_U16 + 0x00fd) + (s_status & STATUS_C);
-                tmp1_U8 = (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)0x00fd) << 6);
-                tmp2_U8 = (uint8_t)tmp6_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_a = tmp2_U8;
-      /*$FC38*/ branchTarget = true; block_id = !tmp1_U8 ? 1507 : 1497;
+                tmp4_U16 = s_a;
+                tmp5_U16 = (tmp4_U16 + 0x00fd) + (s_status & STATUS_C);
+                tmp6_U8 = (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)0x00fd) << 6);
+                tmp1_U8 = (uint8_t)tmp5_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_a = tmp1_U8;
+      /*$FC38*/ branchTarget = true; block_id = !tmp6_U8 ? 1507 : 1497;
       break;
     case 1497:  // $FC3A
       /*$FC3A*/ s_pc = 0xfc3a; CYCLES(0xfc3a, 4);
@@ -10262,16 +10265,16 @@ void func_t001(bool adjust_sp) {
       break;
     case 1498:  // $FC3C
       /*$FC3C*/ s_pc = 0xfc3c; CYCLES(0xfc3c, 7);
-                tmp6_U16 = s_a;
-                tmp3_U16 = (tmp6_U16 + 0x00fd) + (s_status & STATUS_C);
-                tmp1_U8 = (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp1_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)0x00fd) << 6);
-                tmp2_U8 = (uint8_t)tmp3_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_a = tmp2_U8;
-      /*$FC3E*/ branchTarget = true; block_id = !tmp1_U8 ? 1515 : 1499;
+                tmp5_U16 = s_a;
+                tmp4_U16 = (tmp5_U16 + 0x00fd) + (s_status & STATUS_C);
+                tmp6_U8 = (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)0x00fd) << 6);
+                tmp1_U8 = (uint8_t)tmp4_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_a = tmp1_U8;
+      /*$FC3E*/ branchTarget = true; block_id = !tmp6_U8 ? 1515 : 1499;
       break;
     case 1499:  // $FC40
       /*$FC40*/ s_pc = 0xfc40; CYCLES(0xfc40, 4);
@@ -10295,15 +10298,15 @@ void func_t001(bool adjust_sp) {
     case 1503:  // $FC4D
       /*$FC4D*/ s_pc = 0xfc4d; CYCLES(0xfc4d, 16);
                 s_y = 0x00;
-      /*$FC4F*/ tmp1_U8 = pop8();
-      /*$FC50*/ tmp3_U16 = tmp1_U8;
-                tmp6_U16 = tmp3_U16 + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)0x0000) << 6);
-                tmp1_U8 = (uint8_t)tmp6_U16;
-                s_a = tmp1_U8;
-      /*$FC52*/ tmp1_U8 = tmp1_U8 >= ram_peek(0x0023);
-                s_status = (s_status & ~STATUS_C) | tmp1_U8;
-      /*$FC54*/ branchTarget = true; block_id = !tmp1_U8 ? 1501 : 1504;
+      /*$FC4F*/ tmp6_U8 = pop8();
+      /*$FC50*/ tmp4_U16 = tmp6_U8;
+                tmp5_U16 = tmp4_U16 + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)0x0000) << 6);
+                tmp6_U8 = (uint8_t)tmp5_U16;
+                s_a = tmp6_U8;
+      /*$FC52*/ tmp6_U8 = tmp6_U8 >= ram_peek(0x0023);
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+      /*$FC54*/ branchTarget = true; block_id = !tmp6_U8 ? 1501 : 1504;
       break;
     case 1504:  // $FC56
       /*$FC56*/ s_pc = 0xfc56; CYCLES(0xfc56, 4);
@@ -10326,18 +10329,18 @@ void func_t001(bool adjust_sp) {
     case 1507:  // $FC66
       /*$FC66*/ s_pc = 0xfc66; CYCLES(0xfc66, 14);
                 ram_poke(0x0025, (uint8_t)(ram_peek(0x0025) + 0x01));
-      /*$FC68*/ tmp1_U8 = ram_peek(0x0025);
-                s_a = tmp1_U8;
-      /*$FC6A*/ tmp1_U8 = tmp1_U8 >= ram_peek(0x0023);
-                s_status = (s_status & ~STATUS_C) | tmp1_U8;
-      /*$FC6C*/ branchTarget = true; block_id = !tmp1_U8 ? 1491 : 1508;
+      /*$FC68*/ tmp6_U8 = ram_peek(0x0025);
+                s_a = tmp6_U8;
+      /*$FC6A*/ tmp6_U8 = tmp6_U8 >= ram_peek(0x0023);
+                s_status = (s_status & ~STATUS_C) | tmp6_U8;
+      /*$FC6C*/ branchTarget = true; block_id = !tmp6_U8 ? 1491 : 1508;
       break;
     case 1508:  // $FC6E
       /*$FC6E*/ s_pc = 0xfc6e; CYCLES(0xfc6e, 14);
                 ram_poke(0x0025, (uint8_t)(ram_peek(0x0025) - 0x01));
-      /*$FC70*/ tmp1_U8 = ram_peek(0x0022);
-                s_a = tmp1_U8;
-      /*$FC72*/ push8(tmp1_U8);
+      /*$FC70*/ tmp6_U8 = ram_peek(0x0022);
+                s_a = tmp6_U8;
+      /*$FC72*/ push8(tmp6_U8);
       /*$FC73*/ branchTarget = true; push16(0xfc75); block_id = 1491;
       break;
     case 1509:  // $FC76
@@ -10345,15 +10348,15 @@ void func_t001(bool adjust_sp) {
       /*$FC78*/ ram_poke(0x002a, ram_peek(0x0028));
       /*$FC7C*/ ram_poke(0x002b, ram_peek(0x0029));
       /*$FC80*/ s_y = (uint8_t)(ram_peek(0x0021) - 0x01);
-      /*$FC81*/ tmp2_U8 = pop8();
-      /*$FC82*/ tmp3_U16 = tmp2_U8;
-                tmp6_U16 = (tmp3_U16 + 0x0001) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)0x0001) << 6);
-                tmp2_U8 = (uint8_t)tmp6_U16;
-                s_a = tmp2_U8;
-      /*$FC84*/ tmp2_U8 = tmp2_U8 >= ram_peek(0x0023);
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-      /*$FC86*/ branchTarget = true; block_id = tmp2_U8 ? 1513 : 1510;
+      /*$FC81*/ tmp1_U8 = pop8();
+      /*$FC82*/ tmp4_U16 = tmp1_U8;
+                tmp5_U16 = (tmp4_U16 + 0x0001) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)0x0001) << 6);
+                tmp1_U8 = (uint8_t)tmp5_U16;
+                s_a = tmp1_U8;
+      /*$FC84*/ tmp1_U8 = tmp1_U8 >= ram_peek(0x0023);
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+      /*$FC86*/ branchTarget = true; block_id = tmp1_U8 ? 1513 : 1510;
       break;
     case 1510:  // $FC88
       /*$FC88*/ s_pc = 0xfc88; CYCLES(0xfc88, 7);
@@ -10362,14 +10365,14 @@ void func_t001(bool adjust_sp) {
       break;
     case 1511:  // $FC8C
       /*$FC8C*/ s_pc = 0xfc8c; CYCLES(0xfc8c, 12);
-                tmp2_U8 = s_y;
-                tmp1_U8 = peek((ram_peek16al(0x0028) + tmp2_U8));
-      /*$FC8E*/ poke((ram_peek16al(0x002a) + tmp2_U8), tmp1_U8);
-      /*$FC90*/ tmp2_U8 = (uint8_t)(tmp2_U8 - 0x01);
-                tmp1_U8 = tmp2_U8 & 0x80;
-                s_status = (s_status & ~STATUS_N) | tmp1_U8;
-                s_y = tmp2_U8;
-      /*$FC91*/ branchTarget = true; block_id = !tmp1_U8 ? 1511 : 1512;
+                tmp1_U8 = s_y;
+                tmp6_U8 = peek((ram_peek16al(0x0028) + tmp1_U8));
+      /*$FC8E*/ poke((ram_peek16al(0x002a) + tmp1_U8), tmp6_U8);
+      /*$FC90*/ tmp1_U8 = (uint8_t)(tmp1_U8 - 0x01);
+                tmp6_U8 = tmp1_U8 & 0x80;
+                s_status = (s_status & ~STATUS_N) | tmp6_U8;
+                s_y = tmp1_U8;
+      /*$FC91*/ branchTarget = true; block_id = !tmp6_U8 ? 1511 : 1512;
       break;
     case 1512:  // $FC93
       /*$FC93*/ s_pc = 0xfc93; CYCLES(0xfc93, 4);
@@ -10396,16 +10399,16 @@ void func_t001(bool adjust_sp) {
       break;
     case 1517:  // $FCA0
       /*$FCA0*/ s_pc = 0xfca0; CYCLES(0xfca0, 12);
-                tmp1_U8 = s_y;
-                poke((ram_peek16al(0x0028) + tmp1_U8), s_a);
-      /*$FCA2*/ tmp1_U8 = (uint8_t)(tmp1_U8 + 0x01);
-                s_y = tmp1_U8;
-      /*$FCA3*/ tmp2_U8 = ram_peek(0x0021);
-                s_status = (s_status & ~STATUS_Z) | ((tmp1_U8 != tmp2_U8) ? 0 : STATUS_Z);
-                tmp5_U8 = tmp1_U8 >= tmp2_U8;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - tmp2_U8) & 0x80);
-      /*$FCA5*/ branchTarget = true; block_id = !tmp5_U8 ? 1517 : 1518;
+                tmp6_U8 = s_y;
+                poke((ram_peek16al(0x0028) + tmp6_U8), s_a);
+      /*$FCA2*/ tmp6_U8 = (uint8_t)(tmp6_U8 + 0x01);
+                s_y = tmp6_U8;
+      /*$FCA3*/ tmp1_U8 = ram_peek(0x0021);
+                s_status = (s_status & ~STATUS_Z) | ((tmp6_U8 != tmp1_U8) ? 0 : STATUS_Z);
+                tmp2_U8 = tmp6_U8 >= tmp1_U8;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp6_U8 - tmp1_U8) & 0x80);
+      /*$FCA5*/ branchTarget = true; block_id = !tmp2_U8 ? 1517 : 1518;
       break;
     case 1518:  // $FCA7
       /*$FCA7*/ s_pc = 0xfca7; CYCLES(0xfca7, 2);
@@ -10423,24 +10426,24 @@ void func_t001(bool adjust_sp) {
       break;
     case 1521:  // $FCAA
       /*$FCAA*/ s_pc = 0xfcaa; CYCLES(0xfcaa, 7);
-                tmp6_U16 = (s_a - 0x0001) - (uint8_t)(0x01 - (s_status & STATUS_C));
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp6_U16 >> 8) & 0x01));
-                tmp5_U8 = (uint8_t)tmp6_U16;
-                s_a = tmp5_U8;
-      /*$FCAC*/ branchTarget = true; block_id = tmp5_U8 ? 1521 : 1522;
+                tmp5_U16 = (s_a - 0x0001) - (uint8_t)(0x01 - (s_status & STATUS_C));
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp5_U16 >> 8) & 0x01));
+                tmp2_U8 = (uint8_t)tmp5_U16;
+                s_a = tmp2_U8;
+      /*$FCAC*/ branchTarget = true; block_id = tmp2_U8 ? 1521 : 1522;
       break;
     case 1522:  // $FCAE
       /*$FCAE*/ s_pc = 0xfcae; CYCLES(0xfcae, 9);
-                tmp5_U8 = pop8();
-      /*$FCAF*/ tmp6_U16 = tmp5_U8;
-                tmp3_U16 = (tmp6_U16 - 0x0001) - (uint8_t)(0x01 - (s_status & STATUS_C));
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp6_U16, (uint8_t)0xfffe) << 6);
-                tmp5_U8 = (uint8_t)tmp3_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
-      /*$FCB1*/ branchTarget = true; block_id = tmp5_U8 ? 1520 : 1523;
+                tmp2_U8 = pop8();
+      /*$FCAF*/ tmp5_U16 = tmp2_U8;
+                tmp4_U16 = (tmp5_U16 - 0x0001) - (uint8_t)(0x01 - (s_status & STATUS_C));
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp4_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)0xfffe) << 6);
+                tmp2_U8 = (uint8_t)tmp4_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
+      /*$FCB1*/ branchTarget = true; block_id = tmp2_U8 ? 1520 : 1523;
       break;
     case 1523:  // $FCB3
       /*$FCB3*/ s_pc = 0xfcb3; CYCLES(0xfcb3, 2);
@@ -10458,13 +10461,13 @@ void func_t001(bool adjust_sp) {
       break;
     case 1526:  // $FCD0
       /*$FCD0*/ s_pc = 0xfcd0; CYCLES(0xfcd0, 7);
-                tmp3_U16 = s_a;
-                tmp6_U16 = (tmp3_U16 + 0x00fe) + (s_status & STATUS_C);
-                tmp5_U8 = (uint8_t)(tmp6_U16 >> 8);
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp3_U16, (uint8_t)0x00fe) << 6);
-                s_a = ((uint8_t)tmp6_U16);
-      /*$FCD2*/ branchTarget = true; block_id = tmp5_U8 ? 1524 : 1527;
+                tmp4_U16 = s_a;
+                tmp5_U16 = (tmp4_U16 + 0x00fe) + (s_status & STATUS_C);
+                tmp2_U8 = (uint8_t)(tmp5_U16 >> 8);
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)0x00fe) << 6);
+                s_a = ((uint8_t)tmp5_U16);
+      /*$FCD2*/ branchTarget = true; block_id = tmp2_U8 ? 1524 : 1527;
       break;
     case 1527:  // $FCD4
       /*$FCD4*/ s_pc = 0xfcd4; CYCLES(0xfcd4, 9);
@@ -10478,9 +10481,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1529:  // $FCDB
       /*$FCDB*/ s_pc = 0xfcdb; CYCLES(0xfcdb, 6);
-                tmp5_U8 = (uint8_t)(s_y - 0x01);
-                s_y = tmp5_U8;
-      /*$FCDC*/ branchTarget = true; block_id = tmp5_U8 ? 1529 : 1530;
+                tmp2_U8 = (uint8_t)(s_y - 0x01);
+                s_y = tmp2_U8;
+      /*$FCDC*/ branchTarget = true; block_id = tmp2_U8 ? 1529 : 1530;
       break;
     case 1530:  // $FCDE
       /*$FCDE*/ s_pc = 0xfcde; CYCLES(0xfcde, 4);
@@ -10493,18 +10496,18 @@ void func_t001(bool adjust_sp) {
       break;
     case 1532:  // $FCE2
       /*$FCE2*/ s_pc = 0xfce2; CYCLES(0xfce2, 6);
-                tmp5_U8 = (uint8_t)(s_y - 0x01);
-                s_y = tmp5_U8;
-      /*$FCE3*/ branchTarget = true; block_id = tmp5_U8 ? 1532 : 1533;
+                tmp2_U8 = (uint8_t)(s_y - 0x01);
+                s_y = tmp2_U8;
+      /*$FCE3*/ branchTarget = true; block_id = tmp2_U8 ? 1532 : 1533;
       break;
     case 1533:  // $FCE5
       /*$FCE5*/ s_pc = 0xfce5; CYCLES(0xfce5, 12);
-                tmp5_U8 = io_peek(0xc020);
+                tmp2_U8 = io_peek(0xc020);
       /*$FCE8*/ s_y = 0x2c;
-      /*$FCEA*/ tmp5_U8 = (uint8_t)(s_x - 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_x = tmp5_U8;
+      /*$FCEA*/ tmp2_U8 = (uint8_t)(s_x - 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_x = tmp2_U8;
       /*$FCEB*/ branchTarget = true; block_id = find_block_id_func_t001(0xfceb, pop16() + 1);;
       break;
     case 1534:  // $FCEC
@@ -10519,16 +10522,16 @@ void func_t001(bool adjust_sp) {
       break;
     case 1536:  // $FCF2
       /*$FCF2*/ s_pc = 0xfcf2; CYCLES(0xfcf2, 12);
-                tmp5_U8 = pop8();
-      /*$FCF3*/ tmp6_U16 = (tmp5_U8 << 0x01) | (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp6_U16 >> 8);
-                s_a = ((uint8_t)tmp6_U16);
+                tmp2_U8 = pop8();
+      /*$FCF3*/ tmp5_U16 = (tmp2_U8 << 0x01) | (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp5_U16 >> 8);
+                s_a = ((uint8_t)tmp5_U16);
       /*$FCF4*/ s_y = 0x3a;
-      /*$FCF6*/ tmp5_U8 = (uint8_t)(s_x - 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_x = tmp5_U8;
-      /*$FCF7*/ branchTarget = true; block_id = tmp5_U8 ? 1535 : 1537;
+      /*$FCF6*/ tmp2_U8 = (uint8_t)(s_x - 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_x = tmp2_U8;
+      /*$FCF7*/ branchTarget = true; block_id = tmp2_U8 ? 1535 : 1537;
       break;
     case 1537:  // $FCF9
       /*$FCF9*/ s_pc = 0xfcf9; CYCLES(0xfcf9, 2);
@@ -10541,29 +10544,29 @@ void func_t001(bool adjust_sp) {
     case 1539:  // $FCFD
       /*$FCFD*/ s_pc = 0xfcfd; CYCLES(0xfcfd, 14);
                 s_y = (uint8_t)(s_y - 0x01);
-      /*$FCFE*/ tmp5_U8 = io_peek(0xc060);
-      /*$FD01*/ tmp5_U8 = tmp5_U8 ^ ram_peek(0x002f);
-                s_a = tmp5_U8;
-      /*$FD03*/ branchTarget = true; block_id = !(tmp5_U8 & 0x80) ? 1539 : 1540;
+      /*$FCFE*/ tmp2_U8 = io_peek(0xc060);
+      /*$FD01*/ tmp2_U8 = tmp2_U8 ^ ram_peek(0x002f);
+                s_a = tmp2_U8;
+      /*$FD03*/ branchTarget = true; block_id = !(tmp2_U8 & 0x80) ? 1539 : 1540;
       break;
     case 1540:  // $FD05
       /*$FD05*/ s_pc = 0xfd05; CYCLES(0xfd05, 12);
-                tmp5_U8 = s_a ^ ram_peek(0x002f);
-                s_a = tmp5_U8;
-      /*$FD07*/ ram_poke(0x002f, tmp5_U8);
-      /*$FD09*/ tmp5_U8 = s_y;
-                s_status = (s_status & ~STATUS_Z) | ((tmp5_U8 != 0x80) ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0x80);
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp5_U8 - 0x80) & 0x80);
+                tmp2_U8 = s_a ^ ram_peek(0x002f);
+                s_a = tmp2_U8;
+      /*$FD07*/ ram_poke(0x002f, tmp2_U8);
+      /*$FD09*/ tmp2_U8 = s_y;
+                s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != 0x80) ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x80);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - 0x80) & 0x80);
       /*$FD0B*/ branchTarget = true; block_id = find_block_id_func_t001(0xfd0b, pop16() + 1);;
       break;
     case 1541:  // $FD0C
       /*$FD0C*/ s_pc = 0xfd0c; CYCLES(0xfd0c, 26);
                 tmp1_U8 = ram_peek(0x0024);
                 s_y = tmp1_U8;
-      /*$FD0E*/ tmp5_U8 = peek((ram_peek16al(0x0028) + tmp1_U8));
-      /*$FD10*/ push8(tmp5_U8);
-      /*$FD15*/ poke((ram_peek16al(0x0028) + tmp1_U8), ((tmp5_U8 & 0x3f) | 0x40));
+      /*$FD0E*/ tmp6_U8 = peek((ram_peek16al(0x0028) + tmp1_U8));
+      /*$FD10*/ push8(tmp6_U8);
+      /*$FD15*/ poke((ram_peek16al(0x0028) + tmp1_U8), ((tmp6_U8 & 0x3f) | 0x40));
       /*$FD17*/ tmp1_U8 = pop8();
                 s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
@@ -10572,9 +10575,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1542:  // $FD1B
       /*$FD1B*/ s_pc = 0xfd1b; CYCLES(0xfd1b, 7);
-                tmp5_U8 = (uint8_t)(ram_peek(0x004e) + 0x01);
-                ram_poke(0x004e, tmp5_U8);
-      /*$FD1D*/ branchTarget = true; block_id = tmp5_U8 ? 1544 : 1543;
+                tmp2_U8 = (uint8_t)(ram_peek(0x004e) + 0x01);
+                ram_poke(0x004e, tmp2_U8);
+      /*$FD1D*/ branchTarget = true; block_id = tmp2_U8 ? 1544 : 1543;
       break;
     case 1543:  // $FD1F
       /*$FD1F*/ s_pc = 0xfd1f; CYCLES(0xfd1f, 4);
@@ -10583,18 +10586,18 @@ void func_t001(bool adjust_sp) {
       break;
     case 1544:  // $FD21
       /*$FD21*/ s_pc = 0xfd21; CYCLES(0xfd21, 9);
-                tmp5_U8 = io_peek(0xc000);
-      /*$FD24*/ branchTarget = true; block_id = !(tmp5_U8 & 0x80) ? 1542 : 1545;
+                tmp2_U8 = io_peek(0xc000);
+      /*$FD24*/ branchTarget = true; block_id = !(tmp2_U8 & 0x80) ? 1542 : 1545;
       break;
     case 1545:  // $FD26
       /*$FD26*/ s_pc = 0xfd26; CYCLES(0xfd26, 16);
                 poke((ram_peek16al(0x0028) + s_y), s_a);
-      /*$FD28*/ tmp5_U8 = io_peek(0xc000);
-                s_a = tmp5_U8;
-      /*$FD2B*/ tmp2_U8 = io_peek(0xc010);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_status = (s_status & ~STATUS_V) | (((tmp2_U8 >> 0x06) & 0x01) << 6);
-                s_status = (s_status & ~STATUS_Z) | ((tmp5_U8 & tmp2_U8) ? 0 : STATUS_Z);
+      /*$FD28*/ tmp2_U8 = io_peek(0xc000);
+                s_a = tmp2_U8;
+      /*$FD2B*/ tmp1_U8 = io_peek(0xc010);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_status = (s_status & ~STATUS_V) | (((tmp1_U8 >> 0x06) & 0x01) << 6);
+                s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 & tmp1_U8) ? 0 : STATUS_Z);
       /*$FD2E*/ branchTarget = true; block_id = find_block_id_func_t001(0xfd2e, pop16() + 1);;
       break;
     case 1546:  // $FD2F
@@ -10611,12 +10614,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 1549:  // $FD38
       /*$FD38*/ s_pc = 0xfd38; CYCLES(0xfd38, 7);
-                tmp2_U8 = s_a;
-                tmp5_U8 = tmp2_U8 != 0x9b;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x9b);
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - 0x9b) & 0x80);
-      /*$FD3A*/ branchTarget = true; block_id = !tmp5_U8 ? 1546 : 1550;
+                tmp1_U8 = s_a;
+                tmp2_U8 = tmp1_U8 != 0x9b;
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= 0x9b);
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - 0x9b) & 0x80);
+      /*$FD3A*/ branchTarget = true; block_id = !tmp2_U8 ? 1546 : 1550;
       break;
     case 1550:  // $FD3C
       /*$FD3C*/ s_pc = 0xfd3c; CYCLES(0xfd3c, 2);
@@ -10626,32 +10629,32 @@ void func_t001(bool adjust_sp) {
       /*$FD3D*/ s_pc = 0xfd3d; CYCLES(0xfd3d, 23);
       /*$FD3F*/ push8(ram_peek(0x0032));
       /*$FD42*/ ram_poke(0x0032, 0xff);
-      /*$FD44*/ tmp5_U8 = ram_peek((0x0200 + s_x));
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
+      /*$FD44*/ tmp2_U8 = ram_peek((0x0200 + s_x));
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
       /*$FD47*/ branchTarget = true; push16(0xfd49); block_id = 1591;
       break;
     case 1552:  // $FD4A
       /*$FD4A*/ s_pc = 0xfd4a; CYCLES(0xfd4a, 18);
-                tmp5_U8 = pop8();
-      /*$FD4B*/ ram_poke(0x0032, tmp5_U8);
-      /*$FD4D*/ tmp5_U8 = ram_peek((0x0200 + s_x));
-                s_a = tmp5_U8;
-      /*$FD50*/ s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0x88);
-      /*$FD52*/ branchTarget = true; block_id = !(tmp5_U8 != 0x88) ? 1561 : 1553;
+                tmp2_U8 = pop8();
+      /*$FD4B*/ ram_poke(0x0032, tmp2_U8);
+      /*$FD4D*/ tmp2_U8 = ram_peek((0x0200 + s_x));
+                s_a = tmp2_U8;
+      /*$FD50*/ s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x88);
+      /*$FD52*/ branchTarget = true; block_id = !(tmp2_U8 != 0x88) ? 1561 : 1553;
       break;
     case 1553:  // $FD54
       /*$FD54*/ s_pc = 0xfd54; CYCLES(0xfd54, 7);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0x98);
-      /*$FD56*/ branchTarget = true; block_id = !(tmp5_U8 != 0x98) ? 1557 : 1554;
+                tmp2_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x98);
+      /*$FD56*/ branchTarget = true; block_id = !(tmp2_U8 != 0x98) ? 1557 : 1554;
       break;
     case 1554:  // $FD58
       /*$FD58*/ s_pc = 0xfd58; CYCLES(0xfd58, 7);
-                tmp5_U8 = s_x >= 0xf8;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$FD5A*/ branchTarget = true; block_id = !tmp5_U8 ? 1556 : 1555;
+                tmp2_U8 = s_x >= 0xf8;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+      /*$FD5A*/ branchTarget = true; block_id = !tmp2_U8 ? 1556 : 1555;
       break;
     case 1555:  // $FD5C
       /*$FD5C*/ s_pc = 0xfd5c; CYCLES(0xfd5c, 6);
@@ -10659,9 +10662,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1556:  // $FD5F
       /*$FD5F*/ s_pc = 0xfd5f; CYCLES(0xfd5f, 6);
-                tmp5_U8 = (uint8_t)(s_x + 0x01);
-                s_x = tmp5_U8;
-      /*$FD60*/ branchTarget = true; block_id = tmp5_U8 ? 1563 : 1557;
+                tmp2_U8 = (uint8_t)(s_x + 0x01);
+                s_x = tmp2_U8;
+      /*$FD60*/ branchTarget = true; block_id = tmp2_U8 ? 1563 : 1557;
       break;
     case 1557:  // $FD62
       /*$FD62*/ s_pc = 0xfd62; CYCLES(0xfd62, 9);
@@ -10689,9 +10692,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1561:  // $FD71
       /*$FD71*/ s_pc = 0xfd71; CYCLES(0xfd71, 6);
-                tmp5_U8 = s_x;
-                s_a = tmp5_U8;
-      /*$FD72*/ branchTarget = true; block_id = !tmp5_U8 ? 1558 : 1562;
+                tmp2_U8 = s_x;
+                s_a = tmp2_U8;
+      /*$FD72*/ branchTarget = true; block_id = !tmp2_U8 ? 1558 : 1562;
       break;
     case 1562:  // $FD74
       /*$FD74*/ s_pc = 0xfd74; CYCLES(0xfd74, 2);
@@ -10708,8 +10711,8 @@ void func_t001(bool adjust_sp) {
       break;
     case 1565:  // $FD7C
       /*$FD7C*/ s_pc = 0xfd7c; CYCLES(0xfd7c, 4);
-                tmp5_U8 = peek((ram_peek16al(0x0028) + s_y));
-                s_a = tmp5_U8;
+                tmp2_U8 = peek((ram_peek16al(0x0028) + s_y));
+                s_a = tmp2_U8;
                 block_id = 1566;
       break;
     case 1566:  // $FD7E
@@ -10723,10 +10726,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 1568:  // $FD84
       /*$FD84*/ s_pc = 0xfd84; CYCLES(0xfd84, 12);
-                tmp5_U8 = s_a;
-                ram_poke((0x0200 + s_x), tmp5_U8);
-      /*$FD87*/ s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0x8d);
-      /*$FD89*/ branchTarget = true; block_id = (tmp5_U8 != 0x8d) ? 1551 : 1569;
+                tmp2_U8 = s_a;
+                ram_poke((0x0200 + s_x), tmp2_U8);
+      /*$FD87*/ s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0x8d);
+      /*$FD89*/ branchTarget = true; block_id = (tmp2_U8 != 0x8d) ? 1551 : 1569;
       break;
     case 1569:  // $FD8B
       /*$FD8B*/ s_pc = 0xfd8b; CYCLES(0xfd8b, 6);
@@ -10784,10 +10787,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 1579:  // $FDBB
       /*$FDBB*/ s_pc = 0xfdbb; CYCLES(0xfdbb, 9);
-                tmp5_U8 = peek((ram_peek16al(0x003c) + s_y));
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
+                tmp2_U8 = peek((ram_peek16al(0x003c) + s_y));
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
       /*$FDBD*/ branchTarget = true; push16(0xfdbf); block_id = 1587;
       break;
     case 1580:  // $FDC0
@@ -10802,18 +10805,18 @@ void func_t001(bool adjust_sp) {
       break;
     case 1582:  // $FDC6
       /*$FDC6*/ s_pc = 0xfdc6; CYCLES(0xfdc6, 6);
-                tmp5_U8 = s_a;
-                tmp2_U8 = tmp5_U8 & 0x01;
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-                s_a = (tmp5_U8 >> 0x01);
-      /*$FDC7*/ branchTarget = true; block_id = !tmp2_U8 ? 1577 : 1583;
+                tmp2_U8 = s_a;
+                tmp1_U8 = tmp2_U8 & 0x01;
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+                s_a = (tmp2_U8 >> 0x01);
+      /*$FDC7*/ branchTarget = true; block_id = !tmp1_U8 ? 1577 : 1583;
       break;
     case 1583:  // $FDC9
       /*$FDC9*/ s_pc = 0xfdc9; CYCLES(0xfdc9, 11);
-      /*$FDCA*/ tmp2_U8 = (s_a >> 0x01) & 0x01;
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+      /*$FDCA*/ tmp1_U8 = (s_a >> 0x01) & 0x01;
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
       /*$FDCB*/ s_a = ram_peek(0x003e);
-      /*$FDCD*/ branchTarget = true; block_id = !tmp2_U8 ? 1585 : 1584;
+      /*$FDCD*/ branchTarget = true; block_id = !tmp1_U8 ? 1585 : 1584;
       break;
     case 1584:  // $FDCF
       /*$FDCF*/ s_pc = 0xfdcf; CYCLES(0xfdcf, 4);
@@ -10822,12 +10825,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 1585:  // $FDD1
       /*$FDD1*/ s_pc = 0xfdd1; CYCLES(0xfdd1, 14);
-                tmp6_U16 = s_a;
-                tmp3_U16 = ram_peek(0x003c);
-                tmp4_U16 = (tmp6_U16 + tmp3_U16) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp6_U16, (uint8_t)tmp3_U16) << 6);
-      /*$FDD3*/ push8(((uint8_t)tmp4_U16));
+                tmp5_U16 = s_a;
+                tmp4_U16 = ram_peek(0x003c);
+                tmp3_U16 = (tmp5_U16 + tmp4_U16) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp5_U16, (uint8_t)tmp4_U16) << 6);
+      /*$FDD3*/ push8(((uint8_t)tmp3_U16));
       /*$FDD4*/ s_status = (s_status & ~STATUS_Z) | (0xbd ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_N) | 0x80;
                 s_a = 0xbd;
@@ -10835,43 +10838,43 @@ void func_t001(bool adjust_sp) {
       break;
     case 1586:  // $FDD9
       /*$FDD9*/ s_pc = 0xfdd9; CYCLES(0xfdd9, 2);
-                tmp2_U8 = pop8();
-                s_a = tmp2_U8;
+                tmp1_U8 = pop8();
+                s_a = tmp1_U8;
                 block_id = 1587;
       break;
     case 1587:  // $FDDA
       /*$FDDA*/ s_pc = 0xfdda; CYCLES(0xfdda, 14);
-                tmp5_U8 = s_a;
-                push8(tmp5_U8);
-      /*$FDDE*/ s_a = ((((tmp5_U8 >> 0x01) >> 0x01) >> 0x01) >> 0x01);
+                tmp2_U8 = s_a;
+                push8(tmp2_U8);
+      /*$FDDE*/ s_a = (tmp2_U8 >> 0x04);
       /*$FDDF*/ branchTarget = true; push16(0xfde1); block_id = 1589;
       break;
     case 1588:  // $FDE2
       /*$FDE2*/ s_pc = 0xfde2; CYCLES(0xfde2, 6);
-                tmp2_U8 = pop8();
-      /*$FDE3*/ s_a = (tmp2_U8 & 0x0f);
+                tmp1_U8 = pop8();
+      /*$FDE3*/ s_a = (tmp1_U8 & 0x0f);
                 block_id = 1589;
       break;
     case 1589:  // $FDE5
       /*$FDE5*/ s_pc = 0xfde5; CYCLES(0xfde5, 11);
-                tmp2_U8 = s_a | 0xb0;
-                s_a = tmp2_U8;
-      /*$FDE7*/ s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != 0xba) ? 0 : STATUS_Z);
-                tmp5_U8 = tmp2_U8 >= 0xba;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - 0xba) & 0x80);
-      /*$FDE9*/ branchTarget = true; block_id = !tmp5_U8 ? 1591 : 1590;
+                tmp1_U8 = s_a | 0xb0;
+                s_a = tmp1_U8;
+      /*$FDE7*/ s_status = (s_status & ~STATUS_Z) | ((tmp1_U8 != 0xba) ? 0 : STATUS_Z);
+                tmp2_U8 = tmp1_U8 >= 0xba;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - 0xba) & 0x80);
+      /*$FDE9*/ branchTarget = true; block_id = !tmp2_U8 ? 1591 : 1590;
       break;
     case 1590:  // $FDEB
       /*$FDEB*/ s_pc = 0xfdeb; CYCLES(0xfdeb, 4);
-                tmp4_U16 = s_a;
-                tmp3_U16 = (tmp4_U16 + 0x0006) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp3_U16 >> 8);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0x0006) << 6);
-                tmp5_U8 = (uint8_t)tmp3_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_a = tmp5_U8;
+                tmp3_U16 = s_a;
+                tmp4_U16 = (tmp3_U16 + 0x0006) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0x0006) << 6);
+                tmp2_U8 = (uint8_t)tmp4_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_a = tmp2_U8;
                 block_id = 1591;
       break;
     case 1591:  // $FDED
@@ -10880,9 +10883,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1592:  // $FDF0
       /*$FDF0*/ s_pc = 0xfdf0; CYCLES(0xfdf0, 7);
-                tmp5_U8 = s_a >= 0xa0;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-      /*$FDF2*/ branchTarget = true; block_id = !tmp5_U8 ? 1594 : 1593;
+                tmp2_U8 = s_a >= 0xa0;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+      /*$FDF2*/ branchTarget = true; block_id = !tmp2_U8 ? 1594 : 1593;
       break;
     case 1593:  // $FDF4
       /*$FDF4*/ s_pc = 0xfdf4; CYCLES(0xfdf4, 4);
@@ -10897,52 +10900,52 @@ void func_t001(bool adjust_sp) {
       break;
     case 1595:  // $FDFC
       /*$FDFC*/ s_pc = 0xfdfc; CYCLES(0xfdfc, 7);
-                tmp2_U8 = pop8();
-                s_a = tmp2_U8;
-      /*$FDFD*/ tmp2_U8 = ram_peek(0x0035);
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_y = tmp2_U8;
+                tmp1_U8 = pop8();
+                s_a = tmp1_U8;
+      /*$FDFD*/ tmp1_U8 = ram_peek(0x0035);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_y = tmp1_U8;
       /*$FDFF*/ branchTarget = true; block_id = find_block_id_func_t001(0xfdff, pop16() + 1);;
       break;
     case 1596:  // $FE00
       /*$FE00*/ s_pc = 0xfe00; CYCLES(0xfe00, 7);
-                tmp5_U8 = (uint8_t)(ram_peek(0x0034) - 0x01);
-                ram_poke(0x0034, tmp5_U8);
-      /*$FE02*/ branchTarget = true; block_id = !tmp5_U8 ? 1575 : 1597;
+                tmp2_U8 = (uint8_t)(ram_peek(0x0034) - 0x01);
+                ram_poke(0x0034, tmp2_U8);
+      /*$FE02*/ branchTarget = true; block_id = !tmp2_U8 ? 1575 : 1597;
       break;
     case 1597:  // $FE04
       /*$FE04*/ s_pc = 0xfe04; CYCLES(0xfe04, 6);
-                tmp5_U8 = (uint8_t)(s_x - 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                s_x = tmp5_U8;
-      /*$FE05*/ branchTarget = true; block_id = tmp5_U8 ? 1602 : 1598;
+                tmp2_U8 = (uint8_t)(s_x - 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                s_x = tmp2_U8;
+      /*$FE05*/ branchTarget = true; block_id = tmp2_U8 ? 1602 : 1598;
       break;
     case 1598:  // $FE07
       /*$FE07*/ s_pc = 0xfe07; CYCLES(0xfe07, 7);
-                tmp5_U8 = s_a;
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= 0xba);
-      /*$FE09*/ branchTarget = true; block_id = (tmp5_U8 != 0xba) ? 1582 : 1599;
+                tmp2_U8 = s_a;
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= 0xba);
+      /*$FE09*/ branchTarget = true; block_id = (tmp2_U8 != 0xba) ? 1582 : 1599;
       break;
     case 1599:  // $FE0B
       /*$FE0B*/ s_pc = 0xfe0b; CYCLES(0xfe0b, 18);
                 ram_poke(0x0031, s_a);
-      /*$FE0D*/ tmp5_U8 = ram_peek(0x003e);
-                s_a = tmp5_U8;
-      /*$FE0F*/ poke((ram_peek16al(0x0040) + s_y), tmp5_U8);
-      /*$FE11*/ tmp5_U8 = (uint8_t)(ram_peek(0x0040) + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                ram_poke(0x0040, tmp5_U8);
-      /*$FE13*/ branchTarget = true; block_id = tmp5_U8 ? 1601 : 1600;
+      /*$FE0D*/ tmp2_U8 = ram_peek(0x003e);
+                s_a = tmp2_U8;
+      /*$FE0F*/ poke((ram_peek16al(0x0040) + s_y), tmp2_U8);
+      /*$FE11*/ tmp2_U8 = (uint8_t)(ram_peek(0x0040) + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                ram_poke(0x0040, tmp2_U8);
+      /*$FE13*/ branchTarget = true; block_id = tmp2_U8 ? 1601 : 1600;
       break;
     case 1600:  // $FE15
       /*$FE15*/ s_pc = 0xfe15; CYCLES(0xfe15, 4);
-                tmp5_U8 = (uint8_t)(ram_peek(0x0041) + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp5_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp5_U8 & 0x80);
-                ram_poke(0x0041, tmp5_U8);
+                tmp2_U8 = (uint8_t)(ram_peek(0x0041) + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
+                ram_poke(0x0041, tmp2_U8);
                 block_id = 1601;
       break;
     case 1601:  // $FE17
@@ -10974,16 +10977,16 @@ void func_t001(bool adjust_sp) {
       /*$FE6A*/ s_pc = 0xfe6a; CYCLES(0xfe6a, 18);
                 ram_poke(0x003a, s_a);
       /*$FE6C*/ ram_poke(0x003b, s_y);
-      /*$FE6E*/ tmp2_U8 = pop8();
-      /*$FE70*/ tmp4_U16 = tmp2_U8;
-                tmp6_U16 = tmp4_U16 - 0x0001;
-                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp6_U16 >> 8) & 0x01));
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp6_U16, (uint8_t)tmp4_U16, (uint8_t)0xfffe) << 6);
-                tmp2_U8 = (uint8_t)tmp6_U16;
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
-                s_a = tmp2_U8;
-      /*$FE72*/ branchTarget = true; block_id = tmp2_U8 ? 1604 : 1607;
+      /*$FE6E*/ tmp1_U8 = pop8();
+      /*$FE70*/ tmp3_U16 = tmp1_U8;
+                tmp5_U16 = tmp3_U16 - 0x0001;
+                s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp5_U16 >> 8) & 0x01));
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp3_U16, (uint8_t)0xfffe) << 6);
+                tmp1_U8 = (uint8_t)tmp5_U16;
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
+                s_a = tmp1_U8;
+      /*$FE72*/ branchTarget = true; block_id = tmp1_U8 ? 1604 : 1607;
       break;
     case 1607:  // $FE74
       /*$FE74*/ s_pc = 0xfe74; CYCLES(0xfe74, 2);
@@ -11005,9 +11008,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1610:  // $FE9B
       /*$FE9B*/ s_pc = 0xfe9b; CYCLES(0xfe9b, 11);
-      /*$FE9D*/ tmp5_U8 = ram_peek(0x003e) & 0x0f;
-                s_a = tmp5_U8;
-      /*$FE9F*/ branchTarget = true; block_id = !tmp5_U8 ? 1612 : 1611;
+      /*$FE9D*/ tmp2_U8 = ram_peek(0x003e) & 0x0f;
+                s_a = tmp2_U8;
+      /*$FE9F*/ branchTarget = true; block_id = !tmp2_U8 ? 1612 : 1611;
       break;
     case 1611:  // $FEA1
       /*$FEA1*/ s_pc = 0xfea1; CYCLES(0xfea1, 11);
@@ -11026,9 +11029,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1613:  // $FEA9
       /*$FEA9*/ s_pc = 0xfea9; CYCLES(0xfea9, 9);
-                tmp5_U8 = s_x;
-                ram_poke(tmp5_U8, s_y);
-      /*$FEAB*/ ram_poke((uint8_t)(0x01 + tmp5_U8), s_a);
+                tmp2_U8 = s_x;
+                ram_poke(tmp2_U8, s_y);
+      /*$FEAB*/ ram_poke((uint8_t)(0x01 + tmp2_U8), s_a);
       /*$FEAD*/ branchTarget = true; block_id = find_block_id_func_t001(0xfead, pop16() + 1);;
       break;
     case 1614:  // $FEB6
@@ -11045,9 +11048,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1616:  // $FEF9
       /*$FEF9*/ s_pc = 0xfef9; CYCLES(0xfef9, 7);
-                tmp5_U8 = pop8();
-      /*$FEFA*/ tmp5_U8 = pop8();
-      /*$FEFB*/ branchTarget = true; block_id = tmp5_U8 ? 1633 : 1617;
+                tmp2_U8 = pop8();
+      /*$FEFA*/ tmp2_U8 = pop8();
+      /*$FEFB*/ branchTarget = true; block_id = tmp2_U8 ? 1633 : 1617;
       break;
     case 1617:  // $FEFD
       /*$FEFD*/ s_pc = 0xfefd; CYCLES(0xfefd, 6);
@@ -11087,12 +11090,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 1625:  // $FF19
       /*$FF19*/ s_pc = 0xff19; CYCLES(0xff19, 16);
-                tmp5_U8 = s_x;
-                tmp2_U8 = s_a;
-                poke((ram_peek((uint8_t)(0x3c + tmp5_U8)) + (ram_peek((uint8_t)(0x3d + tmp5_U8)) << 8)), tmp2_U8);
-      /*$FF1B*/ tmp2_U8 = tmp2_U8 ^ ram_peek(0x002e);
-                s_a = tmp2_U8;
-      /*$FF1D*/ ram_poke(0x002e, tmp2_U8);
+                tmp2_U8 = s_x;
+                tmp1_U8 = s_a;
+                poke((ram_peek((uint8_t)(0x3c + tmp2_U8)) + (ram_peek((uint8_t)(0x3d + tmp2_U8)) << 8)), tmp1_U8);
+      /*$FF1B*/ tmp1_U8 = tmp1_U8 ^ ram_peek(0x002e);
+                s_a = tmp1_U8;
+      /*$FF1D*/ ram_poke(0x002e, tmp1_U8);
                 func_fcba(true);
       /*$FF22*/ s_pc = 0xff22; CYCLES(0xff22, 7);
                 s_y = 0x35;
@@ -11104,10 +11107,10 @@ void func_t001(bool adjust_sp) {
       break;
     case 1627:  // $FF29
       /*$FF29*/ s_pc = 0xff29; CYCLES(0xff29, 7);
-                tmp2_U8 = s_a;
-                tmp5_U8 = ram_peek(0x002e);
-                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp5_U8);
-      /*$FF2B*/ branchTarget = true; block_id = !(tmp2_U8 != tmp5_U8) ? 1631 : 1628;
+                tmp1_U8 = s_a;
+                tmp2_U8 = ram_peek(0x002e);
+                s_status = (s_status & ~STATUS_C) | (tmp1_U8 >= tmp2_U8);
+      /*$FF2B*/ branchTarget = true; block_id = !(tmp1_U8 != tmp2_U8) ? 1631 : 1628;
       break;
     case 1628:  // $FF2D
       /*$FF2D*/ s_pc = 0xff2d; CYCLES(0xff2d, 9);
@@ -11161,16 +11164,16 @@ void func_t001(bool adjust_sp) {
       break;
     case 1637:  // $FF7A
       /*$FF7A*/ s_pc = 0xff7a; CYCLES(0xff7a, 6);
-                tmp5_U8 = (uint8_t)(s_y - 0x01);
-                s_y = tmp5_U8;
-      /*$FF7B*/ branchTarget = true; block_id = (tmp5_U8 & 0x80) ? 1632 : 1638;
+                tmp2_U8 = (uint8_t)(s_y - 0x01);
+                s_y = tmp2_U8;
+      /*$FF7B*/ branchTarget = true; block_id = (tmp2_U8 & 0x80) ? 1632 : 1638;
       break;
     case 1638:  // $FF7D
       /*$FF7D*/ s_pc = 0xff7d; CYCLES(0xff7d, 9);
-                tmp5_U8 = s_a;
-                tmp2_U8 = ram_peek((0xffcc + s_y));
-                s_status = (s_status & ~STATUS_C) | (tmp5_U8 >= tmp2_U8);
-      /*$FF80*/ branchTarget = true; block_id = (tmp5_U8 != tmp2_U8) ? 1637 : 1639;
+                tmp2_U8 = s_a;
+                tmp1_U8 = ram_peek((0xffcc + s_y));
+                s_status = (s_status & ~STATUS_C) | (tmp2_U8 >= tmp1_U8);
+      /*$FF80*/ branchTarget = true; block_id = (tmp2_U8 != tmp1_U8) ? 1637 : 1639;
       break;
     case 1639:  // $FF82
       /*$FF82*/ s_pc = 0xff82; CYCLES(0xff82, 6);
@@ -11184,19 +11187,19 @@ void func_t001(bool adjust_sp) {
     case 1641:  // $FF8A
       /*$FF8A*/ s_pc = 0xff8a; CYCLES(0xff8a, 11);
                 s_x = 0x03;
-      /*$FF8F*/ s_a = (uint8_t)(((((((s_a << 0x01) & 0x00ff) << 0x01) & 0x00ff) << 0x01) & 0x00ff) << 0x01);
+      /*$FF8F*/ s_a = (uint8_t)(s_a << 0x04);
                 block_id = 1642;
       break;
     case 1642:  // $FF90
       /*$FF90*/ s_pc = 0xff90; CYCLES(0xff90, 14);
-                tmp3_U16 = s_a << 0x01;
-                s_a = ((uint8_t)tmp3_U16);
-      /*$FF91*/ tmp3_U16 = (ram_peek(0x003e) << 0x01) | (uint8_t)(tmp3_U16 >> 8);
-                ram_poke(0x003e, ((uint8_t)tmp3_U16));
-      /*$FF93*/ ram_poke(0x003f, (uint8_t)((ram_peek(0x003f) << 0x01) | (uint8_t)(tmp3_U16 >> 8)));
-      /*$FF95*/ tmp2_U8 = (uint8_t)(s_x - 0x01);
-                s_x = tmp2_U8;
-      /*$FF96*/ branchTarget = true; block_id = !(tmp2_U8 & 0x80) ? 1642 : 1643;
+                tmp4_U16 = s_a << 0x01;
+                s_a = ((uint8_t)tmp4_U16);
+      /*$FF91*/ tmp4_U16 = (ram_peek(0x003e) << 0x01) | (uint8_t)(tmp4_U16 >> 8);
+                ram_poke(0x003e, ((uint8_t)tmp4_U16));
+      /*$FF93*/ ram_poke(0x003f, (uint8_t)((ram_peek(0x003f) << 0x01) | (uint8_t)(tmp4_U16 >> 8)));
+      /*$FF95*/ tmp1_U8 = (uint8_t)(s_x - 0x01);
+                s_x = tmp1_U8;
+      /*$FF96*/ branchTarget = true; block_id = !(tmp1_U8 & 0x80) ? 1642 : 1643;
       break;
     case 1643:  // $FF98
       /*$FF98*/ s_pc = 0xff98; CYCLES(0xff98, 7);
@@ -11204,18 +11207,18 @@ void func_t001(bool adjust_sp) {
       break;
     case 1644:  // $FF9C
       /*$FF9C*/ s_pc = 0xff9c; CYCLES(0xff9c, 11);
-                tmp2_U8 = s_x;
-                tmp5_U8 = ram_peek((uint8_t)(0x3f + tmp2_U8));
-      /*$FF9E*/ ram_poke((uint8_t)(0x3d + tmp2_U8), tmp5_U8);
-      /*$FFA0*/ ram_poke((uint8_t)(0x41 + tmp2_U8), tmp5_U8);
+                tmp1_U8 = s_x;
+                tmp2_U8 = ram_peek((uint8_t)(0x3f + tmp1_U8));
+      /*$FF9E*/ ram_poke((uint8_t)(0x3d + tmp1_U8), tmp2_U8);
+      /*$FFA0*/ ram_poke((uint8_t)(0x41 + tmp1_U8), tmp2_U8);
                 block_id = 1645;
       break;
     case 1645:  // $FFA2
       /*$FFA2*/ s_pc = 0xffa2; CYCLES(0xffa2, 6);
-                tmp2_U8 = (uint8_t)(s_x + 0x01);
-                s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
-                s_x = tmp2_U8;
-      /*$FFA3*/ branchTarget = true; block_id = !tmp2_U8 ? 1643 : 1646;
+                tmp1_U8 = (uint8_t)(s_x + 0x01);
+                s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
+                s_x = tmp1_U8;
+      /*$FFA3*/ branchTarget = true; block_id = !tmp1_U8 ? 1643 : 1646;
       break;
     case 1646:  // $FFA5
       /*$FFA5*/ s_pc = 0xffa5; CYCLES(0xffa5, 4);
@@ -11230,26 +11233,26 @@ void func_t001(bool adjust_sp) {
       break;
     case 1648:  // $FFAD
       /*$FFAD*/ s_pc = 0xffad; CYCLES(0xffad, 18);
-                tmp2_U8 = s_y;
-      /*$FFB0*/ s_y = (uint8_t)(tmp2_U8 + 0x01);
-      /*$FFB1*/ tmp2_U8 = ram_peek((0x0200 + tmp2_U8)) ^ 0xb0;
-                s_a = tmp2_U8;
-      /*$FFB3*/ tmp2_U8 = tmp2_U8 >= 0x0a;
-                s_status = (s_status & ~STATUS_C) | tmp2_U8;
-      /*$FFB5*/ branchTarget = true; block_id = !tmp2_U8 ? 1641 : 1649;
+                tmp1_U8 = s_y;
+      /*$FFB0*/ s_y = (uint8_t)(tmp1_U8 + 0x01);
+      /*$FFB1*/ tmp1_U8 = ram_peek((0x0200 + tmp1_U8)) ^ 0xb0;
+                s_a = tmp1_U8;
+      /*$FFB3*/ tmp1_U8 = tmp1_U8 >= 0x0a;
+                s_status = (s_status & ~STATUS_C) | tmp1_U8;
+      /*$FFB5*/ branchTarget = true; block_id = !tmp1_U8 ? 1641 : 1649;
       break;
     case 1649:  // $FFB7
       /*$FFB7*/ s_pc = 0xffb7; CYCLES(0xffb7, 11);
-                tmp3_U16 = s_a;
-                tmp4_U16 = (tmp3_U16 + 0x0088) + (s_status & STATUS_C);
-                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0x0088) << 6);
-                tmp2_U8 = (uint8_t)tmp4_U16;
-                s_a = tmp2_U8;
-      /*$FFB9*/ s_status = (s_status & ~STATUS_Z) | ((tmp2_U8 != 0xfa) ? 0 : STATUS_Z);
-                tmp5_U8 = tmp2_U8 >= 0xfa;
-                s_status = (s_status & ~STATUS_C) | tmp5_U8;
-                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp2_U8 - 0xfa) & 0x80);
-      /*$FFBB*/ branchTarget = true; block_id = tmp5_U8 ? 1641 : 1650;
+                tmp4_U16 = s_a;
+                tmp3_U16 = (tmp4_U16 + 0x0088) + (s_status & STATUS_C);
+                s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0x0088) << 6);
+                tmp1_U8 = (uint8_t)tmp3_U16;
+                s_a = tmp1_U8;
+      /*$FFB9*/ s_status = (s_status & ~STATUS_Z) | ((tmp1_U8 != 0xfa) ? 0 : STATUS_Z);
+                tmp2_U8 = tmp1_U8 >= 0xfa;
+                s_status = (s_status & ~STATUS_C) | tmp2_U8;
+                s_status = (s_status & ~STATUS_N) | ((uint8_t)(tmp1_U8 - 0xfa) & 0x80);
+      /*$FFBB*/ branchTarget = true; block_id = tmp2_U8 ? 1641 : 1650;
       break;
     case 1650:  // $FFBD
       /*$FFBD*/ s_pc = 0xffbd; CYCLES(0xffbd, 2);
@@ -11505,15 +11508,15 @@ bb_1:
               goto bb_3;
 bb_2:
   /*$E63D*/ s_pc = 0xe63d; CYCLES(0xe63d, 14);
-            tmp3_U8 = s_a;
-            ram_poke(0x0052, tmp3_U8);
-  /*$E63F*/ tmp4_U16 = tmp3_U8;
+            tmp1_U8 = s_a;
+            ram_poke(0x0052, tmp1_U8);
+  /*$E63F*/ tmp4_U16 = tmp1_U8;
             tmp5_U16 = (tmp4_U16 - 0x0003) - (uint8_t)(0x01 - (s_status & STATUS_C));
             s_status = (s_status & ~STATUS_C) | (uint8_t)(0x01 - ((uint8_t)(tmp5_U16 >> 8) & 0x01));
             s_status = (s_status & ~STATUS_V) | (ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)0xfffc) << 6);
-            tmp3_U8 = (uint8_t)tmp5_U16;
-            s_a = tmp3_U8;
-  /*$E641*/ ram_poke(0x0053, tmp3_U8);
+            tmp1_U8 = (uint8_t)tmp5_U16;
+            s_a = tmp1_U8;
+  /*$E641*/ ram_poke(0x0053, tmp1_U8);
   /*$E643*/ s_status = (s_status & ~STATUS_Z) | (0x00 ? 0 : STATUS_Z);
             s_status = (s_status & ~STATUS_N) | 0x00;
             s_y = 0x00;
@@ -11587,8 +11590,8 @@ bb_2:
   /*$F856*/ s_pc = 0xf856; CYCLES(0xf856, 16);
             tmp2_U8 = s_a;
             ram_poke(0x0026, tmp2_U8);
-  /*$F859*/ tmp4_U16 = ((tmp2_U8 << 0x01) & 0x00ff) << 0x01;
-            s_status = (s_status & ~STATUS_C) | (uint8_t)(tmp4_U16 >> 8);
+  /*$F859*/ tmp4_U16 = tmp2_U8 << 0x02;
+            s_status = (s_status & ~STATUS_C) | (uint8_t)((tmp4_U16 & 0x01ff) >> 8);
   /*$F85A*/ tmp2_U8 = ((uint8_t)tmp4_U16) | ram_peek(0x0026);
             s_status = (s_status & ~STATUS_Z) | (tmp2_U8 ? 0 : STATUS_Z);
             s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
@@ -11622,10 +11625,10 @@ bb_1:
               goto bb_4;
 bb_2:
   /*$FB2A*/ s_pc = 0xfb2a; CYCLES(0xfb2a, 6);
-            tmp1_U8 = (uint8_t)(s_y + 0x01);
-            s_y = tmp1_U8;
+            tmp2_U8 = (uint8_t)(s_y + 0x01);
+            s_y = tmp2_U8;
             branchTarget = true;
-            if (tmp1_U8)
+            if (tmp2_U8)
               goto bb_1;
 bb_3:
   /*$FB2D*/ s_pc = 0xfb2d; CYCLES(0xfb2d, 2);

@@ -18,4 +18,8 @@ $a6502 subs.s subs.b33 && $apple2tc --run-data=dclear.json -O3 --ir subs.b33 > s
 diff -q subs.ir subs-test.ir
 rm subs-test.ir subs.b33
 
+$a6502 ands.s ands.b33 && $apple2tc -O3 --ir ands.b33 > ands-test.ir
+diff -q ands.ir ands-test.ir
+rm ands-test.ir ands.b33
+
 echo "Success!"

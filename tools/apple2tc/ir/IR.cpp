@@ -72,6 +72,21 @@ void Value::replaceAllUsesWith(Value *v) {
     userList_.back().setValue(v);
 }
 
+void Instruction::dump() {
+  FILE *os = stdout;
+
+  fprintf(os, "%s", getValueKindName(getKind()));
+  if (unsigned numOperands = getNumOperands()) {
+    fprintf(os, " ");
+    for (unsigned i = 0; i < numOperands; ++i) {
+      if (i)
+        fprintf(os, ", ");
+      fprintf(os, "%s", getValueKindName(getOperand(i)->getKind()));
+    }
+  }
+  fprintf(os, "\n");
+}
+
 void Instruction::clearOperands() {
   getOperands().clear();
 }

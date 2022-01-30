@@ -89,6 +89,35 @@ template <>
 Instruction *create<LiteralU16, ValueKind::Sub8>(IRBuilder &builder, Value *op1, Value *op2) {
   return builder.createSub16(op1, op2);
 }
+template <>
+Instruction *create<LiteralU8, ValueKind::And8>(IRBuilder &builder, Value *op1, Value *op2) {
+  return builder.createAnd8(op1, op2);
+}
+template <>
+Instruction *create<LiteralU16, ValueKind::And8>(IRBuilder &builder, Value *op1, Value *op2) {
+  return builder.createAnd16(op1, op2);
+}
+template <>
+Instruction *create<LiteralU8, ValueKind::Shl8>(IRBuilder &builder, Value *op1, Value *op2) {
+  return builder.createShl8(op1, op2);
+}
+template <>
+Instruction *create<LiteralU16, ValueKind::Shl8>(IRBuilder &builder, Value *op1, Value *op2) {
+  return builder.createShl16(op1, op2);
+}
+template <>
+Instruction *create<LiteralU8, ValueKind::Shr8>(IRBuilder &builder, Value *op1, Value *op2) {
+  return builder.createShr8(op1, op2);
+}
+template <>
+Instruction *create<LiteralU16, ValueKind::Shr8>(IRBuilder &builder, Value *op1, Value *op2) {
+  return builder.createShr16(op1, op2);
+}
+template <>
+Instruction *create<LiteralU16, ValueKind::Trunc16t8>(IRBuilder &builder, Value *op1, Value *op2) {
+  assert(isLiteral<LiteralU16>(op2, 0xFF));
+  return builder.createTrunc16t8(op1);
+}
 
 template <class LiteralT>
 inline Value *simplifyAdd(IRBuilder &builder, Instruction *inst) {
@@ -202,6 +231,232 @@ inline Value *simplifySub(IRBuilder &builder, Instruction *inst) {
   return nullptr;
 }
 
+template <class LiteralT>
+inline Value *simplifyAnd(IRBuilder &builder, Instruction *inst) {
+  constexpr typename LiteralT::ValueType kAllOnes = ~static_cast<typename LiteralT::ValueType>(0);
+
+  auto litFirst = literalFirst<LiteralT>(inst);
+  if (!litFirst)
+    return nullptr;
+
+  LiteralT *lit1 = litFirst->first;
+  Value *val = litFirst->second;
+
+  // (And const1 const2)
+  if (auto *lit2 = dyn_cast<LiteralT>(val))
+    return getLiteral<LiteralT>(builder, lit1->getValue() & lit2->getValue());
+  // (And 0 x) => 0
+  if (lit1->getValue() == 0)
+    return lit1;
+  // (And ~0 x) => x
+  if (lit1->getValue() == kAllOnes)
+    return val;
+
+  //(And const1 (And const2 x)) => (And (And const1 const2) x)
+  if (auto childPair = literalFirst<LiteralT>(val, ValueKind::And8)) {
+    builder.setInsertionPointAfter(inst);
+    return create<LiteralT, ValueKind::And8>(
+        builder,
+        childPair->second,
+        getLiteral<LiteralT>(builder, lit1->getValue() & childPair->first->getValue()));
+  }
+
+  return nullptr;
+}
+
+/// Nested And16 can be collapsed into a top And16
+/// (And16 const1 (Op (And16 const2 x) y)) => (And16 const1 (Op x y))
+///    if (const1 & const2 == Const1)
+///    if Op is one of (Shl, Add, Sub, Mul, Or)
+///
+/// This is a separate function because the "top" And16 can be a Trunc16to8.
+template <class LiteralT, ValueKind INST_KIND>
+Value *simplifyNestedAnd(IRBuilder &builder, Instruction *inst, Value *val, uint16_t const1) {
+  switch (val->getKind()) {
+  case ValueKind::Shl16:
+  case ValueKind::Add16:
+  case ValueKind::Sub16:
+  case ValueKind::Or16:
+    break;
+  default:
+    return nullptr;
+  }
+  auto opInst = cast<Instruction>(val);
+
+  // Check the left operand.
+  // (Op (And16 const2 x) y)
+  if (auto andPair = literalFirst<LiteralT>(opInst->getOperand(0), ValueKind::And8)) {
+    LiteralT *lit2 = andPair->first;
+    Value *x = andPair->second;
+    Value *y = opInst->getOperand(1);
+
+    if ((const1 & lit2->getValue()) == const1) {
+      builder.setInsertionPointAfter(inst);
+      return create<LiteralT, INST_KIND>(
+          builder,
+          builder.createInst(opInst->getKind(), {x, y}),
+          getLiteral<LiteralT>(builder, const1));
+    }
+  }
+
+  // We can't optimize the second operand of Shl
+  if (val->getKind() == ValueKind::Shl16)
+    return nullptr;
+
+  // Check the right operand.
+  // (Op x (And16 const2 y))
+  if (auto andPair = literalFirst<LiteralT>(opInst->getOperand(1), ValueKind::And8)) {
+    Value *x = opInst->getOperand(0);
+    LiteralT *lit2 = andPair->first;
+    Value *y = andPair->second;
+
+    if ((const1 & lit2->getValue()) == const1) {
+      builder.setInsertionPointAfter(inst);
+      return create<LiteralT, INST_KIND>(
+          builder,
+          builder.createInst(opInst->getKind(), {x, y}),
+          getLiteral<LiteralT>(builder, const1));
+    }
+  }
+
+  return nullptr;
+}
+
+Value *simplifyAnd16(IRBuilder &builder, Instruction *inst) {
+  using LiteralT = LiteralU16;
+  if (auto *res = simplifyAnd<LiteralU16>(builder, inst))
+    return res;
+
+  auto litFirst = literalFirst<LiteralT>(inst);
+  if (!litFirst)
+    return nullptr;
+
+  LiteralT *lit1 = litFirst->first;
+  Value *val = litFirst->second;
+
+  return simplifyNestedAnd<LiteralT, ValueKind::And8>(builder, inst, val, lit1->getValue());
+}
+
+Value *simplifyTrunc16to8(IRBuilder &builder, Instruction *inst) {
+  // (Trunc16t8 Literal16)
+  if (auto *u16 = dyn_cast<LiteralU16>(inst->getOperand(0)))
+    return builder.getLiteralU8((uint8_t)u16->getValue());
+  switch (inst->getOperand(0)->getKind()) {
+    // (Trunc16t8 (Make16 lo hi)) => lo
+    // (Trunc16t8 (Ext8t16 v8)) => v8
+  case ValueKind::Make16:
+  case ValueKind::SExt8t16:
+  case ValueKind::ZExt8t16:
+    return cast<Instruction>(inst->getOperand(0))->getOperand(0);
+  default:
+    break;
+  }
+
+  // (Trunc16t8 (And16 0x__FF x)) => (Trunc16t8 x)
+  if (auto andPair = literalFirst<LiteralU16>(inst->getOperand(0), ValueKind::And8)) {
+    if ((andPair->first->getValue() & 0xFF) == 0xFF)
+      return builder.createTrunc16t8(andPair->second);
+  }
+
+  return simplifyNestedAnd<LiteralU16, ValueKind::Trunc16t8>(
+      builder, inst, inst->getOperand(0), 0x00FF);
+}
+
+template <class LiteralT>
+Value *simplifyShl(IRBuilder &builder, Instruction *inst) {
+  constexpr typename LiteralT::ValueType kAllOnes = ~static_cast<typename LiteralT::ValueType>(0);
+  constexpr unsigned kBitWidth = sizeof(typename LiteralT::ValueType) * 8;
+
+  auto *lit1 = dyn_cast<LiteralT>(inst->getOperand(0));
+  auto *lit2 = dyn_cast<LiteralU8>(inst->getOperand(1));
+
+  // (Shl const1 const2)
+  if (lit1 && lit2) {
+    return lit2->getValue() < kBitWidth
+        ? getLiteral<LiteralT>(builder, lit1->getValue() << lit2->getValue())
+        : getLiteral<LiteralT>(builder, 0);
+  }
+  // (Shl 0 x) => 0
+  if (lit1 && lit1->getValue() == 0)
+    return lit1;
+  // (Shl x 0) => x
+  if (lit2 && lit2->getValue() == 0)
+    return inst->getOperand(0);
+  // (Shl x kBitWidth) => 0
+  if (lit2 && lit2->getValue() >= kBitWidth)
+    return getLiteral<LiteralT>(builder, 0);
+
+  //(Shl (Shl x const1) const2) => (Shl x (Add const1 const2))
+  if (lit2 && inst->getOperand(0)->getKind() == arithKindForType<LiteralT>(ValueKind::Shl8)) {
+    auto *childInst = cast<Instruction>(inst->getOperand(0));
+    if (auto *childLit = dyn_cast<LiteralU8>(childInst->getOperand(1))) {
+      builder.setInsertionPointAfter(inst);
+      unsigned count = childLit->getValue() + lit2->getValue();
+      if (count >= kBitWidth)
+        getLiteral<LiteralT>(builder, 0);
+      return create<LiteralT, ValueKind::Shl8>(
+          builder, childInst->getOperand(0), getLiteral<LiteralU8>(builder, count));
+    }
+  }
+
+  // (Shl (And x const1) const2) => (And (Shl x const2) (const1 << const2))
+  if (lit2) {
+    if (auto childPair = literalFirst<LiteralT>(inst->getOperand(0), ValueKind::And8)) {
+      LiteralT *nestedLit = childPair->first;
+      Value *x = childPair->second;
+      unsigned count = lit2->getValue();
+      builder.setInsertionPointAfter(inst);
+      return create<LiteralT, ValueKind::And8>(
+          builder,
+          create<LiteralT, ValueKind::Shl8>(builder, x, lit2),
+          getLiteral<LiteralT>(
+              builder,
+              count < kBitWidth ? (nestedLit->getValue() << count) | ~(kAllOnes << count) : 0));
+    }
+  }
+
+  return nullptr;
+}
+
+template <class LiteralT>
+Value *simplifyShr(IRBuilder &builder, Instruction *inst) {
+  constexpr unsigned kBitWidth = sizeof(typename LiteralT::ValueType) * 8;
+
+  auto *lit1 = dyn_cast<LiteralT>(inst->getOperand(0));
+  auto *lit2 = dyn_cast<LiteralU8>(inst->getOperand(1));
+
+  // (Shl const1 const2)
+  if (lit1 && lit2) {
+    return lit2->getValue() < kBitWidth
+        ? getLiteral<LiteralT>(builder, lit1->getValue() >> lit2->getValue())
+        : getLiteral<LiteralT>(builder, 0);
+  }
+  // (Shr 0 x) => 0
+  if (lit1 && lit1->getValue() == 0)
+    return lit1;
+  // (Shr x 0) => x
+  if (lit2 && lit2->getValue() == 0)
+    return inst->getOperand(0);
+  // (Shr x kBitWidth) => 0
+  if (lit2 && lit2->getValue() >= kBitWidth)
+    return getLiteral<LiteralT>(builder, 0);
+
+  //(Shr (Shr x const1) const2) => (Shl x (Add const1 const2))
+  if (lit2 && inst->getOperand(0)->getKind() == arithKindForType<LiteralT>(ValueKind::Shr8)) {
+    auto *childInst = cast<Instruction>(inst->getOperand(0));
+    if (auto *childLit = dyn_cast<LiteralU8>(childInst->getOperand(1))) {
+      builder.setInsertionPointAfter(inst);
+      unsigned count = childLit->getValue() + lit2->getValue();
+      if (count >= kBitWidth)
+        getLiteral<LiteralT>(builder, 0);
+      return create<LiteralT, ValueKind::Shr8>(
+          builder, childInst->getOperand(0), getLiteral<LiteralU8>(builder, count));
+    }
+  }
+
+  return nullptr;
+}
+
 } // namespace
 
 /// Return a replacement value or nullptr.
@@ -235,20 +490,7 @@ static Value *simplifyInst(IRBuilder &builder, Instruction *inst) {
     }
     break;
   case ValueKind::Trunc16t8:
-    // (Trunc168t Literal16)
-    if (auto *u16 = dyn_cast<LiteralU16>(inst->getOperand(0)))
-      return builder.getLiteralU8((uint8_t)u16->getValue());
-    switch (inst->getOperand(0)->getKind()) {
-    // (Trunc16t8 (Make16 lo hi)) => lo
-    // (Trunc16t8 (Ext8t16 v8)) => v8
-    case ValueKind::Make16:
-    case ValueKind::SExt8t16:
-    case ValueKind::ZExt8t16:
-      return cast<Instruction>(inst->getOperand(0))->getOperand(0);
-    default:
-      break;
-    }
-    break;
+    return simplifyTrunc16to8(builder, inst);
   case ValueKind::High8:
     // (High8 Literal16)
     if (auto *u16 = dyn_cast<LiteralU16>(inst->getOperand(0)))
@@ -267,25 +509,17 @@ static Value *simplifyInst(IRBuilder &builder, Instruction *inst) {
   case ValueKind::Make16:
     break;
   case ValueKind::Shl8:
-    break;
+    return simplifyShl<LiteralU8>(builder, inst);
   case ValueKind::Shl16:
-    break;
+    return simplifyShl<LiteralU16>(builder, inst);
   case ValueKind::Shr8:
-    break;
+    return simplifyShr<LiteralU8>(builder, inst);
   case ValueKind::Shr16:
-    break;
+    return simplifyShr<LiteralU16>(builder, inst);
   case ValueKind::And8:
-    // (And8 const1 const2)
-    if (auto *left = dyn_cast<LiteralU8>(inst->getOperand(0)))
-      if (auto *right = dyn_cast<LiteralU8>(inst->getOperand(1)))
-        return builder.getLiteralU8(left->getValue() & right->getValue());
-    break;
+    return simplifyAnd<LiteralU8>(builder, inst);
   case ValueKind::And16:
-    // (And16 const1 const2)
-    if (auto *left = dyn_cast<LiteralU16>(inst->getOperand(0)))
-      if (auto *right = dyn_cast<LiteralU16>(inst->getOperand(1)))
-        return builder.getLiteralU16(left->getValue() & right->getValue());
-    break;
+    return simplifyAnd16(builder, inst);
   case ValueKind::Or8:
     break;
   case ValueKind::Or16:
