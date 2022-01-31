@@ -16,6 +16,8 @@ bool Range32::overlap16WithWrap(Range32 r) const {
 Range32 classifyMemoryAddr(Value *addr, unsigned width) {
   // Treat implicit stack instruction specially.
   switch (addr->getKind()) {
+  case ValueKind::Call:
+    return {0, 0x10000};
   case ValueKind::Pop8:
   case ValueKind::Push8:
   case ValueKind::RTS:
