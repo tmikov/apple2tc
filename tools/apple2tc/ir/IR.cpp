@@ -195,8 +195,7 @@ BasicBlock::~BasicBlock() {
 }
 
 void BasicBlock::dump() {
-  IRDumper d(stdout);
-  d.dump(this);
+  IRDumper(stdout, false).dump(this);
 }
 
 Instruction *BasicBlock::getTerminator() {
@@ -245,6 +244,10 @@ IteratorRange<BasicBlock::SuccIterator> successors(BasicBlock &bb) {
 
 Function::~Function() {
   bbList_.destroyAll();
+}
+
+void Function::dump() {
+  IRDumper(stdout, false).dump(this);
 }
 
 BasicBlock *Function::createBasicBlock() {

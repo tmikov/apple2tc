@@ -439,6 +439,10 @@ public:
     return makeIteratorRange(instList_.rbegin(), instList_.rend());
   }
 
+  auto instructionToIterator(Instruction *inst ) {
+    return CircularList<Instruction>::iterator(inst);
+  }
+
   void eraseInstruction(Instruction *inst);
 
   void importInstruction(Instruction *inst);
@@ -610,6 +614,8 @@ public:
   static bool classof(const Value *v) {
     return v->getKind() == ValueKind::Function;
   }
+
+  void dump();
 
   Module *getModule() const {
     return module_;
