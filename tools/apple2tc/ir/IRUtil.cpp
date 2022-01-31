@@ -8,6 +8,11 @@
 
 namespace ir {
 
+bool Range32::overlap16WithWrap(Range32 r) const {
+  return this->overlap32(r) || Range32(this->begin + k64K, this->end + k64K).overlap32(r) ||
+      Range32(r.begin + k64K, r.end + k64K).overlap32(*this);
+}
+
 Range32 classifyMemoryAddr(Value *addr, unsigned width) {
   // Treat implicit stack instruction specially.
   switch (addr->getKind()) {
@@ -44,7 +49,7 @@ Range32 classifyMemoryAddr(Value *addr, unsigned width) {
       // literal16 + [0..255] + ofs
       if (auto *op1u16 = dyn_cast<LiteralU16>(op1)) {
         unsigned base = op1u16->getValue();
-        return {base, ((base + 255) & 0xFFFF) + width};
+        return {base, base + 255 + width};
       }
     }
   }
@@ -141,7 +146,7 @@ void markExpressionTrees(BasicBlock *bb, InstSet &validTrees) {
           if (tInst->readsMemory()) {
             auto [readAddr, readWidth] = tInst->memoryAddress();
             auto readRange = classifyMemoryAddr(readAddr, readWidth);
-            if (writeRange.overlaps(readRange))
+            if (writeRange.overlap16WithWrap(readRange))
               return true;
           }
           return false;

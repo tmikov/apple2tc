@@ -119,16 +119,29 @@ private:
   }
 };
 
+/// Range32 takes into consideration 16-bit wraparound, where the end of the
+/// range is larger than 0x10000, meaning it is actually the value & 0xFFFF.
+/// This allows to encode essentially two 16-bit ranges into one.
 struct Range32 {
   uint32_t begin;
   /// Exclusive.
   uint32_t end;
 
+  static constexpr uint32_t k64K = 0x10000;
+
   constexpr Range32(uint32_t begin, uint32_t anEnd) : begin(begin), end(anEnd) {}
 
-  bool overlaps(Range32 r) const {
+  bool wrapsAround() const {
+    return this->end > k64K;
+  }
+
+  /// Checks whether the range overlaps, ignoring 16-bit wraparound.
+  bool overlap32(Range32 r) const {
     return std::max(begin, r.begin) < std::min(end, r.end);
   }
+
+  /// Check if the two ranges overlap, taking 16-bit wraparound in consideration.
+  bool overlap16WithWrap(Range32 r) const;
 };
 
 /// Return a conservative range of the memory pointed by \p addr.

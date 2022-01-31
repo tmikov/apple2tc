@@ -935,7 +935,7 @@ void GenIR::emitAutoPoke8(Value *addr, Value *value) {
 
 bool GenIR::isAddrNonIO(Value *addr, unsigned width) {
   constexpr Range32 kIORange(A2_IO_RANGE_START, A2_IO_RANGE_END + 1);
-  return !classifyMemoryAddr(addr, width).overlaps(kIORange);
+  return !classifyMemoryAddr(addr, width).overlap16WithWrap(kIORange);
 }
 
 std::shared_ptr<ir::IRContext> newIRContext(unsigned verbosity) {
