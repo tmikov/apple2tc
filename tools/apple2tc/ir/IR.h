@@ -644,6 +644,9 @@ public:
     return makeIteratorRange(bbList_.begin(), bbList_.end());
   }
 
+  /// Find a basic block with the specified real address.
+  BasicBlock *findBasicBlock(uint16_t addr);
+
 private:
   Module *module_;
   CircularList<BasicBlock> bbList_{};

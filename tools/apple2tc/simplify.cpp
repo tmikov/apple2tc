@@ -507,6 +507,9 @@ static Value *simplifyInst(IRBuilder &builder, Instruction *inst) {
     }
     break;
   case ValueKind::Make16:
+    if (auto lo = dyn_cast<LiteralU8>(inst->getOperand(0)))
+      if (auto hi = dyn_cast<LiteralU8>(inst->getOperand(1)))
+        return builder.getLiteralU16(hi->getValue() * 256 + lo->getValue());
     break;
   case ValueKind::Shl8:
     return simplifyShl<LiteralU8>(builder, inst);
@@ -574,6 +577,18 @@ static Value *simplifyInst(IRBuilder &builder, Instruction *inst) {
       return builder.createJmp(!u8->getValue() ? inst->getOperand(1) : inst->getOperand(2));
     }
     break;
+
+  case ValueKind::JmpInd:
+    // (JmpInd (CPUAddr2BB const)) => (Jmp bb)
+    if (inst->getOperand(0)->getKind() == ValueKind::CPUAddr2BB) {
+      auto * addr2bb = cast<Instruction>(inst->getOperand(0));
+      if (auto *addr = dyn_cast<LiteralU16>(addr2bb->getOperand(0))) {
+        if (auto *bb = inst->getBasicBlock()->getFunction()->findBasicBlock(addr->getValue())) {
+          builder.setInsertionPointAfter(inst);
+          return builder.createJmp(bb);
+        }
+      }
+    }
 
   default:
     break;

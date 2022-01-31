@@ -261,6 +261,13 @@ void Function::eraseBasicBlock(BasicBlock *bb) {
   delete bb;
 }
 
+BasicBlock *Function::findBasicBlock(uint16_t addr) {
+  for (auto &bb : basicBlocks())
+    if (bb.isRealAddress() && bb.getAddress() && *bb.getAddress() == addr)
+      return &bb;
+  return nullptr;
+}
+
 void Module::dump() {
   IRDumper d(stdout);
   d.dump(this);
