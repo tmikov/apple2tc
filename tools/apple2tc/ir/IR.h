@@ -402,8 +402,10 @@ class BasicBlock : public Value {
   friend class Function;
   friend class IRBuilder;
 
-  explicit BasicBlock(IRContext *ctx, Function *function)
-      : Value(ValueKind::BasicBlock, ctx->getType(TypeKind::BasicBlock)), function_(function) {}
+  explicit BasicBlock(IRContext *ctx, Function *function, unsigned uniqueId)
+      : Value(ValueKind::BasicBlock, ctx->getType(TypeKind::BasicBlock)),
+        function_(function),
+        uniqueId_(uniqueId) {}
 
 public:
   ~BasicBlock();
@@ -413,6 +415,10 @@ public:
   }
 
   void dump();
+
+  unsigned int const getUniqueId() const {
+    return uniqueId_;
+  }
 
   Function *getFunction() const {
     return function_;
@@ -462,6 +468,7 @@ private:
   std::optional<uint32_t> address_{};
   /// Whether the address is "real" or it was synthesized just for informational purposes.
   bool realAddress_ = false;
+  unsigned const uniqueId_;
 };
 
 /// Iterator over the terminator instructions that are predecessors of this basic block.
@@ -592,8 +599,10 @@ IteratorRange<BasicBlock::SuccIterator> successors(BasicBlock &bb);
 
 class Function : public Value {
   friend class Module;
-  explicit Function(IRContext *ctx, Module *module)
-      : Value(ValueKind::Function, ctx->getType(TypeKind::Function)), module_(module) {}
+  explicit Function(IRContext *ctx, Module *module, unsigned uniqueId)
+      : Value(ValueKind::Function, ctx->getType(TypeKind::Function)),
+        module_(module),
+        uniqueId_(uniqueId) {}
 
 public:
   ~Function() override;
@@ -604,6 +613,17 @@ public:
 
   Module *getModule() const {
     return module_;
+  }
+
+  unsigned int getUniqueId() const {
+    return uniqueId_;
+  }
+
+  const std::optional<uint32_t> &getAddress() const {
+    return const_cast<Function *>(this)->getEntryBlock()->getAddress();
+  }
+  bool isRealAddress() const {
+    return const_cast<Function *>(this)->getEntryBlock()->isRealAddress();
   }
 
   BasicBlock *createBasicBlock();
@@ -627,6 +647,8 @@ public:
 private:
   Module *module_;
   CircularList<BasicBlock> bbList_{};
+  unsigned const uniqueId_;
+  unsigned nextBBId_ = 0;
 };
 
 namespace detail {
@@ -638,31 +660,39 @@ template <class T>
 T *toPointer(T &x) {
   return &x;
 }
+
+template <class T>
+inline auto sizeIfPresent(const T *t) -> decltype(t->size()) {
+  return t->size();
+}
+inline auto sizeIfPresent(const void *) -> size_t {
+  return 0;
+}
+
 } // namespace detail
 
 /// Sort a sequence of blocks using their addresses, when available. Block 0
 /// is assumed to be the entry point and is not sorted.
-template <class R>
-std::vector<BasicBlock *> sortBasicBlocksByAddress(R range, bool excludeFirst = true) {
-  std::vector<BasicBlock *> sortedBlocks{};
+template <class T, class R>
+std::vector<T *> sortByAddress(const R &range, bool excludeFirst) {
+  std::vector<T *> sortedBlocks{};
+  sortedBlocks.reserve(detail::sizeIfPresent(&range));
 
-  // Sort the blocks by starting address using a stable sort.
-  for (auto &bb : range)
-    sortedBlocks.push_back(detail::toPointer(bb));
+  for (auto &x : range)
+    sortedBlocks.push_back(detail::toPointer(x));
 
-  // Note that we are not sorting the entry block.
+  // Note that we are optionally not sorting the entry block.
   if (sortedBlocks.size() > 1 + excludeFirst) {
-    std::stable_sort(
-        sortedBlocks.begin() + excludeFirst,
-        sortedBlocks.end(),
-        [](BasicBlock *a, BasicBlock *b) -> bool {
-          // No address is less than address.
-          if (!a->getAddress())
-            return b->getAddress().has_value();
-          if (!b->getAddress())
-            return false;
-          return a->getAddress() < b->getAddress();
-        });
+    std::sort(sortedBlocks.begin() + excludeFirst, sortedBlocks.end(), [](T *a, T *b) -> bool {
+      auto addrA = a->getAddress().value_or(0x10000);
+      auto addrB = b->getAddress().value_or(0x10000);
+      if (addrA < addrB)
+        return true;
+      else if (addrA == addrB)
+        return a->getUniqueId() < b->getUniqueId();
+      else
+        return false;
+    });
   }
   return sortedBlocks;
 }
@@ -686,7 +716,7 @@ public:
   }
 
   Function *createFunction() {
-    auto *func = new Function(context_, this);
+    auto *func = new Function(context_, this, nextFuncId_++);
     functionList_.push_back(func);
     return func;
   }
@@ -702,6 +732,9 @@ public:
 private:
   IRContext *context_ = nullptr;
   std::shared_ptr<Disas> disas_;
+  /// ID of next created function. The only purpose is to create a reproducible
+  /// way of sorting.
+  unsigned nextFuncId_ = 0;
   CircularList<Function> functionList_{};
 };
 

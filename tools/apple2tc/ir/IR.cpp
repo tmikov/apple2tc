@@ -242,7 +242,7 @@ Function::~Function() {
 }
 
 BasicBlock *Function::createBasicBlock() {
-  auto *block = new BasicBlock(module_->getContext(), this);
+  auto *block = new BasicBlock(module_->getContext(), this, nextBBId_++);
   bbList_.push_back(block);
   return block;
 }

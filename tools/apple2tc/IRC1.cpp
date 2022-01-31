@@ -400,7 +400,7 @@ IRC1::~IRC1() = default;
 void IRC1::runFunc() {
   scanForDynamicBlocks();
 
-  auto sortedBlocks = sortBasicBlocksByAddress(func_->basicBlocks());
+  auto sortedBlocks = sortByAddress<BasicBlock>(func_->basicBlocks(), true);
   // "name" the blocks consistently.
   for (auto *bb : sortedBlocks)
     blockID(bb);
@@ -477,7 +477,7 @@ void IRC1::scanForDynamicBlocks() {
   }
 
   if (haveCPUAddr2BB)
-    sortedDynamicBlocks_ = sortBasicBlocksByAddress(dynamicBlocks, false);
+    sortedDynamicBlocks_ = sortByAddress<BasicBlock>(dynamicBlocks, false);
 }
 
 void IRC1::printBB(BasicBlock *bb) {

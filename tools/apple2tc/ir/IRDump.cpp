@@ -57,7 +57,7 @@ void IRDumper::dump(Module *mod) {
 }
 
 void IRDumper::dump(Function *func) {
-  auto sortedBlocks = sortBasicBlocksByAddress(func->basicBlocks());
+  auto sortedBlocks = sortByAddress<BasicBlock>(func->basicBlocks(), true);
 
   // Name all basic blocks and instructions consistently first.
   for (auto *bb : sortedBlocks) {

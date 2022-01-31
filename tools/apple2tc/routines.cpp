@@ -250,16 +250,23 @@ void IdentifySimpleRoutines::splitRoutines() {
   IRBuilder builder(ctx_);
   std::vector<Instruction *> jsrs{};
 
-  // Copy all routines into a vector, so they can be sorted for predictable results.
-  std::vector<std::pair<BasicBlock *, Candidate *>> candidates{};
-  candidates.reserve(candidates_.size());
+  // Sort all routines reproducibly.
+  std::vector<std::pair<BasicBlock *, Candidate *>> sortedCandidates{};
+  sortedCandidates.reserve(candidates_.size());
   for (auto &p : candidates_)
-    candidates.emplace_back(p.first, &p.second);
-  std::sort(candidates.begin(), candidates.end(), [](const auto &a, const auto &b) {
-    return a.first->getAddress().value_or(0) < b.first->getAddress().value_or(0);
+    sortedCandidates.emplace_back(p.first, &p.second);
+  std::sort(sortedCandidates.begin(), sortedCandidates.end(), [](const auto &a, const auto &b) {
+    auto addrA = a.first->getAddress().value_or(0x10000);
+    auto addrB = b.first->getAddress().value_or(0x10000);
+    if (addrA < addrB)
+      return true;
+    else if (addrA == addrB)
+      return a.first->getUniqueId() < b.first->getUniqueId();
+    else
+      return false;
   });
 
-  for (auto [entry, pCand] : candidates) {
+  for (auto [entry, pCand] : sortedCandidates) {
     auto &cand = *pCand;
     cand.func = mod->createFunction();
 
@@ -289,7 +296,8 @@ void IdentifySimpleRoutines::splitRoutines() {
     assert(!entry->hasUsers() && "All users of the entry block should have been eliminated");
 
     cand.func->importBasicBlock(entry);
-    for (auto *bb : cand.blocks)
+    auto sortedBlocks = sortByAddress<BasicBlock>(cand.blocks, false);
+    for (auto *bb : sortedBlocks)
       if (bb != entry)
         cand.func->importBasicBlock(bb);
   }
