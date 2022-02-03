@@ -9,6 +9,8 @@
 #include "ir/IR.h"
 #include "ir/IRUtil.h"
 
+#include "apple2tc/support.h"
+
 #include <deque>
 
 using namespace ir;
@@ -18,7 +20,9 @@ namespace {
 class IdentifySimpleRoutines {
   Function *const func_;
   IRContext *const ctx_;
-  std::unordered_set<BasicBlock *> previouslyChecked_{};
+  /// Blocks of all identified candidates so far. We need this to ensure that
+  /// they don't overlap.
+  std::unordered_set<BasicBlock *> discoveredBlocks_{};
 
   struct Candidate {
     std::unordered_set<BasicBlock *> blocks;
@@ -41,6 +45,7 @@ public:
   void run();
 
 private:
+  /// Collect the basic block of the candidate.
   void scanCandidate(BasicBlock *entry);
   /// Remove candidates that JSR into a non-candidate. Return true if anything
   /// changed.
@@ -53,29 +58,28 @@ private:
 
   /// Actually split the candidates into new IR routines.
   void splitRoutines();
+
+  /// Split a single routine.
+  void splitARoutine(BasicBlock *entry, Candidate &cand);
 };
 
 void IdentifySimpleRoutines::run() {
   // Instead of scanning every instruction to see whether it is JSR, we scan
-  // every basic block to see whether all of its predecessors are JSR.
+  // every basic block to see whether any of its predecessors are JSR.
   for (auto &bb : func_->basicBlocks()) {
-    // 0: not only JSR, -1: nothing, 1: only JSR
-    int onlyJSR = -1;
-    for (Instruction &iRef : predecessorInsts(bb)) {
-      Instruction *inst = &iRef;
-      assert(inst->isTerminator());
-      if (inst->getKind() != ValueKind::JSR || inst->getOperand(0) != &bb) {
-        onlyJSR = 0;
-        break;
-      }
-      onlyJSR = 1;
-    }
-    if (onlyJSR <= 0)
+    if (discoveredBlocks_.count(&bb))
       continue;
 
-    if (ctx_->getVerbosity() > 1)
-      fprintf(stderr, "$%04x: potential simple routine\n", bb.getAddress().value_or(0));
-    scanCandidate(&bb);
+    bool jsr = false;
+    for (Instruction &inst : predecessorInsts(bb)) {
+      assert(inst.isTerminator());
+      if (inst.getKind() == ValueKind::JSR && inst.getOperand(0) == &bb) {
+        jsr = true;
+        break;
+      }
+    }
+    if (jsr)
+      scanCandidate(&bb);
   }
 
   // Make sure that candidates only JSR into other candidates.
@@ -99,14 +103,37 @@ void IdentifySimpleRoutines::run() {
   splitRoutines();
 }
 
+/// Check whether this is a JMP preceded by two pushes. Return the two pushes in
+/// order "hi" then "lo".
+std::optional<std::tuple<Instruction *, Instruction *>> isSimplePushJmp(Instruction *inst) {
+  if (inst->getKind() != ValueKind::Jmp)
+    return std::nullopt;
+
+  auto *bb = inst->getBasicBlock();
+  int pushCount = 0;
+  Instruction *pushes[2];
+  for (auto it = bb->instructionToIterator(inst), begin = bb->instructions().begin();
+       it != begin;) {
+    --it;
+    if (it->getKind() == ValueKind::Push8) {
+      pushes[pushCount++] = &*it;
+      if (pushCount == 2)
+        return std::make_tuple(pushes[1], pushes[0]);
+    } else if (it->modifiesSP()) {
+      return std::nullopt;
+    }
+  }
+  return std::nullopt;
+}
+
 void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
-  assert(
-      !previouslyChecked_.count(entry) &&
-      "A routine entry can't have been checked if all preds are JSR");
   std::unordered_set<BasicBlock *> visited{};
   std::unordered_set<BasicBlock *> jsrTargets{};
   std::unordered_set<Instruction *> rts{};
   std::deque<BasicBlock *> workList{};
+
+  if (ctx_->getVerbosity() > 1)
+    fprintf(stderr, "$%04x: scan candidate\n", entry->getAddress().value_or(0x10000));
 
   workList.push_back(entry);
   do {
@@ -116,9 +143,10 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
     if (!visited.insert(bb).second)
       continue;
 
-    if (!previouslyChecked_.insert(bb).second) {
+    if (discoveredBlocks_.count(bb)) {
       if (ctx_->getVerbosity() > 1)
-        fprintf(stderr, "fail: bb $%04x previously checked\n", bb->getAddress().value_or(0));
+        fprintf(
+            stderr, "fail: bb $%04x already discovered checked\n", bb->getAddress().value_or(0));
       return;
     }
 
@@ -174,10 +202,50 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
     }
   } while (!workList.empty());
 
+  // Now check whether all predecessors are either JSR, push+jmp, or are internal branches to the
+  // entry point.
+  bool pushJmp = false;
+  for (Instruction &iRef : predecessorInsts(*entry)) {
+    auto *inst = &iRef;
+    assert(inst->isTerminator());
+    if (inst->getKind() == ValueKind::JSR && inst->getOperand(0) == entry) {
+      // A regular JSR.
+      continue;
+    }
+    if (inst->getKind() == ValueKind::Jmp && isSimplePushJmp(inst)) {
+      // Push+Jmp.
+      pushJmp = true;
+      continue;
+    }
+    if (visited.count(inst->getBasicBlock())) {
+      // If the predecessor is part of the same function, it is an internal loop
+      // to the entry point.
+      continue;
+    }
+    // We found a predecessor that is neither of these.
+    if (ctx_->getVerbosity() > 1) {
+      fprintf(
+          stderr,
+          "Invalid predecessor inst %s at $%04x\n",
+          getValueKindName(inst->getKind()),
+          inst->getAddress().value_or(0x10000));
+    }
+    return;
+  }
+
+  // Add all blocks to discovered.
+  for (auto *bb : visited)
+    discoveredBlocks_.insert(bb);
+
   candidates_.try_emplace(entry, std::move(visited), std::move(jsrTargets), std::move(rts));
 
-  if (ctx_->getVerbosity() > 1)
-    fprintf(stderr, "$%04x: created candidate\n", entry->getAddress().value_or(0));
+  if (ctx_->getVerbosity() > 1) {
+    fprintf(
+        stderr,
+        "$%04x: created candidate%s\n",
+        entry->getAddress().value_or(0),
+        pushJmp ? " push+jmp" : "");
+  }
 }
 
 bool IdentifySimpleRoutines::removeInvalidJSRs() {
@@ -246,10 +314,6 @@ BasicBlock *IdentifySimpleRoutines::findOwningCandidate(BasicBlock *block) {
 }
 
 void IdentifySimpleRoutines::splitRoutines() {
-  Module *mod = func_->getModule();
-  IRBuilder builder(ctx_);
-  std::vector<Instruction *> jsrs{};
-
   // Sort all routines reproducibly.
   std::vector<std::pair<BasicBlock *, Candidate *>> sortedCandidates{};
   sortedCandidates.reserve(candidates_.size());
@@ -266,41 +330,100 @@ void IdentifySimpleRoutines::splitRoutines() {
       return false;
   });
 
-  for (auto [entry, pCand] : sortedCandidates) {
-    auto &cand = *pCand;
-    cand.func = mod->createFunction();
+  for (auto [entry, pCand] : sortedCandidates)
+    splitARoutine(entry, *pCand);
+}
 
-    // Replace all RTS with Return.
-    for (auto *inst : cand.rts) {
-      builder.setInsertionPointAfter(inst);
-      builder.createReturn();
-      inst->eraseFromBasicBlock();
-    }
-    cand.rts.clear();
+void IdentifySimpleRoutines::splitARoutine(BasicBlock *entry, Candidate &cand) {
+  Module *mod = func_->getModule();
+  IRBuilder builder(ctx_);
+  std::vector<Instruction *> jsrs{};
 
-    // Replace all JSRs with Call and Jmp.
-    for (auto &iRef : predecessorInsts(*entry)) {
-      Instruction *inst = &iRef;
-      if (inst->getKind() == ValueKind::JSR || inst->getOperand(0) == entry)
-        jsrs.push_back(inst);
-    }
+  cand.func = mod->createFunction();
 
-    for (auto *inst : jsrs) {
-      builder.setInsertionPointAfter(inst);
-      builder.createCall(cand.func);
-      builder.createJmp(inst->getOperand(1));
-      inst->eraseFromBasicBlock();
-    }
-    jsrs.clear();
+  // Replace all RTS with Return. Record all return addresses.
+  std::unordered_set<BasicBlock *> dynamicReturnBlocks{};
 
-    assert(!entry->hasUsers() && "All users of the entry block should have been eliminated");
+  for (auto *inst : cand.rts) {
+    // Extract all return addresses.
+    for (unsigned i = 1, count = inst->getNumOperands(); i < count; ++i)
+      dynamicReturnBlocks.insert(cast<BasicBlock>(inst->getOperand(i)));
 
-    cand.func->importBasicBlock(entry);
-    auto sortedBlocks = sortByAddress<BasicBlock>(cand.blocks, false);
-    for (auto *bb : sortedBlocks)
-      if (bb != entry)
-        cand.func->importBasicBlock(bb);
+    builder.setInsertionPointAfter(inst);
+    builder.createReturn();
+    inst->eraseFromBasicBlock();
   }
+  cand.rts.clear();
+
+  // Replace all JSRs with Call and Jmp.
+  for (auto &iRef : predecessorInsts(*entry)) {
+    Instruction *inst = &iRef;
+    if (inst->getKind() == ValueKind::JSR && inst->getOperand(0) == entry ||
+        inst->getKind() == ValueKind::Jmp) {
+      jsrs.push_back(inst);
+
+      // The "fall" block of a JSR doesn't need to be considered a dynamic address.
+      if (inst->getKind() == ValueKind::JSR)
+        dynamicReturnBlocks.erase(cast<BasicBlock>(inst->getOperand(1)));
+    }
+  }
+
+  for (auto *inst : jsrs) {
+    if (inst->getKind() == ValueKind::JSR) {
+      builder.setInsertionPointAfter(inst);
+      builder.setAddress(inst->getAddress());
+      builder.createCall(cand.func, builder.getLiteralU8(1));
+      builder.createJmp(inst->getOperand(1));
+    } else {
+      // push-jmp.
+      auto [pushHi, pushLo] = isSimplePushJmp(inst).value();
+      builder.setInsertionPointAfter(pushHi);
+      builder.setAddress(pushHi->getAddress());
+      builder.createPush8(builder.getLiteralU8(0xFF));
+      builder.setInsertionPointAfter(pushLo);
+      builder.setAddress(pushLo->getAddress());
+      builder.createPush8(builder.getLiteralU8(0xFE));
+      auto *addr = builder.createCPUAddr2BB(builder.createAdd16(
+          builder.createMake16(pushLo->getOperand(0), pushHi->getOperand(0)),
+          builder.getLiteralU16(1)));
+
+      builder.setInsertionPointAfter(inst);
+      builder.setAddress(inst->getAddress());
+      builder.createCall(cand.func, builder.getLiteralU8(0));
+      builder.createPop8();
+      builder.createPop8();
+      
+      auto *jmpInd = builder.createJmpInd(addr);
+      for (auto *bb : dynamicReturnBlocks)
+        jmpInd->pushOperand(bb);
+
+      pushHi->eraseFromBasicBlock();
+      pushLo->eraseFromBasicBlock();
+    }
+    inst->eraseFromBasicBlock();
+  }
+  jsrs.clear();
+
+  dynamicReturnBlocks.clear();
+  // If this fails, we need to do something to record the dynamic blocks so they are not
+  // lost.
+  PANIC_ASSERT_MSG(
+      dynamicReturnBlocks.empty(), "dynamicReturnBlocks must be empty after conversion");
+
+#ifndef NDEBUG
+  // All users of the entry block must be internal.
+  for (auto &user : entry->users()) {
+    assert(
+        cand.blocks.count(cast<Instruction>(user.owner())->getBasicBlock()) &&
+        "All external users of the entry block should have been eliminated");
+  }
+#endif
+
+  cand.func->importBasicBlock(entry);
+  auto sortedBlocks = sortByAddress<BasicBlock>(cand.blocks, false);
+  for (auto *bb : sortedBlocks)
+    if (bb != entry)
+      cand.func->importBasicBlock(bb);
 }
 
 } // namespace

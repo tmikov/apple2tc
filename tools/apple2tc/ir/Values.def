@@ -179,9 +179,11 @@ IR_INST_N(EncodeFlags, U8, 6, U8)
 IR_INST2(DecodeFlag, U8, U8, U8)
 
 /// Convert a CPU address to an "indirect basic block".
+/// Extra operands represent discovered BasicBlocks.
 IR_INST1(CPUAddr2BB, IndBasicBlock, U16)
 
-IR_INST1(Call, Void, Function)
+/// void call(Function, bool adjust_sp)
+IR_INST2(Call, Void, Function, U8)
 
 IR_INST0(Return, Void)
 IR_INST1(Jmp, Void, BasicBlock)

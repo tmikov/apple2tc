@@ -22,4 +22,8 @@ $a6502 ands.s ands.b33 && $apple2tc -O3 --ir ands.b33 > ands-test.ir
 diff -q ands.ir ands-test.ir
 rm ands-test.ir ands.b33
 
+$a6502 func.s func.b33 && $apple2tc -O3 --ir func.b33 > func-test.ir
+diff -q func.ir func-test.ir
+rm func-test.ir func.b33
+
 echo "Success!"

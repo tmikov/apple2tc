@@ -1,0 +1,42 @@
+// Loaded binary at [$0300..$0326]
+// code labels: 4
+// data labels: 2
+function Func0001
+%BB1:  // Pred() Succ()
+                StoreR8       A, 0x00
+                StoreR8       Y, 0x00
+                StoreSP       0xff
+                StoreR8       STATUS_V, 0x00
+                StoreR8       STATUS_B, 0x00
+                StoreR8       STATUS_D, 0x00
+                StoreR8       STATUS_I, 0x00
+                StoreR8       STATUS_C, 0x00
+/*$0300*/       AddCycles     9
+                StoreR8       X, 0x0a
+/*$0302*/       Call          Func0002, 0x01
+/*$0305*/       AddCycles     21
+/*$0307*/       Push8         0xff
+/*$0308*/ %17 = RamPeek8      (Add16 0xffe3 (ZExt8t16 (LoadR8 Y)))
+                StoreR8       A, %17
+/*$030B*/       Push8         0xfe
+/*$030C*/       StoreR8       X, 0x05
+/*$030E*/       Call          Func0002, 0x00
+          %_  = Pop8
+          %_  = Pop8
+                JmpInd        (CPUAddr2BB (Add16 (Make16 %17 0x03) 0x0001))
+end Func0001
+
+function Func0002
+%BB2:  // [$0320] Pred(%BB2) Succ(%BB2, %BB3)
+/*$0320*/       AddCycles     11
+                RamPoke8      0x1001, (Add8 (RamPeek8 0x1001) 0x01)
+/*$0323*/ %33 = Sub8          (LoadR8 X), 0x01
+                StoreR8       STATUS_NotZ, %33
+                StoreR8       STATUS_N, (And8 %33 0x80)
+                StoreR8       X, %33
+/*$0324*/       JTrue         %33, %BB2, %BB3
+%BB3:  // [$0326] Pred(%BB2) Succ()
+/*$0326*/       AddCycles     2
+                Return
+end Func0002
+

@@ -790,11 +790,17 @@ void IRC1::printHigh8(Instruction *inst) {
   bprintf(obuf_, "(uint8_t)(%s >> 8)", formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printMake16(Instruction *inst) {
-  bprintf(
-      obuf_,
-      "%s + (%s << 8)",
-      formatOperand(inst->getOperand(0)).c_str(),
-      formatOperand(inst->getOperand(1)).c_str());
+  if (auto *high = dyn_cast<LiteralU8>(inst->getOperand(1))) {
+    // For readability.
+    bprintf(
+        obuf_, "%s + 0x%04x", formatOperand(inst->getOperand(0)).c_str(), high->getValue() << 8);
+  } else {
+    bprintf(
+        obuf_,
+        "%s + (%s << 8)",
+        formatOperand(inst->getOperand(0)).c_str(),
+        formatOperand(inst->getOperand(1)).c_str());
+  }
 }
 void IRC1::printShl8(Instruction *inst) {
   bprintf(
@@ -1016,7 +1022,12 @@ void IRC1::printCPUAddr2BB(Instruction *inst) {
       formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printCall(Instruction *inst) {
-  bprintf(obuf_, "%s(true)", c1mod_->getName(cast<Function>(inst->getOperand(0))));
+  assert(isa<LiteralU8>(inst->getOperand(1)) && "operand 1 of call must be a u8 constant");
+  bprintf(
+      obuf_,
+      "%s(%s)",
+      c1mod_->getName(cast<Function>(inst->getOperand(0))),
+      cast<LiteralU8>(inst->getOperand(1))->getValue() ? "true" : "false");
 }
 void IRC1::printReturn(Instruction *inst) {
   bprintf(obuf_, "if (adjust_sp) pop16(); return");

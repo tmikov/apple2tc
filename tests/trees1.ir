@@ -2,7 +2,7 @@
 // code labels: 1
 // data labels: 3
 function Func0001
-%BB1:  // Pred() Succ(%BB2)
+%BB1:  // Pred() Succ()
                 StoreR8       A, 0x00
                 StoreR8       X, 0x00
                 StoreSP       0xff
@@ -10,8 +10,6 @@ function Func0001
           %8  = RamPeek8      (Add16 0x1000 (ZExt8t16 (LoadR8 X)))
 /*$0303*/       RamPoke8      0x1001, (LoadR8 A)
 /*$0306*/       RamPoke8      0x2000, %8
-/*$0309*/       Jmp           %BB2
-%BB2:  // [$0309] Pred(%BB1) Succ()
-                Abort         0x0309, 0x0309, 0x03
+/*$0309*/       Abort         0x0309, 0x0309, 0x03
 end Func0001
 

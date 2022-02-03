@@ -2,7 +2,7 @@
 // code labels: 1
 // data labels: 6
 function Func0001
-%BB1:  // Pred() Succ(%BB2)
+%BB1:  // Pred() Succ()
                 StoreSP       0xff
 /*$0300*/       AddCycles     75
 /*$0305*/       RamPoke8      0x1000, 0x55
@@ -10,8 +10,6 @@ function Func0001
 /*$0315*/       RamPoke8      0x1003, (RamPeek8 0x1002)
 /*$031F*/       RamPoke8      0x1004, (And8 (RamPeek8 0x1004) 0x05)
 /*$0328*/       RamPoke8      0x1005, (Trunc16t8 (Shl16 (ZExt8t16 (RamPeek8 0x1005)) 0x03))
-/*$032B*/       Jmp           %BB2
-%BB2:  // [$032B] Pred(%BB1) Succ()
-                Abort         0x032b, 0x032b, 0x03
+/*$032B*/       Abort         0x032b, 0x032b, 0x03
 end Func0001
 
