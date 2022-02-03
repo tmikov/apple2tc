@@ -522,15 +522,17 @@ static void run() {
 }
 
 static void printHelp(const char **argv) {
-  fprintf(stderr, "syntax: %s [--lst] [--syms] [--bin] input_file [output_file]\n", argv[0]);
+  fprintf(stderr, "syntax: %s [options] input_file [output_file]\n", argv[0]);
   fprintf(stderr, "  --lst    print listing to stdout\n");
   fprintf(stderr, "  --syms   print symbol list to stdout\n");
+  fprintf(stderr, "  --csyms  print symbol list to stdout as C code\n");
   fprintf(stderr, "  --bin    if output file is specified, generate binary instead of b33\n");
 }
 
 int main(int argc, const char **argv) {
   bool lst = false;
   bool dsyms = false;
+  bool dcsyms = false;
   bool b33 = true;
   std::string outPath{};
 
@@ -541,6 +543,10 @@ int main(int argc, const char **argv) {
     }
     if (strcmp(argv[i], "--syms") == 0) {
       dsyms = true;
+      continue;
+    }
+    if (strcmp(argv[i], "--csyms") == 0) {
+      dcsyms = true;
       continue;
     }
     if (strcmp(argv[i], "--bin") == 0) {
@@ -605,6 +611,30 @@ int main(int argc, const char **argv) {
 
     for (const auto &p : syms) {
       printf("%-12s  %s$%X\n", p.name, p.def->value ? "" : "?", p.def->value ? *p.def->value : 0);
+    }
+  }
+  if (dcsyms) {
+    struct Sym {
+      const char *name;
+      const SymbolDef *def;
+    };
+    std::vector<Sym> syms{};
+    syms.reserve(s_symbols.size());
+    for (const auto &p : s_symbols)
+      syms.push_back({p.first.c_str(), &p.second});
+
+    std::sort(syms.begin(), syms.end(), [](const Sym &a, const Sym &b) {
+      return a.def->value.value_or(0x10000) < b.def->value.value_or(0x10000);
+    });
+
+    uint32_t lastAddr = UINT32_MAX;
+    for (const auto &p : syms) {
+      if (!p.def->value)
+        continue;
+      if (*p.def->value == lastAddr)
+        continue;
+      lastAddr = *p.def->value;
+      printf("  {0x%04x, \"%s\"},\n", *p.def->value, p.name);
     }
   }
 
