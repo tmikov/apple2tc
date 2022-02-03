@@ -8,42 +8,46 @@
 
 #include "IRUtil.h"
 
+#include "apple2tc/support.h"
+
 namespace ir {
 
 IRDumper::IRDumper(FILE *os, bool trees) : os_(os), trees_(trees) {}
 IRDumper::~IRDumper() = default;
 
 const std::string &IRDumper::name(Value *v) {
-  char buf[32];
-  std::unordered_map<Value *, std::string> *map;
-
   if (isa<Function>(v)) {
-    auto it = globalNames_.find(v);
-    if (it != globalNames_.end())
-      return it->second;
-    snprintf(buf, sizeof(buf), "Func%04zu", ++funcCount_);
-    map = &globalNames_;
-  } else if (isa<Instruction>(v)) {
-    auto it = perFunction_.names.find(v);
-    if (it != perFunction_.names.end())
-      return it->second;
-    int len = snprintf(buf, sizeof(buf), "%%%zu", ++perFunction_.instCount);
-    if (len > perFunction_.instNameWidth)
-      perFunction_.instNameWidth = len;
-    map = &perFunction_.names;
+    return namer_.getName(v, [this](Value *_v) {
+      auto *func = cast<Function>(_v);
+      if (!func->getName().empty())
+        return format("FUNC_%s", func->getName().c_str());
+      else if (func->getAddress().has_value() && func->isRealAddress())
+        return format("func_%04x", *func->getAddress());
+      else
+        return format("func%zu", ++anonFuncCount_);
+    });
   } else if (isa<BasicBlock>(v)) {
-    auto it = perFunction_.names.find(v);
-    if (it != perFunction_.names.end())
-      return it->second;
-    snprintf(buf, sizeof(buf), "%%BB%zu", ++perFunction_.blockCount);
-    map = &perFunction_.names;
+    return perFunction_.namer.getName(v, [this](Value *_v) {
+      auto *bb = cast<BasicBlock>(_v);
+      if (!bb->getName().empty())
+        return format("%%BB_%s", bb->getName().c_str());
+      else if (bb->getAddress().has_value() && bb->isRealAddress())
+        return format("%%bb_%04x", *bb->getAddress());
+      else
+        return format("%%bb%zu", ++perFunction_.anonBlockCount);
+    });
+  } else if (isa<Instruction>(v)) {
+    return perFunction_.namer.getName(v, [this](Value *v) {
+      auto res = format("%%%zu", ++perFunction_.instCount);
+      if (res.size() > perFunction_.instNameWidth)
+        perFunction_.instNameWidth = res.size();
+      return res;
+    });
   } else {
     assert(false && "Invalid value to name");
     static std::string empty{};
     return empty;
   }
-
-  return map->try_emplace(v, buf).first->second;
 }
 
 void IRDumper::dump(Module *mod) {

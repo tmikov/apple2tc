@@ -340,6 +340,7 @@ void IdentifySimpleRoutines::splitARoutine(BasicBlock *entry, Candidate &cand) {
   std::vector<Instruction *> jsrs{};
 
   cand.func = mod->createFunction();
+  cand.func->setName(entry->getName());
 
   // Replace all RTS with Return. Record all return addresses.
   std::unordered_set<BasicBlock *> dynamicReturnBlocks{};

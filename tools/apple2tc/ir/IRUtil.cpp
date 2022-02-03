@@ -6,6 +6,8 @@
  */
 #include "IRUtil.h"
 
+#include "apple2tc/support.h"
+
 namespace ir {
 
 bool Range32::overlap16WithWrap(Range32 r) const {
@@ -157,6 +159,28 @@ void markExpressionTrees(BasicBlock *bb, InstSet &validTrees) {
     }
   }
   assert(trees.empty() && "All trees must have been consumed by the end of the basic block");
+}
+
+const std::string &IRNamer::getName(Value *v, const std::function<std::string(Value *v)> &genName) {
+  auto it = valueMap_.find(v);
+  if (it != valueMap_.end())
+    return *it->second;
+
+  const std::string name = genName(v);
+  for (unsigned retry = 0;; ++retry) {
+    auto res = nameSet_.insert(retry == 0 ? name : format("%s_%u", name.c_str(), retry));
+    if (res.second) {
+      valueMap_.try_emplace(v, &*res.first);
+      return *res.first;
+    }
+  }
+}
+
+const std::string &IRNamer::getExistingName(Value *v) const {
+  auto it = valueMap_.find(v);
+  if (it != valueMap_.end())
+    return *it->second;
+  PANIC_ABORT("name doesn't exist");
 }
 
 } // namespace ir

@@ -10,6 +10,7 @@
 #include "ir/IRDump.h"
 #include "ir/IRUtil.h"
 
+#include "apple2tc/a2symbols.h"
 #include "apple2tc/apple2iodefs.h"
 
 #include <cmath>
@@ -411,6 +412,15 @@ void GenIR::addBranchTargets(Instruction *inst, const std::vector<uint16_t> *tar
 BasicBlock *GenIR::createBB(uint32_t addr, bool real) {
   auto *res = builder_.getCurBasicBlock()->getFunction()->createBasicBlock();
   res->setAddress(addr, real);
+  if (addr < 0x10000)
+    if (const char * symName = findApple2Symbol(addr)) {
+      // Make sure the name is valid.
+      std::string tmp(symName);
+      for(char &ch : tmp)
+        if (!isalnum(ch) && ch != '_')
+          ch = '_';
+      res->setName(tmp);
+    }
   return res;
 }
 

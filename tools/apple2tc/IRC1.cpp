@@ -88,22 +88,16 @@ void IRC1Mod::run() {
   unsigned numFunctions = 0;
 
   // Name all functions.
-  for (auto &func : mod_->functions()) {
-    ++numFunctions;
-    if (func.getEntryBlock()->getAddress().has_value()) {
-      auto res = names_.insert(format("func_%04x", *func.getEntryBlock()->getAddress()));
-      if (!res.second) {
-        res = names_.insert(
-            format("func_%04x_%u", *func.getEntryBlock()->getAddress(), numFunctions));
-        assert(res.second && "The generated name should be unique");
-      }
-      funcNames_.try_emplace(&func, &*res.first);
-    } else {
-      auto res = names_.insert(format("func_t%03u", numFunctions));
-      (void)res;
-      assert(res.second && "The generated name should be unique");
-      funcNames_.try_emplace(&func, &*res.first);
-    }
+  for (auto &fRef : mod_->functions()) {
+    namer_.getName(&fRef, [&numFunctions](Value *v) {
+      auto *func = cast<Function>(v);
+      if (!func->getName().empty())
+        return format("FUNC_%s", func->getName().c_str());
+      else if (func->getAddress().has_value())
+        return format("func_%04x", *func->getAddress());
+      else
+        return format("func_t%03u", ++numFunctions);
+    });
   }
 
   printPrologue();
@@ -123,12 +117,6 @@ void IRC1Mod::run() {
   }
 
   printEpilogue();
-}
-
-const char *IRC1Mod::getName(Function *func) const {
-  auto it = funcNames_.find(func);
-  assert(it != funcNames_.end() && "All functions must be named");
-  return it->second->c_str();
 }
 
 unsigned IRC1::blockID(const Value *bb) {

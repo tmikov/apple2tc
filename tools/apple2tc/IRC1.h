@@ -120,15 +120,18 @@ class IRC1Mod {
   FILE *const os_;
   bool const trees_;
 
-  std::unordered_set<std::string> names_{};
-  std::unordered_map<Function *, const std::string *> funcNames_{};
+  IRNamer namer_{};
+
 public:
   IRC1Mod(Module *mod, FILE *os, bool trees)
       : ctx_(mod->getContext()), mod_(mod), os_(os), trees_(trees) {}
   ~IRC1Mod() = default;
 
   void run();
-  const char *getName(Function *func) const;
+
+  const char *getName(Function *func) const {
+    return namer_.getExistingName(func).c_str();
+  }
 
 private:
   void printPrologue();

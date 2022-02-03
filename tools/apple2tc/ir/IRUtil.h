@@ -9,6 +9,7 @@
 
 #include "IR.h"
 
+#include <unordered_map>
 #include <unordered_set>
 
 namespace ir {
@@ -158,5 +159,20 @@ using InstSet = std::unordered_set<Instruction *>;
 /// \param bb the basic block we are marking.
 /// \param validTrees instructions that are part of a tree are recorded here
 void markExpressionTrees(BasicBlock *bb, InstSet &validTrees);
+
+class IRNamer {
+  std::unordered_set<std::string> nameSet_{};
+  std::unordered_map<const Value *, const std::string *> valueMap_{};
+
+public:
+  void clear() {
+    nameSet_.clear();
+    valueMap_.clear();
+  }
+
+  const std::string &getName(Value *v, const std::function<std::string(Value *v)> &genName);
+
+  const std::string &getExistingName(Value *v) const;
+};
 
 } // namespace ir

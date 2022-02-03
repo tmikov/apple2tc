@@ -45,19 +45,19 @@ addr_to_block_id(uint16_t from_pc, uint16_t addr, const unsigned *block_map, siz
 };
 
 void func_t001(bool adjust_sp);
-void func_d697(bool adjust_sp);
-void func_d72c(bool adjust_sp);
-void func_e0ed(bool adjust_sp);
-void func_e635(bool adjust_sp);
-void func_e9e3(bool adjust_sp);
-void func_f847(bool adjust_sp);
-void func_fb1e(bool adjust_sp);
-void func_fcba(bool adjust_sp);
-void func_fe75(bool adjust_sp);
-void func_fe84(bool adjust_sp);
-void func_ff3f(bool adjust_sp);
-void func_ffa7(bool adjust_sp);
-void func_ffc7(bool adjust_sp);
+void FUNC_CLRTXTPTR(bool adjust_sp);
+void FUNC_GETCHAR(bool adjust_sp);
+void FUNC_GETARY(bool adjust_sp);
+void FUNC_FRETMS(bool adjust_sp);
+void FUNC_UPAY2ARG(bool adjust_sp);
+void FUNC_GBASCALC(bool adjust_sp);
+void FUNC_PREAD(bool adjust_sp);
+void FUNC_NXTA1(bool adjust_sp);
+void FUNC_A1PC(bool adjust_sp);
+void FUNC_SETNORM(bool adjust_sp);
+void FUNC_MON_RESTORE(bool adjust_sp);
+void FUNC_GETNUM(bool adjust_sp);
+void FUNC_ZMODE(bool adjust_sp);
 
 static void emulated_entry_point(void) {
   func_t001(false);
@@ -91,7 +91,7 @@ void func_t001(bool adjust_sp) {
                 s_status = (s_status & ~STATUS_C) | 0x00;
       /*$FA62*/ s_pc = 0xfa62; CYCLES(0xfa62, 7);
                 s_status = (s_status & ~STATUS_D) | (0x00 << 3);
-      /*$FA63*/ func_fe84(true);
+      /*$FA63*/ FUNC_SETNORM(true);
       /*$FA66*/ s_pc = 0xfa66; CYCLES(0xfa66, 6);
                 branchTarget = true; push16(0xfa68); block_id = 1444;
       break;
@@ -1112,7 +1112,7 @@ void func_t001(bool adjust_sp) {
       break;
     case 147:  // $D665
       /*$D665*/ s_pc = 0xd665; CYCLES(0xd665, 6);
-                func_d697(true);
+                FUNC_CLRTXTPTR(true);
       /*$D668*/ s_pc = 0xd668; CYCLES(0xd668, 4);
                 s_status = (s_status & ~STATUS_Z) | (0x00 ? 0 : STATUS_Z);
                 s_status = (s_status & ~STATUS_N) | 0x00;
@@ -1368,7 +1368,7 @@ void func_t001(bool adjust_sp) {
       break;
     case 187:  // $D749
       /*$D749*/ s_pc = 0xd749; CYCLES(0xd749, 6);
-                func_d72c(true);
+                FUNC_GETCHAR(true);
       /*$D74C*/ s_pc = 0xd74c; CYCLES(0xd74c, 4);
                 branchTarget = true; block_id = !(s_status & STATUS_N) ? 187 : 188;
       break;
@@ -1385,7 +1385,7 @@ void func_t001(bool adjust_sp) {
       break;
     case 190:  // $D755
       /*$D755*/ s_pc = 0xd755; CYCLES(0xd755, 6);
-                func_d72c(true);
+                FUNC_GETCHAR(true);
       /*$D758*/ s_pc = 0xd758; CYCLES(0xd758, 4);
                 branchTarget = true; block_id = (s_status & STATUS_N) ? 193 : 191;
       break;
@@ -2356,7 +2356,7 @@ void func_t001(bool adjust_sp) {
       /*$DAB7*/ s_pc = 0xdab7; CYCLES(0xdab7, 12);
                 ram_poke(0x008c, s_a);
       /*$DAB9*/ ram_poke(0x008d, s_y);
-      /*$DABB*/ func_e635(true);
+      /*$DABB*/ FUNC_FRETMS(true);
       /*$DABE*/ s_pc = 0xdabe; CYCLES(0xdabe, 29);
       /*$DAC0*/ tmp2_U8 = peek(ram_peek16al(0x008c));
       /*$DAC2*/ poke(ram_peek16(0x0085), tmp2_U8);
@@ -4007,7 +4007,7 @@ void func_t001(bool adjust_sp) {
       break;
     case 613:  // $DFD0
       /*$DFD0*/ s_pc = 0xdfd0; CYCLES(0xdfd0, 6);
-                func_fb1e(true);
+                FUNC_PREAD(true);
       /*$DFD3*/ s_pc = 0xdfd3; CYCLES(0xdfd3, 6);
                 branchTarget = true; block_id = 740;
       break;
@@ -4489,7 +4489,7 @@ void func_t001(bool adjust_sp) {
       break;
     case 687:  // $E1AA
       /*$E1AA*/ s_pc = 0xe1aa; CYCLES(0xe1aa, 6);
-                func_e0ed(true);
+                FUNC_GETARY(true);
       /*$E1AD*/ s_pc = 0xe1ad; CYCLES(0xe1ad, 14);
                 tmp2_U8 = ram_peek(0x000f);
                 s_a = tmp2_U8;
@@ -4515,7 +4515,7 @@ void func_t001(bool adjust_sp) {
       break;
     case 691:  // $E1C1
       /*$E1C1*/ s_pc = 0xe1c1; CYCLES(0xe1c1, 6);
-                func_e0ed(true);
+                FUNC_GETARY(true);
       /*$E1C4*/ s_pc = 0xe1c4; CYCLES(0xe1c4, 6);
                 branchTarget = true; push16(0xe1c6); block_id = 32;
       break;
@@ -5701,7 +5701,7 @@ void func_t001(bool adjust_sp) {
       /*$E604*/ s_pc = 0xe604; CYCLES(0xe604, 12);
                 ram_poke(0x005e, s_a);
       /*$E606*/ ram_poke(0x005f, s_y);
-      /*$E608*/ func_e635(true);
+      /*$E608*/ FUNC_FRETMS(true);
       /*$E60B*/ s_pc = 0xe60b; CYCLES(0xe60b, 31);
                 push8(((s_status & STATUS_C) | (((~s_status & STATUS_Z) == 0) << 1) | (((s_status & STATUS_I) != 0) << 2) | (((s_status & STATUS_D) != 0) << 3) | STATUS_B | (((s_status & STATUS_V) != 0) << 6) | (s_status & STATUS_N)));
       /*$E60E*/ tmp1_U8 = peek(ram_peek16al(0x005e));
@@ -5903,7 +5903,7 @@ void func_t001(bool adjust_sp) {
       break;
     case 876:  // $E7BE
       /*$E7BE*/ s_pc = 0xe7be; CYCLES(0xe7be, 6);
-                func_e9e3(true);
+                FUNC_UPAY2ARG(true);
                 branchTarget = true; block_id = 877;
       break;
     case 877:  // $E7C1
@@ -6318,7 +6318,7 @@ void func_t001(bool adjust_sp) {
       break;
     case 924:  // $E97F
       /*$E97F*/ s_pc = 0xe97f; CYCLES(0xe97f, 6);
-                func_e9e3(true);
+                FUNC_UPAY2ARG(true);
       /*$E982*/ s_pc = 0xe982; CYCLES(0xe982, 4);
                 branchTarget = true; block_id = (~s_status & STATUS_Z) ? 926 : 925;
       break;
@@ -9293,7 +9293,7 @@ void func_t001(bool adjust_sp) {
                 tmp6_U8 = tmp1_U8 >> 0x01;
                 s_a = tmp6_U8;
       /*$F801*/ push8(((tmp1_U8 & 0x01) | ((tmp6_U8 == 0) << 1) | (((s_status & STATUS_I) != 0) << 2) | (((s_status & STATUS_D) != 0) << 3) | STATUS_B | (((s_status & STATUS_V) != 0) << 6) | (tmp6_U8 & 0x80)));
-      /*$F802*/ func_f847(true);
+      /*$F802*/ FUNC_GBASCALC(true);
       /*$F805*/ s_pc = 0xf805; CYCLES(0xf805, 9);
                 tmp1_U8 = pop8();
                 tmp6_U8 = tmp1_U8 & 0x01;
@@ -9409,7 +9409,7 @@ void func_t001(bool adjust_sp) {
                 tmp2_U8 = tmp1_U8 >> 0x01;
                 s_a = tmp2_U8;
       /*$F872*/ push8(((tmp1_U8 & 0x01) | ((tmp2_U8 == 0) << 1) | (((s_status & STATUS_I) != 0) << 2) | (((s_status & STATUS_D) != 0) << 3) | STATUS_B | (((s_status & STATUS_V) != 0) << 6) | (tmp2_U8 & 0x80)));
-      /*$F873*/ func_f847(true);
+      /*$F873*/ FUNC_GBASCALC(true);
       /*$F876*/ s_pc = 0xf876; CYCLES(0xf876, 6);
                 tmp1_U8 = peek((ram_peek16al(0x0026) + s_y));
                 s_a = tmp1_U8;
@@ -10794,7 +10794,7 @@ void func_t001(bool adjust_sp) {
       break;
     case 1579:  // $FDC0
       /*$FDC0*/ s_pc = 0xfdc0; CYCLES(0xfdc0, 6);
-                func_fcba(true);
+                FUNC_NXTA1(true);
       /*$FDC3*/ s_pc = 0xfdc3; CYCLES(0xfdc3, 4);
                 branchTarget = true; block_id = !(s_status & STATUS_C) ? 1575 : 1580;
       break;
@@ -10958,7 +10958,7 @@ void func_t001(bool adjust_sp) {
       break;
     case 1602:  // $FE5E
       /*$FE5E*/ s_pc = 0xfe5e; CYCLES(0xfe5e, 6);
-                func_fe75(true);
+                FUNC_A1PC(true);
       /*$FE61*/ s_pc = 0xfe61; CYCLES(0xfe61, 4);
                 s_a = 0x14;
                 block_id = 1603;
@@ -11035,9 +11035,9 @@ void func_t001(bool adjust_sp) {
       break;
     case 1613:  // $FEB6
       /*$FEB6*/ s_pc = 0xfeb6; CYCLES(0xfeb6, 6);
-                func_fe75(true);
+                FUNC_A1PC(true);
       /*$FEB9*/ s_pc = 0xfeb9; CYCLES(0xfeb9, 6);
-                func_ff3f(true);
+                FUNC_MON_RESTORE(true);
       /*$FEBC*/ s_pc = 0xfebc; CYCLES(0xfebc, 6);
                 branchTarget = true; block_id = find_block_id_func_t001(0xfebc, ram_peek16al(0x003a));
       break;
@@ -11095,7 +11095,7 @@ void func_t001(bool adjust_sp) {
       /*$FF1B*/ tmp1_U8 = tmp1_U8 ^ ram_peek(0x002e);
                 s_a = tmp1_U8;
       /*$FF1D*/ ram_poke(0x002e, tmp1_U8);
-      /*$FF1F*/ func_fcba(true);
+      /*$FF1F*/ FUNC_NXTA1(true);
       /*$FF22*/ s_pc = 0xff22; CYCLES(0xff22, 7);
                 s_y = 0x35;
       /*$FF24*/ branchTarget = true; block_id = !(s_status & STATUS_C) ? 1623 : 1625;
@@ -11149,12 +11149,12 @@ void func_t001(bool adjust_sp) {
       break;
     case 1633:  // $FF70
       /*$FF70*/ s_pc = 0xff70; CYCLES(0xff70, 6);
-                func_ffc7(true);
+                FUNC_ZMODE(true);
                 branchTarget = true; block_id = 1634;
       break;
     case 1634:  // $FF73
       /*$FF73*/ s_pc = 0xff73; CYCLES(0xff73, 6);
-                func_ffa7(true);
+                FUNC_GETNUM(true);
       /*$FF76*/ s_pc = 0xff76; CYCLES(0xff76, 7);
                 ram_poke(0x0034, s_y);
       /*$FF78*/ s_y = 0x17;
@@ -11188,7 +11188,7 @@ void func_t001(bool adjust_sp) {
       /*$FFC1*/ tmp1_U8 = ram_peek((0xffe3 + s_y));
       /*$FFC4*/ push8(0xfe);
       /*$FFC5*/ s_a = ram_peek(0x0031);
-                func_ffc7(false);
+                FUNC_ZMODE(false);
                 tmp2_U8 = pop8();
                 tmp2_U8 = pop8();
                 block_id = find_block_id_func_t001(0xffc4, ((tmp1_U8 + 0xfe00) + 0x0001));
@@ -11297,7 +11297,7 @@ static unsigned find_block_id_func_t001(uint16_t from_pc, uint16_t addr) {
   return addr_to_block_id(from_pc, addr, s_block_map_func_t001, sizeof(s_block_map_func_t001) / (sizeof(unsigned) * 2));
 };
 
-void func_d697(bool adjust_sp) {
+void FUNC_CLRTXTPTR(bool adjust_sp) {
   bool branchTarget = true;
   uint16_t tmp1_U16;
   uint16_t tmp2_U16;
@@ -11323,7 +11323,7 @@ bb_0:
 }
 
 
-void func_d72c(bool adjust_sp) {
+void FUNC_GETCHAR(bool adjust_sp) {
   bool branchTarget = true;
   uint8_t tmp1_U8;
 
@@ -11350,7 +11350,7 @@ bb_2:
 }
 
 
-void func_e0ed(bool adjust_sp) {
+void FUNC_GETARY(bool adjust_sp) {
   bool branchTarget = true;
   uint16_t tmp1_U16;
   uint16_t tmp2_U16;
@@ -11393,7 +11393,7 @@ bb_2:
 }
 
 
-void func_e635(bool adjust_sp) {
+void FUNC_FRETMS(bool adjust_sp) {
   bool branchTarget = true;
   uint8_t tmp1_U8;
   uint8_t tmp2_U8;
@@ -11446,7 +11446,7 @@ bb_3:
 }
 
 
-void func_e9e3(bool adjust_sp) {
+void FUNC_UPAY2ARG(bool adjust_sp) {
   bool branchTarget = true;
   uint8_t tmp1_U8;
 
@@ -11478,7 +11478,7 @@ bb_0:
 }
 
 
-void func_f847(bool adjust_sp) {
+void FUNC_GBASCALC(bool adjust_sp) {
   bool branchTarget = true;
   uint8_t tmp1_U8;
   uint8_t tmp2_U8;
@@ -11521,7 +11521,7 @@ bb_2:
 }
 
 
-void func_fb1e(bool adjust_sp) {
+void FUNC_PREAD(bool adjust_sp) {
   bool branchTarget = true;
   uint8_t tmp1_U8;
   uint8_t tmp2_U8;
@@ -11562,7 +11562,7 @@ bb_4:
 }
 
 
-void func_fcba(bool adjust_sp) {
+void FUNC_NXTA1(bool adjust_sp) {
   bool branchTarget = true;
   uint16_t tmp1_U16;
   uint16_t tmp2_U16;
@@ -11599,7 +11599,7 @@ bb_2:
 }
 
 
-void func_fe75(bool adjust_sp) {
+void FUNC_A1PC(bool adjust_sp) {
   bool branchTarget = true;
   uint8_t tmp1_U8;
   uint8_t tmp2_U8;
@@ -11636,7 +11636,7 @@ bb_2:
 }
 
 
-void func_fe84(bool adjust_sp) {
+void FUNC_SETNORM(bool adjust_sp) {
   bool branchTarget = true;
 
   if (adjust_sp)
@@ -11652,7 +11652,7 @@ bb_0:
 }
 
 
-void func_ff3f(bool adjust_sp) {
+void FUNC_MON_RESTORE(bool adjust_sp) {
   bool branchTarget = true;
   uint8_t tmp1_U8;
 
@@ -11677,7 +11677,7 @@ bb_0:
 }
 
 
-void func_ffa7(bool adjust_sp) {
+void FUNC_GETNUM(bool adjust_sp) {
   bool branchTarget = true;
   uint16_t tmp1_U16;
   uint8_t tmp2_U8;
@@ -11764,7 +11764,7 @@ bb_9:
 }
 
 
-void func_ffc7(bool adjust_sp) {
+void FUNC_ZMODE(bool adjust_sp) {
   bool branchTarget = true;
 
   if (adjust_sp)

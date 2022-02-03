@@ -15,6 +15,7 @@
 #include <optional>
 #include <unordered_map>
 #include <vector>
+#include <string>
 
 class Disas;
 
@@ -420,6 +421,13 @@ public:
     return uniqueId_;
   }
 
+  std::string const &getName() const {
+    return name_;
+  }
+  void setName(std::string name) {
+    name_ = std::move(name);
+  }
+
   Function *getFunction() const {
     return function_;
   }
@@ -473,6 +481,7 @@ private:
   /// Whether the address is "real" or it was synthesized just for informational purposes.
   bool realAddress_ = false;
   unsigned const uniqueId_;
+  std::string name_{};
 };
 
 /// Iterator over the terminator instructions that are predecessors of this basic block.
@@ -617,6 +626,13 @@ public:
 
   void dump();
 
+  std::string const &getName() const {
+    return name_;
+  }
+  void setName(std::string name) {
+    name_ = std::move(name);
+  }
+
   Module *getModule() const {
     return module_;
   }
@@ -658,6 +674,7 @@ private:
   CircularList<BasicBlock> bbList_{};
   unsigned const uniqueId_;
   unsigned nextBBId_ = 0;
+  std::string name_{};
 };
 
 namespace detail {

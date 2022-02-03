@@ -103,7 +103,7 @@ void func_768f(bool adjust_sp);
 void func_779e(bool adjust_sp);
 void func_7812(bool adjust_sp);
 void func_7979(bool adjust_sp);
-void func_fb1e(bool adjust_sp);
+void FUNC_PREAD(bool adjust_sp);
 
 static void emulated_entry_point(void) {
   func_t001(false);
@@ -679,7 +679,7 @@ void func_t001(bool adjust_sp) {
     case 94:  // $41B8
       /*$41B8*/ s_pc = 0x41b8; CYCLES(0x41b8, 11);
                 s_x = ram_peek(0x1508);
-      /*$41BB*/ func_fb1e(true);
+      /*$41BB*/ FUNC_PREAD(true);
       /*$41BE*/ s_pc = 0x41be; CYCLES(0x41be, 26);
                 tmp1_U8 = s_y;
       /*$41C3*/ s_status = (s_status & ~STATUS_C) | ((tmp1_U8 >> 0x04) & 0x01);
@@ -12224,7 +12224,7 @@ bb_1:
 bb_2:
   /*$418E*/ s_pc = 0x418e; CYCLES(0x418e, 16);
   /*$4191*/ ram_poke(0x1506, (s_a & ram_peek(0x1506)));
-  /*$4194*/ func_fb1e(true);
+  /*$4194*/ FUNC_PREAD(true);
   /*$4197*/ s_pc = 0x4197; CYCLES(0x4197, 11);
             s_x = 0x00;
             branchTarget = true;
@@ -14073,7 +14073,7 @@ bb_4:
 }
 
 
-void func_fb1e(bool adjust_sp) {
+void FUNC_PREAD(bool adjust_sp) {
   bool branchTarget = true;
   uint8_t tmp1_U8;
   uint8_t tmp2_U8;

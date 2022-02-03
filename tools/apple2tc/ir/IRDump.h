@@ -12,8 +12,6 @@
 
 #include <cstdio>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 
 namespace ir {
 
@@ -49,24 +47,24 @@ protected:
 
 private:
   struct PerFunction {
-    std::unordered_map<Value *, std::string> names{};
+    IRNamer namer{};
     int instNameWidth = 0;
     size_t instCount = 0;
-    size_t blockCount = 0;
+    size_t anonBlockCount = 0;
     uint32_t lastAddr = ~(uint32_t)0;
 
     void clear() {
-      names.clear();
+      namer.clear();
       instNameWidth = 0;
       instCount = 0;
-      blockCount = 0;
+      anonBlockCount = 0;
       lastAddr = ~(uint32_t)0;
     }
   };
 
   PerFunction perFunction_{};
-  std::unordered_map<Value *, std::string> globalNames_;
-  size_t funcCount_ = 0;
+  IRNamer namer_{};
+  size_t anonFuncCount_ = 0;
 };
 
 } // namespace ir
