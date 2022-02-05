@@ -345,16 +345,11 @@ void IdentifySimpleRoutines::splitARoutine(BasicBlock *entry, Candidate &cand) {
   // Replace all RTS with Return. Record all return addresses.
   std::unordered_set<BasicBlock *> dynamicReturnBlocks{};
 
+  // Extract all return addresses.
   for (auto *inst : cand.rts) {
-    // Extract all return addresses.
     for (unsigned i = 1, count = inst->getNumOperands(); i < count; ++i)
       dynamicReturnBlocks.insert(cast<BasicBlock>(inst->getOperand(i)));
-
-    builder.setInsertionPointAfter(inst);
-    builder.createReturn();
-    inst->eraseFromBasicBlock();
   }
-  cand.rts.clear();
 
   // Replace all JSRs with Call and Jmp.
   for (auto &iRef : predecessorInsts(*entry)) {
@@ -393,7 +388,7 @@ void IdentifySimpleRoutines::splitARoutine(BasicBlock *entry, Candidate &cand) {
       builder.createCall(cand.func, builder.getLiteralU8(0));
       builder.createPop8();
       builder.createPop8();
-      
+
       auto *jmpInd = builder.createJmpInd(addr);
       for (auto *bb : dynamicReturnBlocks)
         jmpInd->pushOperand(bb);
@@ -425,6 +420,16 @@ void IdentifySimpleRoutines::splitARoutine(BasicBlock *entry, Candidate &cand) {
   for (auto *bb : sortedBlocks)
     if (bb != entry)
       cand.func->importBasicBlock(bb);
+
+  cand.func->createExitBlock();
+
+  // Replace all RTS with Return.
+  for (auto *inst : cand.rts) {
+    builder.setInsertionPointAfter(inst);
+    builder.createReturn(cand.func->getExitBlock());
+    inst->eraseFromBasicBlock();
+  }
+  cand.rts.clear();
 }
 
 } // namespace

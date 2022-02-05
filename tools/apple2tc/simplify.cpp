@@ -581,7 +581,7 @@ static Value *simplifyInst(IRBuilder &builder, Instruction *inst) {
   case ValueKind::JmpInd:
     // (JmpInd (CPUAddr2BB const)) => (Jmp bb)
     if (inst->getOperand(0)->getKind() == ValueKind::CPUAddr2BB) {
-      auto * addr2bb = cast<Instruction>(inst->getOperand(0));
+      auto *addr2bb = cast<Instruction>(inst->getOperand(0));
       if (auto *addr = dyn_cast<LiteralU16>(addr2bb->getOperand(0))) {
         if (auto *bb = inst->getBasicBlock()->getFunction()->findBasicBlock(addr->getValue())) {
           builder.setInsertionPointAfter(inst);
@@ -634,6 +634,10 @@ static bool simplifyCFG(Function *func) {
         break;
 
       auto *nextBlock = cast<BasicBlock>(terminator->getOperand(0));
+      // Can't touch the exit block.
+      if (nextBlock == func->getExitBlock())
+        break;
+
       auto insts = nextBlock->instructions();
       for (auto it = insts.begin(); it != insts.end();) {
         auto cur = it++;

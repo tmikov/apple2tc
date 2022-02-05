@@ -13,9 +13,9 @@
 #include "apple2tc/IteratorRange.h"
 
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <vector>
-#include <string>
 
 class Disas;
 
@@ -447,7 +447,7 @@ public:
     return makeIteratorRange(instList_.rbegin(), instList_.rend());
   }
 
-  auto instructionToIterator(Instruction *inst ) {
+  auto instructionToIterator(Instruction *inst) {
     return CircularList<Instruction>::iterator(inst);
   }
 
@@ -650,6 +650,12 @@ public:
 
   BasicBlock *createBasicBlock();
 
+  BasicBlock *getExitBlock() const {
+    assert(exitBlock_ && "The exit block is not set");
+    return exitBlock_;
+  }
+  void createExitBlock();
+
   /// Move a basic block from a different function into this one. Even if the
   /// block already belongs to this function, it will be removed from the list
   /// and appended to the end.
@@ -672,6 +678,7 @@ public:
 private:
   Module *module_;
   CircularList<BasicBlock> bbList_{};
+  BasicBlock *exitBlock_ = nullptr;
   unsigned const uniqueId_;
   unsigned nextBBId_ = 0;
   std::string name_{};
@@ -698,18 +705,12 @@ inline auto sizeIfPresent(const void *) -> size_t {
 } // namespace detail
 
 /// Sort a sequence of blocks using their addresses, when available. Block 0
-/// is assumed to be the entry point and is not sorted.
+/// is assumed to be the entry point and is optionally not sorted.
 template <class T, class R>
-std::vector<T *> sortByAddress(const R &range, bool excludeFirst) {
-  std::vector<T *> sortedBlocks{};
-  sortedBlocks.reserve(detail::sizeIfPresent(&range));
-
-  for (auto &x : range)
-    sortedBlocks.push_back(detail::toPointer(x));
-
+void sortInplaceByAddress(R &blocks, bool excludeFirst) {
   // Note that we are optionally not sorting the entry block.
-  if (sortedBlocks.size() > 1 + excludeFirst) {
-    std::sort(sortedBlocks.begin() + excludeFirst, sortedBlocks.end(), [](T *a, T *b) -> bool {
+  if (blocks.size() > 1 + excludeFirst) {
+    std::sort(blocks.begin() + excludeFirst, blocks.end(), [](T *a, T *b) -> bool {
       auto addrA = a->getAddress().value_or(0x10000);
       auto addrB = b->getAddress().value_or(0x10000);
       if (addrA < addrB)
@@ -720,6 +721,17 @@ std::vector<T *> sortByAddress(const R &range, bool excludeFirst) {
         return false;
     });
   }
+}
+
+/// Sort a sequence of blocks using their addresses, when available. Block 0
+/// is assumed to be the entry point and is optionally not sorted.
+template <class T, class R>
+std::vector<T *> sortByAddress(const R &range, bool excludeFirst) {
+  std::vector<T *> sortedBlocks{};
+  sortedBlocks.reserve(detail::sizeIfPresent(&range));
+  for (auto &x : range)
+    sortedBlocks.push_back(detail::toPointer(x));
+  sortInplaceByAddress<T>(sortedBlocks, excludeFirst);
   return sortedBlocks;
 }
 

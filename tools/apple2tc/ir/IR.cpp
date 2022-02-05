@@ -256,6 +256,15 @@ BasicBlock *Function::createBasicBlock() {
   return block;
 }
 
+void Function::createExitBlock() {
+  assert(!exitBlock_ && "The exit block can be set only once");
+  auto *block = createBasicBlock();
+  IRBuilder builder(getModule()->getContext());
+  builder.setInsertionBlock(block);
+  builder.createExit();
+  exitBlock_ = block;
+}
+
 void Function::importBasicBlock(BasicBlock *bb) {
   bb->getFunction()->bbList_.remove(bb);
   bbList_.push_back(bb);

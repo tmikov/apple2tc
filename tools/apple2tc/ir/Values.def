@@ -185,7 +185,11 @@ IR_INST1(CPUAddr2BB, IndBasicBlock, U16)
 /// void call(Function, bool adjust_sp)
 IR_INST2(Call, Void, Function, U8)
 
-IR_INST0(Return, Void)
+/// "Return" is a branch to the Exit block.
+IR_INST1(Return, Void, BasicBlock)
+/// Every function contains exactly one exit block. It can't be eliminated or
+/// merged with other blocks.
+IR_INST0(Exit, Void)
 IR_INST1(Jmp, Void, BasicBlock)
 IR_INST3(JTrue, Void, U8, BasicBlock, BasicBlock)
 IR_INST3(JFalse, Void, U8, BasicBlock, BasicBlock)

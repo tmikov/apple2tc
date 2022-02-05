@@ -388,7 +388,12 @@ IRC1::~IRC1() = default;
 void IRC1::runFunc() {
   scanForDynamicBlocks();
 
-  auto sortedBlocks = sortByAddress<BasicBlock>(func_->basicBlocks(), true);
+  std::vector<BasicBlock *> sortedBlocks{};
+  for (auto &rBB : func_->basicBlocks())
+    if (&rBB != func_->getExitBlock())
+      sortedBlocks.push_back(&rBB);
+  sortInplaceByAddress<BasicBlock>(sortedBlocks, true);
+
   // "name" the blocks consistently.
   for (auto *bb : sortedBlocks)
     blockID(bb);
@@ -1020,6 +1025,7 @@ void IRC1::printCall(Instruction *inst) {
 void IRC1::printReturn(Instruction *inst) {
   bprintf(obuf_, "if (adjust_sp) pop16(); return");
 }
+void IRC1::printExit(Instruction *inst) {}
 void IRC1::printJmp(Instruction *inst) {
   if (needDynamicBlocks()) {
     printBranchTarget(inst);
