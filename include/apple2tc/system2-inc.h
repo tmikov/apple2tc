@@ -153,6 +153,7 @@ static struct ResAndStatus adc_decimal(uint8_t a, uint8_t b, uint8_t cf) {
 
 /// Perform A - B - Carry in decimal mode and update the flags.
 static struct ResAndStatus sbc_decimal(uint8_t a, uint8_t b, uint8_t cf) {
+  cf = ~cf & STATUS_C;
   uint8_t al = (a & 15) - (b & 15) - cf;
   if ((int8_t)(al) < 0)
     al -= 6;
