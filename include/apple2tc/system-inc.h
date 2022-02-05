@@ -71,8 +71,13 @@ unsigned get_cycles(void) {
 const uint8_t *get_ram(void) {
   return s_ram;
 }
-void ram_poke(uint16_t addr, uint8_t value) {
+static inline void ram_poke_impl(uint16_t addr, uint8_t value) {
+  if (g_debug & DebugMem)
+    printf("$%04x: $%04x=$%02x\n", s_pc, addr, value);
   s_ram[addr] = value;
+}
+void ram_poke(uint16_t addr, uint8_t value) {
+  ram_poke_impl(addr, value);
 }
 uint8_t ram_peek(uint16_t addr) {
   return s_ram[addr];
@@ -89,7 +94,7 @@ static inline uint8_t peek_zpg(uint8_t addr) {
   return s_ram[addr];
 }
 static inline void poke_zpg(uint8_t addr, uint8_t value) {
-  s_ram[addr] = value;
+  ram_poke_impl(addr, value);
 }
 static uint16_t peek16_zpg(uint8_t addr) {
   return peek_zpg(addr) + (peek_zpg(addr + 1) << 8);
@@ -102,7 +107,7 @@ static uint8_t peek(uint16_t addr) {
 }
 static inline void poke(uint16_t addr, uint8_t value) {
   if (addr < 0xC000) {
-    s_ram[addr] = value;
+    ram_poke_impl(addr, value);
   } else if (addr <= 0xCFFF) {
     io_poke(addr, value);
   } else {
@@ -118,7 +123,7 @@ static uint16_t peek16al(uint16_t addr) {
 }
 
 static inline void push8(uint8_t v) {
-  s_ram[STACK_PAGE_ADDR + s_sp--] = v;
+  ram_poke_impl(STACK_PAGE_ADDR + s_sp--, v);
 }
 static inline uint8_t pop8() {
   return s_ram[STACK_PAGE_ADDR + ++s_sp];
