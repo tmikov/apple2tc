@@ -10,5 +10,6 @@ add_library(support STATIC
   ${A2TC_INC}/CircularList.h
   ${A2TC_INC}/IteratorRange.h
   ${A2TC_INC}/SaveAndRestore.h
+  ${A2TC_INC}/SetVector.h
   )
 
