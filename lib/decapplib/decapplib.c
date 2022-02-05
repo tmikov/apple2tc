@@ -396,6 +396,7 @@ static void print_help() {
   printf(" --kbd-file=path  Read keyboard input from the specified file\n");
   printf(" --fast           Emulate a faster CPU\n");
   printf(" --trace          Dump state at branch targets\n");
+  printf(" --trace-mem      Dump all memory writes\n");
   printf(" --count-bt       Count branch targets\n");
 }
 
@@ -420,6 +421,10 @@ static void parse_args(int argc, char *argv[]) {
     }
     if (strcmp(arg, "--trace") == 0) {
       g_debug |= DebugASM;
+      continue;
+    }
+    if (strcmp(arg, "--trace-mem") == 0) {
+      g_debug |= DebugMem;
       continue;
     }
     if (strcmp(arg, "--debug-bt") == 0) {

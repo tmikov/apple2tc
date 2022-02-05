@@ -45,6 +45,7 @@ typedef struct {
 enum  {
   DebugASM = 1,
   DebugCountBB = 2,
+  DebugMem = 4,
 };
 
 extern uint8_t g_debug;
