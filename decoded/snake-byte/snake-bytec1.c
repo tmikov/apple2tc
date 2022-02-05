@@ -13093,7 +13093,7 @@ bb_0:
             s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
             s_a = tmp2_U8;
   /*$6144*/ ram_poke(0x6063, tmp2_U8);
-            if (adjust_sp) pop16(); return;
+  /*$6B93*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13150,7 +13150,7 @@ bb_6:
               goto bb_4;
 bb_7:
   /*$64C7*/ s_pc = 0x64c7; CYCLES(0x64c7, 2);
-            if (adjust_sp) pop16(); return;
+  /*$763E*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13174,7 +13174,7 @@ bb_0:
   /*$6630*/ s_status = (s_status & ~STATUS_Z) | (0x14 ? 0 : STATUS_Z);
             s_status = (s_status & ~STATUS_N) | 0x00;
             s_a = 0x14;
-            if (adjust_sp) pop16(); return;
+  /*$6258*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13191,7 +13191,7 @@ bb_0:
             s_status = (s_status & ~STATUS_N) | 0x00;
             s_a = 0x66;
   /*$6647*/ ram_poke(0x0037, 0x66);
-            if (adjust_sp) pop16(); return;
+  /*$793F*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13237,7 +13237,7 @@ bb_4:
   /*$69BE*/ ram_poke(0x69c2, tmp2_U8);
 bb_5:
   /*$69C1*/ s_pc = 0x69c1; CYCLES(0x69c1, 2);
-            if (adjust_sp) pop16(); return;
+  /*$639B*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13301,7 +13301,7 @@ bb_4:
               goto bb_1;
 bb_5:
   /*$6BD9*/ s_pc = 0x6bd9; CYCLES(0x6bd9, 2);
-            if (adjust_sp) pop16(); return;
+  /*$6BE6*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13382,7 +13382,7 @@ bb_10:
               goto bb_1;
 bb_11:
   /*$6C45*/ s_pc = 0x6c45; CYCLES(0x6c45, 2);
-            if (adjust_sp) pop16(); return;
+  /*$6453*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13423,7 +13423,7 @@ bb_3:
             goto bb_2;
 bb_4:
   /*$6C62*/ s_pc = 0x6c62; CYCLES(0x6c62, 2);
-            if (adjust_sp) pop16(); return;
+  /*$7647*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13454,7 +13454,7 @@ bb_1:
             ram_poke(0x000b, tmp1_U8);
 bb_2:
   /*$7023*/ s_pc = 0x7023; CYCLES(0x7023, 2);
-            if (adjust_sp) pop16(); return;
+  /*$71B7*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13494,7 +13494,7 @@ bb_2:
               goto bb_1;
 bb_3:
   /*$7044*/ s_pc = 0x7044; CYCLES(0x7044, 2);
-            if (adjust_sp) pop16(); return;
+  /*$747F*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13559,7 +13559,7 @@ bb_7:
 bb_8:
   /*$71F1*/ s_pc = 0x71f1; CYCLES(0x71f1, 4);
             s_status = (s_status & ~STATUS_D) | (0x00 << 3);
-            if (adjust_sp) pop16(); return;
+  /*$76EA*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13652,7 +13652,7 @@ bb_8:
   /*$72CA*/ ram_poke(0x7259, tmp1_U8);
 bb_9:
   /*$72CD*/ s_pc = 0x72cd; CYCLES(0x72cd, 2);
-            if (adjust_sp) pop16(); return;
+  /*$7694*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13705,7 +13705,7 @@ bb_5:
             s_status = (s_status & ~STATUS_N) | (tmp3_U8 & 0x80);
 bb_6:
   /*$D6A2*/ ram_poke(0x00b9, s_a);
-            if (adjust_sp) pop16(); return;
+  /*$D665*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13770,7 +13770,7 @@ bb_8:
   /*$E0F9*/ s_pc = 0xe0f9; CYCLES(0xe0f9, 9);
             ram_poke(0x0094, s_a);
   /*$E0FB*/ ram_poke(0x0095, s_y);
-            if (adjust_sp) pop16(); return;
+  /*$E1C1*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13832,7 +13832,7 @@ bb_5:
             s_y = 0x00;
 bb_6:
   /*$E645*/ s_pc = 0xe645; CYCLES(0xe645, 2);
-            if (adjust_sp) pop16(); return;
+  /*$E608*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13864,7 +13864,7 @@ bb_0:
             s_status = (s_status & ~STATUS_Z) | (tmp1_U8 ? 0 : STATUS_Z);
             s_status = (s_status & ~STATUS_N) | (tmp1_U8 & 0x80);
             s_a = tmp1_U8;
-            if (adjust_sp) pop16(); return;
+  /*$E97F*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13916,7 +13916,7 @@ bb_4:
             s_status = (s_status & ~STATUS_N) | (tmp2_U8 & 0x80);
             s_a = tmp2_U8;
   /*$F85C*/ ram_poke(0x0026, tmp2_U8);
-            if (adjust_sp) pop16(); return;
+  /*$F873*/ if (adjust_sp) pop16(); return;
 bb_5:
             goto bb_4;
 }
@@ -13934,7 +13934,7 @@ bb_0:
             s_status = (s_status & ~STATUS_N) | 0x80;
             s_y = 0xff;
   /*$FE86*/ ram_poke(0x0032, 0xff);
-            if (adjust_sp) pop16(); return;
+  /*$FA63*/ if (adjust_sp) pop16(); return;
 }
 
 
@@ -13959,7 +13959,7 @@ bb_0:
             s_x = tmp1_U8;
   /*$FF55*/ ram_poke(0x0049, tmp1_U8);
   /*$FF57*/ s_status = (s_status & ~STATUS_D) | (0x00 << 3);
-            if (adjust_sp) pop16(); return;
+  /*$FA4D*/ if (adjust_sp) pop16(); return;
 }
 
 static const uint8_t s_mem_00b1[0x0018] = {
