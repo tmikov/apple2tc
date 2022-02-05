@@ -14,6 +14,26 @@
 
 namespace ir {
 
+namespace detail {
+template <class T>
+T *toPointer(T *x) {
+  return x;
+}
+template <class T>
+T *toPointer(T &x) {
+  return &x;
+}
+
+template <class T>
+inline auto sizeIfPresent(const T *t) -> decltype(t->size()) {
+  return t->size();
+}
+inline auto sizeIfPresent(const void *) -> size_t {
+  return 0;
+}
+
+} // namespace detail
+
 struct GraphTraits {
   static auto predecessors(BasicBlock *bb) {
     return ::ir::predecessors(*bb);
@@ -174,5 +194,36 @@ public:
 
   const std::string &getExistingName(Value *v) const;
 };
+
+/// Sort a sequence of blocks using their addresses, when available. Block 0
+/// is assumed to be the entry point and is optionally not sorted.
+template <class T, class R>
+void sortInplaceByAddress(R &blocks, bool excludeFirst) {
+  // Note that we are optionally not sorting the entry block.
+  if (blocks.size() > 1 + excludeFirst) {
+    std::sort(blocks.begin() + excludeFirst, blocks.end(), [](T *a, T *b) -> bool {
+      auto addrA = a->getAddress().value_or(0x10000);
+      auto addrB = b->getAddress().value_or(0x10000);
+      if (addrA < addrB)
+        return true;
+      else if (addrA == addrB)
+        return a->getUniqueId() < b->getUniqueId();
+      else
+        return false;
+    });
+  }
+}
+
+/// Sort a sequence of blocks using their addresses, when available. Block 0
+/// is assumed to be the entry point and is optionally not sorted.
+template <class T, class R>
+std::vector<T *> sortByAddress(const R &range, bool excludeFirst) {
+  std::vector<T *> sortedBlocks{};
+  sortedBlocks.reserve(detail::sizeIfPresent(&range));
+  for (auto &x : range)
+    sortedBlocks.push_back(detail::toPointer(x));
+  sortInplaceByAddress<T>(sortedBlocks, excludeFirst);
+  return sortedBlocks;
+}
 
 } // namespace ir
