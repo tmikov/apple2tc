@@ -52,93 +52,136 @@ struct InverseGraphTraits {
   }
 };
 
-template <class Traits = GraphTraits>
+/// A setting informing algorithms whether to process unreachable blocks.
+/// Sometimes it is necessary to visit unreachable blocks. For example:
+///     - when the control flow is not fully known
+///     - when there are multiple exits and we are operating on the inverse graph.
+enum class VisitUnreachable {
+  /// Do not visit unreachable blocks.
+  No,
+  /// Visit blocks without predecessors.
+  ExceptLoops,
+  /// Visit all remaining unvisited blocks. They might have predecessors and
+  /// still be unreachable if they belong to unreachable loops.
+  All,
+};
+
+template <class T, class Range, class Traits = GraphTraits>
 class GenPostOrder {
-  std::unordered_set<BasicBlock *> visited_{};
-  std::vector<BasicBlock *> order_{};
+  VisitUnreachable const vu_;
+  const Traits &traits_;
+  std::unordered_set<T *> visited_{};
+  std::vector<T *> order_{};
+
+  explicit GenPostOrder(VisitUnreachable vu, Traits const &traits) : vu_(vu), traits_(traits) {}
 
 public:
   /// \param entryBlock optional entry point to visit virst.
-  static std::vector<BasicBlock *> run(Function *func, BasicBlock *entryBlock) {
-    GenPostOrder obj;
-    obj.runImpl(func, entryBlock);
+  static std::vector<T *>
+  run(VisitUnreachable vu, const Range &range, T *entryBlock, const Traits &traits = Traits()) {
+    GenPostOrder obj(vu, traits);
+    obj.runImpl(range, entryBlock);
     return std::move(obj.order_);
   }
 
 private:
-  void runImpl(Function *func, BasicBlock *entryBlock) {
+  void runImpl(const Range &range, T *entryBlock) {
     // Visit all blocks directly reachable from the entry point.
     if (entryBlock)
       visit(entryBlock);
-    // Count how many blocks there are, for debugging.
-    unsigned bbCount = 0;
-    // Visit all blocks without known predecessors.
-    for (auto &rbb : func->basicBlocks()) {
-      if (Traits::predecessors(&rbb).empty())
-        visit(&rbb);
-      ++bbCount;
+    if (vu_ >= VisitUnreachable::ExceptLoops) {
+      // Visit all blocks without known predecessors.
+      for (auto &rbb : range) {
+        if (traits_.predecessors(&rbb).empty())
+          visit(&rbb);
+      }
     }
-    // Visit all remaining unvisited blocks. They are parts of unreachable loops.
-    for (auto &rbb : func->basicBlocks())
-      visit(&rbb);
-    assert(bbCount == order_.size() && "All blocks must have been visited");
+    if (vu_ >= VisitUnreachable::All) {
+      // Visit all remaining unvisited blocks. They are parts of unreachable loops.
+      for (auto &rbb : range)
+        visit(&rbb);
+    }
   }
 
-  inline void visit(BasicBlock *bb) {
+  inline void visit(T *bb) {
     if (!visited_.insert(bb).second)
       return;
     visitSlowPath(bb);
   }
 
-  void visitSlowPath(BasicBlock *bb) {
-    for (auto &succ : Traits::successors(bb))
-      visit(&succ);
+  void visitSlowPath(T *bb) {
+    for (auto &succ : traits_.successors(bb))
+      visit(detail::toPointer(succ));
     order_.push_back(bb);
   }
 };
 
-template <class Traits = GraphTraits>
+template <class T, class Range, class Traits = GraphTraits>
+std::vector<T *>
+genPostOrder(VisitUnreachable vu, const Range &range, T *entry, const Traits &traits = Traits()) {
+  return GenPostOrder<T, Range, Traits>::run(vu, range, entry, traits);
+}
+
+template <class T, class Range, class Traits = GraphTraits>
 class GenEntryBlocks {
-  std::unordered_set<BasicBlock *> visited_{};
-  std::vector<BasicBlock *> entryPoins_{};
+  VisitUnreachable const vu_;
+  const Traits &traits_;
+  std::unordered_set<T *> visited_{};
+  std::vector<T *> entryPoins_{};
+
+  explicit GenEntryBlocks(VisitUnreachable vu, Traits const &traits) : vu_(vu), traits_(traits) {}
 
 public:
   /// \param entryBlock optional entry point to visit virst.
-  static std::vector<BasicBlock *> run(Function *func, BasicBlock *entryBlock) {
-    GenEntryBlocks obj;
-    obj.runImpl(func, entryBlock);
+  static std::vector<T *>
+  run(VisitUnreachable vu, const Range &range, T *entryBlock, const Traits &traits = Traits()) {
+    GenEntryBlocks obj(vu, traits);
+    obj.runImpl(range, entryBlock);
     return std::move(obj.entryPoins_);
   }
 
 private:
-  void runImpl(Function *func, BasicBlock *entryPoint) {
+  void runImpl(const Range &range, T *entryPoint) {
     // Visit all blocks directly reachable from the entry point.
     if (entryPoint)
       visit(entryPoint, true);
-    // Visit all blocks without known predecessors.
-    for (auto &rbb : func->basicBlocks()) {
-      if (Traits::predecessors(&rbb).empty())
+    if (vu_ >= VisitUnreachable::ExceptLoops) {
+      // Visit all blocks without known predecessors.
+      for (auto &rbb : range) {
+        if (traits_.predecessors(&rbb).empty())
+          visit(&rbb, true);
+      }
+    }
+    if (vu_ >= VisitUnreachable::All) {
+      // Visit all remaining unvisited blocks. They are parts of unreachable loops.
+      for (auto &rbb : range)
         visit(&rbb, true);
     }
-    // Visit all remaining unvisited blocks. They are parts of unreachable loops.
-    for (auto &rbb : func->basicBlocks())
-      visit(&rbb, true);
   }
 
-  inline bool visit(BasicBlock *bb, bool addToEPs) {
+  inline bool visit(T *bb, bool addToEPs) {
     if (!visited_.insert(bb).second)
       return false;
     visitSlowPath(bb, addToEPs);
     return true;
   }
 
-  void visitSlowPath(BasicBlock *bb, bool addToEPs) {
+  void visitSlowPath(T *bb, bool addToEPs) {
     if (addToEPs)
       entryPoins_.push_back(bb);
-    for (auto &succ : Traits::successors(bb))
-      visit(&succ, false);
+    for (auto &succ : traits_.successors(bb))
+      visit(detail::toPointer(succ), false);
   }
 };
+
+template <class T, class Range, class Traits = GraphTraits>
+std::vector<T *> genEntryBlocks(
+    VisitUnreachable vu,
+    const Range &range,
+    T *entryBlock,
+    const Traits &traits = Traits()) {
+  return GenEntryBlocks<T, Range, Traits>::run(vu, range, entryBlock, traits);
+}
 
 /// Range32 takes into consideration 16-bit wraparound, where the end of the
 /// range is larger than 0x10000, meaning it is actually the value & 0xFFFF.

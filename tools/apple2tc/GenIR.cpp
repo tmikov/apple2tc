@@ -960,7 +960,3 @@ Module *genIR(const std::shared_ptr<Disas> &disas, ir::IRContext &ctx) {
   GenIR genIR(disas, &ctx);
   return genIR.run();
 }
-
-void dumpModule(ir::Module *mod, bool irTrees) {
-  ir::IRDumper(stdout, irTrees).dump(mod);
-}

@@ -180,11 +180,16 @@ int main(int argc, char **argv) {
       if (optLevel > 2) {
         simplifyCFG(mod);
         simplify(mod);
+        // Enabling this breaks Snake Byte. Not clear why yet!
+        // localCPURegSSA(mod);
+        // dce(mod);
       }
-      if (action == Action::GenIR)
-        dumpModule(mod, irTrees);
-      else
+      if (action == Action::GenIR) {
+        auto regLiveness = liveness(mod);
+        dumpModule(mod, irTrees, regLiveness.get());
+      } else {
         printIRC1(mod, stdout, irTrees);
+      }
       break;
     }
     }
