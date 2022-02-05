@@ -618,6 +618,15 @@ class Function : public Value {
         uniqueId_(uniqueId) {}
 
 public:
+  enum class DecompileLevel {
+    /// Still contains undefined control flow, JSR & RTS instructions,
+    /// potentially unbalanced stack manipulation, etc.
+    Low,
+    /// Fully defined control flow, no JSR/RTS, balanced stack. All calls
+    /// to this routine are known (even if indirect).
+    Normal,
+  };
+
   ~Function() override;
 
   static bool classof(const Value *v) {
@@ -631,6 +640,13 @@ public:
   }
   void setName(std::string name) {
     name_ = std::move(name);
+  }
+
+  DecompileLevel getDecompileLevel() const {
+    return decompileLevel_;
+  }
+  void setDecompileLevel(DecompileLevel decompileLevel) {
+    decompileLevel_ = decompileLevel;
   }
 
   Module *getModule() const {
@@ -682,6 +698,7 @@ private:
   unsigned const uniqueId_;
   unsigned nextBBId_ = 0;
   std::string name_{};
+  DecompileLevel decompileLevel_ = DecompileLevel::Low;
 };
 
 namespace detail {

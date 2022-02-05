@@ -341,6 +341,7 @@ void IdentifySimpleRoutines::splitARoutine(BasicBlock *entry, Candidate &cand) {
 
   cand.func = mod->createFunction();
   cand.func->setName(entry->getName());
+  cand.func->setDecompileLevel(Function::DecompileLevel::Normal);
 
   // Replace all RTS with Return. Record all return addresses.
   std::unordered_set<BasicBlock *> dynamicReturnBlocks{};
