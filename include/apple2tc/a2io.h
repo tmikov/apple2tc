@@ -133,8 +133,18 @@ static inline void a2_io_set_spkr_cb(
 }
 /// Return false if the keyboard queue was full.
 bool a2_io_push_key(a2_iostate_t *io, uint8_t key);
+/// Push a key only if the queue is empty. Return true if pushed.
+/// This method should ordinarily be used for interactive input, since we don't
+/// want to emulate a keyboard queue where the Apple II didn't have one.
+static inline bool a2_io_push_key_if_empty(a2_iostate_t *io, uint8_t key) {
+  return io->keys_count == 0 ? a2_io_push_key(io, key) : false;
+}
 /// Push either the entire string or nothing. Return true on success.
 bool a2_io_push_str(a2_iostate_t *io, const char *str);
+/// Return the number of keys in the queue.
+static inline unsigned a2_io_keys_count(const a2_iostate_t *io) {
+  return io->keys_count;
+}
 /// Return the number of keys that can be pushed onto the keyboard queue.
 static inline unsigned a2_io_keys_expect(const a2_iostate_t *io) {
   return A2_KBD_QUEUE_SIZE - io->keys_count;

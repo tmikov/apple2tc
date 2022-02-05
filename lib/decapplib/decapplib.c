@@ -364,22 +364,22 @@ static void event_cb(const sapp_event *ev) {
     else if (isalpha(k))
       k = toupper(k);
     if (k != toIgnore)
-      a2_io_push_key(&io_, k);
+      a2_io_push_key_if_empty(&io_, k);
   } else if (ev->type == SAPP_EVENTTYPE_KEY_DOWN) {
     switch (ev->key_code) {
     case SAPP_KEYCODE_DELETE:
     case SAPP_KEYCODE_BACKSPACE:
     case SAPP_KEYCODE_LEFT:
-      a2_io_push_key(&io_, ignoreNextCh_ = 8);
+      a2_io_push_key_if_empty(&io_, ignoreNextCh_ = 8);
       break;
     case SAPP_KEYCODE_RIGHT:
-      a2_io_push_key(&io_, ignoreNextCh_ = 21); // CTRL+U
+      a2_io_push_key_if_empty(&io_, ignoreNextCh_ = 21); // CTRL+U
       break;
     case SAPP_KEYCODE_ENTER:
-      a2_io_push_key(&io_, ignoreNextCh_ = 13);
+      a2_io_push_key_if_empty(&io_, ignoreNextCh_ = 13);
       break;
     case SAPP_KEYCODE_ESCAPE:
-      a2_io_push_key(&io_, ignoreNextCh_ = 27);
+      a2_io_push_key_if_empty(&io_, ignoreNextCh_ = 27);
       break;
     default:
       break;
