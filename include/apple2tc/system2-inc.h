@@ -208,13 +208,14 @@ static void cycles_expired() {
 
 #define CYCLES(pc, cycles)                      \
   do {                                          \
+    if (s_remaining_cycles <= 0)                \
+      cycles_expired();                         \
     s_cycles += (cycles);                       \
+    s_remaining_cycles -= (cycles);             \
     if ((g_debug & DebugASM) && branchTarget) { \
       branchTarget = false;                     \
       debug_asm(pc);                            \
     }                                           \
-    if ((s_remaining_cycles -= (cycles)) <= 0)  \
-      cycles_expired();                         \
   } while (0)
 
 void run_emulated(unsigned run_cycles) {

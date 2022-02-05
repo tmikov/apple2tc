@@ -19,15 +19,28 @@ static uint8_t s_y = 0;
 static uint8_t s_status = 0;
 static uint8_t s_sp = 0;
 
-static unsigned s_cycles = 0;
+static int s_cycles = 0;
+static int s_remaining_cycles = 0;
 
 static uint8_t s_ram[0x10000];
 
 uint8_t g_debug = 0;
 
 #define CYCLES(pc, cycles) \
-  (void)(s_cycles += (cycles), (g_debug & DebugASM) && branchTarget ? (branchTarget = false, debug_asm(pc)) : (void)0)
+  (void)(s_cycles += (cycles), s_remaining_cycles -= (cycles), (g_debug & DebugASM) && branchTarget ? (branchTarget = false, debug_asm(pc)) : (void)0)
 
+//#define CYCLES(pc, cycles)                      \
+//  do {                                          \
+//    s_pc = (pc);                                \
+//    s_cycles += (cycles);                       \
+//    if ((g_debug & DebugASM) && branchTarget) { \
+//      branchTarget = false;                     \
+//      debug_asm(pc);                            \
+//    }                                           \
+//    if ((s_remaining_cycles -= (cycles)) <= 0)  \
+//      return;                                   \
+//  } while (0)
+//
 void reset_regs(void) {
   memset(s_ram, 0xFF, 0x10000);
   s_pc = 0;

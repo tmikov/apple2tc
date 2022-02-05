@@ -176,13 +176,14 @@ int main(int argc, char **argv) {
         if (simplify(mod))
           dce(mod);
       }
-      identifySimpleRoutines(mod);
+      if (optLevel > 1)
+        identifySimpleRoutines(mod);
       if (optLevel > 2) {
         simplifyCFG(mod);
         simplify(mod);
         // Enabling this breaks Snake Byte. Not clear why yet!
-        // localCPURegSSA(mod);
-        // dce(mod);
+        localCPURegSSA(mod);
+        dce(mod);
       }
       if (action == Action::GenIR) {
         auto regLiveness = liveness(mod);
