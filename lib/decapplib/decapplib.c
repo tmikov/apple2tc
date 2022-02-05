@@ -17,14 +17,28 @@
 #include "apple2tc/sokol/blit.h"
 
 #include <ctype.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+typedef struct KeyPress {
+  unsigned cycles;
+  uint8_t ch;
+} KeyPress;
 
 static bool sound_enabled_ = true;
 /// If set, a file to read keyboard input from.
 static FILE *kbd_file_ = NULL;
 /// Assumed clock frequency. Can be used for "overclocking".
 static unsigned clock_freq_ = A2_CLOCK_FREQ;
+/// If true, dump key presses with cycle stamps.
+static bool trace_keys_ = false;
+/// Key-presses loaded from disk.
+static KeyPress *key_presses_ = NULL;
+/// Number of loaded key presses.
+static unsigned key_press_count_ = 0;
+/// Next key press to process.
+static unsigned next_key_press_ = 0;
 
 static sg_bindings bind_;
 static sg_pipeline pip_;
@@ -205,6 +219,17 @@ static void stream_userdata_cb(float *buffer, int num_frames, int num_channels, 
   a2_sound_cb((a2_sound_t *)user_data, buffer, num_frames, num_channels);
 }
 
+static void push_key(uint8_t ch) {
+  a2_io_push_key(&io_, ch);
+  if (trace_keys_)
+    printf("%u %u\n", get_cycles(), ch);
+}
+
+static void push_key_if_empty(uint8_t ch) {
+  if (a2_io_keys_count(&io_) == 0)
+    push_key(ch);
+}
+
 /// While the KBD file is open, read as many characters from it as possible.
 /// Close the file of EOF is reached.
 static void drain_kbd_file() {
@@ -221,8 +246,74 @@ static void drain_kbd_file() {
       continue;
     if (ch == '\n')
       ch = '\r';
-    a2_io_push_key(&io_, (uint8_t)ch);
+    push_key((uint8_t)ch);
   }
+}
+
+/// Return true if there are more keypresses to process.
+static void drain_key_presses() {
+  if (!key_presses_)
+    return;
+
+  static unsigned last_cycles = 0;
+  unsigned cycles = get_cycles();
+
+  while (next_key_press_ != key_press_count_ && cycles == key_presses_[next_key_press_].cycles) {
+    a2_io_push_key(&io_, key_presses_[next_key_press_].ch);
+    ++next_key_press_;
+  }
+
+  if (next_key_press_ != key_press_count_)
+    return;
+
+  free(key_presses_);
+  key_presses_ = 0;
+  next_key_press_ = 0;
+  key_press_count_ = 0;
+}
+
+static void load_key_file(const char *path) {
+  if (key_presses_) {
+    fprintf(stderr, "Key file already loaded\n");
+    exit(2);
+  }
+  FILE *f;
+  int res;
+  if ((f = fopen(path, "rt")) == NULL) {
+    perror(path);
+    exit(2);
+  }
+
+  unsigned capacity = 32;
+  key_presses_ = (KeyPress *)malloc(sizeof(KeyPress) * capacity);
+  if (!key_presses_)
+    abort();
+  key_press_count_ = 0;
+  next_key_press_ = 0;
+
+  unsigned cycles, ch;
+  while ((res = fscanf(f, "%u %u\n", &cycles, &ch)) == 2) {
+    if (key_press_count_ == capacity) {
+      if (capacity > UINT_MAX / 2) {
+        fprintf(stderr, "Too many keys\n");
+        exit(2);
+      }
+      capacity *= 2;
+      key_presses_ = realloc(key_presses_, sizeof(KeyPress) * capacity);
+      if (!key_presses_)
+        abort();
+    }
+    key_presses_[key_press_count_].cycles = cycles;
+    key_presses_[key_press_count_].ch = (uint8_t)ch;
+    ++key_press_count_;
+  }
+  if (res != EOF) {
+    fprintf(stderr, "Error parsing key file\n");
+    exit(2);
+  }
+  fprintf(stderr, "Loaded %u keys\n", key_press_count_);
+
+  fclose(f);
 }
 
 static void init_cb(void) {
@@ -232,7 +323,7 @@ static void init_cb(void) {
   a2_sound_init(&sound_);
   a2_io_init(&io_);
   a2_io_set_spkr_cb(&io_, &sound_, speaker_cb);
-  io_.debug = A2_DEBUG_IO2;
+  io_.debug = 0;
 
   if (sound_enabled_) {
     saudio_desc audioDesc = {
@@ -252,10 +343,13 @@ static void init_cb(void) {
 
   init_emulated();
 
-  if (kbd_file_) {
+  if (kbd_file_ || key_presses_) {
     // The first key pressed before initialization is lost, so just add a dummy keypress.
     a2_io_push_key(&io_, '\r');
-    drain_kbd_file();
+    if (key_presses_)
+      drain_key_presses();
+    else
+      drain_kbd_file();
   }
 }
 
@@ -273,11 +367,19 @@ static void simulate_frame(void) {
     firstFrame_ = false;
     firstFrameTick_ = curFrameTick_;
   } else {
-    if (kbd_file_)
+    if (key_presses_)
+      drain_key_presses();
+    else if (kbd_file_)
       drain_kbd_file();
 
-    double elapsed = stm_sec(curFrameTick_ - lastRunTick_);
-    unsigned runCycles = (unsigned)((elapsed < 0.200 ? elapsed : 0.200) * clock_freq_);
+    unsigned runCycles;
+    if (trace_keys_ || key_presses_) {
+      // If we are recording or replaying, we need to have reproducible cycles.
+      runCycles = (unsigned)((1.0 / 60.0) * clock_freq_);
+    } else {
+      double elapsed = stm_sec(curFrameTick_ - lastRunTick_);
+      runCycles = (unsigned)((elapsed < 0.200 ? elapsed : 0.200) * clock_freq_);
+    }
     run_emulated(runCycles);
     a2_sound_submit(&sound_, A2_CLOCK_FREQ, saudio_sample_rate(), get_cycles());
   }
@@ -352,6 +454,9 @@ static void event_cb(const sapp_event *ev) {
   int toIgnore = ignoreNextCh_;
   ignoreNextCh_ = -1;
 
+  if (key_presses_)
+    return;
+
   // If we are reading from a file, just ensure that the keyboard queue us full,
   // so events here will have no effect.
   if (kbd_file_)
@@ -364,22 +469,22 @@ static void event_cb(const sapp_event *ev) {
     else if (isalpha(k))
       k = toupper(k);
     if (k != toIgnore)
-      a2_io_push_key_if_empty(&io_, k);
+      push_key_if_empty(k);
   } else if (ev->type == SAPP_EVENTTYPE_KEY_DOWN) {
     switch (ev->key_code) {
     case SAPP_KEYCODE_DELETE:
     case SAPP_KEYCODE_BACKSPACE:
     case SAPP_KEYCODE_LEFT:
-      a2_io_push_key_if_empty(&io_, ignoreNextCh_ = 8);
+      push_key_if_empty(ignoreNextCh_ = 8);
       break;
     case SAPP_KEYCODE_RIGHT:
-      a2_io_push_key_if_empty(&io_, ignoreNextCh_ = 21); // CTRL+U
+      push_key_if_empty(ignoreNextCh_ = 21); // CTRL+U
       break;
     case SAPP_KEYCODE_ENTER:
-      a2_io_push_key_if_empty(&io_, ignoreNextCh_ = 13);
+      push_key_if_empty(ignoreNextCh_ = 13);
       break;
     case SAPP_KEYCODE_ESCAPE:
-      a2_io_push_key_if_empty(&io_, ignoreNextCh_ = 27);
+      push_key_if_empty(ignoreNextCh_ = 27);
       break;
     default:
       break;
@@ -393,10 +498,12 @@ static void print_help() {
   printf("syntax: %s [options]\n", s_argv0);
   printf(" --help           This help\n");
   printf(" --no-sound       Disable sound\n");
-  printf(" --kbd-file=path  Read keyboard input from the specified file\n");
+  printf(" --kbd-file=path  Read ascii keyboard input from the specified file\n");
+  printf(" --key-file=path  Read key presses and cycles from the specified file\n");
   printf(" --fast           Emulate a faster CPU\n");
   printf(" --trace          Dump state at branch targets\n");
   printf(" --trace-mem      Dump all memory writes\n");
+  printf(" --trace-keys     Dump key presses with cycle stamps\n");
   printf(" --count-bt       Count branch targets\n");
 }
 
@@ -427,6 +534,10 @@ static void parse_args(int argc, char *argv[]) {
       g_debug |= DebugMem;
       continue;
     }
+    if (strcmp(arg, "--trace-keys") == 0) {
+      trace_keys_ = true;
+      continue;
+    }
     if (strcmp(arg, "--debug-bt") == 0) {
       g_debug |= DebugCountBB;
       continue;
@@ -437,6 +548,11 @@ static void parse_args(int argc, char *argv[]) {
         perror(path);
         exit(2);
       }
+      continue;
+    }
+    if (strncmp(arg, "--key-file=", 11) == 0) {
+      const char *path = arg + 11;
+      load_key_file(path);
       continue;
     }
     if (strcmp(arg, "--fast") == 0) {
