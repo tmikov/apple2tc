@@ -38,6 +38,8 @@ private:
   void printOperand(Value *operand);
 
 protected:
+  virtual void preFunction(Function *func);
+  virtual void postFunction(Function *func);
   virtual void preBasicBlock(BasicBlock *bb);
   virtual void postBasicBlock(BasicBlock *bb);
 

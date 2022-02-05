@@ -70,10 +70,12 @@ void IRDumper::dump(Function *func) {
       name(&inst);
   }
 
+  preFunction(func);
   fprintf(os_, "function %s\n", name(func).c_str());
   for (auto *bb : sortedBlocks)
     dumpImpl(bb);
   fprintf(os_, "end %s\n", name(func).c_str());
+  postFunction(func);
 }
 
 void IRDumper::dump(BasicBlock *bb) {
@@ -120,6 +122,8 @@ void IRDumper::dumpImpl(BasicBlock *bb) {
   postBasicBlock(bb);
 }
 
+void IRDumper::preFunction(Function *func) {}
+void IRDumper::postFunction(Function *func) {}
 void IRDumper::preBasicBlock(BasicBlock *bb) {}
 void IRDumper::postBasicBlock(BasicBlock *bb) {}
 
