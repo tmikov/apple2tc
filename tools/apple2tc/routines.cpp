@@ -204,7 +204,7 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
 
   // Now check whether all predecessors are either JSR, push+jmp, or are internal branches to the
   // entry point.
-  bool pushJmp = false;
+  bool jmp = false;
   for (Instruction &iRef : predecessorInsts(*entry)) {
     auto *inst = &iRef;
     assert(inst->isTerminator());
@@ -212,9 +212,9 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
       // A regular JSR.
       continue;
     }
-    if (inst->getKind() == ValueKind::Jmp && isSimplePushJmp(inst)) {
-      // Push+Jmp.
-      pushJmp = true;
+    if (inst->getKind() == ValueKind::Jmp) {
+      // Jmp.
+      jmp = true;
       continue;
     }
     if (visited.count(inst->getBasicBlock())) {
@@ -241,10 +241,7 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
 
   if (ctx_->getVerbosity() > 1) {
     fprintf(
-        stderr,
-        "$%04x: created candidate%s\n",
-        entry->getAddress().value_or(0),
-        pushJmp ? " push+jmp" : "");
+        stderr, "$%04x: created candidate%s\n", entry->getAddress().value_or(0), jmp ? " jmp" : "");
   }
 }
 
@@ -372,30 +369,41 @@ void IdentifySimpleRoutines::splitARoutine(BasicBlock *entry, Candidate &cand) {
       builder.createCall(cand.func, builder.getLiteralU8(1));
       builder.createJmp(inst->getOperand(1));
     } else {
-      // push-jmp.
-      auto [pushHi, pushLo] = isSimplePushJmp(inst).value();
-      builder.setInsertionPointAfter(pushHi);
-      builder.setAddress(pushHi->getAddress());
-      builder.createPush8(builder.getLiteralU8(0xFF));
-      builder.setInsertionPointAfter(pushLo);
-      builder.setAddress(pushLo->getAddress());
-      builder.createPush8(builder.getLiteralU8(0xFE));
-      auto *addr = builder.createCPUAddr2BB(builder.createAdd16(
-          builder.createMake16(pushLo->getOperand(0), pushHi->getOperand(0)),
-          builder.getLiteralU16(1)));
+      // Jmp.
+      if (auto pushJmp = isSimplePushJmp(inst)) {
+        // push-jmp.
+        auto [pushHi, pushLo] = *pushJmp;
+        builder.setInsertionPointAfter(pushHi);
+        builder.setAddress(pushHi->getAddress());
+        builder.createPush8(builder.getLiteralU8(0xFF));
+        builder.setInsertionPointAfter(pushLo);
+        builder.setAddress(pushLo->getAddress());
+        builder.createPush8(builder.getLiteralU8(0xFE));
+        auto *addr = builder.createCPUAddr2BB(builder.createAdd16(
+            builder.createMake16(pushLo->getOperand(0), pushHi->getOperand(0)),
+            builder.getLiteralU16(1)));
 
-      builder.setInsertionPointAfter(inst);
-      builder.setAddress(inst->getAddress());
-      builder.createCall(cand.func, builder.getLiteralU8(0));
-      builder.createPop8();
-      builder.createPop8();
+        builder.setInsertionPointAfter(inst);
+        builder.setAddress(inst->getAddress());
+        builder.createCall(cand.func, builder.getLiteralU8(0));
+        builder.createPop8();
+        builder.createPop8();
 
-      auto *jmpInd = builder.createJmpInd(addr);
-      for (auto *bb : dynamicReturnBlocks)
-        jmpInd->pushOperand(bb);
+        auto *jmpInd = builder.createJmpInd(addr);
+        for (auto *bb : dynamicReturnBlocks)
+          jmpInd->pushOperand(bb);
 
-      pushHi->eraseFromBasicBlock();
-      pushLo->eraseFromBasicBlock();
+        pushHi->eraseFromBasicBlock();
+        pushLo->eraseFromBasicBlock();
+      } else {
+        // Just a jmp.
+        builder.setInsertionPointAfter(inst);
+        builder.setAddress(inst->getAddress());
+        builder.createCall(cand.func, builder.getLiteralU8(0));
+        auto *rts = builder.createRTS(builder.getLiteralU8(0));
+        for (auto *bb : dynamicReturnBlocks)
+          rts->pushOperand(bb);
+      }
     }
     inst->eraseFromBasicBlock();
   }
