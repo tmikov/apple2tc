@@ -258,7 +258,7 @@ static void drain_key_presses() {
   static unsigned last_cycles = 0;
   unsigned cycles = get_cycles();
 
-  while (next_key_press_ != key_press_count_ && cycles == key_presses_[next_key_press_].cycles) {
+  while (next_key_press_ != key_press_count_ && cycles >= key_presses_[next_key_press_].cycles) {
     a2_io_push_key(&io_, key_presses_[next_key_press_].ch);
     ++next_key_press_;
   }
