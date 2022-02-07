@@ -176,8 +176,9 @@ int main(int argc, char **argv) {
         if (simplify(mod))
           dce(mod);
       }
-      if (optLevel > 1)
-        identifySimpleRoutines(mod);
+      if (optLevel > 1) {
+        while (identifySimpleRoutines(mod)) {}
+      }
       if (optLevel > 2) {
         simplifyCFG(mod);
         simplify(mod);

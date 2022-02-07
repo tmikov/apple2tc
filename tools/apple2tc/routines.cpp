@@ -9,6 +9,7 @@
 #include "ir/IR.h"
 #include "ir/IRUtil.h"
 
+#include "apple2tc/SetVector.h"
 #include "apple2tc/support.h"
 
 #include <deque>
@@ -42,7 +43,7 @@ class IdentifySimpleRoutines {
 public:
   explicit IdentifySimpleRoutines(Function *func)
       : func_(func), ctx_(func->getModule()->getContext()) {}
-  void run();
+  bool run();
 
 private:
   /// Collect the basic block of the candidate.
@@ -61,15 +62,19 @@ private:
 
   /// Split a single routine.
   void splitARoutine(BasicBlock *entry, Candidate &cand);
+
+  bool convertRoutineInvocation(
+      IRBuilder &builder,
+      BasicBlock *entry,
+      const Candidate &cand,
+      Instruction *inst,
+      const PrimitiveSetVector<BasicBlock *> &dynamicReturnBlocks);
 };
 
-void IdentifySimpleRoutines::run() {
+bool IdentifySimpleRoutines::run() {
   // Instead of scanning every instruction to see whether it is JSR, we scan
   // every basic block to see whether any of its predecessors are JSR.
   for (auto &bb : func_->basicBlocks()) {
-    if (discoveredBlocks_.count(&bb))
-      continue;
-
     bool jsr = false;
     for (Instruction &inst : predecessorInsts(bb)) {
       assert(inst.isTerminator());
@@ -78,8 +83,15 @@ void IdentifySimpleRoutines::run() {
         break;
       }
     }
-    if (jsr)
+    if (jsr) {
+      if (discoveredBlocks_.count(&bb)) {
+        if (ctx_->getVerbosity() > 1)
+          fprintf(stderr, "$%04x: ignore candidate\n", bb.getAddress().value_or(0x10000));
+        continue;
+      }
+
       scanCandidate(&bb);
+    }
   }
 
   // Make sure that candidates only JSR into other candidates.
@@ -98,9 +110,11 @@ void IdentifySimpleRoutines::run() {
           stderr, "%zu candidates remaining after removing invalid preds\n", candidates_.size());
   } while (changed);
 
+  auto numIdentified = candidates_.size();
   if (ctx_->getVerbosity() > 0)
-    fprintf(stderr, "%zu simple routines identified\n", candidates_.size());
+    fprintf(stderr, "%zu simple routines identified\n", numIdentified);
   splitRoutines();
+  return numIdentified != 0;
 }
 
 /// Check whether this is a JMP preceded by two pushes. Return the two pushes in
@@ -208,14 +222,19 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
   for (Instruction &iRef : predecessorInsts(*entry)) {
     auto *inst = &iRef;
     assert(inst->isTerminator());
-    if (inst->getKind() == ValueKind::JSR && inst->getOperand(0) == entry) {
-      // A regular JSR.
+    // A regular JSR?
+    if (inst->getKind() == ValueKind::JSR && inst->getOperand(0) == entry)
       continue;
-    }
-    if (inst->getKind() == ValueKind::Jmp) {
-      // Jmp.
+    // A jmp to the subroutine?
+    switch (inst->getKind()) {
+    case ValueKind::JSR:
+      assert(inst->getOperand(1) == entry);
+    case ValueKind::Jmp:
+    case ValueKind::JTrue:
+    case ValueKind::JFalse:
       jmp = true;
       continue;
+    default:;
     }
     if (visited.count(inst->getBasicBlock())) {
       // If the predecessor is part of the same function, it is an internal loop
@@ -331,17 +350,127 @@ void IdentifySimpleRoutines::splitRoutines() {
     splitARoutine(entry, *pCand);
 }
 
+bool IdentifySimpleRoutines::convertRoutineInvocation(
+    IRBuilder &builder,
+    BasicBlock *entry,
+    const Candidate &cand,
+    Instruction *inst,
+    const PrimitiveSetVector<BasicBlock *> &dynamicReturnBlocks) {
+  // Some cases set this to the IR instruction that must get all dynamic return blocks
+  // as successors.
+  Instruction *dynamicBranch = nullptr;
+
+  // Create a new basic block that calls the routine and RTS-es.
+  auto createCallBlock = [&builder, &dynamicBranch, func = cand.func, inst]() {
+    BasicBlock *callBlock = inst->getBasicBlock()->getFunction()->createBasicBlock();
+    builder.setInsertionBlock(callBlock);
+    builder.setAddress(inst->getAddress());
+    builder.createCall(func, builder.getLiteralU8(0));
+    dynamicBranch = builder.createRTS(builder.getLiteralU8(0));
+    return callBlock;
+  };
+
+  switch (inst->getKind()) {
+  case ValueKind::JSR:
+    if (inst->getOperand(0) == entry) {
+      // This is the "normal" case: a JSR to the subroutine.
+      builder.setInsertionPointAfter(inst);
+      builder.setAddress(inst->getAddress());
+      builder.createCall(cand.func, builder.getLiteralU8(1));
+      builder.createJmp(inst->getOperand(1));
+    } else {
+      // A JSR followed by the subroutine entry point.
+      assert(inst->getOperand(1) == entry);
+
+      if (cand.blocks.count(inst->getBasicBlock()))
+        return false;
+
+      BasicBlock *callBlock = createCallBlock();
+
+      builder.setInsertionPointAfter(inst);
+      builder.setAddress(inst->getAddress());
+      builder.createJSR(inst->getOperand(0), callBlock);
+    }
+    break;
+
+  case ValueKind::JTrue:
+  case ValueKind::JFalse: {
+    if (cand.blocks.count(inst->getBasicBlock()))
+      return false;
+
+    BasicBlock *callBlock = createCallBlock();
+
+    // Redirect the jmp to the subroutine to the new block calling the subroutine.
+    Value *op1 = inst->getOperand(1);
+    Value *op2 = inst->getOperand(2);
+    if (op1 == entry)
+      op1 = callBlock;
+    if (op2 == entry)
+      op2 = callBlock;
+
+    builder.setInsertionPointAfter(inst);
+    builder.setAddress(inst->getAddress());
+    builder.createInst(inst->getKind(), {inst->getOperand(0), op1, op2});
+    break;
+  }
+
+  case ValueKind::Jmp:
+    if (auto pushJmp = isSimplePushJmp(inst)) {
+      // push-jmp.
+      auto [pushHi, pushLo] = *pushJmp;
+      builder.setInsertionPointAfter(pushHi);
+      builder.setAddress(pushHi->getAddress());
+      builder.createPush8(builder.getLiteralU8(0xFF));
+      builder.setInsertionPointAfter(pushLo);
+      builder.setAddress(pushLo->getAddress());
+      builder.createPush8(builder.getLiteralU8(0xFE));
+      auto *addr = builder.createCPUAddr2BB(builder.createAdd16(
+          builder.createMake16(pushLo->getOperand(0), pushHi->getOperand(0)),
+          builder.getLiteralU16(1)));
+
+      builder.setInsertionPointAfter(inst);
+      builder.setAddress(inst->getAddress());
+      builder.createCall(cand.func, builder.getLiteralU8(0));
+      builder.createPop8();
+      builder.createPop8();
+
+      dynamicBranch = builder.createJmpInd(addr);
+
+      pushHi->eraseFromBasicBlock();
+      pushLo->eraseFromBasicBlock();
+    } else {
+      // Just a jmp.
+      if (cand.blocks.count(inst->getBasicBlock()))
+        return false;
+
+      builder.setInsertionPointAfter(inst);
+      builder.setAddress(inst->getAddress());
+      builder.createCall(cand.func, builder.getLiteralU8(0));
+      dynamicBranch = builder.createRTS(builder.getLiteralU8(0));
+    }
+    break;
+
+  default:
+    PANIC_ABORT("Invalid routine invocation instruction %s", getValueKindName(inst->getKind()));
+  }
+
+  if (dynamicBranch)
+    for (auto *bb : dynamicReturnBlocks)
+      dynamicBranch->pushOperand(bb);
+
+  return true;
+}
+
 void IdentifySimpleRoutines::splitARoutine(BasicBlock *entry, Candidate &cand) {
   Module *mod = func_->getModule();
   IRBuilder builder(ctx_);
-  std::vector<Instruction *> jsrs{};
 
   cand.func = mod->createFunction();
   cand.func->setName(entry->getName());
   cand.func->setDecompileLevel(Function::DecompileLevel::Normal);
 
   // Replace all RTS with Return. Record all return addresses.
-  std::unordered_set<BasicBlock *> dynamicReturnBlocks{};
+  PrimitiveSetVector<BasicBlock *> dynamicReturnBlocks{};
 
   // Extract all return addresses.
   for (auto *inst : cand.rts) {
@@ -349,71 +478,21 @@ void IdentifySimpleRoutines::splitARoutine(BasicBlock *entry, Candidate &cand) {
       dynamicReturnBlocks.insert(cast<BasicBlock>(inst->getOperand(i)));
   }
 
-  // Replace all JSRs with Call and Jmp.
+  // The "fall" block of a JSR doesn't need to be considered a dynamic address,
+  // so remove all of those.
   for (auto &iRef : predecessorInsts(*entry)) {
-    Instruction *inst = &iRef;
-    if (inst->getKind() == ValueKind::JSR && inst->getOperand(0) == entry ||
-        inst->getKind() == ValueKind::Jmp) {
-      jsrs.push_back(inst);
-
-      // The "fall" block of a JSR doesn't need to be considered a dynamic address.
-      if (inst->getKind() == ValueKind::JSR)
-        dynamicReturnBlocks.erase(cast<BasicBlock>(inst->getOperand(1)));
-    }
+    if (iRef.getKind() == ValueKind::JSR && iRef.getOperand(1) != entry)
+      dynamicReturnBlocks.erase(cast<BasicBlock>(iRef.getOperand(1)));
   }
 
-  for (auto *inst : jsrs) {
-    if (inst->getKind() == ValueKind::JSR) {
-      builder.setInsertionPointAfter(inst);
-      builder.setAddress(inst->getAddress());
-      builder.createCall(cand.func, builder.getLiteralU8(1));
-      builder.createJmp(inst->getOperand(1));
-    } else {
-      // Jmp.
-      if (auto pushJmp = isSimplePushJmp(inst)) {
-        // push-jmp.
-        auto [pushHi, pushLo] = *pushJmp;
-        builder.setInsertionPointAfter(pushHi);
-        builder.setAddress(pushHi->getAddress());
-        builder.createPush8(builder.getLiteralU8(0xFF));
-        builder.setInsertionPointAfter(pushLo);
-        builder.setAddress(pushLo->getAddress());
-        builder.createPush8(builder.getLiteralU8(0xFE));
-        auto *addr = builder.createCPUAddr2BB(builder.createAdd16(
-            builder.createMake16(pushLo->getOperand(0), pushHi->getOperand(0)),
-            builder.getLiteralU16(1)));
-
-        builder.setInsertionPointAfter(inst);
-        builder.setAddress(inst->getAddress());
-        builder.createCall(cand.func, builder.getLiteralU8(0));
-        builder.createPop8();
-        builder.createPop8();
-
-        auto *jmpInd = builder.createJmpInd(addr);
-        for (auto *bb : dynamicReturnBlocks)
-          jmpInd->pushOperand(bb);
-
-        pushHi->eraseFromBasicBlock();
-        pushLo->eraseFromBasicBlock();
-      } else {
-        // Just a jmp.
-        builder.setInsertionPointAfter(inst);
-        builder.setAddress(inst->getAddress());
-        builder.createCall(cand.func, builder.getLiteralU8(0));
-        auto *rts = builder.createRTS(builder.getLiteralU8(0));
-        for (auto *bb : dynamicReturnBlocks)
-          rts->pushOperand(bb);
-      }
-    }
-    inst->eraseFromBasicBlock();
+  // Convert all subroutine invocations into Call instructions.
+  auto &&range = predecessorInsts(*entry);
+  for (auto begin = range.begin(), end = range.end(); begin != end;) {
+    auto *inst = &*begin;
+    ++begin;
+    if (convertRoutineInvocation(builder, entry, cand, inst, dynamicReturnBlocks))
+      inst->eraseFromBasicBlock();
   }
-  jsrs.clear();
-
-  dynamicReturnBlocks.clear();
-  // If this fails, we need to do something to record the dynamic blocks so they are not
-  // lost.
-  PANIC_ASSERT_MSG(
-      dynamicReturnBlocks.empty(), "dynamicReturnBlocks must be empty after conversion");
 
 #ifndef NDEBUG
   // All users of the entry block must be internal.
@@ -449,10 +528,10 @@ void IdentifySimpleRoutines::splitARoutine(BasicBlock *entry, Candidate &cand) {
 /// - Always entered via a JSR instruction
 /// - Contain no indirect jumps
 /// - Contain no stack pointer manipulation
-void identifySimpleRoutines(Module *mod) {
+bool identifySimpleRoutines(Module *mod) {
   for (auto &func : mod->functions()) {
-    IdentifySimpleRoutines(&func).run();
     // Only run it on the global function.
-    break;
+    return IdentifySimpleRoutines(&func).run();
   }
+  return false;
 }

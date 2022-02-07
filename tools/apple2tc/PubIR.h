@@ -27,7 +27,7 @@ bool localCPURegSSA(ir::Module *mod);
 bool dce(ir::Module *mod);
 bool simplify(ir::Module *mod);
 bool simplifyCFG(ir::Module *mod);
-void identifySimpleRoutines(ir::Module *mod);
+bool identifySimpleRoutines(ir::Module *mod);
 std::shared_ptr<CPURegLiveness> liveness(ir::Module *mod);
 
 void printIRC1(ir::Module *mod, FILE *os, bool trees);
