@@ -18,8 +18,21 @@ static uint16_t s_pc = 0;
 static uint8_t s_a = 0;
 static uint8_t s_x = 0;
 static uint8_t s_y = 0;
-static uint8_t s_status = 0;
 static uint8_t s_sp = 0;
+/// NEGATIVE.
+static uint8_t s_status_n = 0;
+/// OVERFLOW.
+static uint8_t s_status_v = 0;
+/// BREAK.
+static uint8_t s_status_b = 0;
+/// DECIMAL.
+static uint8_t s_status_d = 0;
+/// INTERRUPT.
+static uint8_t s_status_i = 0;
+/// ZERO.
+static uint8_t s_status_not_z = 1;
+/// CARRY.
+static uint8_t s_status_c = 0;
 
 static uint8_t s_ram[0x10000];
 
@@ -32,7 +45,13 @@ void reset_regs(void) {
   s_a = 0;
   s_x = 0;
   s_y = 0;
-  s_status = STATUS_IGNORED;
+  s_status_n = 0;
+  s_status_v = 0;
+  s_status_b = 0;
+  s_status_d = 0;
+  s_status_i = 0;
+  s_status_not_z = 1;
+  s_status_c = 0;
   s_sp = 0xFF;
 }
 
@@ -41,12 +60,25 @@ void set_regs(regs_t r) {
   s_a = r.a;
   s_x = r.x;
   s_y = r.y;
-  s_status = r.status;
+  s_status_n = r.status & 0x80;
+  s_status_v = (r.status >> 6) & 1;
+  s_status_b = (r.status >> 4) & 1;
+  s_status_d = (r.status >> 3) & 1;
+  s_status_i = (r.status >> 2) & 1;
+  s_status_not_z = ~r.status & 2;
+  s_status_c = r.status & 1;
   s_sp = r.sp;
 }
 
 regs_t get_regs(void) {
-  return (regs_t){.pc = s_pc, .a = s_a, .x = s_x, .y = s_y, .status = s_status, .sp = s_sp};
+  return (regs_t){
+      .pc = s_pc,
+      .a = s_a,
+      .x = s_x,
+      .y = s_y,
+      .status = s_status_n | (s_status_v << 6) | (s_status_b << 4) | (s_status_d << 3) |
+          (s_status_i << 2) | ((!s_status_not_z) << 1) | s_status_c,
+      .sp = s_sp};
 }
 
 unsigned get_cycles(void) {

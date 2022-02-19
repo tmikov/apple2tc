@@ -648,25 +648,25 @@ void IRC1::printLoadR8(Instruction *inst) {
     bprintf(obuf_, "s_y");
     break;
   case CPURegKind::STATUS_N:
-    bprintf(obuf_, "s_status & STATUS_N");
+    bprintf(obuf_, "s_status_n");
     break;
   case CPURegKind::STATUS_V:
-    bprintf(obuf_, "(s_status & STATUS_V) != 0");
+    bprintf(obuf_, "s_status_v");
     break;
   case CPURegKind::STATUS_B:
-    bprintf(obuf_, "(s_status & STATUS_B) != 0");
+    bprintf(obuf_, "s_status_b");
     break;
   case CPURegKind::STATUS_D:
-    bprintf(obuf_, "(s_status & STATUS_D) != 0");
+    bprintf(obuf_, "s_status_d");
     break;
   case CPURegKind::STATUS_I:
-    bprintf(obuf_, "(s_status & STATUS_I) != 0");
+    bprintf(obuf_, "s_status_i");
     break;
   case CPURegKind::STATUS_NotZ:
-    bprintf(obuf_, "(~s_status & STATUS_Z)");
+    bprintf(obuf_, "s_status_not_z");
     break;
   case CPURegKind::STATUS_C:
-    bprintf(obuf_, "s_status & STATUS_C");
+    bprintf(obuf_, "s_status_c");
     break;
   case CPURegKind::_last:
     PANIC_ABORT("Invalid CPU register");
@@ -686,28 +686,25 @@ void IRC1::printStoreR8(Instruction *inst) {
     bprintf(obuf_, "s_y = %s", formatOperand(operand).c_str());
     break;
   case CPURegKind::STATUS_N:
-    bprintf(obuf_, "s_status = (s_status & ~STATUS_N) | %s", formatOperand(operand).c_str());
+    bprintf(obuf_, "s_status_n = %s", formatOperand(operand).c_str());
     break;
   case CPURegKind::STATUS_V:
-    bprintf(obuf_, "s_status = (s_status & ~STATUS_V) | (%s << 6)", formatOperand(operand).c_str());
+    bprintf(obuf_, "s_status_v = %s", formatOperand(operand).c_str());
     break;
   case CPURegKind::STATUS_B:
-    bprintf(obuf_, "s_status = (s_status & ~STATUS_B) | (%s << 4)", formatOperand(operand).c_str());
+    bprintf(obuf_, "s_status_b = %s", formatOperand(operand).c_str());
     break;
   case CPURegKind::STATUS_D:
-    bprintf(obuf_, "s_status = (s_status & ~STATUS_D) | (%s << 3)", formatOperand(operand).c_str());
+    bprintf(obuf_, "s_status_d = %s", formatOperand(operand).c_str());
     break;
   case CPURegKind::STATUS_I:
-    bprintf(obuf_, "s_status = (s_status & ~STATUS_I) | (%s << 2)", formatOperand(operand).c_str());
+    bprintf(obuf_, "s_status_i = %s", formatOperand(operand).c_str());
     break;
   case CPURegKind::STATUS_NotZ:
-    bprintf(
-        obuf_,
-        "s_status = (s_status & ~STATUS_Z) | (%s ? 0 : STATUS_Z)",
-        formatOperand(operand).c_str());
+    bprintf(obuf_, "s_status_not_z = %s", formatOperand(operand).c_str());
     break;
   case CPURegKind::STATUS_C:
-    bprintf(obuf_, "s_status = (s_status & ~STATUS_C) | %s", formatOperand(operand).c_str());
+    bprintf(obuf_, "s_status_c = %s", formatOperand(operand).c_str());
     break;
   case CPURegKind::_last:
     PANIC_ABORT("Invalid CPU register");
