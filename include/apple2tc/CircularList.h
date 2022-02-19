@@ -200,6 +200,9 @@ public:
     return *fromListEntry(m_root.prev);
   }
 
+  void push_front(T *item) {
+    ListEntry::insertAfterEntry(&m_root, Accessor::toListEntry(item));
+  }
   void push_back(T *item) {
     ListEntry::insertAfterEntry(m_root.prev, Accessor::toListEntry(item));
   }
