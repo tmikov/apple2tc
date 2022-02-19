@@ -29,6 +29,7 @@ GenIR::~GenIR() = default;
 Module *GenIR::run() {
   Module *mod = ctx_->createModule(dis_);
   Function *func = mod->createFunction();
+  func->setName("main");
 
   builder_.setInsertionBlock(func->createBasicBlock());
 

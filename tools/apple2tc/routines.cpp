@@ -4,67 +4,9 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-
-#include "PubIR.h"
-#include "ir/IR.h"
-#include "ir/IRUtil.h"
-
-#include "apple2tc/SetVector.h"
-#include "apple2tc/support.h"
-
-#include <deque>
-#include <map>
-
-using namespace ir;
+#include "routines.h"
 
 namespace {
-
-class IdentifySimpleRoutines {
-  Function *const func_;
-  IRContext *const ctx_;
-
-  struct Candidate {
-    std::unordered_set<BasicBlock *> blocks;
-    std::unordered_set<BasicBlock *> jsrTargets;
-    std::unordered_set<Instruction *> rts;
-    Function *func = nullptr;
-
-    Candidate(
-        std::unordered_set<BasicBlock *> &&blocks,
-        std::unordered_set<BasicBlock *> &&jsrTargets,
-        std::unordered_set<Instruction *> &&rts)
-        : blocks(std::move(blocks)), jsrTargets(std::move(jsrTargets)), rts(std::move(rts)) {}
-  };
-
-  std::unordered_map<BasicBlock *, Candidate> candidates_{};
-  std::multimap<BasicBlock *, Candidate *> blocks_{};
-
-public:
-  explicit IdentifySimpleRoutines(Function *func)
-      : func_(func), ctx_(func->getModule()->getContext()) {}
-  bool run();
-
-private:
-  /// Collect the basic block of the candidate.
-  void scanCandidate(BasicBlock *entry);
-  /// Remove candidates that JSR into a non-candidate. Return true if anything
-  /// changed.
-  bool removeInvalidJSRs();
-
-  /// Actually split the candidates into new IR routines.
-  void splitRoutines();
-
-  void convertInvocations(BasicBlock *entry, Candidate &cand);
-
-  bool convertRoutineInvocation(
-      IRBuilder &builder,
-      BasicBlock *entry,
-      const Candidate &cand,
-      Instruction *inst,
-      const PrimitiveSetVector<BasicBlock *> &dynamicReturnBlocks);
-
-  static void extractRoutine(IRBuilder &builder, BasicBlock *entry, Candidate &cand);
-};
 
 bool IdentifySimpleRoutines::run() {
   // Instead of scanning every instruction to see whether it is JSR, we scan
@@ -89,13 +31,14 @@ bool IdentifySimpleRoutines::run() {
     while (removeInvalidJSRs())
       changed = true;
     if (ctx_->getVerbosity() > 1)
-      fprintf(stderr, "%zu candidates remaining after removing invalid JSRs\n", candidates_.size());
+      fprintf(stderr, "%zu candidates remaining after removing invalid JSRs\n", routines_.size());
   } while (changed);
 
-  auto numIdentified = candidates_.size();
+  auto numIdentified = routines_.size();
   if (ctx_->getVerbosity() > 0)
     fprintf(stderr, "%zu simple routines identified\n", numIdentified);
   splitRoutines();
+  outlineRoutines();
   return numIdentified != 0;
 }
 
@@ -123,7 +66,7 @@ std::optional<std::tuple<Instruction *, Instruction *>> isSimplePushJmp(Instruct
 }
 
 void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
-  std::unordered_set<BasicBlock *> visited{};
+  std::unordered_map<BasicBlock *, BasicBlock *> visited{};
   std::unordered_set<BasicBlock *> jsrTargets{};
   std::unordered_set<Instruction *> rts{};
   std::deque<BasicBlock *> workList{};
@@ -136,7 +79,7 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
     BasicBlock *bb = workList.front();
     workList.pop_front();
     // Already visited?
-    if (!visited.insert(bb).second)
+    if (!visited.try_emplace(bb, nullptr).second)
       continue;
 
     // Indirect branches except RTS are not allowed.
@@ -222,7 +165,7 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
     return;
   }
 
-  candidates_.try_emplace(entry, std::move(visited), std::move(jsrTargets), std::move(rts));
+  routines_.try_emplace(entry, std::move(visited), std::move(jsrTargets), std::move(rts));
 
   if (ctx_->getVerbosity() > 1) {
     fprintf(
@@ -232,17 +175,17 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
 
 bool IdentifySimpleRoutines::removeInvalidJSRs() {
   bool changed = false;
-  for (auto it = candidates_.begin(), end = candidates_.end(); it != end;) {
+  for (auto it = routines_.begin(), end = routines_.end(); it != end;) {
     auto cur = it++;
     for (BasicBlock *jsrTarget : cur->second.jsrTargets) {
-      if (!candidates_.count(jsrTarget)) {
+      if (!routines_.count(jsrTarget)) {
         if (ctx_->getVerbosity() > 1)
           fprintf(
               stderr,
               "Removing candidate $%04x because of invalid JSR to $%04x\n",
               cur->first->getAddress().value_or(0),
               jsrTarget->getAddress().value_or(0));
-        candidates_.erase(cur);
+        routines_.erase(cur);
         changed = true;
         break;
       }
@@ -253,9 +196,9 @@ bool IdentifySimpleRoutines::removeInvalidJSRs() {
 
 void IdentifySimpleRoutines::splitRoutines() {
   // Sort all routines reproducibly.
-  std::vector<std::pair<BasicBlock *, Candidate *>> sortedCandidates{};
-  sortedCandidates.reserve(candidates_.size());
-  for (auto &p : candidates_)
+  std::vector<std::pair<BasicBlock *, Routine *>> sortedCandidates{};
+  sortedCandidates.reserve(routines_.size());
+  for (auto &p : routines_)
     sortedCandidates.emplace_back(p.first, &p.second);
   std::sort(sortedCandidates.begin(), sortedCandidates.end(), [](const auto &a, const auto &b) {
     auto addrA = a.first->getAddress().value_or(0x10000);
@@ -270,7 +213,7 @@ void IdentifySimpleRoutines::splitRoutines() {
 
   // Create a map of all blocks and which routine they belong to.
   for (auto [_, pCand] : sortedCandidates)
-    for (auto *bb : pCand->blocks)
+    for (auto [bb, _] : pCand->blocks)
       blocks_.emplace(bb, pCand);
 
   for (auto [entry, pCand] : sortedCandidates)
@@ -279,9 +222,12 @@ void IdentifySimpleRoutines::splitRoutines() {
   IRBuilder builder(ctx_);
   for (auto [entry, pCand] : sortedCandidates)
     extractRoutine(builder, entry, *pCand);
+
+  // Not needed anymore.
+  blocks_.clear();
 }
 
-void IdentifySimpleRoutines::convertInvocations(BasicBlock *entry, Candidate &cand) {
+void IdentifySimpleRoutines::convertInvocations(BasicBlock *entry, Routine &cand) {
   Module *mod = func_->getModule();
   IRBuilder builder(ctx_);
 
@@ -345,10 +291,7 @@ std::vector<BasicBlock *> dfsOrder(BasicBlock *entry) {
   return order;
 }
 
-void IdentifySimpleRoutines::extractRoutine(
-    IRBuilder &builder,
-    BasicBlock *entry,
-    Candidate &cand) {
+void IdentifySimpleRoutines::extractRoutine(IRBuilder &builder, BasicBlock *entry, Routine &cand) {
   // Map from old block to new block.
   std::unordered_map<Value *, Value *> valueMap{};
   auto order = dfsOrder(entry);
@@ -357,6 +300,7 @@ void IdentifySimpleRoutines::extractRoutine(
   for (auto *oldBB : order) {
     auto *newBB = cand.func->createBasicBlock();
     newBB->setAddress(oldBB->getAddress(), oldBB->isRealAddress());
+    cand.addFuncBlock(newBB, oldBB);
     auto res = valueMap.try_emplace(oldBB, newBB);
     (void)res;
     assert(res.second && "Blocks cannot be repeated");
@@ -401,7 +345,7 @@ void IdentifySimpleRoutines::extractRoutine(
 bool IdentifySimpleRoutines::convertRoutineInvocation(
     IRBuilder &builder,
     BasicBlock *entry,
-    const Candidate &cand,
+    const Routine &cand,
     Instruction *inst,
     const PrimitiveSetVector<BasicBlock *> &dynamicReturnBlocks) {
   // Some cases set this to the IR instruction that must get all dynamic return blocks
@@ -416,8 +360,8 @@ bool IdentifySimpleRoutines::convertRoutineInvocation(
     // block.
     auto range = blocks_.equal_range(inst->getBasicBlock());
     for (auto it = range.first; it != range.second; ++it) {
-      Candidate *bCand = it->second;
-      bCand->blocks.insert(callBlock);
+      Routine *bCand = it->second;
+      bCand->blocks.emplace(callBlock, nullptr);
       blocks_.emplace(callBlock, bCand);
     }
 
@@ -535,12 +479,202 @@ bool IdentifySimpleRoutines::convertRoutineInvocation(
   return true;
 }
 
+template <class K, class V>
+bool isSubset(const std::unordered_map<K, V> &small, const std::unordered_map<K, V> &large) {
+  return std::all_of(
+      small.begin(), small.end(), [&large](const auto &pair) { return large.count(pair.first); });
+}
+
+IdentifySimpleRoutines::RoutinePair IdentifySimpleRoutines::wrapMainRoutine() {
+  std::unordered_map<BasicBlock *, BasicBlock *> blocks{};
+  for (auto &bb : func_->basicBlocks())
+    blocks.emplace(&bb, &bb);
+
+  return {func_->getEntryBlock(), Routine(std::move(blocks), {}, {}, func_, true)};
+}
+
+void IdentifySimpleRoutines::outlineRoutines() {
+  func_->getModule()->dump();
+  auto mainRoutine = wrapMainRoutine();
+
+  // Routines sorted by number of blocks in decreasing order.
+  std::vector<RoutinePair *> sortedRoutines{};
+  sortedRoutines.reserve(routines_.size() + 1);
+  // The main routine is always at index 0.
+  sortedRoutines.push_back(&mainRoutine);
+  for (auto &pair : routines_)
+    sortedRoutines.push_back(&pair);
+  std::sort(
+      sortedRoutines.begin() + 1,
+      sortedRoutines.end(),
+      [](const RoutinePair *a, const RoutinePair *b) {
+        auto sizeA = a->second.blocks.size();
+        auto sizeB = b->second.blocks.size();
+        return sizeA > sizeB ||
+            (sizeA == sizeB &&
+             a->first->getAddress().value_or(0x10000) < b->first->getAddress().value_or(0x10000));
+      });
+
+  for (;;) {
+    // Find the largest routine that is a subset of another one.
+    size_t small = sortedRoutines.size();
+    size_t large;
+    for (large = 0; large < sortedRoutines.size() - 1; ++large) {
+      for (small = large + 1; small < sortedRoutines.size(); ++small) {
+        if (!sortedRoutines[small]->second.dirty &&
+            isSubset(sortedRoutines[small]->second.blocks, sortedRoutines[large]->second.blocks)) {
+          if (ctx_->getVerbosity() > 0) {
+            fprintf(
+                stderr,
+                "%s is a subset of %s\n",
+                sortedRoutines[small]->second.func->debuggingName().c_str(),
+                sortedRoutines[large]->second.func->debuggingName().c_str());
+          }
+          goto foundOne;
+        }
+      }
+    }
+    // Couldn't find one.
+    break;
+
+  foundOne:
+    outline(*sortedRoutines[small], *sortedRoutines[large]);
+    func_->getModule()->dump();
+
+    // The large routine has become smaller. Move it to its new position unless
+    // it is the main routine.
+    if (large > 0) {
+      while (large < sortedRoutines.size() - 1 &&
+             sortedRoutines[large]->second.blocks.size() <
+                 sortedRoutines[large + 1]->second.blocks.size()) {
+        std::swap(sortedRoutines[large], sortedRoutines[large + 1]);
+        ++large;
+      }
+    }
+  }
+}
+
+void IdentifySimpleRoutines::outline(RoutinePair &small, RoutinePair &large) {
+  IRBuilder builder(ctx_);
+  Function *largeFunc = large.second.func;
+  Function *smallFunc = small.second.func;
+
+  {
+    // Create a new entry block in "large func" and have it jump to the old entry
+    // block. We need this in case the old entry also happens to be part of "small func".
+    // Then it would get an additional predecessor and would get cloned.
+    BasicBlock *largeOldEntry = largeFunc->getEntryBlock();
+    BasicBlock *largeNewEntry = largeFunc->createBasicBlock();
+    builder.setInsertionBlock(largeNewEntry);
+    builder.createJmp(largeOldEntry);
+    largeFunc->setEntryBlock(largeNewEntry);
+  }
+
+  // The block in large func where we are "invoking" small func.
+  BasicBlock *largeInvokeBlock = large.second.funcBlockFromOriginal(
+      small.second.originalFromFuncBlock(smallFunc->getEntryBlock()));
+
+  // The new invoke block is a call.
+  BasicBlock *newInvokeBlock = largeFunc->createBasicBlock();
+  builder.setInsertionBlock(newInvokeBlock);
+  builder.createCall(smallFunc, builder.getLiteralU16(0));
+  // FIXME: this is a temporary hack to get something out.
+  builder.createReturn(largeFunc->getExitBlock());
+
+  // Point all users in large func to the new block.
+  {
+    std::vector<decltype(&*largeInvokeBlock->users().begin())> largeUsers{};
+    for (auto &user : largeInvokeBlock->users()) {
+      // If the user basic block that doesn't belong to small func, save it.
+      if (!small.second.blocks.count(
+              large.second.originalFromFuncBlock(user.owner()->getBasicBlock()))) {
+        largeUsers.push_back(&user);
+      }
+    }
+    for (auto *user : largeUsers)
+      user->setValue(newInvokeBlock);
+  }
+  largeInvokeBlock->clearAllOperands();
+  largeFunc->eraseBasicBlock(largeInvokeBlock);
+  large.second.removeFuncBlock(largeInvokeBlock);
+
+  // A set of all blocks in small func that need to be kept after the outlining process.
+  std::unordered_set<BasicBlock *> smallKeep{};
+  // General purpose basic block stack.
+  std::vector<BasicBlock *> bbStack{};
+
+  // Mark the specified block and all blocks reachable from it as "to be kept".
+  auto markAllReachableAsKeep = [&smallKeep, &bbStack](BasicBlock *smallBB) {
+    bbStack.push_back(smallBB);
+    do {
+      BasicBlock *bb = bbStack.back();
+      bbStack.pop_back();
+      if (!smallKeep.insert(bb).second)
+        continue;
+      for (auto &succ : successors(*bb))
+        bbStack.push_back(&succ);
+    } while (!bbStack.empty());
+  };
+
+  // Mark all cloned blocks. We simply walk all blocks in any order and check
+  // whether a block has a predecessor in large func that isn't in small func.
+  // If it does, we mark it and all blocks reachable from it as "to be kept".
+  for (auto &bbRef : smallFunc->basicBlocks()) {
+    BasicBlock *smallBB = &bbRef;
+    // Skip the entry and exit blocks.
+    if (smallBB == smallFunc->getEntryBlock() || smallBB == smallFunc->getExitBlock())
+      continue;
+    // If already marked, skip it.
+    if (smallKeep.count(smallBB))
+      continue;
+
+    BasicBlock *originalBB = small.second.originalFromFuncBlock(smallBB);
+    BasicBlock *largeBB = large.second.funcBlockFromOriginal(originalBB);
+
+    // Does the largeBB have any predecessors that are not in small func?
+    auto &&preds = predecessors(*largeBB);
+    bool extraPreds =
+        !std::all_of(preds.begin(), preds.end(), [&small, &large](BasicBlock &predBB) {
+          return small.second.blocks.count(large.second.originalFromFuncBlock(&predBB)) != 0;
+        });
+    if (extraPreds)
+      markAllReachableAsKeep(smallBB);
+  }
+
+  // Delete all blocks that should not be kept.
+  // First clear all their operands in one pass to remove dependencies.
+  std::vector<BasicBlock *> largeErase{};
+  largeErase.reserve(small.second.blocks.size() - smallKeep.size());
+  for (auto &bbRef : smallFunc->basicBlocks()) {
+    BasicBlock *smallBB = &bbRef;
+    if (smallBB == smallFunc->getEntryBlock() || smallBB == smallFunc->getExitBlock())
+      continue;
+    if (smallKeep.count(smallBB))
+      continue;
+    BasicBlock *originalBB = small.second.originalFromFuncBlock(smallBB);
+    BasicBlock *largeBB = large.second.funcBlockFromOriginal(originalBB);
+    largeBB->clearAllOperands();
+    largeErase.push_back(largeBB);
+  }
+  // Now delete them all in a second pass.
+  for (auto *largeBB : largeErase) {
+    largeFunc->eraseBasicBlock(largeBB);
+    large.second.removeFuncBlock(largeBB);
+  }
+
+  // Remove the temporary entry block. Keep in mind that the old entry
+  // block may have been deleted, so obtain the successor of the temp one.
+  BasicBlock *tempEntryBlock = largeFunc->getEntryBlock();
+  Instruction *jmp = tempEntryBlock->getTerminator();
+  assert(jmp->getKind() == ValueKind::Jmp);
+  largeFunc->setEntryBlock(cast<BasicBlock>(jmp->getOperand(0)));
+  tempEntryBlock->clearAllOperands();
+  largeFunc->eraseBasicBlock(tempEntryBlock);
+}
+
 } // namespace
 
-/// "Simple leaf" routines means:
-/// - Leaf routines
 /// - Single entry
-/// - Always entered via a JSR instruction
 /// - Contain no indirect jumps
 /// - Contain no stack pointer manipulation
 bool identifySimpleRoutines(Module *mod) {

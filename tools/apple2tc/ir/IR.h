@@ -483,6 +483,12 @@ public:
     return realAddress_;
   }
 
+  /// Clear the operands of all instructions. This can be done only if the block
+  /// is about to be destroyed. It is necessary if we are goind to destroy a group
+  /// of blocks that may depend on each other. First we clear all operands in all blocks,
+  /// which clears any dependencies, then in a second pass we destroy the blocks.
+  void clearAllOperands();
+
 private:
   void insertBefore(const CircularList<Instruction>::iterator &before, Instruction *inst) {
     instList_.insertBefore(before, inst);
@@ -648,6 +654,9 @@ public:
   }
 
   void dump();
+
+  /// Return a function name suitable for debugging and loggig.
+  std::string debuggingName() const;
 
   std::string const &getName() const {
     return name_;

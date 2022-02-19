@@ -33,7 +33,7 @@ static std::vector<Function *> callerFirstOrder(Module *mod, const CallGraph &cg
 }
 
 static std::string funcName(const Function *func) {
-  return format("func '%s' $%04x", func->getName().c_str(), func->getAddress().value_or(0x10000));
+  return func->debuggingName();
 };
 
 CPURegLiveness::CPURegLiveness(Module *mod) : mod_(mod), cg_(mod) {}

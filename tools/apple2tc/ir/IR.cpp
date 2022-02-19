@@ -216,6 +216,11 @@ void BasicBlock::importInstruction(Instruction *inst) {
   inst->setBasicBlock(this);
 }
 
+void BasicBlock::clearAllOperands() {
+  for (auto &inst : instList_)
+    inst.clearOperands();
+}
+
 IteratorRange<BasicBlock::PredInstIterator> predecessorInsts(BasicBlock &bb) {
   auto users = bb.users();
   return makeIteratorRange(
@@ -248,6 +253,10 @@ Function::~Function() {
 
 void Function::dump() {
   IRDumper(stdout, false).dump(this);
+}
+
+std::string Function::debuggingName() const {
+  return format("func '%s' $%04x", getName().c_str(), getAddress().value_or(0x10000));
 }
 
 BasicBlock *Function::createBasicBlock() {
