@@ -534,9 +534,9 @@ void GenIR::emitADC(const CPUInst &inst) {
     auto *res16 = builder_.createAdcDec16(op1, op2, op3);
     emitStoreReg8(CPURegKind::A, builder_.createTrunc16t8(res16));
     auto *flags = builder_.createHigh8(res16);
-    emitStoreReg8(CPURegKind::STATUS_C, builder_.createDecodeFlag(flags, builder_.getLiteralU8(1)));
+    emitStoreReg8(CPURegKind::STATUS_C, builder_.createDecodeFlag(flags, builder_.getLiteralU8(0)));
     emitStoreReg8(
-        CPURegKind::STATUS_NotZ, builder_.createDecodeFlag(flags, builder_.getLiteralU8(2)));
+        CPURegKind::STATUS_NotZ, builder_.createDecodeFlag(flags, builder_.getLiteralU8(1)));
     emitStoreReg8(CPURegKind::STATUS_V, builder_.createDecodeFlag(flags, builder_.getLiteralU8(6)));
     emitStoreReg8(CPURegKind::STATUS_N, builder_.createDecodeFlag(flags, builder_.getLiteralU8(7)));
   }
@@ -591,10 +591,11 @@ void GenIR::emitSBC(const CPUInst &inst) {
     auto *res16 = builder_.createSbcDec16(op1, op2, op3);
     emitStoreReg8(CPURegKind::A, builder_.createTrunc16t8(res16));
     auto *flags = builder_.createHigh8(res16);
-    emitStoreReg8(CPURegKind::STATUS_C, builder_.createAnd8(flags, builder_.getLiteralU8(0x01)));
-    emitStoreReg8(CPURegKind::STATUS_NotZ, builder_.createAnd8(flags, builder_.getLiteralU8(0x02)));
-    emitStoreReg8(CPURegKind::STATUS_V, builder_.createAnd8(flags, builder_.getLiteralU8(0x40)));
-    emitStoreReg8(CPURegKind::STATUS_N, builder_.createAnd8(flags, builder_.getLiteralU8(0x80)));
+    emitStoreReg8(CPURegKind::STATUS_C, builder_.createDecodeFlag(flags, builder_.getLiteralU8(0)));
+    emitStoreReg8(
+        CPURegKind::STATUS_NotZ, builder_.createDecodeFlag(flags, builder_.getLiteralU8(1)));
+    emitStoreReg8(CPURegKind::STATUS_V, builder_.createDecodeFlag(flags, builder_.getLiteralU8(6)));
+    emitStoreReg8(CPURegKind::STATUS_N, builder_.createDecodeFlag(flags, builder_.getLiteralU8(7)));
   }
   builder_.createJmp(nextBB);
 
