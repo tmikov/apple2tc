@@ -265,6 +265,12 @@ void Function::createExitBlock() {
   exitBlock_ = block;
 }
 
+void Function::setEntryBlock(BasicBlock *block) {
+  assert(block->getFunction() == this && "The new entry block must belong to the same function");
+  bbList_.remove(block);
+  bbList_.push_front(block);
+}
+
 void Function::importBasicBlock(BasicBlock *bb) {
   bb->getFunction()->bbList_.remove(bb);
   bbList_.push_back(bb);

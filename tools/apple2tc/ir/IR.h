@@ -686,17 +686,20 @@ public:
   }
   void createExitBlock();
 
+  BasicBlock *getEntryBlock() {
+    assert(!bbList_.empty() && "getEntryPoint() can only be invoked on non-empty block");
+    return &bbList_.front();
+  }
+
+  /// Move an existing basic block to the front of the list, making it an entry block.
+  void setEntryBlock(BasicBlock *block);
+
   /// Move a basic block from a different function into this one. Even if the
   /// block already belongs to this function, it will be removed from the list
   /// and appended to the end.
   void importBasicBlock(BasicBlock *bb);
 
   void eraseBasicBlock(BasicBlock *bb);
-
-  BasicBlock *getEntryBlock() {
-    assert(!bbList_.empty() && "getEntryPoint() can only be invoked on non-empty block");
-    return &bbList_.front();
-  }
 
   auto basicBlocks() {
     return makeIteratorRange(bbList_.begin(), bbList_.end());
