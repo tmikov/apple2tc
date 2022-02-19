@@ -189,7 +189,6 @@ int main(int argc, char **argv) {
       if (optLevel > 2) {
         simplifyCFG(mod);
         simplify(mod);
-        // Enabling this breaks Snake Byte. Not clear why yet!
         localCPURegSSA(mod);
         dce(mod);
       }
