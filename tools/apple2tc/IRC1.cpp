@@ -111,10 +111,15 @@ void IRC1Mod::run() {
   fprintf(os_, "  %s(false);\n", getName(mod_->getStartFunction()));
   fprintf(os_, "}\n");
 
+  // Generate all functions in order, but generate the start function last.
   for (auto &func : mod_->functions()) {
+    if (&func == mod_->getStartFunction())
+      continue;
     fprintf(os_, "\n");
     IRC1(this, &func, os_, trees_).runFunc();
   }
+  fprintf(os_, "\n");
+  IRC1(this, mod_->getStartFunction(), os_, trees_).runFunc();
 
   printEpilogue();
 }
