@@ -104,7 +104,7 @@ void IRC1Mod::run() {
 
   fprintf(os_, "\n");
   for (auto &func : mod_->functions())
-    fprintf(os_, "void %s(bool adjust_sp);\n", getName(&func));
+    fprintf(os_, "void %s(uint16_t ret_addr);\n", getName(&func));
 
   fprintf(os_, "\n");
   fprintf(os_, "static void emulated_entry_point(void) {\n");
@@ -405,7 +405,7 @@ void IRC1::runFunc() {
 
   regAlloc();
 
-  fprintf(os_, "void %s(bool adjust_sp) {\n", name_);
+  fprintf(os_, "void %s(uint16_t ret_addr) {\n", name_);
   if (needDynamicBlocks())
     fprintf(os_, "  unsigned block_id = 0;\n");
   fprintf(os_, "  bool branchTarget = true;\n");
@@ -415,8 +415,8 @@ void IRC1::runFunc() {
   }
   fprintf(os_, "\n");
 
-  fprintf(os_, "  if (adjust_sp)\n");
-  fprintf(os_, "    push16(0xffff); // Fake return address.\n");
+  fprintf(os_, "  if (ret_addr)\n");
+  fprintf(os_, "    push16(ret_addr); // Fake return address.\n");
   fprintf(os_, "\n");
   if (needDynamicBlocks()) {
     fprintf(os_, "  for(;;) {\n");
@@ -1015,15 +1015,14 @@ void IRC1::printCPUAddr2BB(Instruction *inst) {
       formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printCall(Instruction *inst) {
-  assert(isa<LiteralU8>(inst->getOperand(1)) && "operand 1 of call must be a u8 constant");
   bprintf(
       obuf_,
       "%s(%s)",
       c1mod_->getName(cast<Function>(inst->getOperand(0))),
-      cast<LiteralU8>(inst->getOperand(1))->getValue() ? "true" : "false");
+      formatOperand(inst->getOperand(1)).c_str());
 }
 void IRC1::printReturn(Instruction *inst) {
-  bprintf(obuf_, "if (adjust_sp) pop16(); return");
+  bprintf(obuf_, "if (ret_addr) pop16(); return");
 }
 void IRC1::printExit(Instruction *inst) {}
 void IRC1::printJmp(Instruction *inst) {

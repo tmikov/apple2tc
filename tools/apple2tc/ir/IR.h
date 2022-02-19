@@ -135,6 +135,13 @@ public:
     verbosity_ = verbosity;
   }
 
+  bool getPreserveReturnAddress() const {
+    return preserveReturnAddress_;
+  }
+  void setPreserveReturnAddress(bool preserveReturnAddress) {
+    preserveReturnAddress_ = preserveReturnAddress;
+  }
+
 private:
   CircularList<Module> moduleList_{};
   std::vector<Type> types_{};
@@ -144,6 +151,8 @@ private:
   std::vector<std::unique_ptr<CPUReg>> cpuRegs_{};
 
   unsigned verbosity_ = 0;
+  /// Whether to preserve the routine return address on the stack.
+  bool preserveReturnAddress_ = false;
 };
 
 using OperandList = ValueListBase<Value, Instruction>;

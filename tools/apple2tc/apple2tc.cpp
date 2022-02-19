@@ -60,6 +60,7 @@ static void printHelp() {
   fprintf(stderr, "  --ir                Generate IR\n");
   fprintf(stderr, "  --irc1              Generate C1 representation of the IR\n");
   fprintf(stderr, "  --no-ir-trees       Do not reconstruct trees in IR dump\n");
+  fprintf(stderr, "  --ret-addr          Preserve subroutines return address on the stack\n");
   fprintf(stderr, "  -O<number>          Optimization level (default 0)\n");
   fprintf(stderr, "  --run-data=d.json   Load runtime data from specified file\n");
   fprintf(stderr, "  --no-gen            Ignore runtime generations\n");
@@ -73,6 +74,7 @@ int main(int argc, char **argv) {
     GenIRC1,
   };
   bool noGenerations = false;
+  bool preserveRetAddr = false;
   Action action = Action::GenAsm;
   unsigned verbosity = 0;
   unsigned optLevel = 0;
@@ -109,6 +111,10 @@ int main(int argc, char **argv) {
     }
     if (strcmp(argv[i], "--no-ir-trees") == 0) {
       irTrees = false;
+      continue;
+    }
+    if (strcmp(argv[i], "--ret-addr") == 0) {
+      preserveRetAddr = true;
       continue;
     }
     if (strncmp(argv[i], "-O", 2) == 0 && strlen(argv[i]) == 3 && isdigit(argv[i][2])) {
@@ -166,7 +172,7 @@ int main(int argc, char **argv) {
       break;
     case Action::GenIR:
     case Action::GenIRC1: {
-      auto irCtx = newIRContext(verbosity);
+      auto irCtx = newIRContext(verbosity, preserveRetAddr);
       auto *mod = genIR(dis, *irCtx);
       if (optLevel > 0)
         localCPURegSSA(mod);
@@ -177,7 +183,8 @@ int main(int argc, char **argv) {
           dce(mod);
       }
       if (optLevel > 1) {
-        while (identifySimpleRoutines(mod)) {}
+        while (identifySimpleRoutines(mod)) {
+        }
       }
       if (optLevel > 2) {
         simplifyCFG(mod);

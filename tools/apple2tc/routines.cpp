@@ -365,7 +365,7 @@ bool IdentifySimpleRoutines::convertRoutineInvocation(
     BasicBlock *callBlock = inst->getBasicBlock()->getFunction()->createBasicBlock();
     builder.setInsertionBlock(callBlock);
     builder.setAddress(inst->getAddress());
-    builder.createCall(func, builder.getLiteralU8(0));
+    builder.createCall(func, builder.getLiteralU16(0));
     dynamicBranch = builder.createRTS(builder.getLiteralU8(0));
     return callBlock;
   };
@@ -382,11 +382,14 @@ bool IdentifySimpleRoutines::convertRoutineInvocation(
       // This is the "normal" case: a JSR to the subroutine.
       builder.setInsertionPointAfter(inst);
       builder.setAddress(inst->getAddress());
-      builder.createCall(cand.func, builder.getLiteralU8(1));
+      builder.createCall(
+          cand.func,
+          builder.getLiteralU16(
+              ctx_->getPreserveReturnAddress() ? inst->getAddress().value_or(0xFFFC) + 2 : 0xFFFE));
       if (!fallFromAnother) {
         builder.createJmp(inst->getOperand(1));
       } else {
-        builder.createCall(cand.func, builder.getLiteralU8(0));
+        builder.createCall(cand.func, builder.getLiteralU16(0));
         builder.createRTS(builder.getLiteralU8(0));
       }
     } else {
@@ -432,17 +435,19 @@ bool IdentifySimpleRoutines::convertRoutineInvocation(
       auto [pushHi, pushLo] = *pushJmp;
       builder.setInsertionPointAfter(pushHi);
       builder.setAddress(pushHi->getAddress());
-      builder.createPush8(builder.getLiteralU8(0xFF));
+      builder.createPush8(
+          ctx_->getPreserveReturnAddress() ? pushHi->getOperand(0) : builder.getLiteralU8(0xFF));
       builder.setInsertionPointAfter(pushLo);
       builder.setAddress(pushLo->getAddress());
-      builder.createPush8(builder.getLiteralU8(0xFE));
+      builder.createPush8(
+          ctx_->getPreserveReturnAddress() ? pushLo->getOperand(0) : builder.getLiteralU8(0xFE));
       auto *addr = builder.createCPUAddr2BB(builder.createAdd16(
           builder.createMake16(pushLo->getOperand(0), pushHi->getOperand(0)),
           builder.getLiteralU16(1)));
 
       builder.setInsertionPointAfter(inst);
       builder.setAddress(inst->getAddress());
-      builder.createCall(cand.func, builder.getLiteralU8(0));
+      builder.createCall(cand.func, builder.getLiteralU16(0));
       builder.createPop8();
       builder.createPop8();
 
@@ -457,7 +462,7 @@ bool IdentifySimpleRoutines::convertRoutineInvocation(
 
       builder.setInsertionPointAfter(inst);
       builder.setAddress(inst->getAddress());
-      builder.createCall(cand.func, builder.getLiteralU8(0));
+      builder.createCall(cand.func, builder.getLiteralU16(0));
       dynamicBranch = builder.createRTS(builder.getLiteralU8(0));
     }
     break;

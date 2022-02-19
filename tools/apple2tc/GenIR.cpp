@@ -950,9 +950,10 @@ bool GenIR::isAddrNonIO(Value *addr, unsigned width) {
   return !classifyMemoryAddr(addr, width).overlap16WithWrap(kIORange);
 }
 
-std::shared_ptr<ir::IRContext> newIRContext(unsigned verbosity) {
+std::shared_ptr<ir::IRContext> newIRContext(unsigned verbosity, bool preserveRetAddr) {
   auto res = std::make_shared<IRContext>();
   res->setVerbosity(verbosity);
+  res->setPreserveReturnAddress(preserveRetAddr);
   return res;
 }
 
