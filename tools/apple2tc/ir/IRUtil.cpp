@@ -136,6 +136,13 @@ void markExpressionTrees(BasicBlock *bb, InstSet &validTrees) {
         invalidateTreesIf([cpuReg = inst->getOperand(0)](Instruction *tInst) {
           return tInst->getKind() == ValueKind::LoadR8 && tInst->getOperand(0) == cpuReg;
         });
+      } else if (inst->getKind() == ValueKind::Call) {
+        // TODO: we might use liveness information here for calls, to invalidate only
+        //    changed registers. But ultimately, we don't care too much about global
+        //    registers.
+        invalidateTreesIf([](Instruction *tInst) {
+          return tInst->getKind() == ValueKind::LoadR8;
+        });
       }
       if (inst->modifiesSP()) {
         // Invalidate SP leaves.
