@@ -371,18 +371,29 @@ bool IdentifySimpleRoutines::convertRoutineInvocation(
   };
 
   switch (inst->getKind()) {
-  case ValueKind::JSR:
+  case ValueKind::JSR: {
+    // Check for this case, where the JSR is in a different function.
+    //       JSR func
+    // func:
+    bool fallFromAnother =
+        inst->getOperand(1) == entry && !cand.blocks.count(inst->getBasicBlock());
+
     if (inst->getOperand(0) == entry) {
       // This is the "normal" case: a JSR to the subroutine.
       builder.setInsertionPointAfter(inst);
       builder.setAddress(inst->getAddress());
       builder.createCall(cand.func, builder.getLiteralU8(1));
-      builder.createJmp(inst->getOperand(1));
+      if (!fallFromAnother) {
+        builder.createJmp(inst->getOperand(1));
+      } else {
+        builder.createCall(cand.func, builder.getLiteralU8(0));
+        builder.createRTS(builder.getLiteralU8(0));
+      }
     } else {
       // A JSR followed by the subroutine entry point.
       assert(inst->getOperand(1) == entry);
 
-      if (cand.blocks.count(inst->getBasicBlock()))
+      if (!fallFromAnother)
         return false;
 
       BasicBlock *callBlock = createCallBlock();
@@ -392,6 +403,7 @@ bool IdentifySimpleRoutines::convertRoutineInvocation(
       builder.createJSR(inst->getOperand(0), callBlock);
     }
     break;
+  }
 
   case ValueKind::JTrue:
   case ValueKind::JFalse: {
@@ -486,12 +498,14 @@ void IdentifySimpleRoutines::splitARoutine(BasicBlock *entry, Candidate &cand) {
   }
 
   // Convert all subroutine invocations into Call instructions.
-  auto &&range = predecessorInsts(*entry);
-  for (auto begin = range.begin(), end = range.end(); begin != end;) {
-    auto *inst = &*begin;
-    ++begin;
-    if (convertRoutineInvocation(builder, entry, cand, inst, dynamicReturnBlocks))
-      inst->eraseFromBasicBlock();
+  // A predecessor can be present twice (JSR func, func), so we need to use a set.
+  {
+    PrimitiveSetVector<Instruction *> preds{};
+    for (auto &iRef : predecessorInsts(*entry))
+      preds.insert(&iRef);
+    for (auto *inst : preds)
+      if (convertRoutineInvocation(builder, entry, cand, inst, dynamicReturnBlocks))
+        inst->eraseFromBasicBlock();
   }
 
 #ifndef NDEBUG
