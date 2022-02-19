@@ -466,6 +466,10 @@ public:
     address_ = address;
     realAddress_ = real;
   }
+  void setAddress(std::optional<uint32_t> address, bool real) {
+    address_ = address;
+    realAddress_ = real;
+  }
   bool isRealAddress() const {
     return realAddress_;
   }
