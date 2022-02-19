@@ -634,9 +634,11 @@ static bool simplifyCFG(Function *func) {
         break;
 
       auto *nextBlock = cast<BasicBlock>(terminator->getOperand(0));
-      // Can't touch the exit block.
-      if (nextBlock == func->getExitBlock())
+      // Can't touch the entry or exit block.
+      if (nextBlock == func->getExitBlock() || nextBlock == func->getEntryBlock() ||
+          nextBlock == bb) {
         break;
+      }
 
       auto insts = nextBlock->instructions();
       for (auto it = insts.begin(); it != insts.end();) {
