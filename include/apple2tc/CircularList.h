@@ -251,14 +251,20 @@ public:
     }
 
   protected:
+    explicit iterator_base(std::nullptr_t) {
+      m_p = nullptr;
+    }
     explicit iterator_base(ListEntry *p) {
+      assert(p);
       m_p = p;
     }
 
     ListEntry *getPrev() const {
+      assert(m_p->prev && m_p->next);
       return FWD ? m_p->prev : m_p->next;
     }
     ListEntry *getNext() const {
+      assert(m_p->prev && m_p->next);
       return FWD ? m_p->next : m_p->prev;
     }
 
