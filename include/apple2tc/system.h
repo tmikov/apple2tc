@@ -46,6 +46,8 @@ enum  {
   DebugASM = 1,
   DebugCountBB = 2,
   DebugMem = 4,
+  // Debug info compatible with the emulator.
+  DebugEmu = 8,
 };
 
 extern uint8_t g_debug;

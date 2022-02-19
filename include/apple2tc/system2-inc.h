@@ -58,7 +58,7 @@ const uint8_t *get_ram(void) {
 }
 static inline void ram_poke_impl(uint16_t addr, uint8_t value) {
   if (g_debug & DebugMem)
-    printf("$%04x: $%04x=$%02x\n", s_pc, addr, value);
+    printf("%8u $%04x: $%04x=$%02x\n", s_cycles, s_pc, addr, value);
   s_ram[addr] = value;
 }
 void ram_poke(uint16_t addr, uint8_t value) {
@@ -207,16 +207,16 @@ static void cycles_expired() {
   }
 }
 
-#define CYCLES(pc, cycles)                      \
-  do {                                          \
-    if (s_remaining_cycles <= 0)                \
-      cycles_expired();                         \
-    s_cycles += (cycles);                       \
-    s_remaining_cycles -= (cycles);             \
-    if ((g_debug & DebugASM) && branchTarget) { \
-      branchTarget = false;                     \
-      debug_asm(pc);                            \
-    }                                           \
+#define CYCLES(pc, cycles)                                                 \
+  do {                                                                     \
+    if (s_remaining_cycles <= 0)                                           \
+      cycles_expired();                                                    \
+    s_cycles += (cycles);                                                  \
+    s_remaining_cycles -= (cycles);                                        \
+    if ((g_debug & DebugASM) && (!(g_debug & DebugEmu) || branchTarget)) { \
+      branchTarget = false;                                                \
+      debug_asm(pc);                                                       \
+    }                                                                      \
   } while (0)
 
 void run_emulated(unsigned run_cycles) {

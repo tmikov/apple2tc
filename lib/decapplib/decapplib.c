@@ -120,18 +120,22 @@ void debug_asm(uint16_t pc) {
 
   regs_t r = get_regs();
   r.pc = pc;
-  printf("%04X: %-8s  ", r.pc, "");
+  if (!(g_debug & DebugEmu)) {
+    printf("%8u %04X:", get_cycles(), r.pc);
+  } else {
+    printf("%04X: %-8s  ", r.pc, "");
 
-  // Dump the registers.
-  printf("A=%02X X=%02X Y=%02X SP=%02X SR=", r.a, r.x, r.y, r.sp);
-  // Dump the flags.
-  static const char names[9] = "NV.BDIZC";
-  for (unsigned i = 0; i != 8; ++i)
-    putchar((r.status & (0x80 >> i)) ? names[i] : '.');
+    // Dump the registers.
+    printf("A=%02X X=%02X Y=%02X SP=%02X SR=", r.a, r.x, r.y, r.sp);
+    // Dump the flags.
+    static const char names[9] = "NV.BDIZC";
+    for (unsigned i = 0; i != 8; ++i)
+      putchar((r.status & (0x80 >> i)) ? names[i] : '.');
 
-  if (s_num_watches == 0) {
-    // The PC again for convenience.
-    printf(" PC=%04X", r.pc);
+    if (s_num_watches == 0) {
+      // The PC again for convenience.
+      printf(" PC=%04X", r.pc);
+    }
   }
 
   for (unsigned i = 0; i != s_num_watches; ++i) {
@@ -373,7 +377,7 @@ static void simulate_frame(void) {
       drain_kbd_file();
 
     unsigned runCycles;
-    if (trace_keys_ || key_presses_) {
+    if (trace_keys_ || key_presses_ || (g_debug & (DebugASM | DebugMem)) != 0) {
       // If we are recording or replaying, we need to have reproducible cycles.
       runCycles = (unsigned)((1.0 / 60.0) * clock_freq_);
     } else {
@@ -501,6 +505,7 @@ static void print_help() {
   printf(" --kbd-file=path  Read ascii keyboard input from the specified file\n");
   printf(" --key-file=path  Read key presses and cycles from the specified file\n");
   printf(" --fast           Emulate a faster CPU\n");
+  printf(" --compat         Debug info compatible with the emulator\n");
   printf(" --trace          Dump state at branch targets\n");
   printf(" --trace-mem      Dump all memory writes\n");
   printf(" --trace-keys     Dump key presses with cycle stamps\n");
@@ -524,6 +529,10 @@ static void parse_args(int argc, char *argv[]) {
     }
     if (strcmp(arg, "--no-sound") == 0) {
       sound_enabled_ = false;
+      continue;
+    }
+    if (strcmp(arg, "--compat") == 0) {
+      g_debug |= DebugEmu;
       continue;
     }
     if (strcmp(arg, "--trace") == 0) {
