@@ -15,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class Disas;
@@ -758,6 +759,24 @@ public:
   void add(Instruction *inst) {
     inst->clearOperands();
     toDestroy_.push_back(inst);
+  }
+};
+
+/// Similar to InstDestroyer, but supports adding an instruction multiple times.
+/// Does not clear the instrucion operands when adding.
+class DupInstDestroyer {
+  std::unordered_set<Instruction *> toDestroy_{};
+
+public:
+  DupInstDestroyer(const InstDestroyer &) = delete;
+  void operator=(const InstDestroyer &) = delete;
+
+  DupInstDestroyer();
+  ~DupInstDestroyer();
+
+  /// Record the instruction for destruction.
+  void add(Instruction *inst) {
+    toDestroy_.insert(inst);
   }
 };
 

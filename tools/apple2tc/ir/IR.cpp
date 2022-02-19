@@ -324,6 +324,13 @@ InstDestroyer::~InstDestroyer() {
     inst->eraseFromBasicBlock();
 }
 
+DupInstDestroyer::DupInstDestroyer() = default;
+
+DupInstDestroyer::~DupInstDestroyer() {
+  for (auto *inst : toDestroy_)
+    inst->eraseFromBasicBlock();
+}
+
 void IRBuilder::insert(Instruction *inst) {
   assert(block_ && "BasicBlock must be set");
   assert(inst->getBasicBlock() == block_);
