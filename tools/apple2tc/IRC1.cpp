@@ -960,14 +960,11 @@ void IRC1::printNot16(Instruction *inst) {
   bprintf(obuf_, "~%s", formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printAddCycles(Instruction *inst) {
-  uint16_t pc;
-  if (inst->getAddress()) {
-    pc = *inst->getAddress();
-    bprintf(obuf_, "s_pc = 0x%04x; ", pc);
-  } else {
-    pc = 0xFFFF;
-  }
-  bprintf(obuf_, "CYCLES(0x%04x, %s)", pc, formatOperand(inst->getOperand(0)).c_str());
+  bprintf(
+      obuf_,
+      "CYCLES(0x%04x, %s)",
+      inst->getAddress().value_or(0xFFFF),
+      formatOperand(inst->getOperand(0)).c_str());
 }
 void IRC1::printCycles(Instruction *inst) {
   bprintf(obuf_, "s_cycles");

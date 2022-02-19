@@ -241,6 +241,7 @@ static void cycles_expired() {
 
 #define CYCLES(pc, cycles)                                                 \
   do {                                                                     \
+    s_pc = (pc);                                                           \
     if (s_remaining_cycles <= 0)                                           \
       cycles_expired();                                                    \
     s_cycles += (cycles);                                                  \
