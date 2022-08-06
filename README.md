@@ -62,7 +62,7 @@ The project consists of several components:
 ![](images/robo.jpg)
 
 A2emu is portable and should work on MacOS, Linux, Windows and Web, although as
-of this writing only MacOS and Web have been tested.
+of this writing only MacOS and Web are regularly tested.
 
 It is not intended to be a fancy all-powerful Apple II emulator, with bells and
 whistles, all possible emulated hardware support, super precise timing, etc. Our
@@ -122,3 +122,54 @@ cases work.
 
 Correctness should be good, except for overflowing the 16-bit PC, which I didn't
 bother checking for.
+
+## Building
+
+The project uses CMake. It is designed to be portable and should work on MacOS,
+Linux, Windows and Web. As of this writing only MacOS, Web and Linux builds work,
+and only MacOS and Web are regularly tested.
+
+### MacOS
+
+No additional library dependencies should be needed.
+```shell
+git clone https://github.com/tmikov/apple2tc.git
+cd apple2tc
+mkdir build && cd build
+cmake ..
+make -j
+```
+
+### Linux
+
+The build has been tested on Ubuntu 18.02 LTS, but the build instructions should
+be similar for other distributions.
+
+The project requires c++17, which is not fully supported by gcc versions before 8.
+The default compiler on Ubuntu 18.02 is gcc 7.5.0, so  a later version needs to be
+installed first:
+```shell
+sudo apt-get install gcc-8 g++-8
+```
+
+To override the default compiler used by CMake, the following environment
+variables need to be exported *in the shell used by CMake later*:
+```shell
+export CXX=g++-8
+export CC=gcc-8
+```
+
+The following dependencies are needed:
+```shell
+sudo apt-get install libx11-dev libxi-dev libxcursor-dev \
+  libasound2-dev mesa-common-dev libglvnd-dev
+```
+
+Finally, the build itself:
+```shell
+git clone https://github.com/tmikov/apple2tc.git
+cd apple2tc
+mkdir build && cd build
+cmake ..
+make -j
+```
