@@ -8,6 +8,7 @@
 #include "apple2tc/d6502.h"
 
 #include <cstdlib>
+#include <cstring>
 
 void genDisasmTable() {
   printf("static const CPUOpcode s_opcodes[256] = {\n");
@@ -62,14 +63,9 @@ static void genSortedNames() {
     names[i].kind = (CPUInstKind)i;
   }
 
-  qsort(
-      names,
-      COUNT,
-      sizeof(names[0]),
-      [](const void *a, const void *b) -> int {
-        return strcmp(
-            static_cast<const NameKind *>(a)->name, static_cast<const NameKind *>(b)->name);
-      });
+  qsort(names, COUNT, sizeof(names[0]), [](const void *a, const void *b) -> int {
+    return strcmp(static_cast<const NameKind *>(a)->name, static_cast<const NameKind *>(b)->name);
+  });
 
   printf("static const char s_sortedNames[][4] = {\n");
   for (unsigned i = 0; i != COUNT; ++i)

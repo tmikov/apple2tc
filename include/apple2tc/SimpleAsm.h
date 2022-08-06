@@ -9,6 +9,8 @@
 
 #include "apple2tc/d6502.h"
 
+#include <cassert>
+
 class SimpleAsm {
 public:
   struct ExprResult {

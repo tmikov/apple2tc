@@ -10,6 +10,7 @@
 #include "apple2tc/apple2iodefs.h"
 #include "apple2tc/apple2plus_rom.h"
 
+#include <cstring>
 #include <stdexcept>
 #include <utility>
 

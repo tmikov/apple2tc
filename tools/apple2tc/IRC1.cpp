@@ -377,6 +377,7 @@ static const char *getCTypeName(TypeKind type) {
     PANIC_ABORT("Invalid type");
     break;
   }
+  abort();
 }
 
 IRC1::IRC1(IRC1Mod *c1mod, Function *func, FILE *os, bool trees)

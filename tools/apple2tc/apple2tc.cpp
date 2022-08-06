@@ -10,6 +10,7 @@
 
 #include "apple2tc/support.h"
 
+#include <cstring>
 #include <stdexcept>
 #include <tuple>
 

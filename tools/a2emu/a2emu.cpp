@@ -299,15 +299,11 @@ void A2Emu::initWindow() {
 
   sg_pipeline_desc pdesc = {
       .shader = blit,
-      .layout =
-          {.attrs =
-               {
-                   [ATTR_vs_pos].format = SG_VERTEXFORMAT_FLOAT2,
-                   [ATTR_vs_texcoord0].format = SG_VERTEXFORMAT_FLOAT2,
-               }},
       .primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
       .label = "rect pipeline",
   };
+  pdesc.layout.attrs[ATTR_vs_pos].format = SG_VERTEXFORMAT_FLOAT2;
+  pdesc.layout.attrs[ATTR_vs_texcoord0].format = SG_VERTEXFORMAT_FLOAT2;
   pip_ = sg_make_pipeline(&pdesc);
 }
 
@@ -458,7 +454,8 @@ void A2Emu::frame() {
   updateScreen();
   updateScreenImage();
 
-  sg_pass_action pass_action = {.colors[0] = {.action = SG_ACTION_CLEAR}};
+  sg_pass_action pass_action = {};
+  pass_action.colors[0] = {.action = SG_ACTION_CLEAR};
   sg_begin_default_pass(&pass_action, sapp_width(), sapp_height());
 
   {
@@ -534,7 +531,8 @@ void A2Emu::updateScreen() {
 }
 
 void A2Emu::updateScreenImage() {
-  sg_image_data imgData = {.subimage[0][0] = {.ptr = screen_.data, .size = sizeof(screen_.data)}};
+  sg_image_data imgData = {};
+  imgData.subimage[0][0] = {.ptr = screen_.data, .size = sizeof(screen_.data)};
   sg_update_image(bind_.fs_images[SLOT_tex], &imgData);
 }
 
@@ -695,6 +693,6 @@ sapp_desc sokol_main(int argc, char *argv[]) {
       .width = A2_SCREEN_W * 2,
       .height = A2_SCREEN_H * 2,
       .window_title = "A2Emu",
-      .icon.sokol_default = true,
+      .icon{.sokol_default = true},
   };
 }

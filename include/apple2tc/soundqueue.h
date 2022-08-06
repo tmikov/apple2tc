@@ -8,13 +8,17 @@
 #pragma once
 
 #ifdef __cplusplus
-// Conflicts require these to be included before <stdatomic.h> in C++.
 #include <atomic>
 #include <memory>
+
+using std::atomic_bool;
+using std::atomic_uint;
+using std::memory_order_acquire;
+#else
+#include <stdatomic.h>
 #endif
 
 #include <assert.h>
-#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>

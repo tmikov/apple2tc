@@ -11,6 +11,7 @@
 #include "apple2tc/support.h"
 
 #include <cstdarg>
+#include <cstring>
 #include <functional>
 #include <optional>
 #include <string_view>

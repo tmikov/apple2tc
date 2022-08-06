@@ -9,6 +9,7 @@
 
 #include "IR.h"
 
+#include <functional>
 #include <unordered_map>
 #include <unordered_set>
 

@@ -12,6 +12,7 @@
 #include <cassert>
 #include <cctype>
 #include <cstdarg>
+#include <cstring>
 #include <optional>
 #include <unordered_map>
 #include <vector>

@@ -28,6 +28,7 @@ class BasicBlock;
 class Function;
 class Module;
 class InstDestroyer;
+class IRContext;
 
 template <class T, class B>
 bool isa(const B *b) {
@@ -66,6 +67,8 @@ private:
   TypeKind const kind_;
 };
 
+inline Type *getKnownType(IRContext *ctx, TypeKind TK);
+
 enum class ValueKind : uint8_t {
 #define IR_VALUE(name, ...) name,
 #define IR_RANGE(name, first, last) _##name##_First = first, _##name##_Last = last,
@@ -96,64 +99,6 @@ using LiteralU32 = ConstValueImpl<LiteralNumber, uint32_t, ValueKind::LiteralU32
 using CPUReg = ValueRange<ValueKind::_CPUReg_First, ValueKind::_CPUReg_Last>;
 using CPUReg8 = ConstValueImpl<CPUReg, CPURegKind, ValueKind::CPUReg8, TypeKind::CPUReg8>;
 using CPUReg16 = ConstValueImpl<CPUReg, CPURegKind, ValueKind::CPUReg16, TypeKind::CPUReg16>;
-
-class IRContext {
-public:
-  IRContext();
-  ~IRContext();
-
-  Module *createModule(const std::shared_ptr<Disas> &disas);
-
-  Type *getType(TypeKind kind) {
-    assert(kind < TypeKind::_last);
-    return &types_[(unsigned)kind];
-  }
-
-  Type *getVoidType() {
-    return getType(TypeKind::Void);
-  }
-  Type *getU8Type() {
-    return getType(TypeKind::U8);
-  }
-  Type *getU16Type() {
-    return getType(TypeKind::U16);
-  }
-
-  LiteralU8 *getLiteralU8(uint8_t v);
-  LiteralU16 *getLiteralU16(uint16_t v);
-  LiteralU32 *getLiteralU32(uint32_t v);
-
-  CPUReg *getCPUReg(CPURegKind kind) {
-    assert(kind < CPURegKind::_last);
-    return cpuRegs_[(unsigned)kind].get();
-  }
-
-  unsigned int getVerbosity() const {
-    return verbosity_;
-  }
-  void setVerbosity(unsigned int verbosity) {
-    verbosity_ = verbosity;
-  }
-
-  bool getPreserveReturnAddress() const {
-    return preserveReturnAddress_;
-  }
-  void setPreserveReturnAddress(bool preserveReturnAddress) {
-    preserveReturnAddress_ = preserveReturnAddress;
-  }
-
-private:
-  CircularList<Module> moduleList_{};
-  std::vector<Type> types_{};
-  std::unordered_map<uint8_t, LiteralU8> u8_{};
-  std::unordered_map<uint16_t, LiteralU16> u16_{};
-  std::unordered_map<uint32_t, LiteralU32> u32_{};
-  std::vector<std::unique_ptr<CPUReg>> cpuRegs_{};
-
-  unsigned verbosity_ = 0;
-  /// Whether to preserve the routine return address on the stack.
-  bool preserveReturnAddress_ = false;
-};
 
 using OperandList = ValueListBase<Value, Instruction>;
 
@@ -235,7 +180,7 @@ class ConstValueImpl : public Base {
 public:
   using ValueType = StorageType;
 
-  ConstValueImpl(IRContext *ctx, ValueType num) : Base(VK, ctx->getType(TK)), storage_(num) {}
+  ConstValueImpl(IRContext *ctx, ValueType num) : Base(VK, getKnownType(ctx, TK)), storage_(num) {}
 
   static bool classof(const Value *v) {
     return v->getKind() == VK;
@@ -414,7 +359,7 @@ class BasicBlock : public Value {
   friend class IRBuilder;
 
   explicit BasicBlock(IRContext *ctx, Function *function, unsigned uniqueId)
-      : Value(ValueKind::BasicBlock, ctx->getType(TypeKind::BasicBlock)),
+      : Value(ValueKind::BasicBlock, getKnownType(ctx, TypeKind::BasicBlock)),
         function_(function),
         uniqueId_(uniqueId) {}
 
@@ -627,7 +572,7 @@ IteratorRange<BasicBlock::SuccIterator> successors(BasicBlock &bb);
 class Function : public Value {
   friend class Module;
   explicit Function(IRContext *ctx, Module *module, unsigned uniqueId)
-      : Value(ValueKind::Function, ctx->getType(TypeKind::Function)),
+      : Value(ValueKind::Function, getKnownType(ctx, TypeKind::Function)),
         module_(module),
         uniqueId_(uniqueId) {}
 
@@ -718,7 +663,7 @@ private:
 class Module : public Value {
   friend class IRContext;
   explicit Module(IRContext *ctx, const std::shared_ptr<Disas> &disas)
-      : Value(ValueKind::Module, ctx->getVoidType()), context_(ctx), disas_(disas) {}
+      : Value(ValueKind::Module, getKnownType(ctx, TypeKind::Void)), context_(ctx), disas_(disas) {}
 
 public:
   ~Module();
@@ -791,6 +736,64 @@ public:
   void add(Instruction *inst) {
     toDestroy_.insert(inst);
   }
+};
+
+class IRContext {
+public:
+  IRContext();
+  ~IRContext();
+
+  Module *createModule(const std::shared_ptr<Disas> &disas);
+
+  Type *getType(TypeKind kind) {
+    assert(kind < TypeKind::_last);
+    return &types_[(unsigned)kind];
+  }
+
+  Type *getVoidType() {
+    return getType(TypeKind::Void);
+  }
+  Type *getU8Type() {
+    return getType(TypeKind::U8);
+  }
+  Type *getU16Type() {
+    return getType(TypeKind::U16);
+  }
+
+  LiteralU8 *getLiteralU8(uint8_t v);
+  LiteralU16 *getLiteralU16(uint16_t v);
+  LiteralU32 *getLiteralU32(uint32_t v);
+
+  CPUReg *getCPUReg(CPURegKind kind) {
+    assert(kind < CPURegKind::_last);
+    return cpuRegs_[(unsigned)kind].get();
+  }
+
+  unsigned int getVerbosity() const {
+    return verbosity_;
+  }
+  void setVerbosity(unsigned int verbosity) {
+    verbosity_ = verbosity;
+  }
+
+  bool getPreserveReturnAddress() const {
+    return preserveReturnAddress_;
+  }
+  void setPreserveReturnAddress(bool preserveReturnAddress) {
+    preserveReturnAddress_ = preserveReturnAddress;
+  }
+
+private:
+  CircularList<Module> moduleList_{};
+  std::vector<Type> types_{};
+  std::unordered_map<uint8_t, LiteralU8> u8_{};
+  std::unordered_map<uint16_t, LiteralU16> u16_{};
+  std::unordered_map<uint32_t, LiteralU32> u32_{};
+  std::vector<std::unique_ptr<CPUReg>> cpuRegs_{};
+
+  unsigned verbosity_ = 0;
+  /// Whether to preserve the routine return address on the stack.
+  bool preserveReturnAddress_ = false;
 };
 
 class IRBuilder {
@@ -888,6 +891,10 @@ public:
 
 inline IRBuilder::SaveStateRAII IRBuilder::saveState() {
   return SaveStateRAII(this);
+}
+
+inline Type *getKnownType(IRContext *ctx, TypeKind TK) {
+  return ctx->getType(TK);
 }
 
 } // namespace ir

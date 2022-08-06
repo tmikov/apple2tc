@@ -40,5 +40,7 @@ if (APPLE)
 else ()
   #NOTE: not tested yet.
   target_link_libraries(sokol
-    X11 Xi Xcursor GL dl pthread m)
+    X11 Xi Xcursor GL
+    asound
+    dl pthread m)
 endif ()
