@@ -173,3 +173,23 @@ mkdir build && cd build
 cmake ..
 make -j
 ```
+
+# Docker + Any linux
+
+Build you docker file
+
+```shell
+docker build -t apple2tc .
+```
+
+Then run the container
+
+```shell
+docker run -it --rm --name apple2tc apple2tc
+```
+
+From another terminal copy the compiled binaries
+
+```shell
+docker cp apple2tc:/app /tmp/app
+```
