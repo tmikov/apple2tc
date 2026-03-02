@@ -1,8 +1,13 @@
 // Loaded binary at [$0300..$032A]
 // code labels: 1
 // data labels: 6
-function Func0001
-%BB1:  // Pred() Succ()
+// Gen    :
+// Kill   :
+// Mod    :
+// LiveIn :
+// LiveOut:
+function func1
+%bb1:  // Pred() Succ()
                 StoreSP       0xff
 /*$0300*/       AddCycles     75
 /*$0305*/       RamPoke8      0x1000, 0x55
@@ -11,5 +16,7 @@ function Func0001
 /*$031F*/       RamPoke8      0x1004, (And8 (RamPeek8 0x1004) 0x05)
 /*$0328*/       RamPoke8      0x1005, (Trunc16t8 (Shl16 (ZExt8t16 (RamPeek8 0x1005)) 0x03))
 /*$032B*/       Abort         0x032b, 0x032b, 0x03
-end Func0001
+%bb2:  // Pred() Succ()
+                Exit
+end func1
 
