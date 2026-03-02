@@ -177,6 +177,11 @@ int main(int argc, const char **argv) {
     }
   }
 
+  // Install the Disk II boot ROM into RAM so instruction fetch works.
+  // The CPU reads instructions from ram_[] directly, bypassing ioPeek().
+  if (disk1Path || disk2Path)
+    a2_disk2_install_rom(emu->getMainRAMWritable());
+
   // emu->addDebugFlags(Emu6502::DebugASM);
   emu->addDebugFlags(Emu6502::DebugKbdin);
   emu->addDebugFlags(Emu6502::DebugStdout);

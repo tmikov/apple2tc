@@ -192,6 +192,10 @@ uint8_t a2_disk2_peek(a2_disk2_t *disk, unsigned offset, unsigned cycles);
 void a2_disk2_poke(a2_disk2_t *disk, unsigned offset, uint8_t value, unsigned cycles);
 /// Read from Disk II boot ROM ($C600-$C6FF). addr is 0x00-0xFF.
 uint8_t a2_disk2_rom_peek(unsigned addr);
+/// Copy the Disk II P5 boot ROM into ram at $C600-$C6FF.
+void a2_disk2_install_rom(uint8_t *ram);
+/// Clear the Disk II P5 boot ROM from ram at $C600-$C6FF.
+void a2_disk2_remove_rom(uint8_t *ram);
 
 /// Decode and return the vid control bits as a video mode.
 static inline a2_vidmode_t a2_io_get_vidmode(const a2_iostate_t *io) {

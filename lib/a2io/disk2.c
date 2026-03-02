@@ -293,3 +293,11 @@ static const uint8_t disk2_boot_rom[256] = {
 uint8_t a2_disk2_rom_peek(unsigned addr) {
   return disk2_boot_rom[addr & 0xFF];
 }
+
+void a2_disk2_install_rom(uint8_t *ram) {
+  memcpy(ram + 0xC600, disk2_boot_rom, 256);
+}
+
+void a2_disk2_remove_rom(uint8_t *ram) {
+  memset(ram + 0xC600, 0, 256);
+}

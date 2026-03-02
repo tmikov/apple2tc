@@ -196,6 +196,11 @@ A2Emu::A2Emu(CLIArgs &&cliArgs) : cliArgs_(std::move(cliArgs)) {
     }
   }
 
+  // Install the Disk II boot ROM into RAM so instruction fetch works.
+  // The CPU reads instructions from ram_[] directly, bypassing ioPeek().
+  if (!cliArgs_.disk1Path.empty() || !cliArgs_.disk2Path.empty())
+    a2_disk2_install_rom(emu_.getMainRAMWritable());
+
   stm_setup();
 
   initTraceCollect();

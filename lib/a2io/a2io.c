@@ -336,8 +336,9 @@ static void kbdstrb(a2_iostate_t *io) {
 }
 
 uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
-  // Disk II boot ROM: $C600-$C6FF.
-  if (addr >= 0xC600 && addr <= 0xC6FF)
+  // Disk II boot ROM: $C600-$C6FF (only when a disk is mounted).
+  if (addr >= 0xC600 && addr <= 0xC6FF &&
+      (io->disk2.drive[0].mounted || io->disk2.drive[1].mounted))
     return a2_disk2_rom_peek(addr - 0xC600);
 
   switch (addr & 0xCFF0) {
