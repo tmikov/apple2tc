@@ -162,3 +162,110 @@ void a2_disk2_unmount(a2_disk2_t *disk, int drive_num) {
   drv->nib_data = NULL;
   drv->mounted = false;
 }
+
+/// Handle stepper motor phase changes (offsets 0x0-0x7).
+static void handle_stepper(a2_disk2_t *disk, unsigned offset) {
+  int phase_num = offset >> 1;
+  bool phase_on = offset & 1;
+
+  if (phase_on)
+    disk->phases |= (1 << phase_num);
+  else
+    disk->phases &= ~(1 << phase_num);
+
+  int current_phase = (disk->phase_position / 2) & 3;
+  int direction = 0;
+  if (disk->phases & (1 << ((current_phase + 1) & 3)))
+    direction += 1;
+  if (disk->phases & (1 << ((current_phase + 3) & 3)))
+    direction -= 1;
+
+  if (direction != 0) {
+    disk->phase_position += direction;
+    if (disk->phase_position < 0)
+      disk->phase_position = 0;
+    if (disk->phase_position > 69)
+      disk->phase_position = 69;
+
+    int new_track = disk->phase_position / 2;
+    a2_disk2_drive_t *drv = &disk->drive[disk->selected_drive];
+    if (drv->mounted && new_track != drv->current_track) {
+      drv->current_track = new_track;
+      drv->position = 0;
+    }
+  }
+}
+
+/// Check if the motor is spinning (on or coasting down).
+static bool is_motor_spinning(const a2_disk2_t *disk, unsigned cycles) {
+  if (disk->motor_on)
+    return true;
+  return (unsigned)(cycles - (unsigned)disk->motor_off_cycle) < DISK2_MOTOR_TIMEOUT_CYCLES;
+}
+
+/// Read the next nibble from the current track.
+static uint8_t read_nibble(a2_disk2_t *disk, unsigned cycles) {
+  a2_disk2_drive_t *drv = &disk->drive[disk->selected_drive];
+  if (!drv->mounted || !is_motor_spinning(disk, cycles))
+    return 0;
+
+  // Toggle skip for timing approximation.
+  drv->skip = !drv->skip;
+  if (drv->skip)
+    return 0;
+
+  uint8_t *track_base = drv->nib_data + drv->current_track * DISK2_NIB_TRACK_SIZE;
+  uint8_t val = track_base[drv->position];
+  drv->position++;
+  if (drv->position >= DISK2_NIB_TRACK_SIZE)
+    drv->position = 0;
+
+  disk->data_register = val;
+  return val;
+}
+
+uint8_t a2_disk2_peek(a2_disk2_t *disk, unsigned offset, unsigned cycles) {
+  switch (offset) {
+  case 0x0: case 0x1: case 0x2: case 0x3:
+  case 0x4: case 0x5: case 0x6: case 0x7:
+    handle_stepper(disk, offset);
+    break;
+  case 0x8:
+    disk->motor_on = false;
+    disk->motor_off_cycle = cycles;
+    break;
+  case 0x9:
+    disk->motor_on = true;
+    break;
+  case 0xA:
+    disk->selected_drive = 0;
+    break;
+  case 0xB:
+    disk->selected_drive = 1;
+    break;
+  case 0xC:
+    disk->q6 = false;
+    if (!disk->q7)
+      return read_nibble(disk, cycles);
+    break;
+  case 0xD:
+    disk->q6 = true;
+    if (!disk->q7) {
+      a2_disk2_drive_t *drv = &disk->drive[disk->selected_drive];
+      return drv->write_protected ? 0xFF : 0x00;
+    }
+    break;
+  case 0xE:
+    disk->q7 = false;
+    break;
+  case 0xF:
+    disk->q7 = true;
+    break;
+  }
+  return disk->data_register;
+}
+
+void a2_disk2_poke(a2_disk2_t *disk, unsigned offset, uint8_t value, unsigned cycles) {
+  (void)value;
+  a2_disk2_peek(disk, offset, cycles);
+}
