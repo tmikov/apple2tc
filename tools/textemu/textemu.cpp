@@ -54,11 +54,92 @@ public:
 // ---------------------------------------------------------------------------
 
 class NcursesDisplay : public DisplayBackend {
+  uint8_t shadow_[24][40]{};
+  bool firstFrame_ = true;
+
 public:
-  void init() override {}
-  void shutdown() override {}
-  int readKey() override { return -1; }
-  void updateScreen(const Emu6502 *) override {}
+  void init() override {
+    initscr();
+    cbreak();
+    noecho();
+    nodelay(stdscr, TRUE);
+    keypad(stdscr, TRUE);
+    curs_set(0);
+    memset(shadow_, 0, sizeof(shadow_));
+  }
+
+  void shutdown() override {
+    endwin();
+  }
+
+  int readKey() override {
+    int ch = getch();
+    if (ch == ERR)
+      return -1;
+    return translateKey(ch);
+  }
+
+  void updateScreen(const Emu6502 *emu) override {
+    uint8_t current[24][40];
+    struct Ctx {
+      uint8_t (*buf)[40];
+    } ctx{current};
+
+    apple2_decode_text_screen(
+        emu->getMainRAM() + EmuApple2::TXT1SCRN, &ctx,
+        [](void *vctx, uint8_t ch, unsigned x, unsigned y) {
+          static_cast<Ctx *>(vctx)->buf[y][x] = ch;
+        });
+
+    for (unsigned y = 0; y < 24; ++y) {
+      for (unsigned x = 0; x < 40; ++x) {
+        uint8_t raw = current[y][x];
+        if (raw != shadow_[y][x] || firstFrame_) {
+          shadow_[y][x] = raw;
+          bool inverse = (raw & 0xC0) == 0x00;
+          uint8_t ascii = raw & 0x7F;
+          char displayCh = (ascii >= 32 && ascii < 127) ? (char)ascii : ' ';
+          if (inverse)
+            attron(A_REVERSE);
+          mvaddch(y, x, displayCh);
+          if (inverse)
+            attroff(A_REVERSE);
+        }
+      }
+    }
+
+    firstFrame_ = false;
+    refresh();
+  }
+
+private:
+  static int translateKey(int ch) {
+    switch (ch) {
+    case KEY_BACKSPACE:
+    case 127:
+    case KEY_LEFT:
+      return 8;
+    case KEY_RIGHT:
+      return 21;
+    case KEY_UP:
+      return 11;
+    case KEY_DOWN:
+      return 10;
+    case '\n':
+    case '\r':
+    case KEY_ENTER:
+      return '\r';
+    case 27:
+      return 27;
+    default:
+      if (ch >= 0 && ch < 128) {
+        if (ch >= 'a' && ch <= 'z')
+          ch = ch - 'a' + 'A';
+        return ch;
+      }
+      return -1;
+    }
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -196,11 +277,14 @@ int main(int argc, const char **argv) {
 
   g_backend = backend.get();
   installSignalHandlers();
-  backend->init();
+
+  if (!dumpScreen)
+    backend->init();
 
   runLoop(emu.get(), backend.get(), maxFrames, dumpScreen);
 
-  backend->shutdown();
+  if (!dumpScreen)
+    backend->shutdown();
 
   if (dumpScreen)
     dumpTextScreen(emu.get());
