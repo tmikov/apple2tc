@@ -6,133 +6,204 @@
  */
 #include "apple2tc/DebugState6502.h"
 #include "apple2tc/a2io.h"
-#include "apple2tc/a2symbols.h"
 #include "apple2tc/apple2.h"
+#include "apple2tc/apple2plus_rom.h"
 #include "apple2tc/d6502.h"
 #include "apple2tc/support.h"
 
+#include <chrono>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <thread>
+
+#include <ncurses.h>
+#include <termios.h>
+#include <unistd.h>
+
+// ---------------------------------------------------------------------------
+// Emulator wrapper (retained for future debug/trace support)
+// ---------------------------------------------------------------------------
 
 class Debug6502 : public EmuApple2 {
 public:
   DebugState6502 dbg{};
-
   explicit Debug6502() {
     setDebugStateCB(&dbg, DebugState6502::debugStateCB);
   }
 };
 
-static std::vector<char> readAll(const char *path) {
-  FILE *f = fopen(path, "rb");
-  if (!f) {
-    fprintf(stderr, "***ERROR: can't open %s", path);
-    exit(1);
+// ---------------------------------------------------------------------------
+// Display backend interface
+// ---------------------------------------------------------------------------
+
+class DisplayBackend {
+public:
+  virtual ~DisplayBackend() = default;
+  virtual void init() = 0;
+  virtual void shutdown() = 0;
+  /// Non-blocking key read. Returns Apple II key code (0-127), or -1 if none.
+  virtual int readKey() = 0;
+  virtual void updateScreen(const Emu6502 *emu) = 0;
+};
+
+// ---------------------------------------------------------------------------
+// Ncurses display — stub (Task 3)
+// ---------------------------------------------------------------------------
+
+class NcursesDisplay : public DisplayBackend {
+public:
+  void init() override {}
+  void shutdown() override {}
+  int readKey() override { return -1; }
+  void updateScreen(const Emu6502 *) override {}
+};
+
+// ---------------------------------------------------------------------------
+// Stream display — stub (Task 4)
+// ---------------------------------------------------------------------------
+
+class StreamDisplay : public DisplayBackend {
+public:
+  void init() override {}
+  void shutdown() override {}
+  int readKey() override { return -1; }
+  void updateScreen(const Emu6502 *) override {}
+};
+
+// ---------------------------------------------------------------------------
+// Signal handling
+// ---------------------------------------------------------------------------
+
+static DisplayBackend *g_backend = nullptr;
+
+static void signalHandler(int) {
+  if (g_backend)
+    g_backend->shutdown();
+  _exit(1);
+}
+
+static void installSignalHandlers() {
+  struct sigaction sa{};
+  sa.sa_handler = signalHandler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = 0;
+  sigaction(SIGINT, &sa, nullptr);
+  sigaction(SIGTERM, &sa, nullptr);
+}
+
+// ---------------------------------------------------------------------------
+// Screen dump (for --dump-screen)
+// ---------------------------------------------------------------------------
+
+static void dumpTextScreen(const Emu6502 *emu) {
+  const uint8_t *page = emu->getMainRAM() + EmuApple2::TXT1SCRN;
+  for (unsigned y = 0; y < 24; ++y) {
+    unsigned offset = (y % 8) * 128 + (y / 8) * 40;
+    for (unsigned x = 0; x < 40; ++x) {
+      uint8_t raw = page[offset + x];
+      uint8_t ascii = raw & 0x7F;
+      putchar((ascii >= 32 && ascii < 127) ? ascii : ' ');
+    }
+    putchar('\n');
   }
-  auto res = readAll<std::vector<char>>(f);
-  fclose(f);
-  return res;
 }
 
-static void clearScreen() {
-  printf("\x1b[2J\x1b[0;0H");
-  fflush(stdout);
-}
+// ---------------------------------------------------------------------------
+// Main loop
+// ---------------------------------------------------------------------------
 
-static void drawTextScreen(const Emu6502 *emu) {
-  unsigned pageStart = EmuApple2::TXT1SCRN;
-  apple2_decode_text_screen(
-      emu->getMainRAM() + EmuApple2::TXT1SCRN,
-      nullptr,
-      [](void *, uint8_t ch, unsigned x, unsigned y) {
-        if (x == 0)
-          printf("%02u: ", y);
-        ch &= 0x7F;
-        putchar(ch >= 32 ? ch : ' ');
-        if (x == 39)
-          putchar('\n');
-      });
-}
-
-static void consumeLine() {
-  int ch;
-  while ((ch = getchar()) != EOF && ch != '\n') {
-  }
-}
-
-static void runLoop(Debug6502 *emu) {
-  // CPU Freq: 1023000 Hz
-  // cycle: 1/1023000 seconds
-  // 0.020 / (1/1023000) <=> 0.020 * 1023000 <=> 20 * 1023
+static void
+runLoop(Debug6502 *emu, DisplayBackend *backend, unsigned maxFrames, bool suppressDisplay) {
   static constexpr unsigned CYCLES_20MS = (unsigned)(0.020 * Emu6502::CLOCK_FREQ);
 
-  unsigned lastDisplay = emu->getCycles();
+  for (unsigned frame = 0; maxFrames == 0 || frame < maxFrames; ++frame) {
+    auto frameStart = std::chrono::steady_clock::now();
 
-  for (;;) {
-    // TODO: This is very quick and dirty. We should really measure how much actual
-    //       time has passed, how many actual cycles, and adjust.
     emu->runFor(CYCLES_20MS);
-    std::this_thread::sleep_for(std::chrono::duration<unsigned, std::milli>(20));
 
-    if (emu->getCycles() - lastDisplay > Emu6502::CLOCK_FREQ) {
-      lastDisplay = emu->getCycles();
-      if (emu->getDebugFlags() & Emu6502::DebugStdout)
-        drawTextScreen(emu);
+    int key;
+    while ((key = backend->readKey()) >= 0)
+      a2_io_push_key(emu->io(), key);
 
-      if (emu->getDebugFlags() & Emu6502::DebugKbdin) {
-        printf("> ");
-        int ch;
-        switch (getchar()) {
-        case EOF:
-          return;
-        case '\n':
-          break;
-        case 'a':
-          dumpApplesoftBasic(stdout, emu);
-          emu->setDebugFlags(Emu6502::DebugKbdin | Emu6502::DebugASM);
-          while ((ch = getchar()) != EOF && ch != '\n')
-            a2_io_push_key(emu->io(), ch);
-          a2_io_push_key(emu->io(), '\r');
-          break;
-        case 'r':
-          consumeLine();
-          emu->reset();
-          break;
-        case ':':
-          while ((ch = getchar()) != EOF && ch != '\n')
-            a2_io_push_key(emu->io(), ch);
-          a2_io_push_key(emu->io(), '\r');
-          break;
-        case '`':
-          a2_io_push_key(emu->io(), 27);
-          while ((ch = getchar()) != EOF && ch != '\n') {
-            a2_io_push_key(emu->io(), ch);
-          }
-          break;
+    if (!suppressDisplay)
+      backend->updateScreen(emu);
 
-        default:
-          consumeLine();
-          printf("INVALID COMMAND\n");
-          break;
-        }
-      }
-    }
+    auto elapsed = std::chrono::steady_clock::now() - frameStart;
+    auto remaining =
+        std::chrono::milliseconds(20) -
+        std::chrono::duration_cast<std::chrono::milliseconds>(elapsed);
+    if (remaining.count() > 0)
+      std::this_thread::sleep_for(remaining);
   }
 }
 
-int main(int argc, const char **argv) {
-  auto emu = std::make_unique<Debug6502>();
-  auto rom = readAll(argc < 2 ? "rom/apple2plus.rom" : argv[1]);
-  emu->loadROM((const uint8_t *)rom.data(), rom.size());
-  // emu->addDebugFlags(Emu6502::DebugASM);
-  emu->addDebugFlags(Emu6502::DebugKbdin);
-  emu->addDebugFlags(Emu6502::DebugStdout);
-  emu->dbg.addDefaultNonDebug();
-  // emu->addWatch("FRETOP", 0x6F, 2);
+// ---------------------------------------------------------------------------
+// CLI and main
+// ---------------------------------------------------------------------------
 
-  runLoop(emu.get());
+enum class DisplayMode { Auto, Ncurses, Stream };
+
+int main(int argc, const char **argv) {
+  DisplayMode mode = DisplayMode::Auto;
+  const char *romPath = nullptr;
+  unsigned maxFrames = 0;
+  bool dumpScreen = false;
+
+  for (int i = 1; i < argc; ++i) {
+    if (strcmp(argv[i], "--ncurses") == 0)
+      mode = DisplayMode::Ncurses;
+    else if (strcmp(argv[i], "--stream") == 0)
+      mode = DisplayMode::Stream;
+    else if (strncmp(argv[i], "--frames=", 9) == 0)
+      maxFrames = atoi(argv[i] + 9);
+    else if (strcmp(argv[i], "--dump-screen") == 0)
+      dumpScreen = true;
+    else if (argv[i][0] == '-') {
+      fprintf(stderr, "Unknown option: %s\n", argv[i]);
+      fprintf(stderr,
+          "Usage: textemu [--ncurses|--stream] [--frames=N] [--dump-screen] [rom-path]\n");
+      return 1;
+    } else {
+      romPath = argv[i];
+    }
+  }
+
+  if (mode == DisplayMode::Auto)
+    mode = isatty(STDOUT_FILENO) ? DisplayMode::Ncurses : DisplayMode::Stream;
+
+  auto emu = std::make_unique<Debug6502>();
+  if (romPath) {
+    FILE *f = fopen(romPath, "rb");
+    if (!f) {
+      fprintf(stderr, "Error: can't open %s\n", romPath);
+      return 1;
+    }
+    auto rom = readAll<std::vector<char>>(f);
+    fclose(f);
+    emu->loadROM((const uint8_t *)rom.data(), rom.size());
+  } else {
+    emu->loadROM(apple2plus_rom, apple2plus_rom_len);
+  }
+
+  std::unique_ptr<DisplayBackend> backend;
+  if (mode == DisplayMode::Ncurses)
+    backend = std::make_unique<NcursesDisplay>();
+  else
+    backend = std::make_unique<StreamDisplay>();
+
+  g_backend = backend.get();
+  installSignalHandlers();
+  backend->init();
+
+  runLoop(emu.get(), backend.get(), maxFrames, dumpScreen);
+
+  backend->shutdown();
+
+  if (dumpScreen)
+    dumpTextScreen(emu.get());
 
   return 0;
 }
