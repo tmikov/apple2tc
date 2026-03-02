@@ -109,6 +109,7 @@ public:
     }
 
     firstFrame_ = false;
+    move(24, 0);
     refresh();
   }
 
