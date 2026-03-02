@@ -2,9 +2,27 @@
 
 set -e
 
-bin=../cmake-build-debug
+if [ -z "$1" ]; then
+  echo "Usage: $0 <build-dir>" >&2
+  exit 1
+fi
+
+bin=$1
+
+if [ ! -d "$bin" ]; then
+  echo "Error: build directory '$bin' not found" >&2
+  exit 1
+fi
+
 a6502=$bin/tools/a6502/a6502
 apple2tc=$bin/tools/apple2tc/apple2tc
+
+if [ ! -x "$a6502" ] || [ ! -x "$apple2tc" ]; then
+  echo "Error: required binaries not found in '$bin'" >&2
+  echo "  Expected: $a6502" >&2
+  echo "  Expected: $apple2tc" >&2
+  exit 1
+fi
 
 $a6502 trees.s trees.b33 && $apple2tc trees.b33 -O3 --ir > trees-test.ir
 diff -q trees.ir trees-test.ir
