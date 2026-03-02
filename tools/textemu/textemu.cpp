@@ -8,11 +8,13 @@
 #include "apple2tc/a2io.h"
 #include "apple2tc/a2symbols.h"
 #include "apple2tc/apple2.h"
+#include "apple2tc/apple2plus_rom.h"
 #include "apple2tc/d6502.h"
 #include "apple2tc/support.h"
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <thread>
 
@@ -123,14 +125,62 @@ static void runLoop(Debug6502 *emu) {
 }
 
 int main(int argc, const char **argv) {
+  const char *disk1Path = nullptr;
+  const char *disk2Path = nullptr;
+  const char *romPath = nullptr;
+
+  for (int i = 1; i < argc; i++) {
+    if (strncmp(argv[i], "--disk1=", 8) == 0) {
+      disk1Path = argv[i] + 8;
+    } else if (strncmp(argv[i], "--disk2=", 8) == 0) {
+      disk2Path = argv[i] + 8;
+    } else {
+      romPath = argv[i];
+    }
+  }
+
   auto emu = std::make_unique<Debug6502>();
-  auto rom = readAll(argc < 2 ? "rom/apple2plus.rom" : argv[1]);
-  emu->loadROM((const uint8_t *)rom.data(), rom.size());
+
+  if (romPath) {
+    auto rom = readAll(romPath);
+    emu->loadROM((const uint8_t *)rom.data(), rom.size());
+  } else {
+    emu->loadROM(apple2plus_rom, apple2plus_rom_len);
+  }
+
+  if (disk1Path) {
+    if (FILE *f = fopen(disk1Path, "rb")) {
+      auto data = readAll<std::vector<uint8_t>>(f);
+      fclose(f);
+      if (!a2_disk2_mount(&emu->io()->disk2, 0, data.data(), data.size())) {
+        fprintf(stderr, "Failed to mount disk1: %s (bad format or size)\n", disk1Path);
+        return 2;
+      }
+      fprintf(stderr, "Mounted disk1: %s\n", disk1Path);
+    } else {
+      perror(disk1Path);
+      return 2;
+    }
+  }
+  if (disk2Path) {
+    if (FILE *f = fopen(disk2Path, "rb")) {
+      auto data = readAll<std::vector<uint8_t>>(f);
+      fclose(f);
+      if (!a2_disk2_mount(&emu->io()->disk2, 1, data.data(), data.size())) {
+        fprintf(stderr, "Failed to mount disk2: %s (bad format or size)\n", disk2Path);
+        return 2;
+      }
+      fprintf(stderr, "Mounted disk2: %s\n", disk2Path);
+    } else {
+      perror(disk2Path);
+      return 2;
+    }
+  }
+
   // emu->addDebugFlags(Emu6502::DebugASM);
   emu->addDebugFlags(Emu6502::DebugKbdin);
   emu->addDebugFlags(Emu6502::DebugStdout);
   emu->dbg.addDefaultNonDebug();
-  // emu->addWatch("FRETOP", 0x6F, 2);
 
   runLoop(emu.get());
 
