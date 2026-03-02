@@ -1,5 +1,7 @@
 # textemu Terminal Emulator Improvements
 
+**Status:** Implemented
+
 ## Goal
 
 Make textemu usable for interactive Apple II emulation in a terminal, with two modes:
