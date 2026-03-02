@@ -378,6 +378,8 @@ enum class DisplayMode { Auto, Ncurses, Stream };
 int main(int argc, const char **argv) {
   DisplayMode mode = DisplayMode::Auto;
   const char *romPath = nullptr;
+  const char *disk1Path = nullptr;
+  const char *disk2Path = nullptr;
   unsigned maxFrames = 0;
   bool dumpScreen = false;
 
@@ -390,10 +392,15 @@ int main(int argc, const char **argv) {
       maxFrames = atoi(argv[i] + 9);
     else if (strcmp(argv[i], "--dump-screen") == 0)
       dumpScreen = true;
+    else if (strncmp(argv[i], "--disk1=", 8) == 0)
+      disk1Path = argv[i] + 8;
+    else if (strncmp(argv[i], "--disk2=", 8) == 0)
+      disk2Path = argv[i] + 8;
     else if (argv[i][0] == '-') {
       fprintf(stderr, "Unknown option: %s\n", argv[i]);
       fprintf(stderr,
-          "Usage: textemu [--ncurses|--stream] [--frames=N] [--dump-screen] [rom-path]\n");
+          "Usage: textemu [--ncurses|--stream] [--frames=N] [--dump-screen]"
+          " [--disk1=PATH] [--disk2=PATH] [rom-path]\n");
       return 1;
     } else {
       romPath = argv[i];
@@ -416,6 +423,40 @@ int main(int argc, const char **argv) {
   } else {
     emu->loadROM(apple2plus_rom, apple2plus_rom_len);
   }
+
+  if (disk1Path) {
+    if (FILE *f = fopen(disk1Path, "rb")) {
+      auto data = readAll<std::vector<uint8_t>>(f);
+      fclose(f);
+      if (!a2_disk2_mount(&emu->io()->disk2, 0, data.data(), data.size())) {
+        fprintf(stderr, "Failed to mount disk1: %s (bad format or size)\n", disk1Path);
+        return 2;
+      }
+      fprintf(stderr, "Mounted disk1: %s\n", disk1Path);
+    } else {
+      perror(disk1Path);
+      return 2;
+    }
+  }
+  if (disk2Path) {
+    if (FILE *f = fopen(disk2Path, "rb")) {
+      auto data = readAll<std::vector<uint8_t>>(f);
+      fclose(f);
+      if (!a2_disk2_mount(&emu->io()->disk2, 1, data.data(), data.size())) {
+        fprintf(stderr, "Failed to mount disk2: %s (bad format or size)\n", disk2Path);
+        return 2;
+      }
+      fprintf(stderr, "Mounted disk2: %s\n", disk2Path);
+    } else {
+      perror(disk2Path);
+      return 2;
+    }
+  }
+
+  // Install the Disk II boot ROM into RAM so instruction fetch works.
+  // The CPU reads instructions from ram_[] directly, bypassing ioPeek().
+  if (disk1Path || disk2Path)
+    a2_disk2_install_rom(emu->getMainRAMWritable());
 
   std::unique_ptr<DisplayBackend> backend;
   if (mode == DisplayMode::Ncurses)

@@ -10,6 +10,7 @@
 #include "apple2tc/soundqueue.h"
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -106,6 +107,28 @@ enum {
 
 typedef enum { A2_VIDMODE_TEXT, A2_VIDMODE_GR, A2_VIDMODE_HGR } a2_vidmode_t;
 
+/// Disk II drive state.
+typedef struct {
+  uint8_t *nib_data;      ///< Nibblized track data (all 35 tracks).
+  uint32_t position;      ///< Byte offset within current track.
+  bool write_protected;
+  bool mounted;
+  bool skip;              ///< Timing toggle for read.
+  int current_track;      ///< 0-34.
+} a2_disk2_drive_t;
+
+/// Disk II controller state.
+typedef struct {
+  uint8_t data_register;      ///< 74LS323 shift register.
+  bool q6, q7;                ///< Mode latches.
+  bool motor_on;
+  uint64_t motor_off_cycle;   ///< Cycle when motor was turned off.
+  int selected_drive;         ///< 0 or 1.
+  uint8_t phases;             ///< Bitmask of active phase magnets.
+  int phase_position;         ///< Half-track 0-69.
+  a2_disk2_drive_t drive[2];
+} a2_disk2_t;
+
 typedef struct {
   // Input keyboard queue.
   uint8_t keys[A2_KBD_QUEUE_SIZE];
@@ -120,6 +143,8 @@ typedef struct {
   void (*spkr_cb)(void *ctx, unsigned cycles);
   /// Debug flags.
   uint8_t debug;
+  /// Disk II controller state.
+  a2_disk2_t disk2;
 } a2_iostate_t;
 
 void a2_io_init(a2_iostate_t *io);
@@ -151,6 +176,26 @@ static inline unsigned a2_io_keys_expect(const a2_iostate_t *io) {
 }
 uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles);
 void a2_io_poke(a2_iostate_t *io, uint16_t addr, uint8_t value, unsigned cycles);
+
+/// Initialize disk2 controller state.
+void a2_disk2_init(a2_disk2_t *disk);
+/// Free disk2 controller state.
+void a2_disk2_done(a2_disk2_t *disk);
+/// Mount a DSK/DO format disk image (143360 bytes) on drive 0 or 1.
+/// The data is copied and nibblized internally. Returns false on error.
+bool a2_disk2_mount(a2_disk2_t *disk, int drive_num, const uint8_t *dsk_data, size_t size);
+/// Unmount a drive.
+void a2_disk2_unmount(a2_disk2_t *disk, int drive_num);
+/// Handle a read from disk II soft switch ($C0E0-$C0EF). offset is 0x0-0xF.
+uint8_t a2_disk2_peek(a2_disk2_t *disk, unsigned offset, unsigned cycles);
+/// Handle a write to disk II soft switch ($C0E0-$C0EF). offset is 0x0-0xF.
+void a2_disk2_poke(a2_disk2_t *disk, unsigned offset, uint8_t value, unsigned cycles);
+/// Read from Disk II boot ROM ($C600-$C6FF). addr is 0x00-0xFF.
+uint8_t a2_disk2_rom_peek(unsigned addr);
+/// Copy the Disk II P5 boot ROM into ram at $C600-$C6FF.
+void a2_disk2_install_rom(uint8_t *ram);
+/// Clear the Disk II P5 boot ROM from ram at $C600-$C6FF.
+void a2_disk2_remove_rom(uint8_t *ram);
 
 /// Decode and return the vid control bits as a video mode.
 static inline a2_vidmode_t a2_io_get_vidmode(const a2_iostate_t *io) {

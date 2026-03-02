@@ -58,6 +58,9 @@ struct CLIArgs {
   std::string outputPath{};
   /// Kbd input streamed from here.
   std::string kbdPath{};
+  /// Disk image paths for drive 1 and 2.
+  std::string disk1Path{};
+  std::string disk2Path{};
 };
 
 class A2Emu {
@@ -160,6 +163,43 @@ A2Emu::A2Emu(CLIArgs &&cliArgs) : cliArgs_(std::move(cliArgs)) {
     a2_sound_spkr((a2_sound_t *)ctx, Emu6502::CLOCK_FREQ, saudio_sample_rate(), cycles);
   });
   emu_.loadROM(apple2plus_rom, apple2plus_rom_len);
+
+  // Mount disk images if specified.
+  if (!cliArgs_.disk1Path.empty()) {
+    if (FILE *f = fopen(cliArgs_.disk1Path.c_str(), "rb")) {
+      auto data = readAll<std::vector<uint8_t>>(f);
+      fclose(f);
+      if (!a2_disk2_mount(&emu_.io()->disk2, 0, data.data(), data.size())) {
+        fprintf(stderr, "Failed to mount disk1: %s (bad format or size)\n",
+                cliArgs_.disk1Path.c_str());
+        exit(2);
+      }
+      fprintf(stderr, "Mounted disk1: %s\n", cliArgs_.disk1Path.c_str());
+    } else {
+      perror(cliArgs_.disk1Path.c_str());
+      exit(2);
+    }
+  }
+  if (!cliArgs_.disk2Path.empty()) {
+    if (FILE *f = fopen(cliArgs_.disk2Path.c_str(), "rb")) {
+      auto data = readAll<std::vector<uint8_t>>(f);
+      fclose(f);
+      if (!a2_disk2_mount(&emu_.io()->disk2, 1, data.data(), data.size())) {
+        fprintf(stderr, "Failed to mount disk2: %s (bad format or size)\n",
+                cliArgs_.disk2Path.c_str());
+        exit(2);
+      }
+      fprintf(stderr, "Mounted disk2: %s\n", cliArgs_.disk2Path.c_str());
+    } else {
+      perror(cliArgs_.disk2Path.c_str());
+      exit(2);
+    }
+  }
+
+  // Install the Disk II boot ROM into RAM so instruction fetch works.
+  // The CPU reads instructions from ram_[] directly, bypassing ioPeek().
+  if (!cliArgs_.disk1Path.empty() || !cliArgs_.disk2Path.empty())
+    a2_disk2_install_rom(emu_.getMainRAMWritable());
 
   stm_setup();
 
@@ -603,6 +643,8 @@ static void printHelp() {
   printf(" --no-sound       Disable sound\n");
   printf(" --kbd-file=path  Read keyboard input from the specified file\n");
   printf(" --fast           Emulate a faster CPU\n");
+  printf(" --disk1=path     Mount disk image in drive 1\n");
+  printf(" --disk2=path     Mount disk image in drive 2\n");
 }
 
 static CLIArgs parseCLI(int argc, char **argv) {
@@ -653,6 +695,14 @@ static CLIArgs parseCLI(int argc, char **argv) {
     }
     if (strcmp(arg, "--fast") == 0) {
       cliArgs.clockFreq = Emu6502::CLOCK_FREQ * 10;
+      continue;
+    }
+    if (strncmp(arg, "--disk1=", 8) == 0) {
+      cliArgs.disk1Path = arg + 8;
+      continue;
+    }
+    if (strncmp(arg, "--disk2=", 8) == 0) {
+      cliArgs.disk2Path = arg + 8;
       continue;
     }
     if (arg[0] == '-') {

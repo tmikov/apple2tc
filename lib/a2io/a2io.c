@@ -294,9 +294,11 @@ void a2_sound_cb(a2_sound_t *sound, float *buffer, unsigned num_frames, unsigned
 void a2_io_init(a2_iostate_t *io) {
   memset(io, 0, sizeof(*io));
   io->vid_control = A2_VC_TEXT;
+  a2_disk2_init(&io->disk2);
 }
 
 void a2_io_done(a2_iostate_t *io) {
+  a2_disk2_done(&io->disk2);
   memset(io, 0, sizeof(*io));
 }
 
@@ -334,6 +336,11 @@ static void kbdstrb(a2_iostate_t *io) {
 }
 
 uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
+  // Disk II boot ROM: $C600-$C6FF (only when a disk is mounted).
+  if (addr >= 0xC600 && addr <= 0xC6FF &&
+      (io->disk2.drive[0].mounted || io->disk2.drive[1].mounted))
+    return a2_disk2_rom_peek(addr - 0xC600);
+
   switch (addr & 0xCFF0) {
   case A2_KBD:
     if (io->debug & A2_DEBUG_IO1)
@@ -408,6 +415,10 @@ uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
     }
     break;
 
+  // Disk II soft switches: $C0E0-$C0EF.
+  case 0xC0E0:
+    return a2_disk2_peek(&io->disk2, addr & 0x0F, cycles);
+
   default:
     fprintf(stderr, "[%u] Unsupported IO location read $%04X\n", cycles, addr);
   }
@@ -416,6 +427,11 @@ uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
 }
 
 void a2_io_poke(a2_iostate_t *io, uint16_t addr, uint8_t value, unsigned cycles) {
+  // Disk II soft switches need dedicated write handling.
+  if ((addr & 0xCFF0) == 0xC0E0) {
+    a2_disk2_poke(&io->disk2, addr & 0x0F, value, cycles);
+    return;
+  }
   a2_io_peek(io, addr, cycles);
   a2_io_peek(io, addr, cycles);
 }
