@@ -41,10 +41,14 @@ public:
 
 class DisplayBackend {
 public:
+  /// Special return values from readKey().
+  static constexpr int KEY_NONE = -1;
+  static constexpr int KEY_A2RESET = -2;
+
   virtual ~DisplayBackend() = default;
   virtual void init() = 0;
   virtual void shutdown() = 0;
-  /// Non-blocking key read. Returns Apple II key code (0-127), or -1 if none.
+  /// Non-blocking key read. Returns Apple II key code (0-127), KEY_A2RESET, or KEY_NONE.
   virtual int readKey() = 0;
   virtual void updateScreen(const Emu6502 *emu) = 0;
 };
@@ -116,6 +120,10 @@ public:
 private:
   static int translateKey(int ch) {
     switch (ch) {
+    case KEY_F(1):
+      return 3; // Apple II Ctrl+C (break)
+    case KEY_F(2):
+      return KEY_A2RESET;
     case KEY_BACKSPACE:
     case 127:
     case KEY_LEFT:
@@ -138,7 +146,7 @@ private:
           ch = ch - 'a' + 'A';
         return ch;
       }
-      return -1;
+      return KEY_NONE;
     }
   }
 };
@@ -163,7 +171,7 @@ public:
     if (isatty(STDIN_FILENO)) {
       tcgetattr(STDIN_FILENO, &origTermios_);
       struct termios raw = origTermios_;
-      raw.c_lflag &= ~(ICANON | ECHO | ISIG);
+      raw.c_lflag &= ~(ICANON | ECHO);
       raw.c_cc[VMIN] = 0;
       raw.c_cc[VTIME] = 0;
       tcsetattr(STDIN_FILENO, TCSANOW, &raw);
@@ -182,7 +190,42 @@ public:
     unsigned char ch;
     ssize_t n = read(STDIN_FILENO, &ch, 1);
     if (n <= 0)
-      return -1;
+      return KEY_NONE;
+    // Handle escape sequences for function keys.
+    if (ch == 27) {
+      unsigned char seq[4];
+      if (read(STDIN_FILENO, &seq[0], 1) <= 0)
+        return 27; // bare ESC
+      if (seq[0] == 'O') {
+        // \eOP = F1, \eOQ = F2
+        if (read(STDIN_FILENO, &seq[1], 1) <= 0)
+          return 27;
+        if (seq[1] == 'P')
+          return 3; // F1 → Apple II Ctrl+C (break)
+        if (seq[1] == 'Q')
+          return KEY_A2RESET; // F2 → reset
+        return 27;
+      }
+      if (seq[0] == '[') {
+        // \e[11~ = F1, \e[12~ = F2
+        if (read(STDIN_FILENO, &seq[1], 1) <= 0)
+          return 27;
+        if (seq[1] == '1') {
+          if (read(STDIN_FILENO, &seq[2], 1) <= 0)
+            return 27;
+          if (seq[2] == '1') {
+            read(STDIN_FILENO, &seq[3], 1); // consume '~'
+            return 3; // F1 → Apple II Ctrl+C (break)
+          }
+          if (seq[2] == '2') {
+            read(STDIN_FILENO, &seq[3], 1); // consume '~'
+            return KEY_A2RESET; // F2 → reset
+          }
+        }
+        return 27;
+      }
+      return 27;
+    }
     if (ch >= 'a' && ch <= 'z')
       ch = ch - 'a' + 'A';
     if (ch == '\n')
@@ -290,8 +333,13 @@ runLoop(Debug6502 *emu, DisplayBackend *backend, unsigned maxFrames, bool suppre
     emu->runFor(CYCLES_20MS);
 
     int key;
-    while ((key = backend->readKey()) >= 0)
+    while ((key = backend->readKey()) != DisplayBackend::KEY_NONE) {
+      if (key == DisplayBackend::KEY_A2RESET) {
+        emu->reset();
+        continue;
+      }
       a2_io_push_key(emu->io(), key);
+    }
 
     if (!suppressDisplay)
       backend->updateScreen(emu);
