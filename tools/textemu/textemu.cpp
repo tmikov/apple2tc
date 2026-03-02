@@ -147,11 +147,94 @@ private:
 // ---------------------------------------------------------------------------
 
 class StreamDisplay : public DisplayBackend {
+  struct termios origTermios_{};
+  bool termiosChanged_ = false;
+
+  static constexpr uint16_t ZP_CH = 0x24;
+  static constexpr uint16_t ZP_CV = 0x25;
+
+  uint8_t lastCH_ = 0;
+  uint8_t lastCV_ = 0;
+  bool started_ = false;
+
 public:
-  void init() override {}
-  void shutdown() override {}
-  int readKey() override { return -1; }
-  void updateScreen(const Emu6502 *) override {}
+  void init() override {
+    if (isatty(STDIN_FILENO)) {
+      tcgetattr(STDIN_FILENO, &origTermios_);
+      struct termios raw = origTermios_;
+      raw.c_lflag &= ~(ICANON | ECHO | ISIG);
+      raw.c_cc[VMIN] = 0;
+      raw.c_cc[VTIME] = 0;
+      tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+      termiosChanged_ = true;
+    }
+  }
+
+  void shutdown() override {
+    if (termiosChanged_) {
+      tcsetattr(STDIN_FILENO, TCSANOW, &origTermios_);
+      termiosChanged_ = false;
+    }
+  }
+
+  int readKey() override {
+    unsigned char ch;
+    ssize_t n = read(STDIN_FILENO, &ch, 1);
+    if (n <= 0)
+      return -1;
+    if (ch >= 'a' && ch <= 'z')
+      ch = ch - 'a' + 'A';
+    if (ch == '\n')
+      ch = '\r';
+    if (ch == 127)
+      ch = 8;
+    return ch;
+  }
+
+  void updateScreen(const Emu6502 *emu) override {
+    uint8_t ch = emu->ram_peek(ZP_CH);
+    uint8_t cv = emu->ram_peek(ZP_CV);
+
+    if (!started_) {
+      lastCH_ = ch;
+      lastCV_ = cv;
+      started_ = true;
+      return;
+    }
+
+    if (cv == lastCV_ && ch == lastCH_)
+      return;
+
+    if (cv < lastCV_ || (cv == lastCV_ && ch < lastCH_)) {
+      putchar('\n');
+      fflush(stdout);
+      lastCH_ = ch;
+      lastCV_ = cv;
+      return;
+    }
+
+    const uint8_t *textPage = emu->getMainRAM() + EmuApple2::TXT1SCRN;
+    uint8_t curCV = lastCV_;
+    uint8_t curCH = lastCH_;
+
+    while (curCV < cv || (curCV == cv && curCH < ch)) {
+      unsigned offset = (curCV % 8) * 128 + (curCV / 8) * 40 + curCH;
+      uint8_t raw = textPage[offset];
+      uint8_t ascii = raw & 0x7F;
+      putchar((ascii >= 32 && ascii < 127) ? ascii : ' ');
+
+      curCH++;
+      if (curCH >= 40) {
+        curCH = 0;
+        curCV++;
+        putchar('\n');
+      }
+    }
+
+    fflush(stdout);
+    lastCH_ = ch;
+    lastCV_ = cv;
+  }
 };
 
 // ---------------------------------------------------------------------------
