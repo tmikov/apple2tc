@@ -42,8 +42,12 @@ The project consists of several components:
 - [a2emu](https://tmikov.github.io/apple2tc/): an Apple2 emulator for running
   the original game and for *extracting and recording runtime knowledge about it
   based on dynamic behavior*.
-- [a2io](lib/a2io): A library implementing Apple II sound and graphics. This
-  library is used both by the emulator and by the generated C code.
+- [textemu](tools/textemu): A lightweight text-mode Apple II emulator for
+  terminal use. Supports ncurses (interactive) and stream (pipe-friendly) display
+  backends. Useful for headless testing and debugging.
+- [a2io](lib/a2io): A library implementing Apple II sound, graphics, and Disk II
+  floppy controller emulation. This library is used both by the emulator and by
+  the generated C code.
 - [id](tools/id): An interactive disassembler/binary editor for simple
   exploration of Apple II binary files.
 - [a6502](tools/a6502): A 6502 symbolic assembler for easy experimentation. It
@@ -83,6 +87,9 @@ Status:
 - Text, GR and HGR, keyboard working.
 - Sound works (but on web the user needs to interact with the page first due
   to https://developer.chrome.com/blog/autoplay/).
+- Disk II floppy controller with read-only support. DSK/DO format (DOS 3.3
+  sector order, 143,360 bytes). DOS 3.3 boots successfully. Load disk images
+  with `--disk1=path.dsk` and `--disk2=path.dsk`.
 - Elaborate runtime data collection for Apple2TC.
 
 Missing:
@@ -92,10 +99,9 @@ Missing:
   not supposed to be a very powerful emulator.
 - Tape support (we may add it soon, because it seems simple and may be a
   convenient way to save restore).
-- Disk support. No plans to add it for now, since it appears to be a non-trivial
-  amount of work and does not seem to be strictly necessary for the project. Who
-  knows, perhaps inspiration will strike, or someone will decide to contribute
-  it.
+- Additional disk image formats: PO (ProDOS order), NIB (raw nibblized), 2IMG
+  (wrapper format), and WOZ 1.0/2.0 (bit-accurate preservation format for
+  copy-protected disks). Disk write support.
 
 ## Interactive Disassembler
 
