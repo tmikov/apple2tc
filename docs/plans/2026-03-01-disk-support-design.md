@@ -40,6 +40,7 @@ typedef struct {
     // Stepper
     uint8_t phases;             // Bitmask of active phase magnets
     int phase_position;         // Half-track 0-69
+    unsigned last_nibble_cycle; // Cycle when last nibble byte was clocked in
 
     // Drives
     struct {
@@ -48,7 +49,6 @@ typedef struct {
         uint32_t position;      // Byte offset within current track
         bool write_protected;
         int current_track;      // 0-34
-        bool skip;              // Timing toggle for read
         bool mounted;
     } drive[2];
 } a2_disk2_t;
@@ -62,7 +62,7 @@ Embedded as a field in `a2_iostate_t`.
 |--------|------|--------|
 | 0x0-0x7 | PHASE0-3 OFF/ON | Update `phases` bitmask, compute stepper movement, clamp to 0-69 half-tracks, update current track |
 | 0x8 | MOTOROFF | Record `motor_off_cycle`, clear `motor_on` |
-| 0x9 | MOTORON | Set `motor_on = true` |
+| 0x9 | MOTORON | Set `motor_on = true`, reset `last_nibble_cycle` |
 | 0xA | DRIVE1 | `selected_drive = 0` |
 | 0xB | DRIVE2 | `selected_drive = 1` |
 | 0xC | Q6L | `q6 = false`. If `!q7`: return `read_nibble()` |
@@ -74,9 +74,11 @@ Even offsets return `data_register`, odd offsets return 0.
 
 ### read_nibble()
 
-Advance position in current track's nibble buffer. Toggle `skip` flag; when
-skip is true, return 0x00 (simulates ~32-cycle byte-ready timing -- the CPU's
-BPL loop spins until bit 7 is set). Return 0x00 if motor is not spinning.
+Cycle-accurate timing: track `last_nibble_cycle` and advance the disk position
+by `elapsed_cycles / 32` on each access (~32 CPU cycles per nibble byte at
+1.023 MHz, 5 rev/sec, ~6250 bytes/track). When a new byte is ready, return it
+with bit 7 set. Between bytes, return `data_register & 0x7F` (bit 7 clear) so
+the CPU's BPL loop keeps spinning. Return 0x00 if motor is not spinning.
 
 ### Motor timeout
 
@@ -85,8 +87,11 @@ coast-down at 1.023 MHz).
 
 ### Stepper
 
-Magnet-based: compute direction from active phases vs. current phase position.
-Move one half-track per step. Clamp to 0-69.
+Uses the AppleWin algorithm: on every phase change (ON or OFF), compute
+direction by checking which phases adjacent to `phase_position & 3` (half-track
+mod 4) are energized. Move one half-track per step, clamp to 0-69. This
+naturally gives 1 half-track per ON/OFF pair because at odd half-track
+positions the OFF access finds no matching adjacent phase (direction=0).
 
 ## DSK Loading & Nibblization
 
