@@ -123,6 +123,7 @@ typedef struct {
   bool q6, q7;                ///< Mode latches.
   bool motor_on;
   uint64_t motor_off_cycle;   ///< Cycle when motor was turned off.
+  unsigned last_nibble_cycle;  ///< Cycle when last nibble byte was clocked in.
   int selected_drive;         ///< 0 or 1.
   uint8_t phases;             ///< Bitmask of active phase magnets.
   int phase_position;         ///< Half-track 0-69.

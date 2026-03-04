@@ -9,3 +9,6 @@ include_directories(${CURSES_INCLUDE_DIRS})
 link_libraries(d6502 cpuemu a2io support)
 add_executable(textemu textemu.cpp)
 target_link_libraries(textemu ${CURSES_LIBRARIES})
+
+add_executable(disk_test disk_test.cpp)
+

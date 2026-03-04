@@ -164,6 +164,12 @@ void a2_disk2_unmount(a2_disk2_t *disk, int drive_num) {
 }
 
 /// Handle stepper motor phase changes (offsets 0x0-0x7).
+///
+/// Uses the AppleWin algorithm: on every phase change (ON or OFF), compute
+/// direction by checking which adjacent phases (relative to the current
+/// half-track position) are energized. This naturally gives 1 half-track
+/// per ON/OFF pair because at odd half-track positions the OFF access
+/// typically finds no matching adjacent phase, yielding direction=0.
 static void handle_stepper(a2_disk2_t *disk, unsigned offset) {
   int phase_num = offset >> 1;
   bool phase_on = offset & 1;
@@ -173,11 +179,14 @@ static void handle_stepper(a2_disk2_t *disk, unsigned offset) {
   else
     disk->phases &= ~(1 << phase_num);
 
-  int current_phase = (disk->phase_position / 2) & 3;
+  // Compute direction from the current half-track position.
+  // phase_position is the half-track (0-69). Use it mod 4 directly
+  // to check which adjacent phases are energized.
+  int pp = disk->phase_position;
   int direction = 0;
-  if (disk->phases & (1 << ((current_phase + 1) & 3)))
+  if (disk->phases & (1 << ((pp + 1) & 3)))
     direction += 1;
-  if (disk->phases & (1 << ((current_phase + 3) & 3)))
+  if (disk->phases & (1 << ((pp + 3) & 3)))
     direction -= 1;
 
   if (direction != 0) {
@@ -203,25 +212,36 @@ static bool is_motor_spinning(const a2_disk2_t *disk, unsigned cycles) {
   return (unsigned)(cycles - (unsigned)disk->motor_off_cycle) < DISK2_MOTOR_TIMEOUT_CYCLES;
 }
 
-/// Read the next nibble from the current track.
+/// CPU cycles between successive nibble bytes from the disk.
+/// Apple II: ~1,023,000 Hz CPU, disk at 5 rev/sec, ~6250 raw bytes/track.
+/// 1,023,000 / (6250 * 5) ≈ 32.7 cycles/byte.
+#define DISK2_CYCLES_PER_NIBBLE 32
+
+/// Read the data register, advancing disk position based on elapsed cycles.
+/// On real hardware, the shift register clocks in bits at the disk rotation
+/// rate. A new byte is available every ~32 CPU cycles. Between bytes, the
+/// data register has bit 7 clear (byte not yet ready). Software uses BPL
+/// loops to wait for bit 7 to indicate a valid byte.
 static uint8_t read_nibble(a2_disk2_t *disk, unsigned cycles) {
   a2_disk2_drive_t *drv = &disk->drive[disk->selected_drive];
   if (!drv->mounted || !is_motor_spinning(disk, cycles))
     return 0;
 
-  // Toggle skip for timing approximation.
-  drv->skip = !drv->skip;
-  if (drv->skip)
-    return 0;
+  // Advance disk position based on elapsed time since last nibble.
+  unsigned elapsed = cycles - disk->last_nibble_cycle;
+  if (elapsed >= DISK2_CYCLES_PER_NIBBLE) {
+    unsigned nibbles = elapsed / DISK2_CYCLES_PER_NIBBLE;
+    drv->position = (drv->position + nibbles) % DISK2_NIB_TRACK_SIZE;
+    disk->last_nibble_cycle += nibbles * DISK2_CYCLES_PER_NIBBLE;
 
-  uint8_t *track_base = drv->nib_data + drv->current_track * DISK2_NIB_TRACK_SIZE;
-  uint8_t val = track_base[drv->position];
-  drv->position++;
-  if (drv->position >= DISK2_NIB_TRACK_SIZE)
-    drv->position = 0;
+    uint8_t *track_base = drv->nib_data + drv->current_track * DISK2_NIB_TRACK_SIZE;
+    disk->data_register = track_base[drv->position];
+    return disk->data_register;
+  }
 
-  disk->data_register = val;
-  return val;
+  // Not enough time for a new byte. Return data register with bit 7 clear
+  // to simulate the shift register not being ready yet.
+  return disk->data_register & 0x7F;
 }
 
 uint8_t a2_disk2_peek(a2_disk2_t *disk, unsigned offset, unsigned cycles) {
@@ -236,6 +256,7 @@ uint8_t a2_disk2_peek(a2_disk2_t *disk, unsigned offset, unsigned cycles) {
     break;
   case 0x9:
     disk->motor_on = true;
+    disk->last_nibble_cycle = cycles;
     break;
   case 0xA:
     disk->selected_drive = 0;
