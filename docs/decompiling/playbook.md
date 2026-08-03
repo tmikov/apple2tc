@@ -7,10 +7,11 @@ transfers.
 Written in skill shape (when to use → procedure → red flags) so it can be
 promoted to a `.claude/skills/` skill once it has survived a second game.
 
-**Maturity: early.** Snake Byte is the first target and its conversion has not
-started. Everything below under *Findings* is evidence-backed observation.
-Everything under *Procedure* is a plan that has not yet been tested — treat it as
-a hypothesis, and correct it here as reality intervenes.
+**Maturity: procedure steps 1–3 executed once (Snake Byte, 2026-08-02).** Scope
+control, procedure-recovery repair, and oracle standup have all been run for
+real; their findings below are measured, not predicted. Steps 4–5 (structural
+conversion, vertical RE) remain untested — treat those as hypothesis and correct
+them here as reality intervenes.
 
 **Scope tags:** `[6502]` true of 6502 / Apple II work generally ·
 `[apple2tc]` true of this decompiler · `[game]` observed once, may not generalize
@@ -55,21 +56,46 @@ mega-function, `RTS` becomes a *computed* branch to every possible return site,
 so the CFG is near-complete and cannot be structured. See the decision log entry
 of 2026-08-02 for the full argument.
 
-**`[apple2tc]` `routines.cpp` balances the stack per basic block, not per
-routine.** `int stackLevel = 0;` is declared inside the per-block loop, so the
-universal `PHA`-at-entry / `PLA`-before-`RTS` idiom is rejected as unbalanced.
-On Snake Byte this alone accounts for 7 of 10 rejected game routines, including
-the most-called one. Check whether this has been fixed before assuming a
-rejection is meaningful.
+**`[apple2tc]` `routines.cpp` used to balance the stack per basic block —
+fixed 2026-08-02 in commit `ea29cdc`.** `int stackLevel = 0;` sat inside the
+per-block loop, so the universal `PHA`-at-entry / `PLA`-before-`RTS` idiom was
+rejected as unbalanced. Depth is now propagated along CFG edges and required to
+be zero only at `RTS`. Measured effect on Snake Byte: **53 → 75** routines
+identified, `snake-bytec1.c` from 108 to 152 function lines.
+
+**`[apple2tc]` Recovering a ROM routine can unblock game routines.** The
+predicted 7 game routines were *not* the ones recovered. Only 2 of them made it;
+6 unpredicted ones did, because ROM `$F800` (`PLOT`) and `$F871` (`SCRN`)
+suffered the identical stack bug, and recovering them cascaded *forward* to their
+game-range callers. Net was 8, not 7 — the count held for entirely the wrong
+reasons. Estimate recovery by reasoning about the call graph, not by counting
+direct failures.
 
 **`[apple2tc]` `--irc1 -v2` already reports why every candidate was rejected.**
 Do not write a script to infer it. Reasons seen: `block $X stack level not zero`,
-`Pop8 block $X stack level underflow`, `terminator JmpInd`.
+`Pop8 block $X stack level underflow`, `terminator JmpInd`. Since 2026-08-02
+`--routines-report=<path>` emits the same information plus block sets, call
+sites, dominator chains and natural loops.
 
-**`[apple2tc]` The `removeInvalidJSRs()` fixpoint can cascade rejections up the
-call graph, but often does not.** On Snake Byte it converged immediately and
-removed nothing. Confirm from the `-v2` candidate counts rather than assuming
-either way.
+**`[apple2tc]` The `removeInvalidJSRs()` cascade fires only once candidates get
+far enough to reach it.** On Snake Byte pre-fix it removed nothing — the affected
+routines were already dying earlier in `scanCandidate`. Post-fix it removes 5
+game routines that now pass their own checks but `JSR` into still-rejected ones.
+Fixing an early filter can therefore *expose* a cascade that previously looked
+inert. Re-measure after every recovery change.
+
+**`[6502]` One unrecoverable routine can block many.** Snake Byte's `$7230`
+inline-string printer is not merely 10 unrecovered call sites — it transitively
+blocks 5 other game routines through the cascade above. When triaging which
+rejections to fix first, weight them by how many callers they block, not by their
+own call count.
+
+**`[apple2tc]` The routines report reflects a pre-`simplifyCFG` CFG.**
+`identifySimpleRoutines` runs at `-O2`, `simplifyCFG` at `-O3`, so the report's
+blocks are more granular than the final `--irc1` output and one source address
+can appear as several blocks — e.g. `ADC` splits into binary-mode and
+decimal-mode blocks sharing an address. Expect the report and the C to disagree
+on block structure; that is not a bug.
 
 **`[6502]` The inline-string-after-`JSR` idiom defeats procedure recovery.** A
 routine that does `PLA/PLA`, walks a null-terminated string following its call
@@ -87,9 +113,33 @@ each call site's inline bytes lifted into a real string literal.
 per frame whenever `--key-file` is supplied, so a cycle-stamped key recording
 replays identically every time.
 
-**`[6502]` Per-frame framebuffer hashing over that replay is a cheap behavioral
-oracle.** Record a golden trace from the known-good build, then require the
-rewrite to match frame for frame.
+**`[6502]` Hash video *memory*, not the rendered framebuffer.** Three payoffs,
+all confirmed on Snake Byte. Rendering derives its blink phase from wall-clock
+time and is therefore not reproducible. Memory hashing is strictly more
+sensitive. And it needs no graphics context at all — which is what makes headless
+replay possible, and headless is what let the oracle run in an environment with
+no usable X display. Hash the mode byte, the mixed flag, the text page and the
+hi-res page; include the cycle count per line so the trace doubles as a timing
+check.
+
+**`[6502]` Prove the oracle is reproducible before recording it.** Have the
+record path run the known-good build *twice* and refuse to write the trace unless
+both runs agree. An oracle nobody has shown to be deterministic is worse than
+none: it produces failures that look like real bugs. On Snake Byte this passed
+first time, but the cost of checking is one extra run.
+
+**`[6502]` Prove the oracle can fail, too.** Corrupt one hash in the golden trace
+and confirm the checker reports failure and exits non-zero. A check that cannot
+fail is not a check.
+
+**`[6502]` Measure the trace's coverage; do not assume it.** Distinct-hash count
+is dominated by static stretches, not gameplay. Snake Byte's 1300-frame trace has
+only **191** distinct hashes: frames 0–168 are keystrokes at the BASIC prompt
+(one stable run per key), 177–278 and 371–472 are identical 101-frame title/attract
+plateaus, and continuous gameplay only runs from ~472 to the end — about 828
+frames, 14 seconds. Correlate hash-run boundaries against the key file's cycle
+stamps to find where gameplay actually starts, and check the tail is still
+changing (a long frozen tail means a crash or an early-exhausted key file).
 
 **`[6502]` The oracle only stays exact if timing does.** Visible behavior depends
 on cycle counts through spin loops and delay loops, so approximate timing lets
@@ -121,17 +171,24 @@ memory to real C variables much safer than it would otherwise be.
 
 ## Procedure
 
-Untested. Correct this section from experience rather than preserving it.
+Steps 1–3 executed once (Snake Byte, 2026-08-02) and revised from what happened.
+Steps 4–5 remain untested — correct them from experience rather than preserving
+them.
 
 1. **Scope.** Count blocks by address range. Identify the ROM/library share and
    the distinct entry points crossing into it. Decide the boundary before
    writing anything.
-2. **Fix and run procedure recovery.** Use `-v2` to get per-candidate rejection
-   reasons. Fix decompiler over-strictness where it is genuinely over-strict.
-   Reduce the remainder to a named, enumerable manual list.
+2. **Fix and run procedure recovery.** Use `-v2` (or `--routines-report`) to get
+   per-candidate rejection reasons. Fix decompiler over-strictness where it is
+   genuinely over-strict, then **re-measure** — fixing one filter can expose a
+   cascade that previously looked inert, and the routines actually recovered may
+   not be the ones predicted. Reduce the remainder to a named, enumerable manual
+   list, ranked by how many other routines each one blocks.
 3. **Stand up the oracle.** Golden per-frame hash trace from the known-good
    build, plus a script that replays and diffs. Do this *before* changing
-   anything, so the baseline is trustworthy.
+   anything, so the baseline is trustworthy. Prove it both reproducible (record
+   twice, refuse to write unless they agree) and capable of failing (corrupt a
+   hash, confirm non-zero exit). Then measure what the trace actually covers.
 4. **Structural conversion.** Replace the ROM boundary. Move the entry point to
    the program's real start. Recover remaining procedures by hand, rewriting
    idiom-based ones. Reloop each function — dominator tree, back edges for
@@ -154,3 +211,9 @@ Untested. Correct this section from experience rather than preserving it.
 | Approximate cycle counts + frame-hash oracle | Mutually exclusive. Pick one. |
 | Renaming and restructuring in the same step | Every failure now has two candidate causes. |
 | Golden trace proposed for `tests/` | `tests/` is decompiler regression. Game data goes in `decoded/<game>/`. |
+| A golden trace recorded from a single run | Not shown deterministic. Record twice and diff, or it will produce phantom bugs later. |
+| A checker never observed failing | Corrupt an input and watch it fail. A check that cannot fail is not a check. |
+| Predicting *which* routines a recovery fix will unblock | The call graph decides, not the direct failure list. Predict counts at most, then measure. |
+| Expecting "several hundred" of anything | Static stretches dominate replay traces. Measure the number; explain it if it surprises you. |
+| Trusting IDE/clangd diagnostics on this repo | clangd lacks the include paths and reports cascading phantom errors. Trust `ninja` and the test suite. |
+| Citing a helper function from memory | `support.h` has `format()`, not `stringPrintf()`. Grep before specifying an API in a plan. |
