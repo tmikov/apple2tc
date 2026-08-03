@@ -33,6 +33,12 @@ static FILE *kbd_file_ = NULL;
 static unsigned clock_freq_ = A2_CLOCK_FREQ;
 /// If true, dump key presses with cycle stamps.
 static bool trace_keys_ = false;
+/// If set, write a per-frame hash of video state to this file.
+static FILE *hash_file_ = NULL;
+/// If non-zero, quit after this many frames.
+static unsigned frame_limit_ = 0;
+/// Frames simulated so far.
+static unsigned frame_no_ = 0;
 /// Key-presses loaded from disk.
 static KeyPress *key_presses_ = NULL;
 /// Number of loaded key presses.
@@ -377,7 +383,7 @@ static void simulate_frame(void) {
       drain_kbd_file();
 
     unsigned runCycles;
-    if (trace_keys_ || key_presses_ || (g_debug & (DebugASM | DebugMem)) != 0) {
+    if (trace_keys_ || key_presses_ || hash_file_ || (g_debug & (DebugASM | DebugMem)) != 0) {
       // If we are recording or replaying, we need to have reproducible cycles.
       runCycles = (unsigned)((1.0 / 60.0) * clock_freq_);
     } else {
@@ -388,6 +394,35 @@ static void simulate_frame(void) {
     a2_sound_submit(&sound_, A2_CLOCK_FREQ, saudio_sample_rate(), get_cycles());
   }
   lastRunTick_ = curFrameTick_;
+}
+
+/// FNV-1a over the video state: mode, mixed flag, text page and hires page.
+/// Deliberately hashes memory rather than rendered pixels — rendering depends on
+/// wall-clock time for the blink phase and would not be reproducible.
+static uint64_t hash_video_state(void) {
+  uint64_t h = 1469598103934665603ULL;
+  const uint8_t *ram = get_ram();
+
+  uint8_t header[2] = {
+      (uint8_t)a2_io_get_vidmode(&io_), (uint8_t)a2_io_is_vidmode_mixed(&io_)};
+  for (unsigned i = 0; i < sizeof(header); ++i) {
+    h ^= header[i];
+    h *= 1099511628211ULL;
+  }
+
+  const uint8_t *text = ram + a2_io_get_text_page_offset(&io_);
+  for (unsigned i = 0; i < 0x400; ++i) {
+    h ^= text[i];
+    h *= 1099511628211ULL;
+  }
+
+  const uint8_t *hires = ram + a2_io_get_hires_page_offset(&io_);
+  for (unsigned i = 0; i < 0x2000; ++i) {
+    h ^= hires[i];
+    h *= 1099511628211ULL;
+  }
+
+  return h;
 }
 
 static void update_screen(void) {
@@ -424,6 +459,20 @@ static void update_screen_image(void) {
 static void frame_cb(void) {
   curFrameTick_ = stm_now();
   simulate_frame();
+
+  if (hash_file_) {
+    fprintf(hash_file_, "%u %u %016llx\n", frame_no_, get_cycles(),
+            (unsigned long long)hash_video_state());
+  }
+  ++frame_no_;
+  if (frame_limit_ && frame_no_ >= frame_limit_) {
+    if (hash_file_) {
+      fclose(hash_file_);
+      hash_file_ = NULL;
+    }
+    sapp_request_quit();
+  }
+
   update_screen();
   update_screen_image();
 
@@ -509,6 +558,8 @@ static void print_help() {
   printf(" --trace          Dump state at branch targets\n");
   printf(" --trace-mem      Dump all memory writes\n");
   printf(" --trace-keys     Dump key presses with cycle stamps\n");
+  printf(" --hash-frames=p  Write per-frame video state hashes to the given file\n");
+  printf(" --frames=n       Quit after simulating n frames\n");
   printf(" --count-bt       Count branch targets\n");
 }
 
@@ -566,6 +617,18 @@ static void parse_args(int argc, char *argv[]) {
     }
     if (strcmp(arg, "--fast") == 0) {
       clock_freq_ = A2_CLOCK_FREQ * 5;
+      continue;
+    }
+    if (strncmp(arg, "--hash-frames=", 14) == 0) {
+      const char *path = arg + 14;
+      if ((hash_file_ = fopen(path, "wt")) == NULL) {
+        perror(path);
+        exit(2);
+      }
+      continue;
+    }
+    if (strncmp(arg, "--frames=", 9) == 0) {
+      frame_limit_ = (unsigned)strtoul(arg + 9, NULL, 10);
       continue;
     }
 
