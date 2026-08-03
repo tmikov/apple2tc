@@ -270,3 +270,119 @@ change. On this binary the fix does not appear to promote any never-returning
 junk; the 22 newly-promoted routines look like real subroutines, including
 two well-known ROM entry points (`MON_PLOT`, `SCRN`) that were previously
 stuck inside the mega-switch dispatch.
+
+---
+
+## 2026-08-03 — Externalizing ROM entry points: measured effect
+
+**Scope:** apple2tc · **Status:** validated
+
+**Decision:** (records the outcome of Phase 1a, "cut the ROM")
+
+**Evidence:** Snake Byte calls 9 Apple II ROM entry points. Declaring them
+external via a new `--extern-routines` pass, and supplying them from a
+hand-written `a2rom.c`, gives:
+
+| Metric | Before | After |
+| --- | --- | --- |
+| Blocks in the start function | 2064 | 1952 (112 deleted) |
+| ROM blocks in `func_t001` | 1430 | 1334 |
+| Game blocks in `func_t001` | 620 | **564** |
+| Routines identified | 75 | 72 |
+| Game routines accepted | 26 | **28** |
+| Rejected game candidates | 14 | **12** |
+| Rejection roots | 5 | **3** |
+
+`$71F3`, the game's most-called routine, recovered with its 15 call sites — it
+had been blocked transitively by `COUT`'s `JMP (CSWL)` indirect terminator. That
+was the phase's headline hypothesis and it held. Verified frame-identical against
+`play.frames` across the full 1300-frame session, cycle counts included.
+
+**The plan's central premise was wrong.** It predicted externalizing the 9 would
+prune ~1429 ROM blocks. It prunes **112**. The ROM is reachable by two
+independent routes — the 9 entry points, and the BASIC boot path (start PC is
+`$FA62` RESET; `$00C8`, Applesoft's `CHRGET` RTS dispatch, reaches deep into the
+interpreter). Severing both takes externs *and* retargeting the entry to `$3750`,
+and they are strongly non-additive: measured separately at 112 and 48 blocks, but
+1530 together. The ROM cut is therefore Phase 1b, not this phase.
+
+**Three things the spike found that were not anticipated:**
+
+1. **The compiler has no dead-block elimination.** `dce()` removes only
+   user-less, side-effect-free *instructions*, and `hasSideEffects()` is true for
+   every `Void`-typed instruction including all terminators. The only
+   `eraseBasicBlock` call in the tree is inside `simplifyCFG`'s straight-line
+   merge. Any pass that makes blocks unreachable must delete them itself.
+2. **`Function::getAddress()` derives from `getEntryBlock()`**, which `assert`s
+   on an empty block list — so a bodyless function is silent UB under `NDEBUG`,
+   and `CPURegLiveness` calls it unconditionally at `-v2`. Externals need an
+   explicit flag with a stored address, not just an empty block list.
+3. **Externalizing a routine deletes everything only it reached.** `GBASCALC`,
+   `PLOT1` and the entire `$FB78` `COUTZ` subtree disappeared along with the 9,
+   so `a2rom.c` had to supply them too. Correct behaviour, but it triples the
+   hand-written surface over the naive estimate.
+
+**Rejected:** the spec's framing, which replaced the ROM only in a hand-written
+source file starting at `$3750`. That cannot be checked against `play.frames` at
+all — a cold start skips the 168 frames of BASIC boot the trace opens with — so
+nothing would have been verifiable until the phase was substantially complete.
+Keeping the boot path and swapping only the 9 leaf routines made every step
+checkable against the existing trace.
+
+---
+
+## 2026-08-03 — `rom_cout` dispatches through the vector and aborts on unknown targets
+
+**Scope:** 6502 · **Status:** proposed
+
+**Decision:** `rom_cout` reads `CSWL/CSWH` (`$0036/$0037`); if the vector is
+`$FDF0` it runs the `COUT1` equivalent, and for any other target it prints the
+address and calls `error_handler`. No silent fallback.
+
+**Evidence:** `COUT` is `JMP ($36)`. Snake Byte hooks it: `$6641` points the
+vector at `$664A`, its own hi-res text renderer — hand-decoded from the binary as
+a glyph blitter that maps the text cursor (`BASL/BASH` + `CH`) to a hi-res
+address by adding `$1C` to the high byte, indexing an 8-byte-per-glyph font at
+`$66A9`.
+
+The run-data records `$FDED -> $FDF0` only, and `$6641` never executed at all —
+neither it nor its callers `$7485`/`$793F` appear in `BranchTargets`. So the
+tracer classified `$664A` as *data* and it is absent from the generated C
+entirely.
+
+**The oracle structurally cannot check this path.** A wrong choice here would
+pass all 1300 frames. Aborting loudly at the moment it first matters is the only
+honest option; a silent fallback to `COUT1` would render text with the wrong
+font, on the wrong page, undetectably.
+
+**Known gap:** `$664A` remains unimplemented. Phase 1c must either hand-decode it
+into the rewrite or add it to the run-data's `BranchTargets` so the decompiler
+emits it as code.
+
+---
+
+## 2026-08-03 — Coverage measured by instrumentation, not by the trace file
+
+**Scope:** apple2tc · **Status:** validated
+
+**Decision:** To determine whether a code path actually executes, instrument and
+count. Do not infer it from `BranchTargets` in the run-data.
+
+**Evidence:** While closing out which `COUTZ` paths Snake Byte exercises, reading
+`BranchTargets` gave wrong answers twice. The list is capped at 500 entries and
+records only *branch targets*, so a fall-through block reads as absent whether or
+not it ran — `$FBDD` shows absent purely because `$FBDB BNE` falls into it.
+Temporarily adding per-block counters and replaying the session gave the truth:
+
+- The **bell** path is live — 192 speaker clicks. Not from the game: ROM RESET
+  reaches it via `$FF3A` (`LDA #$87; JMP $FDED`). An earlier report had called
+  this probably-unreachable; instrumentation overturned that.
+- **Backspace is provably unreachable from this game**, by argument rather than
+  absence of evidence: no byte Snake Byte emits is `$88`. The `$08` inside the
+  inverse-"CRASH" string at `$7868` has bit 7 clear, so `$FC01` routes it to the
+  glyph path long before the `CMP #$88` at `$FC0C`.
+- The `$93`/`$83` **Ctrl-S handshake** is genuinely reachable at runtime but not
+  on this trace — it needs a key pending when a CR is output.
+
+"Absent from the trace file" and "unreachable" are different claims. Only the
+second is worth relying on, and it takes an argument to establish.
