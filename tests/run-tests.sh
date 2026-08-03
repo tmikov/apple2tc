@@ -48,4 +48,8 @@ $a6502 phapla.s phapla.b33 && $apple2tc -O3 --ir phapla.b33 > phapla-test.ir
 diff -q phapla.ir phapla-test.ir
 rm phapla-test.ir phapla.b33
 
+$a6502 stackmerge.s stackmerge.b33 && $apple2tc -O3 --ir stackmerge.b33 > stackmerge-test.ir
+diff -q stackmerge.ir stackmerge-test.ir
+rm stackmerge-test.ir stackmerge.b33
+
 echo "Success!"

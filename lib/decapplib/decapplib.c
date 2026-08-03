@@ -373,6 +373,10 @@ static void init_cb(void) {
 }
 
 static void cleanup_cb(void) {
+  if (hash_file_) {
+    fclose(hash_file_);
+    hash_file_ = NULL;
+  }
   shutdown_emulated();
   sg_shutdown();
   if (sound_enabled_)
@@ -408,7 +412,15 @@ static void simulate_frame(void) {
 
 /// FNV-1a over the video state: mode, mixed flag, text page and hires page.
 /// Deliberately hashes memory rather than rendered pixels — rendering depends on
-/// wall-clock time for the blink phase and would not be reproducible.
+/// wall-clock time for the blink phase and would not be reproducible, and memory
+/// hashing needs no graphics context, which is what makes headless replay work.
+///
+/// Both pages are hashed regardless of the current video mode, on purpose: a
+/// game may use the currently-undisplayed page as a data structure rather than a
+/// display. Snake Byte does exactly this — the never-shown lo-res page is its
+/// collision grid, read back via SCRN. The tradeoff is that a rewrite which
+/// stores that state differently but renders identically will show up as a
+/// mismatch. That is the intended behaviour: it is game state, not scratch.
 static uint64_t hash_video_state(void) {
   uint64_t h = 1469598103934665603ULL;
   const uint8_t *ram = get_ram();

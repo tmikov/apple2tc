@@ -40,8 +40,10 @@ class IdentifySimpleRoutines {
 
   std::unordered_map<BasicBlock *, Candidate> candidates_{};
   std::multimap<BasicBlock *, Candidate *> blocks_{};
-  /// Entry blocks that were considered and rejected, with the reason.
-  std::map<uint32_t, std::string> rejected_{};
+  /// Entry blocks that were considered and rejected, with the reason. A multimap
+  /// because distinct blocks can share a source address, and each rejection is
+  /// worth reporting.
+  std::multimap<uint32_t, std::string> rejected_{};
   FILE *const report_;
 
 public:
@@ -107,7 +109,11 @@ bool IdentifySimpleRoutines::run() {
   auto numIdentified = candidates_.size();
   if (ctx_->getVerbosity() > 0)
     fprintf(stderr, "%zu simple routines identified\n", numIdentified);
-  emitReport();
+  // Only the productive passes are worth reporting. apple2tc calls this in a
+  // loop until it stops finding routines, and the final no-op pass would
+  // otherwise append a redundant, confusingly-worded duplicate section.
+  if (numIdentified != 0)
+    emitReport();
   splitRoutines();
   return numIdentified != 0;
 }

@@ -65,10 +65,10 @@ DomTree computeDomTree(BasicBlock *entry, const std::unordered_set<BasicBlock *>
 
   auto intersect = [&dt](BasicBlock *a, BasicBlock *b) {
     while (a != b) {
-      while (dt.rpoIndex[a] > dt.rpoIndex[b])
-        a = dt.idom[a];
-      while (dt.rpoIndex[b] > dt.rpoIndex[a])
-        b = dt.idom[b];
+      while (dt.rpoIndex.at(a) > dt.rpoIndex.at(b))
+        a = dt.idom.at(a);
+      while (dt.rpoIndex.at(b) > dt.rpoIndex.at(a))
+        b = dt.idom.at(b);
     }
     return a;
   };
