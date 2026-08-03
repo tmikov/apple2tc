@@ -123,8 +123,16 @@ void IdentifySimpleRoutines::emitReport() {
     accepted.emplace_back(p.first->getAddress().value_or(0x10000), p.first);
   std::sort(accepted.begin(), accepted.end());
 
-  fprintf(report_, "=== routine candidates: %zu accepted, %zu rejected ===\n\n",
+  fprintf(report_, "=== routine candidates: %zu accepted, %zu rejected ===\n",
           accepted.size(), rejected_.size());
+  // This pass runs at -O2, before simplifyCFG (-O3), so the CFG reported here is
+  // more granular than the one behind the final --irc1 output. A single source
+  // address can appear as several blocks -- e.g. ADC splits into binary-mode and
+  // decimal-mode blocks that share one address.
+  fprintf(
+      report_,
+      "Blocks reflect the CFG before simplifyCFG; they are more granular than\n"
+      "--irc1 output, and one address may appear as several blocks.\n\n");
 
   for (auto [addr, entry] : accepted) {
     Candidate &cand = candidates_.at(entry);
