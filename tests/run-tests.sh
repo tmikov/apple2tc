@@ -44,4 +44,8 @@ $a6502 func.s func.b33 && $apple2tc -O3 --ir func.b33 > func-test.ir
 diff -q func.ir func-test.ir
 rm func-test.ir func.b33
 
+$a6502 phapla.s phapla.b33 && $apple2tc -O3 --ir phapla.b33 > phapla-test.ir
+diff -q phapla.ir phapla-test.ir
+rm phapla-test.ir phapla.b33
+
 echo "Success!"

@@ -123,21 +123,35 @@ std::optional<std::tuple<Instruction *, Instruction *>> isSimplePushJmp(Instruct
 }
 
 void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
-  std::unordered_set<BasicBlock *> visited{};
+  // Stack depth relative to routine entry, at the start of each visited block.
+  std::unordered_map<BasicBlock *, int> depthAt{};
   std::unordered_set<BasicBlock *> jsrTargets{};
   std::unordered_set<Instruction *> rts{};
-  std::deque<BasicBlock *> workList{};
+  std::deque<std::pair<BasicBlock *, int>> workList{};
 
   if (ctx_->getVerbosity() > 1)
     fprintf(stderr, "$%04x: scan candidate\n", entry->getAddress().value_or(0x10000));
 
-  workList.push_back(entry);
+  workList.emplace_back(entry, 0);
   do {
-    BasicBlock *bb = workList.front();
+    auto [bb, entryDepth] = workList.front();
     workList.pop_front();
-    // Already visited?
-    if (!visited.insert(bb).second)
+
+    // Already visited? Every path here must agree on the stack depth.
+    auto [it, inserted] = depthAt.try_emplace(bb, entryDepth);
+    if (!inserted) {
+      if (it->second != entryDepth) {
+        if (ctx_->getVerbosity() > 1)
+          fprintf(
+              stderr,
+              "fail: block $%04x reached at stack level %d and %d\n",
+              bb->getAddress().value_or(0),
+              it->second,
+              entryDepth);
+        return;
+      }
       continue;
+    }
 
     // Indirect branches except RTS are not allowed.
     auto *terminator = bb->getTerminator();
@@ -147,19 +161,22 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
       return;
     }
 
-    // Check for stack operations. RTS and JSR are allowed. push8/pop8 must match.
+    // Check for stack operations. RTS and JSR are allowed. push8/pop8 adjust the
+    // depth, which is tracked across the whole routine rather than per block.
     // Others are not allowed.
-    int stackLevel = 0;
+    int depth = entryDepth;
     for (auto &iRef : bb->instructions()) {
       if (iRef.getKind() == ValueKind::JSR) {
         jsrTargets.insert(cast<BasicBlock>(iRef.getOperand(0)));
       } else if (iRef.getKind() == ValueKind::RTS) {
         rts.insert(&iRef);
       } else if (iRef.getKind() == ValueKind::Push8) {
-        ++stackLevel;
+        ++depth;
       } else if (iRef.getKind() == ValueKind::Pop8) {
-        --stackLevel;
-        if (stackLevel < 0) {
+        --depth;
+        if (depth < 0) {
+          // Popping below routine entry means the routine is manipulating its
+          // own return address.
           if (ctx_->getVerbosity() > 1)
             fprintf(
                 stderr,
@@ -174,22 +191,32 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
         return;
       }
     }
-    if (stackLevel > 0) {
-      if (ctx_->getVerbosity() > 1)
-        fprintf(stderr, "fail: block $%04x stack level not zero\n", bb->getAddress().value_or(0));
-      return;
-    }
 
     if (terminator->getKind() == ValueKind::RTS) {
-      // Do nothing.
+      // The return address must be on top of the stack when we return.
+      if (depth != 0) {
+        if (ctx_->getVerbosity() > 1)
+          fprintf(
+              stderr,
+              "fail: block $%04x stack level %d at RTS\n",
+              bb->getAddress().value_or(0),
+              depth);
+        return;
+      }
     } else if (terminator->getKind() == ValueKind::JSR) {
-      // Optimistically continue in the "fall" block.
-      workList.push_back(cast<BasicBlock>(terminator->getOperand(1)));
+      // Optimistically continue in the "fall" block. A JSR/RTS pair is
+      // depth-neutral from this routine's point of view.
+      workList.emplace_back(cast<BasicBlock>(terminator->getOperand(1)), depth);
     } else {
       for (auto &succ : successors(*bb))
-        workList.push_back(&succ);
+        workList.emplace_back(&succ, depth);
     }
   } while (!workList.empty());
+
+  std::unordered_set<BasicBlock *> visited{};
+  visited.reserve(depthAt.size());
+  for (auto &p : depthAt)
+    visited.insert(p.first);
 
   // Now check whether all predecessors are either JSR, Jmp or fall.
   // entry point.
