@@ -399,7 +399,7 @@ void IdentifySimpleRoutines::reject(BasicBlock *entry, const std::string &reason
 
 - [ ] **Step 3: Route every rejection through the helper**
 
-In `scanCandidate`, replace each of the five `if (ctx_->getVerbosity() > 1) fprintf(stderr, "fail: ...")` blocks with a `reject(entry, ...)` call. Use `stringPrintf` from `apple2tc/support.h`, which is already included. The five sites, in order:
+In `scanCandidate`, replace each of the five `if (ctx_->getVerbosity() > 1) fprintf(stderr, "fail: ...")` blocks with a `reject(entry, ...)` call. Use `format()` from `apple2tc/support.h` (declared at `support.h:33`), which is already included and is the idiomatic helper throughout `tools/apple2tc/`. (An earlier draft of this plan said `stringPrintf`; no such function exists.) The five sites, in order:
 
 ```cpp
     // Inconsistent depth on re-entry:
