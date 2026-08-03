@@ -211,3 +211,62 @@ a prediction.
 **Consequence:** A change to *decompiler behavior* still warrants a `tests/`
 case. The `routines.cpp` fix alters which routines get promoted, which changes
 `.ir` output for every target, so it needs one.
+
+---
+
+## 2026-08-02 — Per-routine stack tracking: measured effect
+
+**Scope:** apple2tc · **Status:** validated
+
+**Decision:** (records outcome of the 2026-08-02 "Improve `routines.cpp`"
+entry, commit `ea29cdc`)
+
+**Evidence:** After propagating stack depth along CFG edges instead of
+resetting it per basic block, Snake Byte's first pass identifies **75**
+routines, up from 53 (`snake-bytec1.c` grows from 108 `func_`/`FUNC_`
+declaration+definition lines to **152**). Using the same measure the original
+"10 distinct game-range candidates" count used — counting only candidates
+that fail `scanCandidate` directly — game-range rejections fall from 10 to
+**3**: `$6A32` and `$7230` (`Pop8` stack underflow) and `$7226` (`JmpInd`
+terminator). That is exactly the set the earlier entry predicted would
+survive, so by that narrow count the predicted 7-of-10 recovery was
+**accurate**.
+
+Identity is a different story. Of the 7 candidates that previously failed
+their own stack-depth check (`$71F3`, `$6256`, `$6288`, `$6B3D`, `$6C72`,
+`$7000`, `$72CE`), only `$6C72` and `$7000` are actually in the new routine
+set. The other five now pass `scanCandidate` (the log shows `created
+candidate` for all of them) but are removed afterward by the
+`removeInvalidJSRs` fixpoint: they `JSR` into `$6A32`, `$7230`, or the
+`$60E7`/`$6148`/`$615A` chain, which remain rejected for unrelated reasons
+(`Pop8` underflow, and `$60E7`'s own "invalid predecessor" structural issue —
+untouched by this fix). The prior entry's note that "the cascade mechanism is
+real but does not fire on this binary" no longer holds after the fix — it now
+fires both ways.
+
+Counting the cascade properly (all 40 game-range `scanCandidate` attempts vs.
+the final routine set, not just direct failures) gives the fuller picture:
+game-range rejections fall from **22 to 14**, i.e. **8** routines recovered
+net, not 7. Six of those eight were never predicted (`$64C8`, `$6594`,
+`$69C3`, `$6AB8`, `$6BEF`, `$7642`): they were unblocked because two ROM
+Monitor entry points the game calls, `$F800` (`MON_PLOT`) and `$F871`
+(`SCRN`), were themselves victims of the identical per-block stack bug and
+are now recovered directly, which cascades to their game-range callers
+through the same mechanism that used to cascade rejections. So the estimate's
+*count* held, but for the wrong reason and the wrong routines — worth
+recording because a future estimate of this shape should account for the
+cascade, not just the direct failures.
+
+**Junk check:** Of the 22 newly-promoted routines (8 game-range: `$64C8
+$6594 $69C3 $6AB8 $6BEF $6C72 $7000 $7642`; 14 ROM-range: `$E484 $E5D4 $E5E2
+$E5E6 $E600 $E604 $F800 $F819 $F828 $F836 $F871 $FB60 $FC58 $FCA8`), every
+one contains a real `return;` in `snake-bytec1.c` — none are never-returning
+stubs. Across the whole 75-routine set there is exactly one function with no
+`return;`: `FUNC_BCC` at `$0090`, an invalid-instruction trap that compiles
+to `fprintf(...); error_handler(...)` and nothing else. That routine was
+already promoted in the pre-fix 53-routine baseline (confirmed by rebuilding
+the old `routines.cpp` and rerunning), so it is not new noise from this
+change. On this binary the fix does not appear to promote any never-returning
+junk; the 22 newly-promoted routines look like real subroutines, including
+two well-known ROM entry points (`MON_PLOT`, `SCRN`) that were previously
+stuck inside the mega-switch dispatch.
