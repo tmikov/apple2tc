@@ -130,7 +130,9 @@ So: recover procedures first, then reloop each independently.
 
 `IdentifySimpleRoutines` in `tools/apple2tc/routines.cpp` already performs
 procedure recovery. Running `apple2tc … --irc1 -v2` reports why each candidate
-was rejected. Across all candidates (raw counts, summed over both generations):
+was rejected. Across all candidates (raw counts, summed over the two passes of
+the `while (identifySimpleRoutines(mod)) {}` loop in `apple2tc.cpp` — the first
+identifies 53 routines, the second finds none and terminates):
 
 | Rejection reason | Count |
 | --- | --- |
