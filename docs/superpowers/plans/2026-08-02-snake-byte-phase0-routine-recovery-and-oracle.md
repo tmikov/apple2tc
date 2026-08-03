@@ -4,7 +4,7 @@
 
 **Goal:** Fix apple2tc's over-strict procedure recovery, add a routines report that Phase 1 will be written from, and stand up a deterministic frame-hash oracle for the Snake Byte conversion.
 
-**Architecture:** Three independent pieces. (1) `scanCandidate` in `routines.cpp` currently balances the 6502 stack per basic block; it becomes a depth-propagating dataflow over the candidate's block set, which accepts the standard `PHA`-at-entry / `PLA`-before-`RTS` shape. (2) A new `--routines-report` mode emits per-candidate status, block sets, call sites, dominator trees and natural loops — requiring a dominator implementation, which the codebase does not currently have. (3) `decapplib` gains per-frame hashing of video memory plus a frame limit, which turns the existing cycle-locked `--key-file` replay into a reproducible behavioral oracle.
+**Architecture:** Three independent pieces. (1) `scanCandidate` in `routines.cpp` currently balances the 6502 stack per basic block; it becomes a depth-propagating dataflow over the candidate's block set, which accepts the standard `PHA`-at-entry / `PLA`-before-`RTS` shape. (2) A new `--routines-report` mode emits per-candidate status, block sets, call sites, dominator trees and natural loops — requiring a dominator implementation, which the codebase does not currently have. (3) `decapplib` gains per-frame hashing of video memory, a frame limit, and a headless mode, which turns the existing cycle-locked `--key-file` replay into a reproducible behavioral oracle that needs no display. Hashing memory rather than rendered pixels is what makes headless possible at all — no graphics context is required.
 
 **Tech Stack:** C++17 (decompiler), C11 (runtime library), CMake + Ninja, `a6502` for test fixtures, golden-file diffing for regression.
 
@@ -25,7 +25,7 @@
 | `tools/apple2tc/PubIR.h` | modify | `identifySimpleRoutines` gains a report `FILE *` |
 | `tools/apple2tc/apple2tc.cpp` | modify | `--routines-report=<path>` option |
 | `tools/apple2tc/CMakeLists.txt` | modify | Add `Dominators.cpp` |
-| `lib/decapplib/decapplib.c` | modify | `--hash-frames=<path>`, `--frames=<n>` |
+| `lib/decapplib/decapplib.c` | modify | `--hash-frames=<path>`, `--frames=<n>`, `--headless` |
 | `decoded/snake-byte/play.frames` | create | Golden per-frame trace |
 | `decoded/snake-byte/verify.sh` | create | Record + diff harness |
 
@@ -1077,7 +1077,265 @@ git commit -m "decapplib: add --hash-frames and --frames for deterministic repla
 
 ---
 
-## Task 8: Prove the oracle is deterministic, then record it
+## Task 8: Headless mode
+
+Hashing video memory rather than rendered pixels means the oracle needs no
+graphics context at all. `sokol_main()` runs before any window exists, so a
+headless path can run the whole simulation there and exit — no `SOKOL_NO_ENTRY`,
+no build changes.
+
+This task extracts the shared setup and per-frame logic rather than copying it,
+so the GUI and headless paths cannot drift apart.
+
+**Files:**
+- Modify: `lib/decapplib/decapplib.c`
+
+- [ ] **Step 1: Add the flag**
+
+After the `static unsigned frame_no_ = 0;` line added in Task 7:
+
+```c
+/// If true, run without opening a window or initialising graphics/audio.
+static bool headless_ = false;
+```
+
+- [ ] **Step 2: Extract emulation setup from `init_cb`**
+
+`init_cb()` currently mixes graphics setup with emulator setup. Split it. Add
+immediately before `static void init_cb(void) {`:
+
+```c
+/// Everything needed to start the emulated program, with no graphics or audio.
+/// Shared by the windowed and headless paths.
+static void init_emulation(void) {
+  a2_io_init(&io_);
+  io_.debug = 0;
+
+  add_default_nondebug();
+  reset_regs();
+  // SP is 0xF0 in BASIC.
+  regs_t r = get_regs();
+  r.sp = 0xF0;
+  set_regs(r);
+
+  init_emulated();
+
+  if (kbd_file_ || key_presses_) {
+    // The first key pressed before initialization is lost, so just add a dummy
+    // keypress.
+    a2_io_push_key(&io_, '\r');
+    if (key_presses_)
+      drain_key_presses();
+    else
+      drain_kbd_file();
+  }
+}
+```
+
+Then rewrite `init_cb()` to:
+
+```c
+static void init_cb(void) {
+  init_window();
+  stm_setup();
+
+  a2_sound_init(&sound_);
+  init_emulation();
+  a2_io_set_spkr_cb(&io_, &sound_, speaker_cb);
+
+  if (sound_enabled_) {
+    saudio_desc audioDesc = {
+        .num_channels = 1,
+        .stream_userdata_cb = stream_userdata_cb,
+        .user_data = &sound_,
+    };
+    saudio_setup(&audioDesc);
+  }
+}
+```
+
+Note the reordering: `a2_sound_init` must precede `a2_io_set_spkr_cb`, and
+`init_emulation` calls `a2_io_init`, which must precede the speaker callback
+being attached. Preserve that order.
+
+- [ ] **Step 3: Extract the per-frame hash emission**
+
+Replace the block added to `frame_cb()` in Task 7 with a call to a shared
+helper. Add before `static void frame_cb(void) {`:
+
+```c
+/// Emit this frame's hash if requested and advance the frame counter.
+/// Returns true when the frame limit has been reached.
+static bool record_frame(void) {
+  if (hash_file_) {
+    fprintf(hash_file_, "%u %u %016llx\n", frame_no_, get_cycles(),
+            (unsigned long long)hash_video_state());
+  }
+  ++frame_no_;
+  if (frame_limit_ && frame_no_ >= frame_limit_) {
+    if (hash_file_) {
+      fclose(hash_file_);
+      hash_file_ = NULL;
+    }
+    return true;
+  }
+  return false;
+}
+```
+
+Then in `frame_cb()`, the code added in Task 7 becomes:
+
+```c
+  curFrameTick_ = stm_now();
+  simulate_frame();
+
+  if (record_frame())
+    sapp_request_quit();
+
+  update_screen();
+```
+
+- [ ] **Step 4: Guard the audio submission**
+
+`simulate_frame()` calls `a2_sound_submit(..., saudio_sample_rate(), ...)`
+unconditionally, but `saudio_setup()` only runs when sound is enabled. In
+headless mode saudio is never initialised at all. Change the line in
+`simulate_frame()` from:
+
+```c
+    a2_sound_submit(&sound_, A2_CLOCK_FREQ, saudio_sample_rate(), get_cycles());
+```
+to:
+```c
+    if (sound_enabled_)
+      a2_sound_submit(&sound_, A2_CLOCK_FREQ, saudio_sample_rate(), get_cycles());
+```
+
+This also fixes the existing `--no-sound` path, which was calling
+`saudio_sample_rate()` on an uninitialised audio backend.
+
+- [ ] **Step 5: Add the headless loop**
+
+Add immediately before `sapp_desc sokol_main(int argc, char *argv[]) {`:
+
+```c
+/// Run the emulated program with no window, hashing frames as we go. Never
+/// returns — exits the process when the frame limit is reached.
+static void run_headless(void) {
+  if (!frame_limit_) {
+    fprintf(stderr, "--headless requires --frames=<n>\n");
+    exit(2);
+  }
+
+  stm_setup();
+  a2_sound_init(&sound_);
+  init_emulation();
+
+  for (;;) {
+    curFrameTick_ = stm_now();
+    simulate_frame();
+    if (record_frame())
+      break;
+  }
+
+  shutdown_emulated();
+  a2_io_done(&io_);
+  a2_sound_done(&sound_);
+  exit(0);
+}
+```
+
+`sound_enabled_` is irrelevant here because Step 4 guards the only audio call,
+but `a2_sound_init`/`a2_sound_done` are still paired so the speaker queue is
+valid if the emulated code touches `$C030`.
+
+- [ ] **Step 6: Wire up the option**
+
+In `print_help()`, after the `--frames` line added in Task 7:
+
+```c
+  printf(" --headless       Run with no window. Requires --frames\n");
+```
+
+In `parse_args()`, alongside the other options:
+
+```c
+    if (strcmp(arg, "--headless") == 0) {
+      headless_ = true;
+      sound_enabled_ = false;
+      continue;
+    }
+```
+
+In `sokol_main()`, immediately after `parse_args(argc, argv);`:
+
+```c
+  if (headless_)
+    run_headless(); // Does not return.
+```
+
+- [ ] **Step 7: Build**
+
+Run:
+```bash
+ninja -C /home/tmikov/work/apple2tc/cmake-build-debug
+```
+Expected: builds cleanly.
+
+- [ ] **Step 8: Verify it runs with no display**
+
+Run:
+```bash
+cd /home/tmikov/work/apple2tc/decoded/snake-byte
+env -u DISPLAY -u WAYLAND_DISPLAY \
+  ../../cmake-build-debug/decoded/snake-byte/snake-bytec1 \
+  --headless --key-file=play.keys --frames=100 --hash-frames=/tmp/hl.frames
+wc -l /tmp/hl.frames
+awk '{print $3}' /tmp/hl.frames | sort -u | wc -l
+```
+Expected: exits 0 with no window, `/tmp/hl.frames` has 100 lines, and more than
+one distinct hash.
+
+If it fails with a graphics or display error, something in the headless path is
+still reaching sokol_gfx or sokol_app — check that `run_headless` is called
+before `sokol_main` returns its `sapp_desc`.
+
+- [ ] **Step 9: Verify headless and windowed agree**
+
+The two paths must produce identical traces, or the oracle means different things
+in each mode. This needs a display.
+
+Run:
+```bash
+cd /home/tmikov/work/apple2tc/decoded/snake-byte
+bin=../../cmake-build-debug/decoded/snake-byte/snake-bytec1
+$bin --headless --key-file=play.keys --frames=100 --hash-frames=/tmp/a.frames
+$bin --no-sound --key-file=play.keys --frames=100 --hash-frames=/tmp/b.frames
+diff /tmp/a.frames /tmp/b.frames && echo "MATCH"
+```
+Expected: `MATCH`.
+
+If they differ, the windowed path is perturbing emulation — most likely through
+`event_cb` injecting keys, or audio timing. Resolve before continuing: the
+golden trace is recorded headless and would otherwise be uncomparable to
+anything run interactively.
+
+- [ ] **Step 10: Commit**
+
+```bash
+cd /home/tmikov/work/apple2tc
+git add lib/decapplib/decapplib.c
+git commit -m "decapplib: add --headless for display-free replay
+
+Extracts init_emulation() and record_frame() so the windowed and headless
+paths share setup and per-frame logic. Also guards a2_sound_submit on
+sound_enabled_, which was calling saudio_sample_rate() on an uninitialised
+backend under --no-sound."
+```
+
+---
+
+## Task 9: Prove the oracle is deterministic, then record it
 
 An oracle that is not reproducible is worse than none. Verify before trusting.
 
@@ -1085,7 +1343,7 @@ An oracle that is not reproducible is worse than none. Verify before trusting.
 - Create: `decoded/snake-byte/verify.sh`
 - Create: `decoded/snake-byte/play.frames`
 
-**Prerequisite:** this runs the real app, which opens a window via sokol. Run it on a machine with a display.
+**Prerequisite:** none — Task 8 made this runnable without a display.
 
 - [ ] **Step 1: Determine the frame count**
 
@@ -1116,7 +1374,7 @@ cd "$here"
 
 run() {
   # $1: executable, $2: output path
-  "$1" --no-sound --key-file=play.keys --frames=$frames --hash-frames="$2" >/dev/null
+  "$1" --headless --key-file=play.keys --frames=$frames --hash-frames="$2" >/dev/null
 }
 
 if [ "$1" = "--record" ]; then
@@ -1156,7 +1414,7 @@ cd /home/tmikov/work/apple2tc/decoded/snake-byte
 ```
 Expected: `Recorded 1300 frames to play.frames`.
 
-If it reports the oracle is not reproducible, **stop**. Likely causes, in order of probability: a nondeterministic cycle path (check that `hash_file_` was added to the `simulate_frame()` condition in Task 7 Step 5), sound enabled feeding back through timing (the script passes `--no-sound`), or genuine nondeterminism in the emulated thread handoff. Diagnose before continuing — every later task depends on this.
+If it reports the oracle is not reproducible, **stop**. Likely causes, in order of probability: a nondeterministic cycle path (check that `hash_file_` was added to the `simulate_frame()` condition in Task 7 Step 5), or genuine nondeterminism in the emulated thread handoff between `run_emulated` and `cycles_expired`. Audio is already excluded — `--headless` forces `sound_enabled_ = false`. Diagnose before continuing — every later task depends on this.
 
 - [ ] **Step 4: Sanity-check the trace is not degenerate**
 
@@ -1191,7 +1449,7 @@ runs agree, so the trace is only written once reproducibility is proven."
 
 ---
 
-## Task 9: Update the playbook from what actually happened
+## Task 10: Update the playbook from what actually happened
 
 The playbook's *Procedure* section is explicitly marked untested. Phase 0 is the first evidence.
 
@@ -1226,6 +1484,8 @@ git commit -m "docs: update decompilation playbook from Phase 0 results"
 - [ ] `tests/phapla.ir` exists and shows `function func_0320` extracted
 - [ ] Snake Byte recovers more routines than the previous 53; the count is recorded in the decision log
 - [ ] `--routines-report` emits accepted candidates with block sets, call sites, idom chains and natural loops, and rejected candidates with reasons
+- [ ] `--headless --frames=n` runs to completion with `DISPLAY` unset
+- [ ] Headless and windowed runs produce byte-identical traces
 - [ ] `decoded/snake-byte/verify.sh --record` proves reproducibility before writing `play.frames`
 - [ ] `decoded/snake-byte/verify.sh` passes against the committed trace
 - [ ] The playbook reflects measured outcomes, not predictions
