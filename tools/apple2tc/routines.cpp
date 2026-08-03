@@ -193,29 +193,6 @@ void IdentifySimpleRoutines::emitReport() {
   fprintf(report_, "\n");
 }
 
-/// Check whether this is a JMP preceded by two pushes. Return the two pushes in
-/// order "hi" then "lo".
-std::optional<std::tuple<Instruction *, Instruction *>> isSimplePushJmp(Instruction *inst) {
-  if (inst->getKind() != ValueKind::Jmp)
-    return std::nullopt;
-
-  auto *bb = inst->getBasicBlock();
-  int pushCount = 0;
-  Instruction *pushes[2];
-  for (auto it = bb->instructionToIterator(inst), begin = bb->instructions().begin();
-       it != begin;) {
-    --it;
-    if (it->getKind() == ValueKind::Push8) {
-      pushes[pushCount++] = &*it;
-      if (pushCount == 2)
-        return std::make_tuple(pushes[1], pushes[0]);
-    } else if (it->modifiesSP()) {
-      return std::nullopt;
-    }
-  }
-  return std::nullopt;
-}
-
 void IdentifySimpleRoutines::reject(BasicBlock *entry, const std::string &reason) {
   rejected_.emplace(entry->getAddress().value_or(0x10000), reason);
   if (ctx_->getVerbosity() > 1)

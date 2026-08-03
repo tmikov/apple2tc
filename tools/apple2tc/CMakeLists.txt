@@ -13,7 +13,7 @@ add_executable(apple2tc
   Analysis.cpp Analysis.h
   CPURegLiveness.cpp CPURegLiveness.h
   SSA.cpp dce.cpp simplify.cpp
-  routines.cpp
+  routines.cpp ExternRoutines.cpp
   Dominators.cpp Dominators.h
   IRC1.cpp IRC1.h
   PrintSimpleC.cpp

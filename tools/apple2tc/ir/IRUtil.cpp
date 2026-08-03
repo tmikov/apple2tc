@@ -15,6 +15,27 @@ bool Range32::overlap16WithWrap(Range32 r) const {
       Range32(r.begin + k64K, r.end + k64K).overlap32(*this);
 }
 
+std::optional<std::tuple<Instruction *, Instruction *>> isSimplePushJmp(Instruction *inst) {
+  if (inst->getKind() != ValueKind::Jmp)
+    return std::nullopt;
+
+  auto *bb = inst->getBasicBlock();
+  int pushCount = 0;
+  Instruction *pushes[2];
+  for (auto it = bb->instructionToIterator(inst), begin = bb->instructions().begin();
+       it != begin;) {
+    --it;
+    if (it->getKind() == ValueKind::Push8) {
+      pushes[pushCount++] = &*it;
+      if (pushCount == 2)
+        return std::make_tuple(pushes[1], pushes[0]);
+    } else if (it->modifiesSP()) {
+      return std::nullopt;
+    }
+  }
+  return std::nullopt;
+}
+
 Range32 classifyMemoryAddr(Value *addr, unsigned width) {
   // Treat implicit stack instruction specially.
   switch (addr->getKind()) {

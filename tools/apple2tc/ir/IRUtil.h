@@ -10,6 +10,7 @@
 #include "IR.h"
 
 #include <functional>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -213,6 +214,10 @@ struct Range32 {
 Range32 classifyMemoryAddr(Value *addr, unsigned width);
 
 ValueKind negateComparison(ValueKind kind);
+
+/// Check whether \p inst is a JMP preceded by two pushes -- the hand-rolled
+/// JSR idiom. Return the two pushes in order "hi" then "lo".
+std::optional<std::tuple<Instruction *, Instruction *>> isSimplePushJmp(Instruction *inst);
 
 using InstSet = std::unordered_set<Instruction *>;
 
