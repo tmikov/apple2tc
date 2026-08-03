@@ -1,0 +1,39 @@
+/*
+ * Copyright (c) Tzvetan Mikov.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+/// \file
+/// The translation unit that CMake actually compiles for the `snake-bytec1`
+/// target. It exists purely to stitch the generated code and the hand-written
+/// ROM replacements into a single TU.
+///
+/// Why a wrapper is necessary
+/// --------------------------
+/// `apple2tc/system2-inc.h` does not merely declare the emulated machine, it
+/// *defines* it, and nearly all of it has internal linkage: the CPU registers
+/// and flags (`s_a`, `s_x`, `s_y`, `s_sp`, `s_status_*`), the RAM array
+/// (`s_ram`), the cycle counters (`s_pc`, `s_cycles`, `s_remaining_cycles`) and
+/// the access helpers (`peek`, `poke`, `ram_peek16al`, `push8`, `pop8`,
+/// `push16`, `pop16`, ...) are all `static`. The `CYCLES()` macro expands to
+/// references to those statics plus the caller's local `branchTarget`.
+///
+/// `apple2tc/system.h` exports only `ram_peek`/`ram_poke`/`ram_peek16`,
+/// `io_peek`/`io_poke` and `error_handler`, which is nowhere near enough to
+/// implement a 6502 routine. On top of that, `a2rom.c` calls the generated
+/// helpers `FUNC_VTABZ`, `FUNC_CLREOLZ`, `FUNC_CLREOL` and `FUNC_MON_WAIT` and
+/// uses the generated `static` helpers `ovf8()` and `adc_dec16()`.
+///
+/// So `a2rom.c` cannot be a separate object file; it has to share a translation
+/// unit with the generated code.
+///
+/// Include order matters
+/// ---------------------
+/// `snake-bytec1.c` must come first: it pulls in `system2-inc.h` and defines
+/// the statics and helper functions that `a2rom.c` depends on. Swapping the two
+/// lines produces a wall of undefined identifiers.
+
+#include "snake-bytec1.c"
+#include "a2rom.c"
