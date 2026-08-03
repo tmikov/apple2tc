@@ -616,10 +616,27 @@ public:
     return uniqueId_;
   }
 
+  /// Whether this is an external routine: a declaration with no body, whose
+  /// implementation is supplied by hand-written C.
+  bool isExternal() const {
+    return external_;
+  }
+  /// Turn this into an external routine. External functions have no basic
+  /// blocks, so they must carry their address explicitly.
+  void setExternal(uint32_t address) {
+    assert(bbList_.empty() && "An external function cannot have a body");
+    external_ = true;
+    externAddress_ = address;
+  }
+
   const std::optional<uint32_t> &getAddress() const {
+    if (external_)
+      return externAddress_;
     return const_cast<Function *>(this)->getEntryBlock()->getAddress();
   }
   bool isRealAddress() const {
+    if (external_)
+      return true;
     return const_cast<Function *>(this)->getEntryBlock()->isRealAddress();
   }
 
@@ -658,6 +675,11 @@ private:
   unsigned nextBBId_ = 0;
   std::string name_{};
   DecompileLevel decompileLevel_ = DecompileLevel::Low;
+  /// Whether this function is an external declaration without a body.
+  bool external_ = false;
+  /// The address of an external function. Regular functions derive their
+  /// address from their entry block, which an external function doesn't have.
+  std::optional<uint32_t> externAddress_{};
 };
 
 class Module : public Value {

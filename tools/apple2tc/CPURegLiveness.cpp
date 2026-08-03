@@ -68,6 +68,9 @@ void CPURegLiveness::calcLiveness() {
 
   // First pass assuming the worst case for every function LiveOut.
   for (auto *func : order) {
+    // External functions have no blocks; their sets were fixed in calcGenKillMod().
+    if (func->isExternal())
+      continue;
     // We start out by assuming everything is live on function return, since
     // we don't know any better.
     auto &fData = funcData_[func];
@@ -85,8 +88,9 @@ void CPURegLiveness::calcLiveness() {
 
     // Update every function's LiveOut based on the LiveOut of all calls to it.
     for (auto *func : order) {
-      // No need to bother with functions without known callers.
-      if (cg_.funcNode(func).preds.empty())
+      // No need to bother with external functions, or with functions without
+      // known callers.
+      if (func->isExternal() || cg_.funcNode(func).preds.empty())
         continue;
 
       SetType liveOut = 0;
@@ -136,6 +140,14 @@ void CPURegLiveness::calcGenKillMod() {
 
   for (auto *func : order) {
     FuncData &fdata = funcData_[func];
+    if (func->isExternal()) {
+      // We know nothing about an external routine, so assume it reads and
+      // modifies every register, and kills none of them.
+      fdata.sets.gen = LivenessSets::kAll;
+      fdata.sets.kill = 0;
+      fdata.modified = LivenessSets::kAll;
+      continue;
+    }
     for (auto &rBB : func->basicBlocks()) {
       auto *bb = &rBB;
       initBB(bb);
@@ -152,8 +164,8 @@ void CPURegLiveness::calcGenKillMod() {
     ++iter;
     for (auto *func : order) {
       // Only process functions that call other functions because only they
-      // can change.
-      if (cg_.funcNode(func).succs.empty())
+      // can change. External functions never change.
+      if (func->isExternal() || cg_.funcNode(func).succs.empty())
         continue;
       ++funcCount;
       for (auto &rBB : func->basicBlocks())
