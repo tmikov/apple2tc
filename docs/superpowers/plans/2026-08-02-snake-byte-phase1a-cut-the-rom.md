@@ -2,7 +2,27 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the 9 Apple II ROM entry points the game calls with hand-written C, so the decompiled reference loses the ROM subtree and `$71F3` becomes recoverable.
+**Goal:** Replace the 9 Apple II ROM entry points the game calls with hand-written C, recovering `$71F3` and building the externalization mechanism the ROM cut needs.
+
+> **Corrected after the Task 1 spike.** The title over-promises. Externalizing the
+> 9 entry points prunes **112 blocks, not ~1429** — measured. The ROM has two
+> independent reachability routes: the 9 entry points, and the BASIC boot path
+> (start PC is `$FA62` RESET; the game is entered by typing `CALL 14160`, and
+> `$00C8`, Applesoft's `CHRGET` RTS dispatch, reaches deep into the interpreter).
+> Severing both takes externs **and** retargeting the entry to `$3750`, and they
+> are strongly non-additive: 48 + 112 ≪ 1530.
+>
+> | Configuration | Blocks deleted | ROM blocks left | Routines | `$71F3` |
+> | --- | --- | --- | --- | --- |
+> | baseline | — | 1430 | 75 | no |
+> | + 9 externs (this phase) | 112 | 1335 | 72 | **yes, 15 sites** |
+> | + retarget only | 48 | 1403 | 71 | no |
+> | + both (Phase 1b) | 1530 | **4** | 29 | yes |
+>
+> What this phase actually delivers: `$71F3` recovered, 9 ROM routines replaced by
+> hand-written C proven frame-identical against the oracle, and the mechanism
+> Phase 1b needs. The ROM itself falls in Phase 1b. The routine count *dropping*
+> 75 → 72 is expected — several of the 75 were ROM routines that no longer exist.
 
 **Architecture:** Teach `apple2tc` that a list of addresses are *external* routines: calls to them become calls to declared-but-undefined C functions, their bodies are dropped, and DCE removes whatever becomes unreachable. Hand-written implementations live in `decoded/snake-byte/a2rom.c`. The program still boots through ROM into BASIC, so the only behavioral change is those 9 routines — which means the existing 1300-frame `play.frames` verifies the whole thing unchanged.
 
@@ -140,17 +160,88 @@ bool externRoutines(
 
 Add `#include <string>`, `<utility>` and `<vector>` to `PubIR.h` if not already present.
 
-- [ ] **Step 2: Implement it**
+- [ ] **Step 2: Add the `external_` flag to `Function`**
 
-Create `tools/apple2tc/ExternRoutines.cpp` following the design from Task 1. It must:
+Required, not optional. `Function::getAddress()` (`ir/IR.h:619`) is derived from
+`getEntryBlock()`, which `assert`s on an empty block list — so under `NDEBUG` a
+bodyless function is silent UB, and `CPURegLiveness.cpp:36` calls `getAddress()`
+unconditionally at `-v2`. Do **not** encode this as a third `DecompileLevel`:
+that enum is compared ordinally (`CPURegLiveness.cpp:173,296`) and a new value
+would silently change those tests.
 
-1. Build an address → name map from `externs`.
-2. Walk every function's blocks, finding `JSR` instructions whose target block's address is in the map.
-3. For each distinct target address, create one bodyless `Function` with the mapped name, reusing it across call sites.
-4. Rewrite each such `JSR` into a `Call` to that function, following the sequence Task 1 documented from `convertRoutineInvocation`.
-5. Return whether anything changed.
+In `ir/IR.h`, in `class Function`:
 
-Match the file header, `using namespace ir;`, and anonymous-namespace conventions of `routines.cpp`.
+```cpp
+  bool isExternal() const { return external_; }
+  void setExternal(uint32_t address) { external_ = true; externAddress_ = address; }
+
+  const std::optional<uint32_t> &getAddress() const {
+    if (external_)
+      return externAddress_;
+    return const_cast<Function *>(this)->getEntryBlock()->getAddress();
+  }
+  bool isRealAddress() const {
+    if (external_)
+      return true;
+    return const_cast<Function *>(this)->getEntryBlock()->isRealAddress();
+  }
+private:
+  bool external_ = false;
+  std::optional<uint32_t> externAddress_{};
+```
+
+- [ ] **Step 3: Guard `CPURegLiveness`**
+
+Four sites break on an empty function. This analysis is informational only —
+`liveness(mod)` is called solely for the `--ir` dump (`apple2tc.cpp:212`), never
+to drive an optimization — so conservative values cannot miscompile anything.
+
+In the `for (auto *func : order)` loop:
+
+```cpp
+    FuncData &fdata = funcData_[func];
+    if (func->isExternal()) {
+      // Conservative: an external routine may read and modify everything.
+      fdata.sets.gen = LivenessSets::kAll;
+      fdata.sets.kill = 0;
+      fdata.modified = LivenessSets::kAll;
+      continue;
+    }
+```
+
+Add `if (func->isExternal()) continue;` to `calcLiveness`'s first loop, and
+`func->isExternal() ||` to the two `cg_.funcNode(func).…empty()` early-outs.
+
+- [ ] **Step 4: Implement the pass**
+
+Create `tools/apple2tc/ExternRoutines.cpp`. Use the code the Task 1 spike
+produced verbatim as the starting point — it compiled, ran, and produced the
+measured results. Match the file header, `using namespace ir;`, and
+anonymous-namespace conventions of `routines.cpp`.
+
+Three things it must do that are easy to miss:
+
+1. **Delete unreachable blocks itself.** There is no dead-block elimination in
+   the compiler — `dce()` only removes instructions, and `hasSideEffects()` is
+   true for every `Void`-typed instruction including all terminators. Batch every
+   instruction of every dead block into one `InstDestroyer` first (its `add()`
+   clears operands immediately, so nothing has users at erase time), then
+   `eraseBasicBlock` each. Preserve the exit block explicitly — the start
+   function is `DecompileLevel::Low` and its exit block is unreachable by
+   construction.
+2. **Handle the tail call.** `$722C: JMP $FDED` exists in this binary. An
+   external routine has no `Candidate::rts`, so recover the return targets by
+   walking the ROM body from the entry and **stopping at `RTS` blocks rather
+   than following their return edges**. Then attach them only *after* computing
+   reachability, keeping only targets that survive independently — otherwise the
+   tail call resurrects all of ROM. (COUT's 16 raw targets reduce to 6.)
+3. **Make a missing address a hard error.** `findBasicBlock` filters on
+   `isRealAddress()`, so externalizing an address with no real block silently
+   no-ops. Fail loudly instead.
+
+Implement the `isSimplePushJmp` computed-JSR path (`routines.cpp:617-641`) for
+parity with `convertRoutineInvocation`; Snake Byte does not exercise it, but
+leaving a `PANIC_ABORT` hole is worse than handling it.
 
 - [ ] **Step 3: Add to the build**
 
@@ -485,7 +576,20 @@ grep -c '^ACCEPT' /tmp/after.txt
 grep '^REJECT' /tmp/after.txt | grep -E '\$(3[7-9]|[4-7][0-9A-F]|8[0-4])'
 ```
 
-Baseline to compare against: 75 routines, 620 game blocks and **1429 ROM blocks** in `func_t001`, 14 rejected game candidates.
+Baseline to compare against, and what the Task 1 spike measured for this exact
+configuration — treat these as the expected result, and investigate any
+deviation:
+
+| Metric | Baseline | Expected after externs |
+| --- | --- | --- |
+| Blocks deleted | — | **112** |
+| Blocks in start function | 2064 | **1913** |
+| ROM blocks (≥ `$D000`) | 1430 | **1335** |
+| Routines identified | 75 | **72** |
+| `$71F3` recovered | no | **yes, 15 call sites** |
+
+The routine count *falling* is correct: several of the 75 were ROM routines that
+no longer exist as IR functions.
 
 - [ ] **Step 2: Append to the decision log**
 
@@ -542,8 +646,9 @@ git commit -m "docs: update playbook from Phase 1a"
 - [ ] `--extern-routines=rom.externs` produces 9 `rom_*` declarations and no `rom_*` definitions
 - [ ] `snake-bytec1` links against `a2rom.c` and builds clean
 - [ ] `decoded/snake-byte/verify.sh` prints `PASS: 1300 frames match`
-- [ ] ROM blocks in `func_t001` measurably reduced from 1429, with the number recorded
-- [ ] `$71F3`'s status after the cut recorded either way
+- [ ] 112 blocks deleted, ROM blocks 1430 → 1335, routines 75 → 72 (or the deviation explained)
+- [ ] `$71F3` recovered with 15 call sites (or the failure explained)
+- [ ] `Function::isExternal()` added; `CPURegLiveness` guarded at all four sites
 - [ ] Decision log and playbook updated from measurements, not predictions
 
 ## Explicitly out of scope
