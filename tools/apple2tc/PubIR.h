@@ -27,7 +27,9 @@ bool localCPURegSSA(ir::Module *mod);
 bool dce(ir::Module *mod);
 bool simplify(ir::Module *mod);
 bool simplifyCFG(ir::Module *mod);
-bool identifySimpleRoutines(ir::Module *mod);
+/// \param report if non-null, write a human-readable analysis of every routine
+///     candidate — accepted and rejected — to this stream.
+bool identifySimpleRoutines(ir::Module *mod, FILE *report = nullptr);
 std::shared_ptr<CPURegLiveness> liveness(ir::Module *mod);
 
 void printIRC1(ir::Module *mod, FILE *os, bool trees);

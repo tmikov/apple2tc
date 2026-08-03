@@ -64,6 +64,7 @@ static void printHelp() {
   fprintf(stderr, "  --ret-addr          Preserve subroutines return address on the stack\n");
   fprintf(stderr, "  -O<number>          Optimization level (default 0)\n");
   fprintf(stderr, "  --run-data=d.json   Load runtime data from specified file\n");
+  fprintf(stderr, "  --routines-report=f Write routine candidate analysis to file\n");
   fprintf(stderr, "  --no-gen            Ignore runtime generations\n");
 }
 
@@ -84,6 +85,7 @@ int main(int argc, char **argv) {
 
   std::string inputPath;
   std::string runDataPath;
+  std::string routinesReportPath;
   bool rom = false;
   for (int i = 1; i < argc; ++i) {
     if (strncmp(argv[i], "-v", 2) == 0 && strlen(argv[i]) == 3 && isdigit(argv[i][2])) {
@@ -128,6 +130,10 @@ int main(int argc, char **argv) {
     }
     if (strcmp(argv[i], "--no-gen") == 0) {
       noGenerations = true;
+      continue;
+    }
+    if (strncmp(argv[i], "--routines-report=", 18) == 0) {
+      routinesReportPath = argv[i] + 18;
       continue;
     }
     if (argv[i][0] == '-') {
@@ -184,8 +190,17 @@ int main(int argc, char **argv) {
           dce(mod);
       }
       if (optLevel > 1) {
-        while (identifySimpleRoutines(mod)) {
+        FILE *report = nullptr;
+        if (!routinesReportPath.empty()) {
+          if ((report = fopen(routinesReportPath.c_str(), "wt")) == nullptr) {
+            perror(routinesReportPath.c_str());
+            return 2;
+          }
         }
+        while (identifySimpleRoutines(mod, report)) {
+        }
+        if (report)
+          fclose(report);
       }
       if (optLevel > 2) {
         simplifyCFG(mod);

@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "Dominators.h"
 #include "PubIR.h"
 #include "ir/IR.h"
 #include "ir/IRUtil.h"
@@ -12,6 +13,7 @@
 #include "apple2tc/SetVector.h"
 #include "apple2tc/support.h"
 
+#include <algorithm>
 #include <deque>
 #include <map>
 
@@ -40,15 +42,20 @@ class IdentifySimpleRoutines {
   std::multimap<BasicBlock *, Candidate *> blocks_{};
   /// Entry blocks that were considered and rejected, with the reason.
   std::map<uint32_t, std::string> rejected_{};
+  FILE *const report_;
 
 public:
-  explicit IdentifySimpleRoutines(Function *func)
-      : func_(func), ctx_(func->getModule()->getContext()) {}
+  explicit IdentifySimpleRoutines(Function *func, FILE *report)
+      : func_(func), ctx_(func->getModule()->getContext()), report_(report) {}
   bool run();
 
 private:
   /// Record why a candidate was rejected, and log it at high verbosity.
   void reject(BasicBlock *entry, const std::string &reason);
+
+  /// Write a human-readable analysis of every routine candidate — accepted
+  /// and rejected — to `report_`, if non-null.
+  void emitReport();
 
   /// Collect the basic block of the candidate.
   void scanCandidate(BasicBlock *entry);
@@ -100,8 +107,76 @@ bool IdentifySimpleRoutines::run() {
   auto numIdentified = candidates_.size();
   if (ctx_->getVerbosity() > 0)
     fprintf(stderr, "%zu simple routines identified\n", numIdentified);
+  emitReport();
   splitRoutines();
   return numIdentified != 0;
+}
+
+void IdentifySimpleRoutines::emitReport() {
+  if (!report_)
+    return;
+
+  // Accepted candidates, sorted by address for stable output.
+  std::vector<std::pair<uint32_t, BasicBlock *>> accepted{};
+  accepted.reserve(candidates_.size());
+  for (auto &p : candidates_)
+    accepted.emplace_back(p.first->getAddress().value_or(0x10000), p.first);
+  std::sort(accepted.begin(), accepted.end());
+
+  fprintf(report_, "=== routine candidates: %zu accepted, %zu rejected ===\n\n",
+          accepted.size(), rejected_.size());
+
+  for (auto [addr, entry] : accepted) {
+    Candidate &cand = candidates_.at(entry);
+    fprintf(report_, "ACCEPT $%04X  %zu blocks\n", addr, cand.blocks.size());
+
+    // Call sites.
+    fprintf(report_, "  called from:");
+    std::vector<uint32_t> callers{};
+    for (Instruction &iRef : predecessorInsts(*entry)) {
+      if (iRef.getKind() == ValueKind::JSR && iRef.getOperand(0) == entry)
+        callers.push_back(iRef.getAddress().value_or(0x10000));
+    }
+    std::sort(callers.begin(), callers.end());
+    for (uint32_t c : callers)
+      fprintf(report_, " $%04X", c);
+    fprintf(report_, "  (%zu sites)\n", callers.size());
+
+    // Blocks in reverse postorder, with immediate dominators.
+    DomTree dt = computeDomTree(entry, cand.blocks);
+    fprintf(report_, "  blocks (rpo, idom):");
+    for (BasicBlock *bb : dt.rpo) {
+      auto it = dt.idom.find(bb);
+      fprintf(
+          report_,
+          " $%04X<-$%04X",
+          bb->getAddress().value_or(0xFFFF),
+          it == dt.idom.end() ? 0xFFFF : it->second->getAddress().value_or(0xFFFF));
+    }
+    fprintf(report_, "\n");
+
+    // Natural loops.
+    std::vector<NaturalLoop> loops = findNaturalLoops(dt);
+    if (loops.empty()) {
+      fprintf(report_, "  loops: none\n");
+    } else {
+      for (const NaturalLoop &loop : loops) {
+        std::vector<uint32_t> body{};
+        for (BasicBlock *bb : loop.body)
+          body.push_back(bb->getAddress().value_or(0xFFFF));
+        std::sort(body.begin(), body.end());
+        fprintf(report_, "  loop header $%04X body:", loop.header->getAddress().value_or(0xFFFF));
+        for (uint32_t a : body)
+          fprintf(report_, " $%04X", a);
+        fprintf(report_, "\n");
+      }
+    }
+    fprintf(report_, "\n");
+  }
+
+  for (auto &[addr, reason] : rejected_)
+    fprintf(report_, "REJECT $%04X  %s\n", addr, reason.c_str());
+  fprintf(report_, "\n");
 }
 
 /// Check whether this is a JMP preceded by two pushes. Return the two pushes in
@@ -581,10 +656,10 @@ bool IdentifySimpleRoutines::convertRoutineInvocation(
 /// - Always entered via a JSR instruction
 /// - Contain no indirect jumps
 /// - Contain no stack pointer manipulation
-bool identifySimpleRoutines(Module *mod) {
+bool identifySimpleRoutines(Module *mod, FILE *report) {
   for (auto &func : mod->functions()) {
     // Only run it on the global function.
-    return IdentifySimpleRoutines(&func).run();
+    return IdentifySimpleRoutines(&func, report).run();
   }
   return false;
 }
