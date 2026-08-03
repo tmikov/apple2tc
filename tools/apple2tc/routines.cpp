@@ -38,6 +38,8 @@ class IdentifySimpleRoutines {
 
   std::unordered_map<BasicBlock *, Candidate> candidates_{};
   std::multimap<BasicBlock *, Candidate *> blocks_{};
+  /// Entry blocks that were considered and rejected, with the reason.
+  std::map<uint32_t, std::string> rejected_{};
 
 public:
   explicit IdentifySimpleRoutines(Function *func)
@@ -45,6 +47,9 @@ public:
   bool run();
 
 private:
+  /// Record why a candidate was rejected, and log it at high verbosity.
+  void reject(BasicBlock *entry, const std::string &reason);
+
   /// Collect the basic block of the candidate.
   void scanCandidate(BasicBlock *entry);
   /// Remove candidates that JSR into a non-candidate. Return true if anything
@@ -122,6 +127,12 @@ std::optional<std::tuple<Instruction *, Instruction *>> isSimplePushJmp(Instruct
   return std::nullopt;
 }
 
+void IdentifySimpleRoutines::reject(BasicBlock *entry, const std::string &reason) {
+  rejected_.emplace(entry->getAddress().value_or(0x10000), reason);
+  if (ctx_->getVerbosity() > 1)
+    fprintf(stderr, "fail: %s\n", reason.c_str());
+}
+
 void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
   // Stack depth relative to routine entry, at the start of each visited block.
   std::unordered_map<BasicBlock *, int> depthAt{};
@@ -141,13 +152,13 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
     auto [it, inserted] = depthAt.try_emplace(bb, entryDepth);
     if (!inserted) {
       if (it->second != entryDepth) {
-        if (ctx_->getVerbosity() > 1)
-          fprintf(
-              stderr,
-              "fail: block $%04x reached at stack level %d and %d\n",
-              bb->getAddress().value_or(0),
-              it->second,
-              entryDepth);
+        reject(
+            entry,
+            format(
+                "block $%04x reached at stack level %d and %d",
+                bb->getAddress().value_or(0),
+                it->second,
+                entryDepth));
         return;
       }
       continue;
@@ -156,8 +167,7 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
     // Indirect branches except RTS are not allowed.
     auto *terminator = bb->getTerminator();
     if (terminator->getKind() != ValueKind::RTS && terminator->isIndirectBranch()) {
-      if (ctx_->getVerbosity() > 1)
-        fprintf(stderr, "fail: terminator %s\n", getValueKindName(terminator->getKind()));
+      reject(entry, format("terminator %s", getValueKindName(terminator->getKind())));
       return;
     }
 
@@ -177,17 +187,16 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
         if (depth < 0) {
           // Popping below routine entry means the routine is manipulating its
           // own return address.
-          if (ctx_->getVerbosity() > 1)
-            fprintf(
-                stderr,
-                "fail: %s block $%04x stack level underflow\n",
-                getValueKindName(iRef.getKind()),
-                bb->getAddress().value_or(0));
+          reject(
+              entry,
+              format(
+                  "%s block $%04x stack level underflow",
+                  getValueKindName(iRef.getKind()),
+                  bb->getAddress().value_or(0)));
           return;
         }
       } else if (iRef.modifiesSP()) {
-        if (ctx_->getVerbosity() > 1)
-          fprintf(stderr, "fail: %s\n", getValueKindName(iRef.getKind()));
+        reject(entry, format("%s", getValueKindName(iRef.getKind())));
         return;
       }
     }
@@ -195,12 +204,12 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
     if (terminator->getKind() == ValueKind::RTS) {
       // The return address must be on top of the stack when we return.
       if (depth != 0) {
-        if (ctx_->getVerbosity() > 1)
-          fprintf(
-              stderr,
-              "fail: block $%04x stack level %d at RTS\n",
-              bb->getAddress().value_or(0),
-              depth);
+        reject(
+            entry,
+            format(
+                "block $%04x stack level %d at RTS",
+                bb->getAddress().value_or(0),
+                depth));
         return;
       }
     } else if (terminator->getKind() == ValueKind::JSR) {
@@ -239,13 +248,12 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
     default:;
     }
     // We found a predecessor that is neither of these.
-    if (ctx_->getVerbosity() > 1) {
-      fprintf(
-          stderr,
-          "Invalid predecessor inst %s at $%04x\n",
-          getValueKindName(inst->getKind()),
-          inst->getAddress().value_or(0x10000));
-    }
+    reject(
+        entry,
+        format(
+            "invalid predecessor inst %s at $%04x",
+            getValueKindName(inst->getKind()),
+            inst->getAddress().value_or(0x10000)));
     return;
   }
 
@@ -269,6 +277,9 @@ bool IdentifySimpleRoutines::removeInvalidJSRs() {
               "Removing candidate $%04x because of invalid JSR to $%04x\n",
               cur->first->getAddress().value_or(0),
               jsrTarget->getAddress().value_or(0));
+        rejected_.emplace(
+            cur->first->getAddress().value_or(0x10000),
+            format("invalid JSR to $%04x", jsrTarget->getAddress().value_or(0x10000)));
         candidates_.erase(cur);
         changed = true;
         break;
