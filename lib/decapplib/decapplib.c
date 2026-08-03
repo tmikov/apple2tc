@@ -39,6 +39,8 @@ static FILE *hash_file_ = NULL;
 static unsigned frame_limit_ = 0;
 /// Frames simulated so far.
 static unsigned frame_no_ = 0;
+/// If true, run without opening a window or initialising graphics/audio.
+static bool headless_ = false;
 /// Key-presses loaded from disk.
 static KeyPress *key_presses_ = NULL;
 /// Number of loaded key presses.
@@ -326,23 +328,11 @@ static void load_key_file(const char *path) {
   fclose(f);
 }
 
-static void init_cb(void) {
-  init_window();
-  stm_setup();
-
-  a2_sound_init(&sound_);
+/// Everything needed to start the emulated program, with no graphics or audio.
+/// Shared by the windowed and headless paths.
+static void init_emulation(void) {
   a2_io_init(&io_);
-  a2_io_set_spkr_cb(&io_, &sound_, speaker_cb);
   io_.debug = 0;
-
-  if (sound_enabled_) {
-    saudio_desc audioDesc = {
-        .num_channels = 1,
-        .stream_userdata_cb = stream_userdata_cb,
-        .user_data = &sound_,
-    };
-    saudio_setup(&audioDesc);
-  }
 
   add_default_nondebug();
   reset_regs();
@@ -354,12 +344,31 @@ static void init_cb(void) {
   init_emulated();
 
   if (kbd_file_ || key_presses_) {
-    // The first key pressed before initialization is lost, so just add a dummy keypress.
+    // The first key pressed before initialization is lost, so just add a dummy
+    // keypress.
     a2_io_push_key(&io_, '\r');
     if (key_presses_)
       drain_key_presses();
     else
       drain_kbd_file();
+  }
+}
+
+static void init_cb(void) {
+  init_window();
+  stm_setup();
+
+  a2_sound_init(&sound_);
+  init_emulation();
+  a2_io_set_spkr_cb(&io_, &sound_, speaker_cb);
+
+  if (sound_enabled_) {
+    saudio_desc audioDesc = {
+        .num_channels = 1,
+        .stream_userdata_cb = stream_userdata_cb,
+        .user_data = &sound_,
+    };
+    saudio_setup(&audioDesc);
   }
 }
 
@@ -391,7 +400,8 @@ static void simulate_frame(void) {
       runCycles = (unsigned)((elapsed < 0.200 ? elapsed : 0.200) * clock_freq_);
     }
     run_emulated(runCycles);
-    a2_sound_submit(&sound_, A2_CLOCK_FREQ, saudio_sample_rate(), get_cycles());
+    if (sound_enabled_)
+      a2_sound_submit(&sound_, A2_CLOCK_FREQ, saudio_sample_rate(), get_cycles());
   }
   lastRunTick_ = curFrameTick_;
 }
@@ -456,10 +466,9 @@ static void update_screen_image(void) {
   sg_update_image(bind_.fs_images[SLOT_tex], &imgData);
 }
 
-static void frame_cb(void) {
-  curFrameTick_ = stm_now();
-  simulate_frame();
-
+/// Emit this frame's hash if requested and advance the frame counter.
+/// Returns true when the frame limit has been reached.
+static bool record_frame(void) {
   if (hash_file_) {
     fprintf(hash_file_, "%u %u %016llx\n", frame_no_, get_cycles(),
             (unsigned long long)hash_video_state());
@@ -470,8 +479,17 @@ static void frame_cb(void) {
       fclose(hash_file_);
       hash_file_ = NULL;
     }
-    sapp_request_quit();
+    return true;
   }
+  return false;
+}
+
+static void frame_cb(void) {
+  curFrameTick_ = stm_now();
+  simulate_frame();
+
+  if (record_frame())
+    sapp_request_quit();
 
   update_screen();
   update_screen_image();
@@ -560,6 +578,7 @@ static void print_help() {
   printf(" --trace-keys     Dump key presses with cycle stamps\n");
   printf(" --hash-frames=p  Write per-frame video state hashes to the given file\n");
   printf(" --frames=n       Quit after simulating n frames\n");
+  printf(" --headless       Run with no window. Requires --frames\n");
   printf(" --count-bt       Count branch targets\n");
 }
 
@@ -631,6 +650,11 @@ static void parse_args(int argc, char *argv[]) {
       frame_limit_ = (unsigned)strtoul(arg + 9, NULL, 10);
       continue;
     }
+    if (strcmp(arg, "--headless") == 0) {
+      headless_ = true;
+      sound_enabled_ = false;
+      continue;
+    }
 
     if (arg[0] == '-') {
       fprintf(stderr, "Invalid option '%s'\n", arg);
@@ -643,8 +667,36 @@ static void parse_args(int argc, char *argv[]) {
   }
 }
 
+/// Run the emulated program with no window, hashing frames as we go. Never
+/// returns — exits the process when the frame limit is reached.
+static void run_headless(void) {
+  if (!frame_limit_) {
+    fprintf(stderr, "--headless requires --frames=<n>\n");
+    exit(2);
+  }
+
+  stm_setup();
+  a2_sound_init(&sound_);
+  init_emulation();
+
+  for (;;) {
+    curFrameTick_ = stm_now();
+    simulate_frame();
+    if (record_frame())
+      break;
+  }
+
+  shutdown_emulated();
+  a2_io_done(&io_);
+  a2_sound_done(&sound_);
+  exit(0);
+}
+
 sapp_desc sokol_main(int argc, char *argv[]) {
   parse_args(argc, argv);
+
+  if (headless_)
+    run_headless(); // Does not return.
 
   return (sapp_desc){
       .init_cb = init_cb,
