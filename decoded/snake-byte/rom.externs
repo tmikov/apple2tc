@@ -1,0 +1,10 @@
+# Apple II ROM entry points called by Snake Byte, replaced by a2rom.c.
+F800 rom_plot
+F819 rom_hline
+F864 rom_setcol
+F871 rom_scrn
+FC58 rom_home
+FC68 rom_fc68
+FDED rom_cout
+FE89 rom_setkbd
+FE93 rom_setvid

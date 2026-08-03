@@ -65,6 +65,7 @@ static void printHelp() {
   fprintf(stderr, "  -O<number>          Optimization level (default 0)\n");
   fprintf(stderr, "  --run-data=d.json   Load runtime data from specified file\n");
   fprintf(stderr, "  --routines-report=f Write routine candidate analysis to file\n");
+  fprintf(stderr, "  --extern-routines=f Declare the routines listed in the file external\n");
   fprintf(stderr, "  --no-gen            Ignore runtime generations\n");
 }
 
@@ -86,6 +87,7 @@ int main(int argc, char **argv) {
   std::string inputPath;
   std::string runDataPath;
   std::string routinesReportPath;
+  std::string externRoutinesPath;
   bool rom = false;
   for (int i = 1; i < argc; ++i) {
     if (strncmp(argv[i], "-v", 2) == 0 && strlen(argv[i]) == 3 && isdigit(argv[i][2])) {
@@ -134,6 +136,10 @@ int main(int argc, char **argv) {
     }
     if (strncmp(argv[i], "--routines-report=", 18) == 0) {
       routinesReportPath = argv[i] + 18;
+      continue;
+    }
+    if (strncmp(argv[i], "--extern-routines=", 18) == 0) {
+      externRoutinesPath = argv[i] + 18;
       continue;
     }
     if (argv[i][0] == '-') {
@@ -189,6 +195,10 @@ int main(int argc, char **argv) {
         if (simplify(mod))
           dce(mod);
       }
+      // Externalizing must happen before routine identification: a routine that
+      // calls an unidentifiable ROM entry point is itself rejected.
+      if (!externRoutinesPath.empty())
+        externRoutines(mod, loadExternRoutines(mod, externRoutinesPath));
       if (optLevel > 1) {
         FILE *report = nullptr;
         if (!routinesReportPath.empty()) {

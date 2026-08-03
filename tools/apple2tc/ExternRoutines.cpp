@@ -12,6 +12,9 @@
 #include "apple2tc/SetVector.h"
 #include "apple2tc/support.h"
 
+#include <cerrno>
+#include <cctype>
+#include <cstring>
 #include <stdexcept>
 #include <unordered_set>
 
@@ -311,4 +314,63 @@ bool externRoutines(Module *mod, const std::vector<std::pair<uint16_t, std::stri
   if (externs.empty())
     return false;
   return ExternRoutines(mod).run(externs);
+}
+
+std::vector<std::pair<uint16_t, std::string>> loadExternRoutines(
+    Module *mod,
+    const std::string &path) {
+  FILE *f = fopen(path.c_str(), "rt");
+  if (!f)
+    throw std::runtime_error(format("%s: %s", path.c_str(), strerror(errno)));
+  auto contents = readAll<std::string>(f);
+  fclose(f);
+
+  std::vector<std::pair<uint16_t, std::string>> res{};
+  unsigned lineNum = 0;
+  for (size_t pos = 0; pos <= contents.size();) {
+    size_t eol = contents.find('\n', pos);
+    if (eol == std::string::npos)
+      eol = contents.size();
+    std::string line = contents.substr(pos, eol - pos);
+    pos = eol + 1;
+    ++lineNum;
+
+    auto fail = [&path, lineNum](const char *what) {
+      throw std::runtime_error(format("%s:%u: %s", path.c_str(), lineNum, what));
+    };
+
+    if (auto comment = line.find('#'); comment != std::string::npos)
+      line.erase(comment);
+
+    // Split into whitespace separated words.
+    std::vector<std::string> words{};
+    for (size_t i = 0; i != line.size();) {
+      if (isspace((unsigned char)line[i])) {
+        ++i;
+        continue;
+      }
+      size_t start = i;
+      while (i != line.size() && !isspace((unsigned char)line[i]))
+        ++i;
+      words.push_back(line.substr(start, i - start));
+    }
+
+    if (words.empty())
+      continue;
+    if (words.size() != 2)
+      fail("expected '<hex-address> <name>'");
+
+    char *end;
+    unsigned long addr = strtoul(words[0].c_str(), &end, 16);
+    if (*end || words[0].empty())
+      fail("invalid hexadecimal address");
+    if (addr > 0xFFFF)
+      fail("address is not a 16-bit value");
+    if (!mod->getStartFunction()->findBasicBlock((uint16_t)addr))
+      fail(format("no code at address $%04X", (unsigned)addr).c_str());
+
+    res.emplace_back((uint16_t)addr, words[1]);
+  }
+
+  return res;
 }

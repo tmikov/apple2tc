@@ -40,6 +40,13 @@ bool identifySimpleRoutines(ir::Module *mod, FILE *report = nullptr);
 bool externRoutines(
     ir::Module *mod,
     const std::vector<std::pair<uint16_t, std::string>> &externs);
+/// Read a list of external routines from a file. Every non-empty line, after
+/// stripping '#' comments, must contain a hexadecimal address and a name.
+/// Throws std::runtime_error, quoting the file and line, if a line is malformed
+/// or an address doesn't resolve to a basic block in \p mod.
+std::vector<std::pair<uint16_t, std::string>> loadExternRoutines(
+    ir::Module *mod,
+    const std::string &path);
 std::shared_ptr<CPURegLiveness> liveness(ir::Module *mod);
 
 void printIRC1(ir::Module *mod, FILE *os, bool trees);

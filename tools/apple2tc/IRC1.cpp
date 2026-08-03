@@ -91,6 +91,10 @@ void IRC1Mod::run() {
   for (auto &fRef : mod_->functions()) {
     namer_.getName(&fRef, [&numFunctions](Value *v) {
       auto *func = cast<Function>(v);
+      // An external function's name is the C symbol that hand-written code
+      // must define, so it is used verbatim.
+      if (func->isExternal())
+        return func->getName();
       if (!func->getName().empty())
         return format("FUNC_%s", func->getName().c_str());
       else if (func->getAddress().has_value())
@@ -112,8 +116,10 @@ void IRC1Mod::run() {
   fprintf(os_, "}\n");
 
   // Generate all functions in order, but generate the start function last.
+  // External functions have no body: the forward declaration above is all we
+  // emit, and hand-written C supplies the implementation.
   for (auto &func : mod_->functions()) {
-    if (&func == mod_->getStartFunction())
+    if (&func == mod_->getStartFunction() || func.isExternal())
       continue;
     fprintf(os_, "\n");
     IRC1(this, &func, os_, trees_).runFunc();

@@ -19,6 +19,8 @@ const std::string &IRDumper::name(Value *v) {
   if (isa<Function>(v)) {
     return namer_.getName(v, [this](Value *_v) {
       auto *func = cast<Function>(_v);
+      if (func->isExternal())
+        return func->getName();
       if (!func->getName().empty())
         return format("FUNC_%s", func->getName().c_str());
       else if (func->getAddress().has_value() && func->isRealAddress())
