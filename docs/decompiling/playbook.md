@@ -7,11 +7,11 @@ transfers.
 Written in skill shape (when to use → procedure → red flags) so it can be
 promoted to a `.claude/skills/` skill once it has survived a second game.
 
-**Maturity: procedure steps 1–3 executed once (Snake Byte, 2026-08-02).** Scope
-control, procedure-recovery repair, and oracle standup have all been run for
-real; their findings below are measured, not predicted. Steps 4–5 (structural
-conversion, vertical RE) remain untested — treat those as hypothesis and correct
-them here as reality intervenes.
+**Maturity: procedure steps 1–4 executed once (Snake Byte, 2026-08-02/03).**
+Scope control, procedure-recovery repair, oracle standup, and the first half of
+the library cut have all been run for real; their findings below are measured,
+not predicted. The entry retarget, structural conversion and vertical RE remain
+untested — treat those as hypothesis and correct them here as reality intervenes.
 
 **Scope tags:** `[6502]` true of 6502 / Apple II work generally ·
 `[apple2tc]` true of this decompiler · `[game]` observed once, may not generalize
@@ -38,10 +38,34 @@ the reset vector `$FA62`, so the program boots ROM into BASIC and the recorded
 keystrokes type `CALL 14160`. Result: 1,442 of 2,097 basic blocks in the output
 are Applesoft and Monitor ROM, against 641 blocks of actual game.
 
-**`[6502]` The ROM boundary is usually far smaller than the ROM.** Snake Byte
-pulls in 1,442 ROM blocks but calls only **9 distinct ROM entry points**. Count
-the distinct `JSR`/`JMP` targets crossing into ROM before assuming the ROM is
-expensive to remove — roughly 150 lines of C displaced all of it.
+**`[6502]` The ROM boundary is far smaller than the ROM — but cutting it is not.**
+Snake Byte pulls in ~1430 ROM blocks and calls only **9 distinct entry points**.
+Count the distinct `JSR`/`JMP` targets crossing into ROM first. But do not assume
+that externalizing them removes the ROM: measured, it removed **112 blocks**, not
+1430. Library code is typically reachable by two independent routes — through its
+public entry points, *and* through whatever the program's start PC leads to. Both
+must be severed, and they are strongly non-additive (112 and 48 separately, 1530
+together). Retargeting the entry point is the other half.
+
+**`[apple2tc]` Externalizing routines is a decompiler capability, not a hand-editing
+chore.** `--extern-routines=<file>` maps addresses to C function names; calls
+become calls to bodyless `Function`s and unreachable blocks are deleted. Two
+payoffs beyond the block count: an unrecoverable callee poisons its callers, so
+externing one can unblock procedure recovery elsewhere (`$FDED`'s `JMP (CSWL)`
+was the sole reason `$71F3`, the game's most-called routine, stayed unrecovered);
+and the hand-written replacements are verifiable against an existing trace.
+
+**`[6502]` Externalizing a routine deletes everything only it reached.** Cutting
+Snake Byte's 9 also removed `GBASCALC`, `PLOT1` and the whole `$FB78` `COUTZ`
+subtree, which the hand-written file then had to supply. Correct behaviour, but
+it multiplies the hand-written surface over the naive estimate — size the work by
+the reachable subtree, not by the entry-point count.
+
+**`[6502]` Keep the original boot path while swapping leaf routines.** Changing
+the entry point at the same time forfeits the ability to verify: a cold start
+skips whatever boot frames the golden trace opens with, so nothing matches.
+Externalize first, verify against the existing trace, retarget the entry
+afterwards as a separate step.
 
 **`[6502]` Measure the hardware surface early.** Snake Byte touches only
 `$C000`/`$C061` (keyboard, joystick button), `$C010` (strobe), and
@@ -161,6 +185,20 @@ while the never-displayed lo-res page is the logical game board, read back via
 page, its representation is yours to change — but verify nothing else accesses
 the address range first.
 
+**`[6502]` A game may hook `COUT` through `CSWL`/`CSWH`.** Snake Byte's `$6641`
+repoints `$36/$37` at its own hi-res text renderer at `$664A`. A replacement for
+`COUT` must dispatch through the vector, never reimplement the ROM path — and
+should fail loudly on an unrecognised target rather than falling back, because a
+trace that never installs the hook cannot catch the mistake. Check for writes to
+`$36/$37` and `$38/$39` before replacing any character I/O routine.
+
+**`[6502]` The decompilation covers what the trace exercised, not what is
+reachable.** Snake Byte's own `COUT` handler at `$664A` is installed by code the
+recorded session never ran, so the tracer classified it as *data* and it is
+absent from the generated C entirely — despite decoding cleanly as a glyph
+blitter. Look for vector writes whose targets were never traced. The decompiler's
+code/data classification is evidence, not a verdict; decode the bytes yourself.
+
 **`[6502]` Self-modifying code may be rarer than the warnings suggest.** Snake
 Byte reported three self-modifying game blocks; two are a one-shot startup
 relocator (a block copy) and one is a false positive from the inline-string
@@ -189,12 +227,18 @@ them.
    anything, so the baseline is trustworthy. Prove it both reproducible (record
    twice, refuse to write unless they agree) and capable of failing (corrupt a
    hash, confirm non-zero exit). Then measure what the trace actually covers.
-4. **Structural conversion.** Replace the ROM boundary. Move the entry point to
+4. **Cut the library boundary, in two separate steps.** First externalize the
+   entry points the program calls and supply them by hand, keeping the original
+   boot path so the existing golden trace still verifies every change. Only then
+   retarget the entry point — that step needs an entry-state snapshot and a
+   re-based trace, because a cold start skips the boot frames the trace opens
+   with. Doing both at once forfeits verification for the duration.
+5. **Structural conversion.** Move the entry point to
    the program's real start. Recover remaining procedures by hand, rewriting
    idiom-based ones. Reloop each function — dominator tree, back edges for
    natural loops, then iterative region matching (sequence / if-then /
    if-then-else / while / do-while). Keep address-derived names throughout.
-5. **Vertical reverse engineering.** One subsystem at a time: promote zero page
+6. **Vertical reverse engineering.** One subsystem at a time: promote zero page
    to locals and parameters, extract structs from data tables, apply meaningful
    names. Verify and commit each slice independently.
 
@@ -217,3 +261,8 @@ them.
 | Expecting "several hundred" of anything | Static stretches dominate replay traces. Measure the number; explain it if it surprises you. |
 | Trusting IDE/clangd diagnostics on this repo | clangd lacks the include paths and reports cascading phantom errors. Trust `ninja` and the test suite. |
 | Citing a helper function from memory | `support.h` has `format()`, not `stringPrintf()`. Grep before specifying an API in a plan. |
+| Inferring "this code never runs" from the trace file | Branch-target lists are capped and record only targets, so fall-through blocks read as absent either way. Instrument and count. |
+| "Absent from the trace" treated as "unreachable" | Different claims. Only the second is worth relying on, and it takes an argument, not an absence of evidence. |
+| Replacing a routine that dispatches through a vector | The vector may point at game code. Honour it; abort loudly on an unknown target. |
+| Externalizing entry points to shrink output | You also delete everything only they reached — and the library stays reachable via the start PC. Measure both routes. |
+| A bodyless `ir::Function` | `getAddress()` derives from `getEntryBlock()`, which asserts on an empty block list: silent UB under NDEBUG. Use the explicit `isExternal()` flag. |
