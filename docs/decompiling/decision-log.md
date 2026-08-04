@@ -466,3 +466,80 @@ and it supplied the exact `CYCLES()` constants.
 `Unknown address $7541`. It is a regression test rather than an oracle: only the
 ext build can run it, so its authority rests on the one-time cross-check above.
 `$7541` is the next hand-decompilation target.
+
+---
+
+## 2026-08-04 — How much of Snake Byte is actually decompiled
+
+**Scope:** this game · **Status:** validated
+
+**Decision:** (scoping measurement, not a decision — recorded because it bounds
+every remaining phase)
+
+**Evidence:** Of the 19,967 bytes at `$3750-$854E`:
+
+| | bytes | |
+| --- | --- | --- |
+| Decompiled as code | ~3,931 | 1,696 instructions, 19.7% |
+| Known assets | 10,139 | see below |
+| Zero-filled buffers | 3,284 | |
+| **Unknown nonzero** | **2,657** | untraced code + unidentified tables |
+
+Assets identified by inspection rather than assumption:
+
+- `$4000-$5FFF` (8,192 bytes) — a hi-res title image. 28% of it is the single
+  byte `$2A` (`0101010`, the classic hi-res dither), only 1.7% has the colour
+  bit set.
+- `$3800-$3FFF` (2,048 bytes) — level/map data, copied to `$1800` by the startup
+  relocator at `$3750`. Disassembling it yields mostly invalid opcodes and the
+  values cluster in `$02-$1D`, consistent with tile indices. **Nothing is
+  decompiled at `$1800-$1FFF`**, which is correct: it is data, not code.
+- `$66A9-$69A8` (768 bytes) — the font used by `$664A`, 8 bytes per glyph.
+
+**So the remaining hand-decompilation job is bounded at ~2,657 bytes**, roughly
+900-1,300 instructions, against 3,931 already done. The game is about 60%
+code-complete and finishing it is finite work — not the 80% figure a naive
+code-vs-data count suggests.
+
+Where the unknown bytes are:
+
+```
+$8390-$84A4  277   $8000-$80D9  218   $823C-$82F0  181
+$7499-$753F  167   $80FF-$8190  146   $606C-$60E3  120
+$831B-$838E  116   $7579-$75E7  111   $81D5-$8235   97   $600E-$6063   86
+```
+
+Two clusters: `$7499-$75E7` (the screen reached by pressing C, containing
+`$7541`) and `$8000-$84A4` (~1,035 bytes at the end of the binary, entirely
+untraced — nothing yet known to reach it).
+
+**Method note:** the `--asm` listing's `Code range` markers are not a coverage
+measure — they only appear at discontinuities and totalled 260 bytes here
+against 3,931 bytes of actual instructions. Count instructions, not range
+markers.
+
+---
+
+## 2026-08-04 — Next steps, in order
+
+**Scope:** this game · **Status:** proposed
+
+1. **`$7541`** — hand-decompile. Smallest target, already reachable (SPACE then
+   C), and unblocks `play-hires.frames` past its 390-frame cap. It is a
+   six-iteration loop over `$6C63,X` calling `$7590`, so it pulls in a small
+   cluster with it.
+2. **The three remaining rejection roots** — `$7230` (inline-string printer,
+   `Pop8` underflow, blocks 3 game routines), `$60E7` ("invalid predecessor inst
+   RTS at $6147", blocks 4), `$6A32` (`Pop8` underflow, blocks 2). Decompiler-side
+   work on already-traced code; recovers ~9 routines and improves the reference
+   everything else is written from. Cheap, so do it before the big unknown block.
+3. **`$8000-$84A4`** — the largest unknown region. Requires first finding what
+   reaches it; nothing in the recording does.
+4. **Phase 1b** — retarget the entry to `$3750`. This is what actually cuts the
+   ROM (measured: 1,530 blocks, leaving 4). Needs an entry-state snapshot and a
+   re-based trace, because a cold start skips the 168 boot frames `play.frames`
+   opens with.
+
+Deferred and still open: the headless-vs-windowed trace comparison (needs a
+display), and regenerating `decoded/robotron/**` and `decoded/bolo/**`, which
+would now pick up both the recovery fix and `--extern-routines`.
