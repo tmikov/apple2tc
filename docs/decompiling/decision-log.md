@@ -386,3 +386,38 @@ Temporarily adding per-block counters and replaying the session gave the truth:
 
 "Absent from the trace file" and "unreachable" are different claims. Only the
 second is worth relying on, and it takes an argument to establish.
+
+---
+
+## 2026-08-03 — Keep the self-contained build; the extern build is additional
+
+**Scope:** apple2tc · **Status:** validated
+
+**Decision:** `decompile.sh` generates **two** variants and CMake builds both.
+`snake-bytec1.c` is generated with no externs — self-contained, links on its own,
+and remains the reference build. `snake-bytec1-ext.c` is the extern variant, and
+is compiled only via the `snake-byte-ext.c` wrapper together with `a2rom.c`.
+`verify.sh` checks both against `play.frames`.
+
+**Evidence:** Phase 1a initially made `--extern-routines` unconditional in
+`decompile.sh` and repointed the existing `snake-bytec1` target at the wrapper.
+That silently destroyed a property the project had always had — the generated C
+being a standalone file that compiles and runs the game — and left **no build of
+the pristine decompilation at all**. It also contradicted the Phase 0 spec's own
+commitment that "both binaries stay in `CMakeLists.txt` throughout, so the oracle
+is always buildable".
+
+The verification that passed was still meaningful, because `play.frames` had been
+recorded from the pre-extern build. But the reference existed only as a
+historical artifact, not as something rebuildable — so re-recording a trace or
+bisecting a divergence would have had nothing to compare against.
+
+Keeping both is also a strictly stronger test: the reference build is now a live
+control rather than a historical one, and the two binaries producing byte-identical
+1300-frame traces is what actually proves the hand-written ROM replacements match
+the decompiled ROM.
+
+**Correction recorded:** the mistake was replacing a build target rather than
+adding one. When a change makes generated output depend on hand-written code,
+keep the independent variant building — the cost is one extra generated file and
+one target.

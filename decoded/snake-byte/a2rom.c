@@ -33,15 +33,22 @@
 ///
 /// Consequently this file must be textually included into the same translation
 /// unit as the generated C, *after* it. That is what `snake-byte-ext.c` does,
-/// and `snake-byte-ext.c` is the file CMake compiles for the `snake-bytec1`
+/// and `snake-byte-ext.c` is the file CMake compiles for the `snake-bytec1-ext`
 /// target:
 ///
-///     #include "snake-bytec1.c"
+///     #include "snake-bytec1-ext.c"
 ///     #include "a2rom.c"
 ///
 /// DO NOT add `a2rom.c` to CMake as a source file of its own. Compiling it
 /// alone yields a wall of undefined identifiers, because everything listed
-/// above is invisible outside the generated file's translation unit.
+/// above is invisible outside the generated file's translation unit. Worse, if
+/// it ever did compile separately it would get its *own* copy of `s_ram` and
+/// the registers -- `system2-inc.h` declares them `static` -- and link cleanly
+/// while reading and writing a machine state nothing else can see.
+///
+/// This file is used only by the `snake-bytec1-ext` build. The plain
+/// `snake-bytec1` target is the self-contained reference build, which
+/// decompiles the ROM instead of calling into here.
 
 #include "a2rom.h"
 
