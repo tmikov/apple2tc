@@ -1,0 +1,58 @@
+# Snake Byte labels, for the `id` disassembler:
+#
+#     id
+#     > loadb33 snake-byte.b33
+#     > labels labels.txt
+#     > dis $664A $66A8
+#
+# or non-interactively:
+#
+#     printf 'loadb33 snake-byte.b33\nlabels labels.txt\ndis $664A $66A8\n' | id
+#
+# Format: "ADDR name", hex, '$' optional, '#' starts a comment. These override
+# the built-in Apple II symbol database, so game names win over ROM ones.
+#
+# Names are recorded here as they are established, with the evidence. Anything
+# unproven belongs in a comment, not in a name.
+
+# --- entry and startup -----------------------------------------------------
+3750 relocate_1800     # copies $3800-$3FFF to $1800-$1FFF, then JMP $76C2
+376E init_0300         # writes $52/$01/$01/$01/$64 to $0300-$0304
+76C2 main              # target of the JMP at $3785
+
+# --- hi-res drawing --------------------------------------------------------
+60E4 hgr_draw          # uses the tables below; 4 sub-rows, +$400 each
+6127 hgr_set_masks     # fills $6060-$6063 from the table at $6174
+6000 tbl_hgr_lo        # 48 hi-res line address low bytes
+6030 tbl_hgr_hi        # 48 hi-res line address high bytes
+6060 var_hgr_mask      # 4 bytes, rewritten by hgr_set_masks
+6064 tbl_hgr_pattern   # indexed by the value built in $0006
+6174 tbl_hgr_masks     # source for hgr_set_masks, 4 bytes per entry
+
+# --- input -----------------------------------------------------------------
+6217 kbd_scan          # reads $C000, buffers into $623C,X
+623C buf_keys          # circular key buffer
+624C var_key_mask
+624D var_key_index
+
+# --- text output -----------------------------------------------------------
+6641 install_cout_hook # LDA #$4A / STA $36 / LDA #$66 / STA $37 -- points CSWL at cout_hires
+664A cout_hires        # the game's own COUT: hi-res glyph blitter, then ROM COUT1
+66A9 tbl_font          # 8 bytes per glyph, first glyph is $20 (space)
+7230 print_inline_str  # PLA/PLA, walks the string after the JSR, PHA/PHA/RTS past it
+71F3 print_char        # most-called routine in the game, 15 call sites
+
+# --- menus and screens -----------------------------------------------------
+741C attract_loop      # polls $C000; any key dispatches at key_dispatch
+7461 key_dispatch      # CMP #$C3 -> hires_text_screen; '0'..'2' select an option
+747F hires_text_screen # pressing C: full-screen graphics, install hook, print
+7541 UNTRACED_7541     # reached from hires_text_screen; not in the recording
+
+# --- video soft switches used once, at $704D-$7056 -------------------------
+7045 set_video_mode    # $C050 graphics, $C057 hi-res, $C055 page 2, $C052 full
+
+# --- routines the recovery pass still rejects ------------------------------
+# Kept here so the reasons stay attached to the addresses.
+60E7 rej_60E7          # "invalid predecessor inst RTS at $6147"
+6A32 rej_6A32          # Pop8 stack underflow at $6AB3
+7226 rej_7226          # JmpInd terminator

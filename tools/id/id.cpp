@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -34,12 +35,60 @@ static void poke16(unsigned addr, uint16_t value) {
   poke(addr + 1, value >> 8);
 }
 
+/// Labels loaded with the "labels" command. Consulted before the built-in
+/// Apple II symbol database, so a program's own names win over ROM ones.
+static std::map<uint16_t, std::string> s_userLabels;
+
+/// Read a label file: one "ADDR name" pair per line, '#' starts a comment.
+/// ADDR is hexadecimal, with or without a leading '$'.
+static void loadLabels(const char *path) {
+  FILE *f = fopen(path, "rt");
+  if (!f) {
+    perror(path);
+    return;
+  }
+  char line[256];
+  unsigned lineNo = 0, loaded = 0;
+  while (fgets(line, sizeof(line), f)) {
+    ++lineNo;
+    if (char *hash = strchr(line, '#'))
+      *hash = 0;
+    char addrBuf[64], name[128];
+    if (sscanf(line, "%63s %127s", addrBuf, name) != 2)
+      continue; // Blank or comment-only.
+    const char *p = addrBuf[0] == '$' ? addrBuf + 1 : addrBuf;
+    char *endp;
+    unsigned long addr = strtoul(p, &endp, 16);
+    if (*endp || addr > 0xFFFF) {
+      printf("%s:%u: invalid address \"%s\"\n", path, lineNo, addrBuf);
+      continue;
+    }
+    s_userLabels[(uint16_t)addr] = name;
+    ++loaded;
+  }
+  fclose(f);
+  printf("loaded %u labels from %s\n", loaded, path);
+}
+
+static std::string symbolResolver(CPUInst inst) {
+  if (cpuAddrModeHasOperand(inst.addrMode) && inst.addrMode != CPUAddrMode::Imm) {
+    auto it = s_userLabels.find((uint16_t)inst.operand);
+    if (it != s_userLabels.end())
+      return it->second;
+  }
+  return apple2SymbolResolver(inst);
+}
+
 static uint8_t printInst(uint16_t pc) {
   ThreeBytes bytes{0};
   for (unsigned i = 0; i != 3; ++i)
     bytes.d[i] = peek(pc + i);
   CPUInst inst = decodeInst(pc, bytes);
-  FormattedInst fmt = formatInst(inst, bytes, apple2SymbolResolver);
+  FormattedInst fmt = formatInst(inst, bytes, symbolResolver);
+
+  // Print the label on its own line so the address column stays aligned.
+  if (auto it = s_userLabels.find(pc); it != s_userLabels.end())
+    printf("%s:\n", it->second.c_str());
 
   printf("%04X: %-8s    %s", pc, fmt.bytes, fmt.inst);
   if (!fmt.operand.empty())
@@ -225,6 +274,9 @@ static void printHelp() {
   printf("s addr - Set current address\n");
   printf("s - Print current address\n");
   printf("dis - Disassemble 20 instructions\n");
+  printf("dis count - Disassemble count instructions\n");
+  printf("dis addr end - Disassemble the range [addr, end]\n");
+  printf("labels file - Load \"ADDR name\" pairs; they override built-in symbols\n");
   printf("db - print up to 64 bytes/words\n");
   printf("dw - print 8 words\n");
   printf("memcpy dest src len - copy memory\n");
@@ -315,6 +367,34 @@ int main() {
       for (unsigned i = 0; i != 20; ++i) {
         s_curAddr = (uint16_t)(s_curAddr + printInst(s_curAddr));
       }
+    } else if (tokens[0] == "dis" && tokens.size() == 2) {
+      // dis count - disassemble that many instructions.
+      auto count = parse16(tokens[1].c_str());
+      if (!count)
+        printf("Error: invalid number.\n");
+      else
+        for (unsigned i = 0; i != *count; ++i)
+          s_curAddr = (uint16_t)(s_curAddr + printInst(s_curAddr));
+    } else if (tokens[0] == "dis" && tokens.size() == 3) {
+      // dis addr end - disassemble the range [addr, end]. Stops on wraparound
+      // so a bad range cannot spin forever.
+      auto addr = parse16(tokens[1].c_str());
+      auto end = parse16(tokens[2].c_str());
+      if (!addr || !end) {
+        printf("Error: invalid number.\n");
+      } else if (*addr > *end) {
+        printf("Error: start address is above end address.\n");
+      } else {
+        s_curAddr = *addr;
+        while (s_curAddr <= *end) {
+          uint16_t prev = s_curAddr;
+          s_curAddr = (uint16_t)(s_curAddr + printInst(s_curAddr));
+          if (s_curAddr <= prev)
+            break;
+        }
+      }
+    } else if (tokens[0] == "labels" && tokens.size() == 2) {
+      loadLabels(tokens[1].c_str());
     } else if (tokens[0] == "db" && tokens.size() == 1) {
       printDB();
     } else if (tokens[0] == "dw" && tokens.size() == 1) {

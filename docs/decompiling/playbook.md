@@ -176,6 +176,33 @@ analysis.
 mismatch tells you *that* something broke, not *where*. Converting one subsystem
 at a time keeps every failure attributable to one change.
 
+### Hand-decompiling
+
+**`[apple2tc]` `id` is a scriptable disassembler; drive it from stdin.** It is a
+REPL with no argv parsing, but it reads commands from standard input, so a
+one-liner disassembles any range:
+
+    printf 'loadb33 game.b33\nlabels labels.txt\ndis $664A $66A8\n' | id
+
+It resolves the built-in Apple II symbol database automatically (`COUT1`,
+`BASH`, `CSWL`), so you get named operands, not bare addresses. `dis` takes an
+instruction count or a start/end range; `labels <file>` loads `ADDR name` pairs
+that override the built-in names.
+
+**`[6502]` Keep a labels file next to the game and grow it as names are
+established.** It makes every later disassembly more readable, and it is the
+natural place to park what has been *proven* about an address. Record the
+evidence in a comment; a name asserting something unproven is worse than no
+name.
+
+**`[6502]` Use the decompiler to check hand work, not to do it.** When a routine
+is missing because the trace never reached it, decode it by hand -- then build a
+*scratch* copy of the run-data with the address added as a branch target, and
+diff the two implementations' behaviour. That validates the hand decode against
+an independent one and yields exact `CYCLES()` constants, without editing the
+committed recording. The recording is evidence of what happened; asserting
+reachability into it destroys that.
+
 ### Apple II idioms worth checking for
 
 **`[game]` An undisplayed video page may be a data structure, not a display.**
@@ -260,6 +287,8 @@ them.
 | Predicting *which* routines a recovery fix will unblock | The call graph decides, not the direct failure list. Predict counts at most, then measure. |
 | Expecting "several hundred" of anything | Static stretches dominate replay traces. Measure the number; explain it if it surprises you. |
 | Trusting IDE/clangd diagnostics on this repo | clangd lacks the include paths and reports cascading phantom errors. Trust `ninja` and the test suite. |
+| Hand-decoding bytes without disassembling them | `id` will do it in one command, with ROM symbols resolved. Decoding by eye invites transcription errors. |
+| A changed frame trace read as "the code I wanted ran" | It only proves *something* changed. Add a counter and confirm the routine was entered. |
 | Citing a helper function from memory | `support.h` has `format()`, not `stringPrintf()`. Grep before specifying an API in a plan. |
 | Inferring "this code never runs" from the trace file | Branch-target lists are capped and record only targets, so fall-through blocks read as absent either way. Instrument and count. |
 | "Absent from the trace" treated as "unreachable" | Different claims. Only the second is worth relying on, and it takes an argument, not an absence of evidence. |
