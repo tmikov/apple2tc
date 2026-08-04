@@ -43,3 +43,4 @@
 
 #include "snake-bytec1-ext.c"
 #include "a2rom.c"
+#include "game.c" /* after a2rom.c: uses its static rom_cout1() */

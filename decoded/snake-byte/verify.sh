@@ -65,4 +65,30 @@ check() {
 
 check ref "$ref"
 check ext "$ext"
+
+# The hi-res text scenario. play-hires.keys presses SPACE and then C at the
+# attract screen, which makes the game install its own COUT handler at $664A
+# (via $6641) and print through it -- 177 calls in 390 frames.
+#
+# Only the ext build can run this: $664A is hand-decompiled in game.c, and the
+# reference build does not contain it at all (the recorded session never
+# installs the hook, so the tracer classified those bytes as data). This is
+# therefore a regression test, not an independent oracle -- its authority comes
+# from a one-time cross-check against a decompiler-generated $664A, built from a
+# scratch run-data file with $664A added as a branch target.
+#
+# Capped at 390 frames: at 393 the C screen reaches $7541, which the recording
+# never covered either, and both builds stop with "Unknown address $7541".
+if [ -x "$ext" ]; then
+  "$ext" --headless --key-file=play-hires.keys --frames=390 \
+    --hash-frames=/tmp/sb-check-hires.frames >/dev/null
+  if diff -u play-hires.frames /tmp/sb-check-hires.frames > /tmp/sb-diff-hires.txt; then
+    echo "PASS [hires]: $(wc -l < play-hires.frames) frames match"
+  else
+    echo "FAIL [hires]: first divergence:" >&2
+    head -10 /tmp/sb-diff-hires.txt >&2
+    status=1
+  fi
+fi
+
 exit $status

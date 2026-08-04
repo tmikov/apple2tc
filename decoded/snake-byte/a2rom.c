@@ -51,6 +51,7 @@
 /// decompiles the ROM instead of calling into here.
 
 #include "a2rom.h"
+#include "game.h"
 
 /* Helpers that remain in the generated code. Redeclared here so that this file
    reads standalone; C permits identical redeclarations. */
@@ -58,6 +59,10 @@ void FUNC_VTABZ(uint16_t ret_addr);
 void FUNC_CLREOLZ(uint16_t ret_addr);
 void FUNC_CLREOL(uint16_t ret_addr);
 void FUNC_MON_WAIT(uint16_t ret_addr);
+
+/* $FDF0 COUT1, defined below. `rom_cout` dispatches to it, and so does the
+   game's own $664A handler in game.c once it has drawn its glyph. */
+static void rom_cout1(uint16_t ret_addr);
 
 /* ========================================================================== */
 /* Private helpers.                                                           */
@@ -725,31 +730,56 @@ bb_21:
 ///
 /// KNOWN GAP for a later phase: implement $664A (the hi-res text renderer) and
 /// dispatch to it here.
+/// $FDED COUT -- `JMP ($36)`. Dispatches through the output vector CSWL/CSWH
+/// rather than reimplementing COUT1, because Snake Byte repoints it: $6641
+/// installs the game's own hi-res text renderer at $664A.
+///
+/// Any target other than the two we implement is a hard failure rather than a
+/// fallback. The recorded session never leaves $FDF0, so `verify.sh` cannot
+/// catch a wrong guess here -- a silent fallback would render with the wrong
+/// font onto the wrong page, undetectably.
 void rom_cout(uint16_t ret_addr) {
   bool branchTarget = true;
   uint16_t vector;
-  uint8_t tmp1_U8;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$FDED*/ CYCLES(0xfded, 6);
             vector = ram_peek16al(0x0036); // JMP ($36)
             branchTarget = true;
-            if (vector != 0xfdf0) {
+            switch (vector) {
+            case 0xfdf0:
+              rom_cout1(0xfffe);
+              break;
+            case 0x664a:
+              game_cout_hook(0xfffe);
+              break;
+            default:
               fprintf(
                   stderr,
                   "rom_cout: output vector CSWL/CSWH ($36/$37) points at $%04X, "
-                  "but only ROM COUT1 ($FDF0) is implemented.\n"
-                  "  $664A is the game's hi-res text renderer and is a known gap; "
-                  "it was never reached in the recorded session.\n",
+                  "which is not implemented.\n"
+                  "  Known targets are $FDF0 (ROM COUT1) and $664A (the game's "
+                  "hi-res text renderer).\n",
                   vector);
               error_handler(0xfded);
               abort();
             }
 
-  /* ---- $FDF0 COUT1 ---- */
+            if (ret_addr) pop16();
+            return;
+}
+
+/// $FDF0 COUT1 -- the ROM's own character output: mask to the current text
+/// mode, then COUTZ for the actual placement and cursor bookkeeping.
+static void rom_cout1(uint16_t ret_addr) {
+  bool branchTarget = true;
+  uint8_t tmp1_U8;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
 bb_1:
   /*$FDF0*/ CYCLES(0xfdf0, 7);
             tmp1_U8 = s_a >= 0xa0;

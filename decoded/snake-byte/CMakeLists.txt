@@ -27,7 +27,8 @@ add_executable(snake-bytec1
 # give each object file its own private copy of s_ram and still link cleanly.
 add_executable(snake-bytec1-ext
   snake-byte-ext.c
-  snake-bytec1-ext.c a2rom.c a2rom.h
+  snake-bytec1-ext.c a2rom.c a2rom.h game.c game.h
   ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   )
-set_source_files_properties(snake-bytec1-ext.c a2rom.c PROPERTIES HEADER_FILE_ONLY TRUE)
+set_source_files_properties(snake-bytec1-ext.c a2rom.c game.c
+  PROPERTIES HEADER_FILE_ONLY TRUE)

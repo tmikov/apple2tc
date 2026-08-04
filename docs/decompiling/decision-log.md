@@ -421,3 +421,48 @@ the decompiled ROM.
 adding one. When a change makes generated output depend on hand-written code,
 keep the independent variant building — the cost is one extra generated file and
 one target.
+
+---
+
+## 2026-08-04 — Hand-decompile what the tracer never saw; cross-check with the tool
+
+**Scope:** 6502 · **Status:** validated
+
+**Decision:** Routines the recording never reached are decompiled **by hand**
+from the binary. The committed run-data is not edited to make the tool emit them.
+
+**Evidence:** `$664A` is Snake Byte's own `COUT` handler, installed by `$6641`
+pointing `CSWL/CSWH` at it. The recorded session never runs `$6641`, so apple2tc
+classified the bytes as data and emitted nothing — yet they decode cleanly as a
+hi-res glyph blitter, and the routine is genuinely reachable: pressing **C** at
+the attract screen reaches it, 177 times in 390 frames.
+
+Decoded by hand into `decoded/snake-byte/game.c`. The alternative — adding
+`$664A` to `snake-byte.json`'s `BranchTargets` — was rejected: the run-data is a
+recording of what happened, not a config file, and editing it to assert
+reachability the run never observed destroys its value as evidence for all later
+work.
+
+**The tool is still useful as a cross-check.** A *scratch* copy of the run-data
+(in `/tmp`, never committed) with `$664A` added produced an independently
+generated implementation. Building both and replaying the same scenario gave
+byte-identical frame traces for 393 frames, with 177 executions of the routine.
+That validates the hand decode against the tool without corrupting the recording,
+and it supplied the exact `CYCLES()` constants.
+
+**Two things instrumentation caught that inference got wrong:**
+
+1. A first attempt pressed `C` at nine different cycles and the trace *changed*
+   each time, which looked like success. A call counter showed `$664A` ran **0**
+   times — the keypress was landing in a different poll loop entirely. Only
+   SPACE-then-`C` reaches it. A changed trace is not evidence that the intended
+   code ran.
+2. An exit-status check appeared to show the reference build surviving the
+   scenario. It was reading `grep`'s status through a pipe, not the binary's.
+
+**Consequence:** `verify.sh` gained a third check, `play-hires.keys` /
+`play-hires.frames`, capped at 390 frames — at 393 the same screen reaches
+`$7541`, which the recording also never covered, and both builds stop with
+`Unknown address $7541`. It is a regression test rather than an oracle: only the
+ext build can run it, so its authority rests on the one-time cross-check above.
+`$7541` is the next hand-decompilation target.
