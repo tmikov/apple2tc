@@ -261,6 +261,60 @@ void Disas::applyCodeAt() {
   printf("// --code-at: %zu asserted edges applied\n", codeAt_.size());
 }
 
+void Disas::validateCodeAt() const {
+  for (const auto &edge : codeAt_) {
+    const AsmBlock *targetBlock = cfindAsmBlockAt(edge.target);
+    if (!targetBlock)
+      throw std::runtime_error(format(
+          "--code-at: target $%04X is not the start of a basic block", (unsigned)edge.target));
+
+    // Whether untraced bytes are really code is precisely what --code-at
+    // asserts, so a target pointing at data cannot be diagnosed in general --
+    // the disassembler will happily decode anything. The one cheap signal is
+    // the target failing to decode at all, which catches the common typo.
+    //
+    // Deliberately the *first* instruction and not AsmBlock::invalid(), which
+    // means "ends in an invalid instruction". Blocks legitimately end that way
+    // when real code runs into undecodable bytes -- past a BRK, or at the end
+    // of the binary -- and a warning that fires on good input gets ignored.
+    for (auto [addr, inst] : targetBlock->instructions(this)) {
+      if (inst.kind == CPUInstKind::INVALID)
+        fprintf(
+            stderr,
+            "warning: --code-at: target $%04X does not decode to a valid instruction, "
+            "so it is probably not code\n",
+            (unsigned)edge.target);
+      break; // Only the first instruction is of interest.
+    }
+
+    std::optional<CPUInst> originInst{};
+    if (const AsmBlock *block = cfindAsmBlockContaining(edge.origin)) {
+      for (auto [addr, inst] : block->instructions(this)) {
+        if (addr >= edge.origin) {
+          if (addr == edge.origin)
+            originInst = inst;
+          break;
+        }
+      }
+    }
+
+    if (!originInst)
+      throw std::runtime_error(format(
+          "--code-at: origin $%04X is not the start of a disassembled instruction",
+          (unsigned)edge.origin));
+
+    // These are exactly the instructions GenIR consults branchTargetsFrom() for.
+    // A JMP or JSR with a plain literal operand is accepted here but cannot
+    // actually take an extra target; GenIR warns about that separately.
+    if (!instIsBranch(originInst->kind, originInst->addrMode) ||
+        originInst->kind == CPUInstKind::BRK)
+      throw std::runtime_error(format(
+          "--code-at: the instruction at origin $%04X is not a branch. Only RTS, RTI, JMP, JSR "
+          "and conditional branches can be given extra targets",
+          (unsigned)edge.origin));
+  }
+}
+
 void Disas::run(bool noGenerations) {
   // Load the start address from runtime data, if available.
   if (!runDataPath_.empty())
@@ -315,6 +369,8 @@ void Disas::run(bool noGenerations) {
     // Identify additional asm blocks.
     identifyAsmBlocks();
   }
+
+  validateCodeAt();
 
   // TODO: identify and coalesce misaligned blocks which come back in sync after
   //       one instruction.

@@ -59,6 +59,46 @@ $a6502 codeat.s codeat.b33 && $apple2tc codeat.b33 --code-at=codeat.txt -O3 --ir
 diff -q codeat.ir codeat-test.ir
 $apple2tc codeat.b33 -O3 --ir > codeat-noedges-test.ir
 diff -q codeat-noedges.ir codeat-noedges-test.ir
-rm codeat-test.ir codeat-noedges-test.ir codeat.b33
+rm codeat-test.ir codeat-noedges-test.ir
+
+# Each --code-at rejection, asserted to actually reject. A check nobody has
+# watched fail is not a check.
+expect_reject() {
+  # $1: what is wrong with it, $2: contents of the --code-at file
+  printf '%s\n' "$2" > codeat-bad.txt
+  if $apple2tc codeat.b33 --code-at=codeat-bad.txt -O3 --ir >/dev/null 2>codeat-bad.err; then
+    echo "FAIL: --code-at accepted $1" >&2
+    exit 1
+  fi
+  if ! grep -q 'FATAL' codeat-bad.err; then
+    echo "FAIL: --code-at rejected $1, but without a FATAL diagnostic:" >&2
+    cat codeat-bad.err >&2
+    exit 1
+  fi
+  rm -f codeat-bad.txt codeat-bad.err
+}
+
+expect_reject "an origin that is not a branch"  "0300 0330"
+expect_reject "an origin inside an instruction" "0301 0330"
+expect_reject "a line with only one address"    "0306"
+expect_reject "a malformed hex address"         "030g 0330"
+expect_reject "an address wider than 16 bits"   "0306 10330"
+
+# A target pointing at data cannot be rejected -- that untraced bytes are code
+# is precisely what the option asserts -- but one that does not decode warns.
+printf '0306 0328\n' > codeat-bad.txt
+$apple2tc codeat.b33 --code-at=codeat-bad.txt -O3 --ir >/dev/null 2>codeat-bad.err
+if ! grep -q "does not decode to a valid instruction" codeat-bad.err; then
+  echo "FAIL: --code-at did not warn about a target pointing into filler bytes" >&2
+  exit 1
+fi
+# ...and the good file must stay silent, or the warning is noise.
+$apple2tc codeat.b33 --code-at=codeat.txt -O3 --ir >/dev/null 2>codeat-bad.err
+if grep -q "code-at" codeat-bad.err; then
+  echo "FAIL: --code-at warned about codeat.txt, which is correct:" >&2
+  cat codeat-bad.err >&2
+  exit 1
+fi
+rm -f codeat-bad.txt codeat-bad.err codeat.b33
 
 echo "Success!"

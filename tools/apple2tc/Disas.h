@@ -397,6 +397,11 @@ private:
   /// Merge the `--code-at` edges into runData_, creating it if there is no
   /// recording at all. Must run before the branch targets are turned into work.
   void applyCodeAt();
+  /// Check that every `--code-at` edge actually landed: the target has to be the
+  /// start of a block, and the origin has to be an instruction that can carry
+  /// extra targets. Must run after the final identifyAsmBlocks().
+  void validateCodeAt() const;
+
   void addMemRange(MemRange range);
   /// Return an iterator to the memory range containing the specified address.
   [[nodiscard]] std::vector<MemRange>::const_iterator findMemRange(uint16_t addr) const;
