@@ -52,4 +52,13 @@ $a6502 stackmerge.s stackmerge.b33 && $apple2tc -O3 --ir stackmerge.b33 > stackm
 diff -q stackmerge.ir stackmerge-test.ir
 rm stackmerge-test.ir stackmerge.b33
 
+# --code-at: hand-asserted dynamic branch edges. Two baselines, so this pins
+# down what the option changes rather than merely that it runs -- without the
+# edges neither continuation in codeat.s is reachable at all.
+$a6502 codeat.s codeat.b33 && $apple2tc codeat.b33 --code-at=codeat.txt -O3 --ir > codeat-test.ir
+diff -q codeat.ir codeat-test.ir
+$apple2tc codeat.b33 -O3 --ir > codeat-noedges-test.ir
+diff -q codeat-noedges.ir codeat-noedges-test.ir
+rm codeat-test.ir codeat-noedges-test.ir codeat.b33
+
 echo "Success!"

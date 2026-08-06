@@ -1,0 +1,5 @@
+# Asserted dynamic branch edges for codeat.s -- "ORIGIN TARGET", hexadecimal.
+# The '$' prefix is optional and is exercised on one line here on purpose.
+
+$306 $320    # the computed RTS returns to via_rts
+0318  0330   # the indirect JMP goes to via_jmp

@@ -1,0 +1,68 @@
+// Loaded binary at [$0300..$0336]
+// --code-at: 2 asserted edges applied
+// 2 new runtime blocks added
+// code labels: 6
+// data labels: 4
+// Gen    :
+// Kill   :
+// Mod    : A, X, Y, STATUS_N, STATUS_V, STATUS_B, STATUS_D, STATUS_I, STATUS_NotZ, STATUS_C
+// LiveIn :
+// LiveOut: A, X, Y, STATUS_N, STATUS_V, STATUS_B, STATUS_D, STATUS_I, STATUS_NotZ, STATUS_C
+function func1
+%bb1:  // Pred() Succ(%bb_0320)
+                StoreR8       X, 0x00
+                StoreR8       Y, 0x00
+                StoreSP       0xff
+                StoreR8       STATUS_V, 0x00
+                StoreR8       STATUS_B, 0x00
+                StoreR8       STATUS_D, 0x00
+                StoreR8       STATUS_I, 0x00
+                StoreR8       STATUS_C, 0x00
+/*$0300*/       AddCycles     12
+/*$0302*/       Push8         0x03
+/*$0303*/       StoreR8       STATUS_NotZ, 0x1f
+                StoreR8       STATUS_N, 0x00
+                StoreR8       A, 0x1f
+/*$0305*/       Push8         0x1f
+/*$0306*/       RTS           0x00, %bb_0320
+%bb_0320:  // [$0320] Pred(%bb1) Succ(%bb_0330)
+/*$0320*/       AddCycles     14
+/*$0322*/       RamPoke8      0x1000, 0x11
+/*$0310*/       AddCycles     19
+/*$0312*/       RamPoke8      0x0010, 0x30
+/*$0314*/       StoreR8       STATUS_NotZ, 0x03
+                StoreR8       STATUS_N, 0x00
+                StoreR8       A, 0x03
+/*$0316*/       RamPoke8      0x0011, 0x03
+/*$0318*/       JmpInd        (CPUAddr2BB (RamPeek16al 0x0010)), %bb_0330
+%bb_0330:  // [$0330] Pred(%bb_0320) Succ()
+/*$0330*/       AddCycles     12
+/*$0332*/       RamPoke8      0x1001, 0x22
+/*$0335*/       Call          func2, 0xfffe
+/*$0337*/       Abort         0x0335, 0x0337, 0x02
+%bb_0337:  // [$0337] Pred() Succ()
+                AddCycles     2
+                Abort         0x0337, 0x0337, 0x03
+%bb_ffff:  // [$FFFF] Pred() Succ()
+/*$FFFF*/       AddCycles     2
+                Abort         0xffff, 0xffff, 0x03
+%bb2:  // Pred() Succ()
+                Exit
+%bb3:  // [$10100] Pred() Succ()
+/*$0335*/       Push8         (EncodeFlags (LoadR8 STATUS_C) (LoadR8 STATUS_NotZ) (LoadR8 STATUS_I) (LoadR8 STATUS_D) (LoadR8 STATUS_V) (LoadR8 STATUS_N))
+/*$FA40*/       Abort         0x0335, 0xfa40, 0x01
+end func1
+
+// Gen    :
+// Kill   :
+// Mod    :
+// LiveIn :
+// LiveOut:
+function func2
+%bb4:  // [$10100] Pred() Succ()
+/*$0335*/       Push8         (EncodeFlags (LoadR8 STATUS_C) (LoadR8 STATUS_NotZ) (LoadR8 STATUS_I) (LoadR8 STATUS_D) (LoadR8 STATUS_V) (LoadR8 STATUS_N))
+/*$FA40*/       Abort         0x0335, 0xfa40, 0x01
+%bb5:  // Pred() Succ()
+                Exit
+end func2
+

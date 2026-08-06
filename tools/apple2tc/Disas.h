@@ -296,6 +296,29 @@ struct RuntimeData {
   static std::unique_ptr<RuntimeData> load(const std::string &path);
 };
 
+/// An extra dynamic control-flow edge, supplied with `--code-at`: the branch at
+/// \c origin can transfer control to \c target.
+///
+/// A recording only ever proves that an edge *was* taken. Some edges are never
+/// taken in a given session even though the code is plainly there -- the
+/// classic case is the Apple II "inline string after JSR" idiom, where the
+/// printer pops its own return address, walks the string, pushes the address of
+/// the terminator and RTSes past it. That RTS target cannot be resolved
+/// statically, so if the session never ran it the bytes after the string are
+/// classified as data and never decompiled.
+///
+/// These edges are asserted by hand rather than observed, so they belong in
+/// their own file and not in the recording, which must stay a faithful record
+/// of what actually happened.
+struct CodeAtEdge {
+  uint16_t origin;
+  uint16_t target;
+};
+
+/// Parse a `--code-at` file. Each non-empty line is "ORIGIN TARGET", both
+/// hexadecimal with an optional '$' prefix; '#' starts a comment.
+std::vector<CodeAtEdge> loadCodeAt(const std::string &path);
+
 class Disas {
 public:
   enum class SelfModifiedKind : uint8_t {
@@ -318,6 +341,12 @@ public:
 
   const RuntimeData *getRunData() const {
     return runData_.get();
+  }
+
+  /// Record hand-asserted dynamic control-flow edges, to be merged into the
+  /// runtime data at the start of run(). See CodeAtEdge and loadCodeAt().
+  void setCodeAt(std::vector<CodeAtEdge> edges) {
+    codeAt_ = std::move(edges);
   }
 
   auto asmBlocks() const {
@@ -365,6 +394,9 @@ public:
   }
 
 private:
+  /// Merge the `--code-at` edges into runData_, creating it if there is no
+  /// recording at all. Must run before the branch targets are turned into work.
+  void applyCodeAt();
   void addMemRange(MemRange range);
   /// Return an iterator to the memory range containing the specified address.
   [[nodiscard]] std::vector<MemRange>::const_iterator findMemRange(uint16_t addr) const;
@@ -423,6 +455,10 @@ private:
 
   /// Optional runtime execution data.
   std::unique_ptr<RuntimeData> runData_;
+
+  /// Hand-asserted dynamic control-flow edges from `--code-at`, merged into
+  /// runData_ by applyCodeAt().
+  std::vector<CodeAtEdge> codeAt_{};
 
   /// Whether to name labels by their address or their order of definition.
   bool labelsByAddr_ = true;

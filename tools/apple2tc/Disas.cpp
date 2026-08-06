@@ -9,7 +9,9 @@
 
 #include "apple2tc/apple2iodefs.h"
 #include "apple2tc/apple2plus_rom.h"
+#include "apple2tc/support.h"
 
+#include <algorithm>
 #include <cstring>
 #include <stdexcept>
 #include <utility>
@@ -225,10 +227,49 @@ void Disas::identifyAsmBlocks() {
   }
 }
 
+void Disas::applyCodeAt() {
+  if (codeAt_.empty())
+    return;
+
+  // `--code-at` is meaningful even without a recording, since its edges are
+  // asserted rather than observed. Synthesize an empty RuntimeData so they
+  // reach the disassembler through the ordinary path.
+  if (!runData_)
+    runData_ = std::make_unique<RuntimeData>();
+
+  for (const auto &edge : codeAt_) {
+    // Seeds disassembly of the target.
+    runData_->branchTargets.push_back(edge.target);
+    // Makes the target a successor of the branch at the origin. That is what
+    // turns it into a "dynamic block", which is what gets an entry in the
+    // generated address-to-block map -- without it the target would be
+    // decompiled but unreachable.
+    auto &targets = runData_->allBranches[edge.origin];
+    if (std::find(targets.begin(), targets.end(), edge.target) == targets.end()) {
+      targets.push_back(edge.target);
+      // RuntimeData::load() sorts each target list; keep that invariant.
+      std::sort(targets.begin(), targets.end());
+    }
+  }
+
+  // branchTargets is documented as sorted by address. Note this only runs when
+  // there is at least one edge, so a plain --run-data build is untouched.
+  auto &bt = runData_->branchTargets;
+  std::sort(bt.begin(), bt.end());
+  bt.erase(std::unique(bt.begin(), bt.end()), bt.end());
+
+  printf("// --code-at: %zu asserted edges applied\n", codeAt_.size());
+}
+
 void Disas::run(bool noGenerations) {
   // Load the start address from runtime data, if available.
   if (!runDataPath_.empty())
     runData_ = RuntimeData::load(runDataPath_);
+
+  // Must happen before the branch targets below are turned into work. It may
+  // synthesize an empty RuntimeData, which supplies no start regs, so the block
+  // just below is unaffected.
+  applyCodeAt();
 
   if (runData_) {
     if (auto *regs = runData_->getStartRegs())

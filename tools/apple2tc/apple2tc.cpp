@@ -66,6 +66,7 @@ static void printHelp() {
   fprintf(stderr, "  --run-data=d.json   Load runtime data from specified file\n");
   fprintf(stderr, "  --routines-report=f Write routine candidate analysis to file\n");
   fprintf(stderr, "  --extern-routines=f Declare the routines listed in the file external\n");
+  fprintf(stderr, "  --code-at=f         Add hand-asserted 'origin target' branch edges\n");
   fprintf(stderr, "  --no-gen            Ignore runtime generations\n");
 }
 
@@ -88,6 +89,7 @@ int main(int argc, char **argv) {
   std::string runDataPath;
   std::string routinesReportPath;
   std::string externRoutinesPath;
+  std::string codeAtPath;
   bool rom = false;
   for (int i = 1; i < argc; ++i) {
     if (strncmp(argv[i], "-v", 2) == 0 && strlen(argv[i]) == 3 && isdigit(argv[i][2])) {
@@ -142,6 +144,10 @@ int main(int argc, char **argv) {
       externRoutinesPath = argv[i] + 18;
       continue;
     }
+    if (strncmp(argv[i], "--code-at=", 10) == 0) {
+      codeAtPath = argv[i] + 10;
+      continue;
+    }
     if (argv[i][0] == '-') {
       printHelp();
       return 1;
@@ -168,6 +174,8 @@ int main(int argc, char **argv) {
 
   try {
     auto dis = std::make_shared<Disas>(runDataPath);
+    if (!codeAtPath.empty())
+      dis->setCodeAt(loadCodeAt(codeAtPath));
     if (rom) {
       dis->loadROM(binary.data(), binary.size());
       dis->setStart(dis->peek16(0xFFFC));
