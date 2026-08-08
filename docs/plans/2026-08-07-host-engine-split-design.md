@@ -109,7 +109,9 @@ lib/engine6502/  an engine implementing a2engine.h over Emu6502, plus b33/ROM/
 
 a2emu  (GUI)     = a2host + a2host_gui + engine6502 + its debug UI
 a2run  (console) = a2host + engine6502
-decoded/*/       = a2host + a2host_gui + the generated C
+
+snake-bytec1     (GUI)     = a2host + a2host_gui + the generated C
+snake-bytec1-run (console) = a2host + the generated C
 ```
 
 ### Why two executables and not one with a flag
@@ -129,6 +131,43 @@ non-deterministic branch -- replay and hashing take the fixed
 which is off headless; and the `stm_setup`/`stm_now` calls in `run_headless` are
 vestigial, feeding a `curFrameTick_` that the deterministic branch never reads.
 The host is linked against sokol today only because there was one library.
+
+### Every program ships as a GUI/console pair
+
+The subsystem argument applies to a decompiled game exactly as it does to the
+emulator: `snake-bytec1` is a program someone runs, but `verify.sh` drives it as
+a batch tool. So each `decoded/*` target becomes two, with `-run` as the console
+suffix, matching `a2run`.
+
+Two payoffs beyond consistency. **The verification path stops linking sokol, GL
+and audio** -- today `verify.sh` pulls all of that in purely to pass
+`--headless`. And **`--snapshot-at` lands where Phase 1b needs it**: the capture
+has to come from the decompiled build, because that is what `play.frames` was
+recorded from, and `snake-bytec1-run` is precisely that build as a console tool.
+
+There are 8 decoded targets today (1 bolo, 2 robotron, 2 rom, 3 snake-byte), so
+this is 16 executables. Two things keep that from hurting:
+
+```cmake
+# Two executables from one compile: <name> is a GUI program, <name>-run a
+# console one. They cannot be a single binary with a flag -- see above.
+function(add_a2_program name)
+  add_library(${name}-obj OBJECT ${ARGN})
+  add_executable(${name}     $<TARGET_OBJECTS:${name}-obj>)
+  add_executable(${name}-run $<TARGET_OBJECTS:${name}-obj>)
+  target_link_libraries(${name}     PRIVATE a2host a2host_gui)
+  target_link_libraries(${name}-run PRIVATE a2host)
+endfunction()
+```
+
+One call per program, so the duplication never reaches the call sites; and an
+OBJECT library so the generated C -- `snake-bytec1.c` alone is ~18k lines -- is
+**compiled once and linked twice** rather than built twice. Build time is
+essentially unchanged.
+
+`snake-byte`'s `HEADER_FILE_ONLY` properties on `a2rom.c`, `game.c` and
+`snake-bytec1-ext.c` are directory-scoped, so they keep working across both
+targets unchanged.
 
 ### IO ownership
 
@@ -181,68 +220,63 @@ needs a hook for engine-specific interactive keys.
 ## Staging
 
 Every stage ends somewhere verifiable. `tests/run-tests.sh` and all four
-`verify.sh` scenarios are the regression test throughout.
+`verify.sh` scenarios are the regression test throughout, and **stages 0-3 must
+not move a single frame hash** -- they are code motion and build topology, not
+behaviour.
 
-**Stage 0 — name the contract.** Split `system.h` into `a2engine.h` and
-`a2host.h` with the call direction stated, keep `system.h` including both. No
-code moves. *Verify:* everything builds, `verify.sh` 4/4 unchanged.
+**0 — name the contract.** Split `system.h` into `a2engine.h` and `a2host.h`
+with the call direction stated; `system.h` keeps including both. No code moves.
 
-**Stage 1 — engine hooks.** Add the stop reason and the `engine_parse_arg` /
-`engine_print_help` / `host_io` hooks, with the generated engine implementing
-them trivially. The host still hosts one engine. *Verify:* `verify.sh` 4/4, and
-**not one frame hash may change** — this stage is pure motion.
+**1 — engine hooks.** Add the stop reason, `engine_parse_arg`,
+`engine_print_help` and `host_io`, with the generated engine implementing them
+trivially. Still one engine.
 
-**Stage 2a — a headless interpreter tool.** `lib/engine6502` plus a small
-executable that is host + engine6502, with no windowed UI: `--key-file`,
-`--kbd-file`, `--hash-frames`, `--frames`, `--headless`, `--collect`.
-Deliberately a *new* tool rather than a flag on `a2emu`, because `a2emu` has no
-`main()` — sokol supplies it and calls `sokol_main` — so making it headless
-means restructuring its entry point, which is a separate concern from proving
-the engine split works. **This stage alone unblocks run-data regeneration.**
-*Verify:* replay `play.keys`, get frame hashes, and regenerate `snake-byte.json`
-and diff it against the committed 2022 copy.
+**2 — split the host.** `lib/decapplib` becomes `lib/a2host` (sokol-free) plus
+`lib/a2host_gui`. `decoded/*` still build one GUI binary each, now linking both.
+This absorbs the `decapplib` → `a2host` rename, so there is no separate rename
+stage.
 
-**Stage 3 — the cross-check.** Replay `play.keys` through the interpreter and
-diff frame hashes against `snake-bytec1`. This is the independent oracle the
-project has never had. **Open-ended discovery, not a gate** — see Risks.
+**3 — GUI/console pairs.** Add `add_a2_program`, give every `decoded/*` target
+its `-run` twin, and point `verify.sh` at the console binaries. Verification
+stops depending on sokol.
 
-**Stage 2b — fold `a2emu` in.** Port its debug UI onto the host and delete its
-duplicated frame loop, video, sound and CLI.
+**4 — `engine6502` and `a2run`.** The interpreter behind `a2engine.h`, plus the
+console tool. **This is what unblocks run-data regeneration.** *Verify:*
+regenerate `snake-byte.json` and diff it against the committed 2022 copy.
 
-**Stage 4 — `--snapshot-at` / `--snapshot-out`** in the host, once, working for
-both engines. Then Phase 1b.
+**5 — the cross-check.** Replay `play.keys` through `a2run` and diff frame
+hashes against `snake-bytec1-run`. The independent oracle the project has never
+had. **Open-ended discovery, not a gate** — see Risks.
 
-**Stage 5 — rename `decapplib` → `a2host`.** Mechanical, and deliberately last
-so the functional diffs stay readable.
+**6 — fold `a2emu` in.** Port its debug UI onto the host; delete its duplicated
+frame loop, video, sound and CLI.
+
+**7 — `--snapshot-at` / `--snapshot-out`** in `a2host`, once, available to both
+engines and in particular to `snake-bytec1-run`. Then Phase 1b.
 
 ## Risks
 
-**Cycle accounting will probably diverge (stage 3).** The generated code adds
+**Cycle accounting will probably diverge (stage 5).** The generated code adds
 whole-block totals via `CYCLES(pc, n)`; the interpreter adds per-instruction and
 models page-crossing and branch-taken penalties as it goes. If the block totals
 were computed from the same tables these agree, but that has never been tested.
 A divergence here is a finding about one of the two implementations and is worth
-having — but it could absorb real time, which is why stage 3 sits after the
+having — but it could absorb real time, which is why stage 5 sits after the
 refactor has already banked its value rather than gating it.
 
-**Stage 0 and 1 must be provably inert.** They touch the only thing that
-currently works. If a frame hash moves, stop and understand it rather than
-re-recording.
+**Stages 0-3 must be provably inert.** They touch the only thing that currently
+works. Stage 3 changes *which binary* `verify.sh` runs, so the frame hashes it
+produces are exactly the evidence that the host split preserved behaviour: if
+one moves, stop and understand it rather than re-recording.
 
-**The rename is churn.** Four `CMakeLists.txt` and the include paths. Harmless,
-but it would obscure the real diffs if done early.
+**Stage 3 doubles the executable count** from 8 to 16. The OBJECT-library form
+of `add_a2_program` keeps compile time flat, but link time and build-directory
+size do grow. If that becomes annoying, the console twin is the one worth
+keeping and the GUI target could become opt-in per game -- `bolo` is WIP and
+nobody runs `rom` interactively.
 
 ## Open questions
 
-- **Should `decoded/*` also build two binaries each?** The same argument
-  applies: a decompiled game is a GUI program, but `verify.sh` drives it as a
-  batch tool. The symmetric end state is `snake-bytec1` (GUI) plus
-  `snake-bytec1-run` (console), with `verify.sh` using the latter -- which
-  would also stop the verification path linking sokol, GL and audio purely to
-  run headless. Deliberately **not** part of this refactor: it doubles the six
-  `decoded/` targets and mixes a build-topology change into what stages 0 and 1
-  need to keep as provably inert code motion. `a2host` being sokol-free is what
-  makes it possible afterwards.
 - **`textemu` is a third host** (ncurses, headless-capable, `EmuApple2`-based).
   It should probably fold onto `engine6502` + host too, but it is out of scope
   here and does not block anything.
