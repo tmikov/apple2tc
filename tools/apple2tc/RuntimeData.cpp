@@ -152,3 +152,69 @@ std::vector<CodeAtEdge> loadCodeAt(const std::string &path) {
 
   return res;
 }
+
+std::vector<KnownDataRange> loadKnownData(const std::string &path) {
+  FILE *f = fopen(path.c_str(), "rt");
+  if (!f)
+    throw std::runtime_error(format("%s: %s", path.c_str(), strerror(errno)));
+  auto contents = readAll<std::string>(f);
+  fclose(f);
+
+  std::vector<KnownDataRange> res{};
+  unsigned lineNum = 0;
+  for (size_t pos = 0; pos <= contents.size();) {
+    size_t eol = contents.find('\n', pos);
+    if (eol == std::string::npos)
+      eol = contents.size();
+    std::string line = contents.substr(pos, eol - pos);
+    pos = eol + 1;
+    ++lineNum;
+
+    auto fail = [&path, lineNum](const std::string &what) {
+      throw std::runtime_error(format("%s:%u: %s", path.c_str(), lineNum, what.c_str()));
+    };
+
+    if (auto comment = line.find('#'); comment != std::string::npos)
+      line.erase(comment);
+
+    std::vector<std::string> words{};
+    for (size_t i = 0; i != line.size();) {
+      if (isspace((unsigned char)line[i])) {
+        ++i;
+        continue;
+      }
+      size_t start = i;
+      while (i != line.size() && !isspace((unsigned char)line[i]))
+        ++i;
+      words.push_back(line.substr(start, i - start));
+    }
+
+    if (words.empty())
+      continue;
+    if (words.size() < 3)
+      fail("expected '<hex-from> <hex-to> <name>'");
+
+    uint16_t addr[2] = {0, 0};
+    for (unsigned i = 0; i != 2; ++i) {
+      std::string word = words[i][0] == '$' ? words[i].substr(1) : words[i];
+      char *end;
+      unsigned long value = strtoul(word.c_str(), &end, 16);
+      if (word.empty() || *end)
+        fail(format("invalid hexadecimal address '%s'", words[i].c_str()));
+      if (value > 0xFFFF)
+        fail(format("address '%s' is not a 16-bit value", words[i].c_str()));
+      addr[i] = (uint16_t)value;
+    }
+    if (addr[0] > addr[1])
+      fail("start address is above end address");
+
+    // Everything after the two addresses is the name, joined with spaces.
+    std::string name = words[2];
+    for (size_t i = 3; i != words.size(); ++i)
+      name += " " + words[i];
+
+    res.push_back(KnownDataRange{.from = addr[0], .to = addr[1], .name = std::move(name)});
+  }
+
+  return res;
+}

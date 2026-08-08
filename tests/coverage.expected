@@ -1,0 +1,11 @@
+declared data:
+  $0320-$0327      8 bytes  blob
+
+range $0300-$0332  51 bytes
+  code                10   19.6%
+  declared data        8   15.7%
+  unknown zero         0    0.0%
+  unknown nonzero     33   64.7%   <- what is left to identify
+    $0304-$030F     12 bytes, 12 nonzero
+    $0328-$0332     11 bytes, 11 nonzero
+    $0316-$031F     10 bytes, 10 nonzero

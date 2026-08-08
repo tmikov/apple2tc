@@ -124,4 +124,22 @@ $a6502 xref.s xref.b33 && printf 'loadb33 xref.b33\nxref $310 $31F $300 $321\n' 
 diff -q xref.expected xref-test.txt
 rm xref-test.txt xref.b33
 
+# The coverage report, with one region of each kind it classifies. The
+# overlap warning is checked separately below, since a declared range that the
+# disassembler also reached as code means one of the two claims is wrong.
+$a6502 coverage.s coverage.b33 && $apple2tc coverage.b33 --known-data=coverage-data.txt \
+  -O3 --ir --coverage=coverage-test.txt > /dev/null
+diff -q coverage.expected coverage-test.txt
+rm coverage-test.txt
+
+# Declaring code as data has to be noticed, not silently believed.
+printf '0300 0304 wrong\n' > coverage-bad.txt
+$apple2tc coverage.b33 --known-data=coverage-bad.txt -O3 --ir --coverage=coverage-test.txt \
+  > /dev/null
+if ! grep -q "also decompiled as code" coverage-test.txt; then
+  echo "FAIL: --coverage did not flag a data range that overlaps code" >&2
+  exit 1
+fi
+rm coverage-test.txt coverage-bad.txt coverage.b33
+
 echo "Success!"

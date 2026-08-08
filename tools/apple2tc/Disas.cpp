@@ -408,6 +408,112 @@ void Disas::run(bool noGenerations) {
   printf("// data labels: %zu\n", dataLabels_.size());
 }
 
+void Disas::printCoverage(FILE *f, const std::vector<KnownDataRange> &knownData) {
+  // What the disassembler reached, not what survives into the generated C:
+  // this runs before IR generation, so passes that delete blocks later (see
+  // --extern-routines) are not reflected. It answers "how much of this binary
+  // has been classified as code", which is the number that bounds the work.
+  std::vector<bool> covered(0x10000, false);
+  for (const auto &[addr, block] : asmBlocks_) {
+    (void)addr;
+    for (uint32_t a = block.addr(); a < block.endAddr() && a < 0x10000; ++a)
+      covered[a] = true;
+  }
+
+  std::vector<bool> known(0x10000, false);
+  for (const auto &kd : knownData)
+    for (uint32_t a = kd.from; a <= kd.to; ++a)
+      known[a] = true;
+
+  auto nonzeroIn = [this](uint32_t from, uint32_t to) {
+    uint32_t n = 0;
+    for (uint32_t a = from; a <= to; ++a)
+      if (memory_[a])
+        ++n;
+    return n;
+  };
+
+  if (!knownData.empty()) {
+    fprintf(f, "declared data:\n");
+    for (const auto &kd : knownData) {
+      uint32_t len = (uint32_t)kd.to - kd.from + 1;
+      uint32_t overlap = 0;
+      for (uint32_t a = kd.from; a <= kd.to; ++a)
+        if (covered[a])
+          ++overlap;
+      fprintf(f, "  $%04X-$%04X  %5u bytes  %s", kd.from, kd.to, len, kd.name.c_str());
+      // Worth shouting about: the disassembler reached bytes declared as data,
+      // so one of the two is wrong.
+      if (overlap)
+        fprintf(f, "  *** %u bytes also decompiled as code", overlap);
+      fprintf(f, "\n");
+    }
+    fprintf(f, "\n");
+  }
+
+  for (const auto &range : memRanges_) {
+    uint32_t total = range.byte_length();
+    uint32_t code = 0, dataBytes = 0, unknownZero = 0, unknownNonzero = 0;
+    for (uint32_t a = range.from; a <= range.to; ++a) {
+      if (covered[a])
+        ++code;
+      else if (known[a])
+        ++dataBytes;
+      else if (memory_[a])
+        ++unknownNonzero;
+      else
+        ++unknownZero;
+    }
+
+    fprintf(f, "range $%04X-$%04X  %u bytes\n", range.from, range.to, total);
+    auto pct = [total](uint32_t n) { return total ? 100.0 * n / total : 0.0; };
+    fprintf(f, "  code            %6u  %5.1f%%\n", code, pct(code));
+    fprintf(f, "  declared data   %6u  %5.1f%%\n", dataBytes, pct(dataBytes));
+    fprintf(f, "  unknown zero    %6u  %5.1f%%\n", unknownZero, pct(unknownZero));
+    fprintf(
+        f,
+        "  unknown nonzero %6u  %5.1f%%   <- what is left to identify\n",
+        unknownNonzero,
+        pct(unknownNonzero));
+
+    // Runs of unaccounted-for bytes, most nonzero first. Runs that are entirely
+    // zero are buffers; listing them as work badly overstates what remains.
+    struct Gap {
+      uint32_t from, to, nonzero;
+    };
+    std::vector<Gap> gaps{};
+    for (uint32_t a = range.from; a <= range.to;) {
+      if (covered[a] || known[a]) {
+        ++a;
+        continue;
+      }
+      uint32_t start = a;
+      while (a <= range.to && !covered[a] && !known[a])
+        ++a;
+      gaps.push_back({start, a - 1, nonzeroIn(start, a - 1)});
+    }
+
+    std::sort(gaps.begin(), gaps.end(), [](const Gap &a, const Gap &b) {
+      return a.nonzero > b.nonzero;
+    });
+    unsigned shown = 0;
+    for (const Gap &g : gaps) {
+      if (!g.nonzero)
+        continue;
+      fprintf(
+          f,
+          "    $%04X-$%04X  %5u bytes, %u nonzero\n",
+          g.from,
+          g.to,
+          g.to - g.from + 1,
+          g.nonzero);
+      ++shown;
+    }
+    if (!shown)
+      fprintf(f, "    (no unidentified nonzero bytes)\n");
+  }
+}
+
 void Disas::printAsmListing() {
   // Name all labels by address.
   unsigned labelNumber = 0;

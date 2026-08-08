@@ -319,6 +319,19 @@ struct CodeAtEdge {
 /// hexadecimal with an optional '$' prefix; '#' starts a comment.
 std::vector<CodeAtEdge> loadCodeAt(const std::string &path);
 
+/// A region identified as something other than code: an asset, a table, a
+/// buffer. Declared by hand, because deciding that bytes are data is a
+/// conclusion about the program, not something the disassembler can derive.
+struct KnownDataRange {
+  uint16_t from;
+  uint16_t to;
+  std::string name;
+};
+
+/// Parse a `--known-data` file. Each non-empty line is "FROM TO name", the
+/// addresses hexadecimal with an optional '$' prefix; '#' starts a comment.
+std::vector<KnownDataRange> loadKnownData(const std::string &path);
+
 class Disas {
 public:
   enum class SelfModifiedKind : uint8_t {
@@ -377,6 +390,15 @@ public:
   void run(bool noGenerations);
   void printAsmListing();
   void printSimpleC(FILE *f);
+  /// Report, per loaded memory range, how many bytes the disassembler
+  /// classified as code and where the gaps are. See the definition for what the
+  /// numbers do and do not mean.
+  ///
+  /// \p knownData are identified non-code regions (assets, tables, buffers).
+  /// Accounting for them separately is what makes the report answer "what is
+  /// left to identify" rather than merely "what is not code" -- for a game, most
+  /// of the binary is legitimately not code.
+  void printCoverage(FILE *f, const std::vector<KnownDataRange> &knownData);
 
   uint8_t peek(uint16_t addr) const {
     return memory_[addr];

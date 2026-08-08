@@ -67,6 +67,8 @@ static void printHelp() {
   fprintf(stderr, "  --routines-report=f Write routine candidate analysis to file\n");
   fprintf(stderr, "  --extern-routines=f Declare the routines listed in the file external\n");
   fprintf(stderr, "  --code-at=f         Add hand-asserted 'origin target' branch edges\n");
+  fprintf(stderr, "  --coverage=f        Write a code/data coverage report to file\n");
+  fprintf(stderr, "  --known-data=f      Declare 'from to name' data ranges for --coverage\n");
   fprintf(stderr, "  --no-gen            Ignore runtime generations\n");
 }
 
@@ -90,6 +92,8 @@ int main(int argc, char **argv) {
   std::string routinesReportPath;
   std::string externRoutinesPath;
   std::string codeAtPath;
+  std::string coveragePath;
+  std::string knownDataPath;
   bool rom = false;
   for (int i = 1; i < argc; ++i) {
     if (strncmp(argv[i], "-v", 2) == 0 && strlen(argv[i]) == 3 && isdigit(argv[i][2])) {
@@ -148,6 +152,14 @@ int main(int argc, char **argv) {
       codeAtPath = argv[i] + 10;
       continue;
     }
+    if (strncmp(argv[i], "--coverage=", 11) == 0) {
+      coveragePath = argv[i] + 11;
+      continue;
+    }
+    if (strncmp(argv[i], "--known-data=", 13) == 0) {
+      knownDataPath = argv[i] + 13;
+      continue;
+    }
     if (argv[i][0] == '-') {
       printHelp();
       return 1;
@@ -184,6 +196,16 @@ int main(int argc, char **argv) {
       dis->setStart(start);
     }
     dis->run(noGenerations);
+    if (!coveragePath.empty()) {
+      FILE *cf = fopen(coveragePath.c_str(), "wt");
+      if (!cf) {
+        perror(coveragePath.c_str());
+        return 2;
+      }
+      dis->printCoverage(cf, knownDataPath.empty() ? std::vector<KnownDataRange>{}
+                                                    : loadKnownData(knownDataPath));
+      fclose(cf);
+    }
     switch (action) {
     case Action::GenAsm:
       dis->printAsmListing();
