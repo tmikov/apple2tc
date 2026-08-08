@@ -7,11 +7,11 @@ transfers.
 Written in skill shape (when to use → procedure → red flags) so it can be
 promoted to a `.claude/skills/` skill once it has survived a second game.
 
-**Maturity: procedure steps 1–4 executed once (Snake Byte, 2026-08-02/03).**
-Scope control, procedure-recovery repair, oracle standup, and the first half of
-the library cut have all been run for real; their findings below are measured,
-not predicted. The entry retarget, structural conversion and vertical RE remain
-untested — treat those as hypothesis and correct them here as reality intervenes.
+**Maturity (Snake Byte, 2026-08-02/07).** Steps 1–3 have been executed and
+step 4a with them; their findings below are measured, not predicted. Step 4b —
+retargeting the entry — and steps 5–6 remain untested: treat those as hypothesis
+and correct them here as reality intervenes. The per-step status is on each step
+in the Procedure section, which is the copy to keep current.
 
 **Scope tags:** `[6502]` true of 6502 / Apple II work generally ·
 `[apple2tc]` true of this decompiler · `[game]` observed once, may not generalize
@@ -262,38 +262,47 @@ memory to real C variables much safer than it would otherwise be.
 
 ## Procedure
 
-Steps 1–3 executed once (Snake Byte, 2026-08-02) and revised from what happened.
-Steps 4–5 remain untested — correct them from experience rather than preserving
-them.
+Each step carries its own status. Executed steps have been revised from what
+actually happened; untested ones are hypothesis, so correct them from experience
+rather than preserving them.
 
-1. **Scope.** Count blocks by address range. Identify the ROM/library share and
-   the distinct entry points crossing into it. Decide the boundary before
-   writing anything.
-2. **Fix and run procedure recovery.** Use `-v2` (or `--routines-report`) to get
-   per-candidate rejection reasons. Fix decompiler over-strictness where it is
-   genuinely over-strict, then **re-measure** — fixing one filter can expose a
+Step 4 is deliberately two steps, and only the first has been run. That split is
+the whole point of it — see the step itself.
+
+1. **Scope.** *(executed)* Count blocks by address range. Identify the
+   ROM/library share and the distinct entry points crossing into it. Decide the
+   boundary before writing anything.
+2. **Fix and run procedure recovery.** *(executed)* Use `-v2` (or
+   `--routines-report`) to get per-candidate rejection reasons. Filter them to
+   the program's own address range first — most of the list is usually library
+   code that step 4 deletes wholesale. Fix decompiler over-strictness where it
+   is genuinely over-strict, then **re-measure**: fixing one filter can expose a
    cascade that previously looked inert, and the routines actually recovered may
    not be the ones predicted. Reduce the remainder to a named, enumerable manual
    list, ranked by how many other routines each one blocks.
-3. **Stand up the oracle.** Golden per-frame hash trace from the known-good
-   build, plus a script that replays and diffs. Do this *before* changing
-   anything, so the baseline is trustworthy. Prove it both reproducible (record
-   twice, refuse to write unless they agree) and capable of failing (corrupt a
-   hash, confirm non-zero exit). Then measure what the trace actually covers.
-4. **Cut the library boundary, in two separate steps.** First externalize the
-   entry points the program calls and supply them by hand, keeping the original
-   boot path so the existing golden trace still verifies every change. Only then
-   retarget the entry point — that step needs an entry-state snapshot and a
-   re-based trace, because a cold start skips the boot frames the trace opens
-   with. Doing both at once forfeits verification for the duration.
-5. **Structural conversion.** Move the entry point to
-   the program's real start. Recover remaining procedures by hand, rewriting
-   idiom-based ones. Reloop each function — dominator tree, back edges for
-   natural loops, then iterative region matching (sequence / if-then /
+3. **Stand up the oracle.** *(executed)* Golden per-frame hash trace from the
+   known-good build, plus a script that replays and diffs. Do this *before*
+   changing anything, so the baseline is trustworthy. Prove it both reproducible
+   (record twice, refuse to write unless they agree) and capable of failing
+   (corrupt a hash, confirm non-zero exit). Then measure what the trace actually
+   covers.
+4. **Cut the library boundary, in two separate steps.**
+   1. *(executed)* Externalize the entry points the program calls and supply
+      them by hand, keeping the original boot path so the existing golden trace
+      still verifies every change.
+   2. *(untested)* Only then retarget the entry point to the program's real
+      start. This needs an entry-state snapshot and a re-based trace, because a
+      cold start skips the boot frames the trace opens with.
+
+   Doing both at once forfeits verification for the duration, which is the
+   entire reason this is two steps and not one.
+5. **Structural conversion.** *(untested)* Recover the remaining procedures by
+   hand, rewriting idiom-based ones. Reloop each function — dominator tree, back
+   edges for natural loops, then iterative region matching (sequence / if-then /
    if-then-else / while / do-while). Keep address-derived names throughout.
-6. **Vertical reverse engineering.** One subsystem at a time: promote zero page
-   to locals and parameters, extract structs from data tables, apply meaningful
-   names. Verify and commit each slice independently.
+6. **Vertical reverse engineering.** *(untested)* One subsystem at a time:
+   promote zero page to locals and parameters, extract structs from data tables,
+   apply meaningful names. Verify and commit each slice independently.
 
 ---
 
