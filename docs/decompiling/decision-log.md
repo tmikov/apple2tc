@@ -789,3 +789,37 @@ hi-res tables, and scattered smaller gaps.
 but restrict the search range. Unrestricted it drowns in a data region's noise —
 `xref $000A $000B` over the whole binary is unreadable, and over `$69A9-$7FFF`
 it returns exactly the five instructions that use the pointer.
+
+---
+
+## 2026-08-07 — `$6000-$60E3` is table, with derived extents
+
+**Scope:** this game · **Status:** validated
+
+**Decision:** The last two "may be data" ranges, `$600E-$6063` and
+`$606C-$60E3`, are the hi-res drawing tables. They were only ever "unknown"
+because the coverage measurement counted anything neither decompiled nor on the
+known-asset list, and these tables were labelled without extents.
+
+**Evidence, derived rather than assumed:**
+
+| range | bytes | what |
+| --- | --- | --- |
+| `$6000-$602F` | 48 | line address low bytes |
+| `$6030-$605F` | 48 | line address high bytes |
+| `$6060-$6063` | 4 | mask, rewritten at run time by `hgr_set_masks` |
+| `$6064-$60E3` | 128 | pattern table |
+
+228 bytes, no gaps, ending exactly where `hgr_draw` begins at `$60E4`.
+
+The 48 pairs decode to `$2000 $3000 $2080 $3080 …`, the classic interleaved
+hi-res layout, every one inside page 1 (`$2000-$3FFF`). The pattern table's size
+comes from its index: `$60F7` builds `$06` as `$01*8 + bit*4 + ($02 & 3)`, and
+scanning the display list shows `$01` takes every value `0..15`, so the index
+reaches 127 exactly — 128 entries, which lands on `$60E4`.
+
+**Method note:** two independent facts agreeing is what makes this solid — the
+arithmetic bounds the index at 127, and the table happens to end where the next
+routine starts. Either alone would be suggestive; together they are conclusive.
+Deriving a table's extent from the range of its index is generally cheaper than
+staring at the bytes, and it produces an argument rather than an impression.

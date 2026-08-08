@@ -168,21 +168,18 @@ Of 19,967 bytes at `$3750-$854E`:
 | Zero-filled buffers | 3,284 | |
 | **Unknown nonzero** | **2,657** | untraced code + unidentified tables |
 
-**The remaining job is bounded at roughly 1,400 bytes.** The 2,657 figure has
-come down by the 212 newly covered at `$7541-$75B2` and `$75D1-$7632`, the 22 at
-`$794D-$797D`, and about 1,035 that turned out not to be code at all. What is
-left:
-
-```
-$606C-$60E3  120   $600E-$6063   86        <- near the hi-res tables; may be data
-```
-
-plus scattered smaller gaps. The full table has not been re-measured.
+**The remaining job is bounded at roughly 1,200 bytes**, none of it in a named
+cluster any more. The 2,657 figure has come down by the 212 newly covered at
+`$7541-$75B2` and `$75D1-$7632`, the 22 at `$794D-$797D`, about 1,035 that
+turned out not to be code, and 206 more that were table all along. Every range
+the 2026-08-04 measurement named is now accounted for; what is left is
+scattered gaps, and the table has not been re-measured.
 
 Reclassified as known assets, not code:
 
 ```
 $8000-$853D  1342  29 vector display lists, one per level (2026-08-07)
+$6000-$60E3   228  hi-res line address, mask and pattern tables (2026-08-07)
 $7499-$753F   167  inline string data, correctly classified all along
 ```
 
@@ -270,8 +267,6 @@ Mistakes already made here. The log has the full accounts.
 
 ## Open questions
 
-- **`$600E-$6063` and `$606C-$60E3`**: adjacent to the hi-res address tables.
-  Probably more tables, not verified.
 - **The `$93`/`$83` Ctrl-S handshake** in `rom_coutz`: reachable at runtime
   (needs a key pending when a CR is output) but not on this trace. Transcribed
   faithfully, unvalidated by execution.
