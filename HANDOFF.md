@@ -4,9 +4,9 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
-**Last commit:** `5eb711a`. 36 commits on `snake-byte`, nothing pushed, tree
-clean. The `$7541` work described below landed in five commits: two for
-`--code-at` in `tools/apple2tc/`, three for the game.
+**Last commit:** `7479aed`. 38 commits on `snake-byte`, nothing pushed, tree
+clean. The `$7541` work landed in five commits (two for `--code-at` in
+`tools/apple2tc/`, three for the game); the `$60E7` routine recovery in two.
 
 ---
 
@@ -68,6 +68,11 @@ preserves the wrong turns so they are not repeated. See "Traps" below.
   per *basic block*, rejecting the universal `PHA`-at-entry / `PLA`-before-`RTS`
   idiom. Depth now propagates along CFG edges, required zero only at `RTS`.
   Snake Byte: **53 → 75** routines.
+- **A routine entry can also be a call's return point.** `scanCandidate` used to
+  reject an `RTS` predecessor outright, losing every block that a caller falls
+  into after a `JSR` — Snake Byte's `$60E7`, plus five more through the cascade.
+  Accepting it was one line; the extraction then needed three further fixes. See
+  the 2026-08-07 log entry. Snake Byte: **74 → 81** routines.
 - **`--routines-report=<path>`** — every candidate, accepted or rejected, with
   block sets, call sites, dominator chains and natural loops. This is the input
   for hand-writing structured C. Note it reflects the CFG *before* `simplifyCFG`,
@@ -203,13 +208,18 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
 
 ### Next
 
-1. **The three rejection roots.** `$7230` (inline-string printer, `Pop8`
-   underflow, transitively blocks 3 game routines), `$60E7` ("invalid predecessor
-   inst RTS at `$6147`", blocks 4), `$6A32` (`Pop8` underflow, blocks 2).
-   Decompiler-side work on already-traced code; recovers ~9 routines and improves
-   the reference everything else is written from. Cheap — do it before item 3.
-   `$7230` is not recovered but *rewritten*: `print_str(const char *)`, with each
-   call site's inline bytes lifted into a real string literal.
+1. **The two remaining rejection roots.** `$60E7` is done (2026-08-07); it took
+   six routines with it, 74 → 81. Left, both blocking 3 apiece:
+   - `$6A32` — `Pop8` block `$6AB3` stack level underflow, blocks `$6256`,
+     `$6288`. Not yet diagnosed.
+   - `$7230` — the inline-string printer. Not recovered but *rewritten*:
+     `print_str(const char *)`, with each call site's inline bytes lifted into a
+     real string literal. Blocks `$72CE`, `$78B3`, `$7980`.
+
+   **Measure before treating any other rejection as work.** Of 74 rejections in
+   the extern build only **7 are in the game range**; the rest is ROM that Phase
+   1b deletes wholesale. Filter to `$3750-$854E` first — see the 2026-08-07 log
+   entry for the one-liner.
 2. **Teach the disassembler the inline-string idiom.** The higher-leverage
    version of what `--code-at` now does by hand: recognise the
    `PLA/PLA … PHA/PHA/RTS` shape, mark the bytes after the `JSR` as a string,
