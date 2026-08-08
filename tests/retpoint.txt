@@ -1,0 +1,12 @@
+# Return edges for retpoint.s -- "ORIGIN TARGET", hexadecimal.
+#
+# An RTS only gets successor operands from observed runtime data, so with no
+# recording the return edges do not exist and every routine here is trivially
+# accepted. Asserting them by hand is what puts the RTS back in the predecessor
+# list of $0313 and reproduces the shape this test is about.
+
+0325 0313    # masks returns into plot, which draw fell through to
+0325 0333    # ...and to line's call site
+0318 0336    # plot returns to line
+0318 0303    # ...and, via draw, to start
+0336 0306    # line returns to start

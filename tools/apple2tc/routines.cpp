@@ -70,12 +70,20 @@ private:
 
   void convertInvocations(BasicBlock *entry, Candidate &cand);
 
+  BasicBlock *makeCallBlock(
+      IRBuilder &builder,
+      const Candidate &cand,
+      Instruction *ctxInst,
+      const PrimitiveSetVector<BasicBlock *> &dynamicReturnBlocks,
+      BasicBlock *standsInFor = nullptr);
+
   bool convertRoutineInvocation(
       IRBuilder &builder,
       BasicBlock *entry,
       const Candidate &cand,
       Instruction *inst,
-      const PrimitiveSetVector<BasicBlock *> &dynamicReturnBlocks);
+      const PrimitiveSetVector<BasicBlock *> &dynamicReturnBlocks,
+      BasicBlock **fallCallBlock);
 
   static void extractRoutine(IRBuilder &builder, BasicBlock *entry, Candidate &cand);
 };
@@ -293,6 +301,27 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
   for (auto &p : depthAt)
     visited.insert(p.first);
 
+  // Is this entry the "fall" block of a JSR, i.e. the address a call returns
+  // to? Then the RTS edges arriving here are the return leg of that very call,
+  // and carry no control flow that the JSR edge below does not already carry.
+  //
+  // The shape is a caller that does JSR <helper> and then falls straight into
+  // a block which is itself a subroutine other callers JSR directly. Snake
+  // Byte's $60E4 does exactly that: it calls $6127 and falls into $60E7, while
+  // $6148 and $615A call $60E7 on its own. Rejecting the return leg cost
+  // $60E7 and, through the invalid-JSR cascade, five more routines.
+  // The JSR must live outside the candidate, matching the `fallFromAnother`
+  // condition in convertRoutineInvocation(): that is the case which builds the
+  // block the RTS edges are later redirected to.
+  bool isReturnPoint = false;
+  for (Instruction &iRef : predecessorInsts(*entry)) {
+    if (iRef.getKind() == ValueKind::JSR && iRef.getOperand(1) == entry &&
+        !visited.count(iRef.getBasicBlock())) {
+      isReturnPoint = true;
+      break;
+    }
+  }
+
   // Now check whether all predecessors are either JSR, Jmp or fall.
   // entry point.
   bool jmp = false;
@@ -311,6 +340,14 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
     case ValueKind::JFalse:
       jmp = true;
       continue;
+    case ValueKind::RTS:
+      // Only when something really does return here; an RTS edge into an entry
+      // that is not a return point is a computed jump and stays rejected.
+      if (isReturnPoint) {
+        jmp = true;
+        continue;
+      }
+      break;
     default:;
     }
     // We found a predecessor that is neither of these.
@@ -413,9 +450,38 @@ void IdentifySimpleRoutines::convertInvocations(BasicBlock *entry, Candidate &ca
     PrimitiveSetVector<Instruction *> preds{};
     for (auto &iRef : predecessorInsts(*entry))
       preds.insert(&iRef);
+
+    // Set when the entry turns out to be the "fall" block of a JSR from outside
+    // the routine, which is the only way an RTS predecessor is accepted.
+    BasicBlock *fallCallBlock = nullptr;
     for (auto *inst : preds)
-      if (convertRoutineInvocation(builder, entry, cand, inst, dynamicReturnBlocks))
+      if (convertRoutineInvocation(builder, entry, cand, inst, dynamicReturnBlocks, &fallCallBlock))
         inst->eraseFromBasicBlock();
+
+    // Whatever still returns to the entry must return to a block that calls the
+    // extracted routine instead, so that the entry is left with no users
+    // outside the routine.
+    //
+    // Recomputed live rather than reusing `preds`: the loop above erases the
+    // predecessors it converts, so that snapshot now holds dangling pointers.
+    PrimitiveSetVector<Instruction *> rtsPreds{};
+    for (auto &iRef : predecessorInsts(*entry))
+      if (iRef.getKind() == ValueKind::RTS)
+        rtsPreds.insert(&iRef);
+
+    if (!rtsPreds.empty()) {
+      // Usually the JSR that falls into the entry has already built the block.
+      // Not always: scanCandidate() runs over the whole function before any
+      // routine is split out, so by the time this one is extracted an earlier
+      // extraction may have rewritten that JSR away. Build it here in that case
+      // rather than depending on an ordering that does not hold.
+      if (!fallCallBlock)
+        fallCallBlock = makeCallBlock(builder, cand, *rtsPreds.begin(), dynamicReturnBlocks, entry);
+      for (auto *inst : rtsPreds)
+        for (unsigned i = 1, count = inst->getNumOperands(); i != count; ++i)
+          if (inst->getOperand(i) == entry)
+            inst->setOperand(i, fallCallBlock);
+    }
   }
 
 #ifndef NDEBUG
@@ -502,34 +568,59 @@ void IdentifySimpleRoutines::extractRoutine(
   }
 }
 
+/// Build a block that calls \p cand's routine and then returns to whichever of
+/// \p dynamicReturnBlocks is live, and register it with every candidate that
+/// owned \p ctxInst's block. Used wherever control reaches the routine by some
+/// means other than a plain JSR -- a jump into it, or a return into it.
+///
+/// \p standsInFor, when given, is an entry block whose address the new block
+/// takes over. That is needed when control still arrives here *by address*
+/// after the entry has moved into the extracted routine: a JSR falling through
+/// to it needs the address to compute what it pushes, and a return to it needs
+/// the address in the generated address-to-block map. The entry itself leaves
+/// this function, so the address does not end up duplicated.
+BasicBlock *IdentifySimpleRoutines::makeCallBlock(
+    IRBuilder &builder,
+    const Candidate &cand,
+    Instruction *ctxInst,
+    const PrimitiveSetVector<BasicBlock *> &dynamicReturnBlocks,
+    BasicBlock *standsInFor) {
+  BasicBlock *callBlock = ctxInst->getBasicBlock()->getFunction()->createBasicBlock();
+  if (standsInFor && standsInFor->getAddress())
+    callBlock->setAddress(standsInFor->getAddress(), standsInFor->isRealAddress());
+
+  // Record that the new block belongs to all routines that owned the original
+  // block.
+  auto range = blocks_.equal_range(ctxInst->getBasicBlock());
+  for (auto it = range.first; it != range.second; ++it) {
+    Candidate *bCand = it->second;
+    bCand->blocks.insert(callBlock);
+    blocks_.emplace(callBlock, bCand);
+  }
+
+  builder.setInsertionBlock(callBlock);
+  builder.setAddress(ctxInst->getAddress());
+  builder.createCall(cand.func, builder.getLiteralU16(0));
+  auto *rts = builder.createRTS(builder.getLiteralU8(0));
+  for (auto *bb : dynamicReturnBlocks)
+    rts->pushOperand(bb);
+  return callBlock;
+}
+
 bool IdentifySimpleRoutines::convertRoutineInvocation(
     IRBuilder &builder,
     BasicBlock *entry,
     const Candidate &cand,
     Instruction *inst,
-    const PrimitiveSetVector<BasicBlock *> &dynamicReturnBlocks) {
+    const PrimitiveSetVector<BasicBlock *> &dynamicReturnBlocks,
+    BasicBlock **fallCallBlock) {
   // Some cases set this to the IR instruction that must get all dynamic return blocks
   // as successors.
   Instruction *dynamicBranch = nullptr;
 
-  // Create a new basic block that calls the routine and RTS-es.
-  auto createCallBlock = [this, &builder, &dynamicBranch, &cand, inst]() {
-    BasicBlock *callBlock = inst->getBasicBlock()->getFunction()->createBasicBlock();
-
-    // Record that the new block belongs to all routines that owned the original
-    // block.
-    auto range = blocks_.equal_range(inst->getBasicBlock());
-    for (auto it = range.first; it != range.second; ++it) {
-      Candidate *bCand = it->second;
-      bCand->blocks.insert(callBlock);
-      blocks_.emplace(callBlock, bCand);
-    }
-
-    builder.setInsertionBlock(callBlock);
-    builder.setAddress(inst->getAddress());
-    builder.createCall(cand.func, builder.getLiteralU16(0));
-    dynamicBranch = builder.createRTS(builder.getLiteralU8(0));
-    return callBlock;
+  auto createCallBlock = [this, &builder, &cand, inst, &dynamicReturnBlocks](
+                             BasicBlock *standsInFor = nullptr) {
+    return makeCallBlock(builder, cand, inst, dynamicReturnBlocks, standsInFor);
   };
 
   switch (inst->getKind()) {
@@ -560,7 +651,11 @@ bool IdentifySimpleRoutines::convertRoutineInvocation(
       if (!fallFromAnother)
         return false;
 
-      BasicBlock *callBlock = createCallBlock();
+      BasicBlock *callBlock = createCallBlock(entry);
+      // Anything that *returns* to the entry is really returning to this new
+      // block now. convertInvocations() redirects those RTS edges once every
+      // predecessor has been visited, since they may be visited in any order.
+      *fallCallBlock = callBlock;
 
       builder.setInsertionPointAfter(inst);
       builder.setAddress(inst->getAddress());
@@ -568,6 +663,13 @@ bool IdentifySimpleRoutines::convertRoutineInvocation(
     }
     break;
   }
+
+  case ValueKind::RTS:
+    // A call that returns to the entry. The JSR that made that call is a
+    // predecessor too, and building the block this should retarget to is its
+    // job; see the *fallCallBlock assignment above. Leave the instruction in
+    // place -- only its operand changes, and convertInvocations() does that.
+    return false;
 
   case ValueKind::JTrue:
   case ValueKind::JFalse: {

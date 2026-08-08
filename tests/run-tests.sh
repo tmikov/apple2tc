@@ -101,4 +101,18 @@ if grep -q "code-at" codeat-bad.err; then
 fi
 rm -f codeat-bad.txt codeat-bad.err codeat.b33
 
+# A subroutine entry that is also the return point of a call. The RTS returning
+# into it used to be rejected as an invalid predecessor, which also took the
+# routine calling it down through the invalid-JSR cascade.
+$a6502 retpoint.s retpoint.b33 && $apple2tc retpoint.b33 --code-at=retpoint.txt -O3 --ir \
+  --routines-report=retpoint-report.txt > retpoint-test.ir
+diff -q retpoint.ir retpoint-test.ir
+# Said directly, so a regression reads as more than an unexplained baseline diff.
+if grep -q "^REJECT" retpoint-report.txt; then
+  echo "FAIL: every routine in retpoint.s should be recovered, but:" >&2
+  grep "^REJECT" retpoint-report.txt >&2
+  exit 1
+fi
+rm retpoint-test.ir retpoint-report.txt retpoint.b33
+
 echo "Success!"
