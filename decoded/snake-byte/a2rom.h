@@ -43,9 +43,16 @@ void rom_scrn(uint16_t ret_addr);
 /// $FC58 HOME. Clear the text window and move the cursor to its top left.
 void rom_home(uint16_t ret_addr);
 
-/// $FC68 SCROLL. Scroll the text window up one line and clear the bottom line.
-/// Not a documented monitor entry point under a familiar name; it is the
-/// continuation of the LF handling in COUT1, and the game reaches it via $FC66.
+/// $FC68. The tail of the ROM's LF handling, not a documented entry point under
+/// a familiar name:
+///
+///     FC68: LDA CV / CMP WNDBTM / BCC VTABZ
+///     FC6E: DEC CV / ... scroll the window up one line, clear the bottom
+///
+/// So it recomputes BASL/BASH from CV, and only scrolls when CV has run past the
+/// bottom of the window. COUT1 reaches it by falling through $FC66, but the game
+/// also calls it directly as a VTAB -- $7590 and $75D1 store CH/CV and JSR here,
+/// with CV always well under WNDBTM ($18), so the scroll half never runs.
 void rom_fc68(uint16_t ret_addr);
 
 /// $FDED COUT. Output the character in A through the output vector CSWL/CSWH

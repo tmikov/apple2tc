@@ -389,10 +389,17 @@ bb_6:
 }
 
 /* ========================================================================== */
-/* $FC68 SCROLL                                                               */
+/* $FC68 -- the tail of LF: VTAB, or scroll if CV has run off the window.      */
+/*                                                                            */
+/*   FC68: LDA CV / CMP WNDBTM / BCC VTABZ    ; usual case: just recompute BAS */
+/*   FC6E: DEC CV / LDA WNDTOP / PHA / ...    ; otherwise scroll up one line   */
 /*                                                                            */
 /* Transcribed from the pre-externs mega-switch blocks $FC68..$FC95 plus the   */
 /* three exit blocks ($FC6C -> VTABZ, $FC22, $FC9A -> CLREOL).                */
+/*                                                                            */
+/* Besides COUT1 falling through $FC66, the game calls this directly as a      */
+/* VTAB: $7590 and $75D1 store CH/CV and JSR here. Their CV values are 5..13,  */
+/* well under WNDBTM ($18), so they always take the BCC and never scroll.      */
 /* ========================================================================== */
 
 void rom_fc68(uint16_t ret_addr) {
