@@ -36,7 +36,7 @@ static void fatal(const char *msg, ...) {
 
 Emu6502::Emu6502(unsigned int ioRangeStart, unsigned int ioRangeEnd)
     : ioRangeStart_(ioRangeStart), ioRangeEnd_(ioRangeEnd) {
-  memset(ram_, 0xFF, 0x10000);
+  memset(ram_, RAM_INIT_FILL, 0x10000);
 }
 
 void Emu6502::loadROM(const uint8_t *rom, unsigned int size) {

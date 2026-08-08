@@ -142,4 +142,23 @@ if ! grep -q "also decompiled as code" coverage-test.txt; then
 fi
 rm coverage-test.txt coverage-bad.txt coverage.b33
 
+# The generated init_emulated() must fill RAM before loading the binary, and
+# with the value the emulator uses. Otherwise a program that reads memory
+# nothing has written behaves differently here than under the emulator -- a
+# divergence that only shows on paths touching virgin RAM, so it hides for a
+# long time. Emu6502::RAM_INIT_FILL is the one definition; this checks it
+# reaches the generated code and precedes the binary being copied in.
+$a6502 fill.s fill.b33 && $apple2tc fill.b33 -O3 --irc1 > fill-test.c
+if ! grep -q 'memset(s_ram, 0xff, sizeof(s_ram));' fill-test.c; then
+  echo "FAIL: init_emulated() does not fill RAM with the emulator's value" >&2
+  grep -A 4 'void init_emulated' fill-test.c >&2
+  exit 1
+fi
+if [ "$(grep -n 'memset(s_ram' fill-test.c | head -1 | cut -d: -f1)" -gt \
+     "$(grep -n 'memcpy(s_ram' fill-test.c | head -1 | cut -d: -f1)" ]; then
+  echo "FAIL: init_emulated() fills RAM after copying the binary in, wiping it" >&2
+  exit 1
+fi
+rm fill-test.c fill.b33
+
 echo "Success!"

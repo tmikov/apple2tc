@@ -13,6 +13,17 @@
 
 class Emu6502 {
 public:
+  /// What RAM contains before anything writes to it.
+  ///
+  /// Real hardware powers on indeterminate, so any value is equally faithful
+  /// and only *agreement* matters: apple2tc emits a matching fill into the
+  /// generated init_emulated(), so a decompiled program reading memory that
+  /// nothing has written sees what it saw under the emulator. Without that the
+  /// two diverge silently, and only on paths that read virgin RAM -- which is
+  /// exactly the kind of bug that surfaces much later as an unreproducible
+  /// frame mismatch.
+  static constexpr uint8_t RAM_INIT_FILL = 0xFF;
+
   /// Negative.
   static constexpr uint8_t STATUS_N = 0x80;
   /// Overflow.

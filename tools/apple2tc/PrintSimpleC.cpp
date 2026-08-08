@@ -12,6 +12,8 @@
 
 #include "apple2tc/apple2iodefs.h"
 
+#include "apple2tc/emu6502.h"
+
 #include <cmath>
 
 void Disas::printSimpleCPrologue(FILE *f) {
@@ -23,6 +25,12 @@ void Disas::printSimpleCPrologue(FILE *f) {
   }
 
   fprintf(f, "\nvoid init_emulated(void) {\n");
+  // Must match the emulator, or a program that reads RAM nothing has written
+  // behaves differently here than it did when the run data was recorded.
+  fprintf(
+      f,
+      "  memset(s_ram, 0x%02x, sizeof(s_ram));\n",
+      (unsigned)Emu6502::RAM_INIT_FILL);
   for (auto const &mr : memRanges_) {
     unsigned len = mr.to - mr.from + 1;
     fprintf(f, "  memcpy(s_ram + 0x%04x, s_mem_%04x, 0x%04x);\n", mr.from, mr.from, len);
