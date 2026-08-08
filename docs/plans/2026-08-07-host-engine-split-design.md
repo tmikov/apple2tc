@@ -96,15 +96,39 @@ include/apple2tc/
   a2host.h       what the host provides        (engine → host calls)
   system.h       umbrella that includes both, for existing users
 
-lib/a2host/      the host: CLI, key replay, frame loop, video, sound,
-                 frame hashing, headless. Owns the single a2_iostate_t.
-                 (this is today's decapplib, made engine-agnostic)
+lib/a2host/      NO sokol. CLI (common args), key replay, deterministic frame
+                 loop, hash_video_state, record_frame, the headless loop, owns
+                 the single a2_iostate_t, debug_asm / error_handler.
+                 (today's decapplib, minus the GUI, made engine-agnostic)
 
-lib/engine6502/  an engine implementing a2engine.h over Emu6502
+lib/a2host_gui/  sokol. Window, audio, events, rendering, wall-clock pacing,
+                 sokol_main.
 
-tools/…          host + engine6502
-decoded/*/       host + the generated C
+lib/engine6502/  an engine implementing a2engine.h over Emu6502, plus b33/ROM/
+                 disk loading and DebugState6502 run-data collection.
+
+a2emu  (GUI)     = a2host + a2host_gui + engine6502 + its debug UI
+a2run  (console) = a2host + engine6502
+decoded/*/       = a2host + a2host_gui + the generated C
 ```
+
+### Why two executables and not one with a flag
+
+On Windows the console/GUI distinction is a **link-time** property --
+`/SUBSYSTEM:CONSOLE` versus `/SUBSYSTEM:WINDOWS` -- not something a runtime flag
+can bridge. A GUI binary has no stdout to write frame hashes to unless it
+allocates a console; a console binary pops up a console window when launched
+from Explorer. So `a2run` is a first-class, permanent tool rather than
+scaffolding for stage 2a, and `a2emu` does not grow a `--headless` flag.
+
+This is also what forces `lib/a2host` to be sokol-free, which turns out to cost
+nothing: every sokol reference in today's `decapplib` already falls on the GUI
+side of the line. `simulate_frame` consults the wall clock *only* in the
+non-deterministic branch -- replay and hashing take the fixed
+`1/60 * clock_freq` path; `a2_sound_submit` is guarded by `sound_enabled_`,
+which is off headless; and the `stm_setup`/`stm_now` calls in `run_headless` are
+vestigial, feeding a `curFrameTick_` that the deterministic branch never reads.
+The host is linked against sokol today only because there was one library.
 
 ### IO ownership
 
@@ -210,6 +234,15 @@ but it would obscure the real diffs if done early.
 
 ## Open questions
 
+- **Should `decoded/*` also build two binaries each?** The same argument
+  applies: a decompiled game is a GUI program, but `verify.sh` drives it as a
+  batch tool. The symmetric end state is `snake-bytec1` (GUI) plus
+  `snake-bytec1-run` (console), with `verify.sh` using the latter -- which
+  would also stop the verification path linking sokol, GL and audio purely to
+  run headless. Deliberately **not** part of this refactor: it doubles the six
+  `decoded/` targets and mixes a build-topology change into what stages 0 and 1
+  need to keep as provably inert code motion. `a2host` being sokol-free is what
+  makes it possible afterwards.
 - **`textemu` is a third host** (ncurses, headless-capable, `EmuApple2`-based).
   It should probably fold onto `engine6502` + host too, but it is out of scope
   here and does not block anything.
