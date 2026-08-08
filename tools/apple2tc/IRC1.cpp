@@ -10,7 +10,6 @@
 #include "apple2tc/SaveAndRestore.h"
 #include "apple2tc/apple2iodefs.h"
 #include "apple2tc/d6502.h"
-#include "apple2tc/emu6502.h"
 #include "apple2tc/support.h"
 
 #include <cstdarg>
@@ -26,12 +25,6 @@ void IRC1Mod::printPrologue() {
   }
 
   fprintf(os_, "\nvoid init_emulated(void) {\n");
-  // Must match the emulator, or a program that reads RAM nothing has written
-  // behaves differently here than it did when the run data was recorded.
-  fprintf(
-      os_,
-      "  memset(s_ram, 0x%02x, sizeof(s_ram));\n",
-      (unsigned)Emu6502::RAM_INIT_FILL);
   for (auto const &mr : mod_->getDisas()->memRanges()) {
     unsigned len = mr.to - mr.from + 1;
     fprintf(os_, "  memcpy(s_ram + 0x%04x, s_mem_%04x, 0x%04x);\n", mr.from, mr.from, len);
