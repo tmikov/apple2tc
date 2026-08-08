@@ -676,3 +676,62 @@ the `$7541` work turned out to be what made this one testable in isolation.
 underflow at `$6AB3`, blocks `$6256` and `$6288`) and `$7230` (the inline-string
 idiom, blocks `$72CE`, `$78B3`, `$7980`). Everything else rejected is ROM, which
 Phase 1b deletes wholesale — worth measuring before treating any of it as work.
+
+---
+
+## 2026-08-07 — `$6A32` is correctly rejected, not a decompiler defect
+
+**Scope:** this game · **Status:** validated
+
+**Decision:** `$6A32` stays rejected. It is not over-strictness, so there is
+nothing to fix in `routines.cpp`; it belongs on the manual-rewrite list.
+
+**Evidence:** the block the analysis complains about, `$6AB3`, is:
+
+```
+6AB3: PLA / PLA / JMP $6315
+```
+
+a non-local exit. Having exhausted its options the routine pops *its own* return
+address and tail-jumps, so control never comes back to the `JSR $6A32` at
+`$6256` or `$6288`; `$6315` runs in place of the rest of the caller and its
+eventual `RTS` returns to the caller's caller. "`Pop8` block `$6AB3` stack level
+underflow" is an accurate description: the routine really does read below its
+own frame. A simple C function cannot express that, and the two dependents are
+rejected for the same underlying reason rather than by a cascade artefact.
+
+**Consequence:** of the three game-range roots named on 2026-08-04, one was a
+genuine bug (`$60E7`, fixed), one is a genuine non-routine (`$6A32`, here), and
+one is an idiom needing a source-level rewrite rather than recovery (`$7230`).
+A rejection reason is a hypothesis about the decompiler; check it against the
+6502 before assuming the tool is wrong.
+
+---
+
+## 2026-08-07 — The inline-string call sites, enumerated
+
+**Scope:** this game · **Status:** validated
+
+**Decision:** Added `7251 794D` to `code-at.txt` — the last unreached
+continuation of an inline string.
+
+**Evidence:** rather than discovering these one crash at a time, all ten
+`JSR $7230` sites were enumerated by scanning the binary for `20 30 72` and
+walking each following `$00`-terminated string:
+
+```
+$72D6 "SCORE: "        -> $72E2     $73B6 "LEVEL: "              -> $73C2
+$7305 "HI SCORE: "     -> $7314     $73F1 "HOW MANY PLUMS (0-2)?"-> $7414
+$733B "APPLES LEFT: "  -> $734D     $748C the key-redef screen   -> $7541
+$7369 "VALUE: "        -> $7375     $7865 "PRESS SPACE TO..."    -> $7886
+$7390 "SNAKES LEFT: "  -> $73A2     $7942 "BONUS: "              -> $794D
+```
+
+Nine of the ten resume points were already decompiled; the recording simply
+never displayed a bonus. This also confirms after the fact that the `$748C ->
+$7541` edge asserted on 2026-08-05 was the right one. Newly covered:
+`$794D-$797D`, 22 instruction addresses.
+
+**Method note:** enumerating the idiom's call sites is cheap and bounds the
+question exactly. Do that before asserting edges one at a time — the scan tells
+you both how many there are and which ones the recording already covered.

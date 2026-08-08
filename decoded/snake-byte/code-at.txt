@@ -38,6 +38,25 @@
 # this edge existed both builds stopped there with "Unknown address $7541".
 7251 7541
 
+# $7942 is the same idiom, in the bonus display. $793F installs the hi-res COUT
+# hook and $7942 prints the inline string "BONUS: " ($7945..$794B, terminated by
+# the $00 at $794C), so the RTS lands on $794D:
+#
+#     794D: LDA #$00 / STA $2C
+#     7951: LDA $78B1 / JSR print_char      ; the two bonus digits
+#     7957: LDA $78B0 / JSR print_char
+#     795D: LDA #$F0 / STA CSWL / LDA #$FD / STA $37   ; hook back off
+#
+# which is the same shape as $7541's ending and decodes cleanly throughout.
+# $7942 itself is reached in the recording; only the continuation past the
+# string is not, because the session never displayed a bonus.
+#
+# Enumerated rather than guessed: there are exactly 10 `JSR $7230` sites in the
+# binary, and this is the only one whose resume point the recording missed. The
+# other nine ($72E2, $7314, $734D, $7375, $73A2, $73C2, $7414, $7541, $7886) are
+# all already decompiled.
+7251 794D
+
 # --------------------------------------------------------------------------
 # $FDED COUT is JMP ($36), and $6641 repoints CSWL/CSWH at the game's own
 # hi-res glyph blitter at $664A:

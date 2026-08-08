@@ -40,6 +40,7 @@
 664A cout_hires        # the game's own COUT: hi-res glyph blitter, then ROM COUT1
 66A9 tbl_font          # 8 bytes per glyph, first glyph is $20 (space)
 7230 print_inline_str  # PLA/PLA, walks the string after the JSR, PHA/PHA/RTS past it
+                       # 10 call sites; see the 2026-08-07 log entry for all of them
 71F3 print_char        # most-called routine in the game, 15 call sites
 
 # --- menus and screens -----------------------------------------------------
@@ -76,14 +77,25 @@
 # (LDA CV / CMP WNDBTM / BCC VTABZ). Their CV is always well under WNDBTM, so
 # it acts as a plain VTAB and never scrolls. See a2rom.h.
 
+# --- the bonus display -----------------------------------------------------
+# Same idiom: $7942 prints the inline string "BONUS: " and its RTS lands on
+# $794D. Also supplied via code-at.txt -- $7942 is reached in the recording but
+# the session never displayed a bonus, so the continuation was never traced.
+793F show_bonus        # installs the hi-res hook, then prints through it
+794D show_bonus_digits # two digits from $78B1/$78B0, then CSWL back to $FDF0
+
 # --- video soft switches used once, at $704D-$7056 -------------------------
 7045 set_video_mode    # $C050 graphics, $C057 hi-res, $C055 page 2, $C052 full
 
 # --- routines the recovery pass still rejects ------------------------------
 # Kept here so the reasons stay attached to the addresses. Two roots are left
 # in the game range; between them they block 7 routines in the extern build.
-6A32 rej_6A32          # Pop8 stack underflow at $6AB3; blocks $6256, $6288
-7230 rej_7230          # inline-string idiom; blocks $72CE, $78B3, $7980
+# $6A32 is *correctly* rejected -- $6AB3 is PLA/PLA/JMP $6315, a non-local exit
+# that discards its own return address, which no simple C function can express.
+# Manual rewrite, not a decompiler fix. See the 2026-08-07 log entry.
+# $7230 is named in the text-output section above; it blocks $72CE, $78B3 and
+# $7980, and is rewritten rather than recovered.
+6A32 abort_to_6315     # blocks $6256, $6288
 
 # $60E7 used to be a third root, rejected with "invalid predecessor inst RTS at
 # $6147" because $60E4 calls $6127 and falls into it. Recovered as of the
