@@ -4,7 +4,9 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
-**Last commit:** `4267ab0`. 30 commits on `snake-byte`, nothing pushed, tree clean.
+**Last commit:** `5eb711a`. 36 commits on `snake-byte`, nothing pushed, tree
+clean. The `$7541` work described below landed in five commits: two for
+`--code-at` in `tools/apple2tc/`, three for the game.
 
 ---
 
@@ -23,12 +25,18 @@ and its code/data classifications are evidence, not verdicts.
 - **Decide routine-level questions yourself.** Do not escalate "what should I do
   about `$X`". Escalate only project-level forks: scope, architecture,
   verification strategy.
-- **Hand-decompile what the tool cannot reach.** Do not feed the decompiler more
-  input to route around a gap.
 - **Never edit `snake-byte.json`.** It is a recording of what actually happened
   during a play session. Editing it to assert reachability the run never
-  observed destroys its value as evidence. Use a *scratch* copy in `/tmp` when
-  you want the tool's opinion on something it did not trace.
+  observed destroys its value as evidence.
+- **Reachability the run never observed goes in `code-at.txt`**, one
+  `ORIGIN TARGET` edge per line, each with the argument for why it is real. See
+  the 2026-08-05 log entry: this supersedes the earlier "hand-decompile what the
+  tool cannot reach, do not feed the decompiler more input" agreement, which was
+  weighed and set aside once the cost of the alternative was measured.
+- **Hand-decompilation is still the fallback**, for anything `--code-at` cannot
+  reach — but note there is no general way to *call* hand-written code at an
+  untraced address. `$664A` works only because `$FDED` is an externalised ROM
+  vector that `rom_cout` dispatches on.
 - **`tests/` is decompiler regression only** — hand-written `.s` assembled by
   `a6502`, decompiled, diffed against `.ir` baselines. Game data lives in
   `decoded/<game>/`.
@@ -41,7 +49,8 @@ and its code/data classifications are evidence, not verdicts.
 | --- | --- |
 | `docs/decompiling/playbook.md` | The transferable method: findings, procedure, red-flag table. Maturity is honestly marked — steps 1-4 have been executed, 5-6 have not. |
 | `docs/decompiling/decision-log.md` | Append-only rationale. **Never edit existing entries**; add new ones and mark old ones `superseded`. Ends with the coverage measurement and the ordered next steps. |
-| `decoded/snake-byte/labels.txt` | 27 established names, each with its evidence in a comment. |
+| `decoded/snake-byte/labels.txt` | Established names, each with its evidence in a comment. |
+| `decoded/snake-byte/code-at.txt` | The two hand-asserted reachability claims, each with its argument. Read before adding a third. |
 | `docs/superpowers/specs/2026-08-02-snake-byte-proper-c-design.md` | The original design. Parts are superseded — the log says which. |
 
 The two plans in `docs/superpowers/plans/` are executed and historical.
@@ -65,6 +74,13 @@ preserves the wrong turns so they are not repeated. See "Traps" below.
   so its blocks are more granular than `--irc1` output.
 - **`--extern-routines=<file>`** — maps addresses to C function names; calls
   become calls to bodyless `Function`s and unreachable blocks are deleted.
+  Note it rejects any address that is not already a known block.
+- **`--code-at=<file>`** — hand-asserted `ORIGIN TARGET` dynamic branch edges,
+  merged into the runtime data before disassembly. `TARGET` is disassembled
+  *and* becomes a successor of the branch at `ORIGIN`; the latter is what earns
+  it an entry in the generated address-to-block map, without which it would be
+  decompiled but unreachable. This is how `$7541` and the reference build's
+  `$664A` are reached.
 - **`Dominators.{h,cpp}`** — Cooper-Harvey-Kennedy, validated against a DAG, a
   single-loop routine and a nested delay loop. The codebase had none before.
 
@@ -109,27 +125,30 @@ cmake -G Ninja -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug
 ninja -C cmake-build-debug
 
 cd tests && ./run-tests.sh ../cmake-build-debug     # expect: Success!
-cd decoded/snake-byte && ./verify.sh                # expect: 3x PASS
+cd decoded/snake-byte && ./verify.sh                # expect: 4x PASS
 ./decompile.sh                                      # regenerates both c1 variants
 ```
 
-`verify.sh` runs three scenarios:
+`verify.sh` replays two scenarios against both builds:
 
 ```
-PASS [ref]:   1300 frames match     self-contained build
-PASS [ext]:   1300 frames match     hand-written ROM routines
-PASS [hires]:  390 frames match     $664A path (177 calls)
+PASS [play/ref]:  1300 frames match     ordinary game
+PASS [play/ext]:  1300 frames match
+PASS [hires/ref]: 1300 frames match     C at attract -> redefine all six keys
+PASS [hires/ext]: 1300 frames match
 ```
 
 It replays cycle-stamped keys headless and compares per-frame FNV-1a hashes of
 video memory (mode + text page + hi-res page) *and* cycle counts. `--record`
-runs the reference build twice and refuses to write unless both agree.
+re-records both traces from the reference build, twice each, and refuses to
+write unless the two runs agree.
 
 **Never edit a `.frames` file to make a test pass.** The trace is the reference.
 
-The `[hires]` check is a regression test, not an independent oracle: only the ext
-build can run it, since the reference build has no `$664A`. Its authority comes
-from a one-time cross-check against a decompiler-generated version.
+`[hires]` is a real cross-check, not a regression test: the reference build runs
+a decompiler-generated `$664A`, while in the ext build `$FDED` is externalised,
+which deletes that block and routes COUT through hand-written `game_cout_hook`.
+The two builds run different code and must agree frame for frame.
 
 ---
 
@@ -144,46 +163,62 @@ Of 19,967 bytes at `$3750-$854E`:
 | Zero-filled buffers | 3,284 | |
 | **Unknown nonzero** | **2,657** | untraced code + unidentified tables |
 
-**The remaining hand-decompilation job is bounded at ~2,657 bytes** — roughly
-900-1,300 instructions, against 3,931 already done. Two clusters:
+**The remaining job is bounded at ~2,445 bytes** (2,657 less the 212 newly
+covered at `$7541-$75B2` and `$75D1-$7632`; the full table has not been
+re-measured). Where the rest is:
 
 ```
-$7499-$753F  167   $7579-$75E7  111        <- the screen reached by pressing C
 $8390-$84A4  277   $8000-$80D9  218        <- end of binary, nothing known
 $823C-$82F0  181   $80FF-$8190  146           reaches it
 $831B-$838E  116   $81D5-$8235   97
 $606C-$60E3  120   $600E-$6063   86        <- near the hi-res tables; may be data
+$7499-$753F  167                           <- inline string data, correctly so
 ```
 
 ---
 
-## Next task: `$7541`
+## `$7541` — done (2026-08-05)
 
-Hand-decompile it into `game.c`.
+Reached via `--code-at` (`7251 7541`) rather than hand-decompiled; see the
+2026-08-05 log entry for why, and `code-at.txt` for the argument that the edge
+is real. It is the **key-redefinition screen**:
 
-- **Reachable**: `decoded/snake-byte/play-hires.keys` (SPACE at 5,728,811 then
-  `C` at 6,500,000). Today both builds stop at frame 393 with
-  `Unknown address $7541`, which is why `play-hires.frames` is capped at 390.
-- **What it is**: `LDX #$00 / LDA $6C63,X / JSR $7590 / INX / CPX #$06 / ...` —
-  a six-iteration loop over a table at `$6C63`, calling `$7590`. Expect it to
-  pull in a small cluster.
-- **How**: disassemble with `id` (do not decode by hand), write C into `game.c`
-  matching the conventions already there, then cross-check against a
-  decompiler-generated version built from a **scratch** run-data copy with the
-  address added to `BranchTargets` and to `$FDED`'s `Branches` entry. That is how
-  `$664A` was validated: identical frame traces, 177 executions.
-- **Then**: extend `play-hires.frames` past 390 frames and re-record.
+```
+        ABSOLUTE            RELATIVE
+       DIRECTION           DIRECTION
+           b                             b/c/d/e are font glyphs $E2-$E5,
+         d + e               d   e       drawn as arrows by $664A
+           c
+      PRESS THE KEY FOR THIS FUNCTION
+```
 
-### After that
+Six slots — absolute up/left/right/down, then relative turn-left/turn-right —
+over the key table at `$6C63` (`C9 CA CB CD 88 95` = `I J K M ← →`). For each
+slot it prints the current key (`$7590`), blinks the slot's arrow while polling
+for a new one (`$75D1`), accepts anything `>= $A1` or the two arrows (`$761C`),
+writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
 
-2. **The three rejection roots.** `$7230` (inline-string printer, `Pop8`
+`play-hires.keys` now presses six keys after `C` and `play-hires.frames` covers
+1,300 frames, up from 390.
+
+### Next
+
+1. **The three rejection roots.** `$7230` (inline-string printer, `Pop8`
    underflow, transitively blocks 3 game routines), `$60E7` ("invalid predecessor
    inst RTS at `$6147`", blocks 4), `$6A32` (`Pop8` underflow, blocks 2).
    Decompiler-side work on already-traced code; recovers ~9 routines and improves
    the reference everything else is written from. Cheap — do it before item 3.
    `$7230` is not recovered but *rewritten*: `print_str(const char *)`, with each
    call site's inline bytes lifted into a real string literal.
+2. **Teach the disassembler the inline-string idiom.** The higher-leverage
+   version of what `--code-at` now does by hand: recognise the
+   `PLA/PLA … PHA/PHA/RTS` shape, mark the bytes after the `JSR` as a string,
+   and resume disassembly past the terminator. `$7230` has 15 call sites and the
+   idiom is ubiquitous in Apple II games, so this serves the "repeatable method"
+   aim directly. Weigh against item 1 — recovering `$7230` may subsume it.
 3. **`$8000-$84A4`** — the largest unknown region. Find what reaches it first.
+   Worth trying `--code-at` from candidate dynamic branches once something is
+   known to reach it.
 4. **Phase 1b: retarget the entry to `$3750`.** This is what actually cuts the
    ROM — measured at 1,530 blocks deleted, leaving 4. Needs an entry-state
    snapshot and a re-based trace, because a cold start skips the 168 boot frames
@@ -210,6 +245,8 @@ Mistakes already made here. The log has the full accounts.
 | Replacing a routine that dispatches through a vector | `COUT` is `JMP ($36)` and the game repoints it. `rom_cout` honours the vector and aborts loudly on an unknown target — the trace cannot catch a wrong guess there. |
 | clangd/IDE diagnostics in this repo | It lacks the include paths and reports cascading phantom errors (`CircularList.h file not found`, `s_a` undeclared in `a2rom.c`). Trust `ninja` and the test suite. |
 | A bodyless `ir::Function` | `getAddress()` derives from `getEntryBlock()`, which asserts on an empty block list — silent UB under `NDEBUG`. Use `Function::isExternal()`. |
+| Adding a `--code-at` target is enough to reach it | It also needs the `ORIGIN` half. Only a block that is a successor of a *dynamic* branch gets an address-to-block map entry; without one the code is decompiled but unreachable, and you still get `Unknown address`. |
+| `--code-at` will tell you if you point it at data | It cannot. That untraced bytes are code is exactly what you are asserting. It only checks the target starts a block and the origin is a branch, and warns if the target decodes to an invalid instruction. The real check is that the surrounding data boundaries come out right. |
 | The compiler will DCE unreachable blocks | It will not. `dce()` removes only instructions, and every `Void`-typed instruction counts as having side effects. A pass that orphans blocks must delete them itself. |
 
 ---
