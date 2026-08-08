@@ -38,3 +38,23 @@
 # this edge existed both builds stopped there with "Unknown address $7541".
 7251 7541
 
+# --------------------------------------------------------------------------
+# $FDED COUT is JMP ($36), and $6641 repoints CSWL/CSWH at the game's own
+# hi-res glyph blitter at $664A:
+#
+#     6641: LDA #$4A / STA $36 / LDA #$66 / STA $37 / RTS
+#
+# $6641 is called from $7485 and $793F. The recorded session never ran either,
+# so the only COUT target it observed was the ROM's own $FDF0 and $664A was
+# classified as data.
+#
+# The address is not a guess: it is stored by $6641 as two immediate literals.
+#
+# This edge exists so the *reference* build contains a decompiler-generated
+# $664A. In the extern build $FDED is replaced by the hand-written rom_cout
+# (see rom.externs), so its $FDED block -- and with it the generated $664A --
+# is deleted as unreachable, and the hand-written game_cout_hook in game.c is
+# what runs instead. Running play-hires.keys against both builds therefore
+# compares the hand-written $664A against a generated one on every verify.sh
+# run, rather than relying on a one-time manual cross-check.
+FDED 664A

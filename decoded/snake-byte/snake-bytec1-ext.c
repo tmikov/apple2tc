@@ -1,8 +1,8 @@
 // Loaded binary at [$3750..$854E]
-// --code-at: 1 asserted edges applied
+// --code-at: 2 asserted edges applied
 // Loaded segment [$00B1..$00C8]
-// 291 new runtime blocks added
-// code labels: 1680
+// 292 new runtime blocks added
+// code labels: 1685
 // data labels: 300
 
 #include "apple2tc/system2-inc.h"

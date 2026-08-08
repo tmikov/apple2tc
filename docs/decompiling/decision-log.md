@@ -594,3 +594,35 @@ does not itself decode to a valid instruction warns but does not fail — and it
 is deliberately the first instruction, not "the block ends invalid", which fires
 on real code that runs into undecodable bytes past a `BRK`.
 
+
+---
+
+## 2026-08-05 — `[hires]` promoted from regression test to cross-check
+
+**Scope:** this game · **Status:** validated
+
+**Decision:** `verify.sh` now replays both scenarios against both builds, and
+`play-hires.frames` is recorded from the reference build like `play.frames`.
+
+**Why this became possible:** the `[hires]` scenario used to run only on the
+extern build, because `$664A` existed only as hand-written C in `game.c`. Its
+authority came from a one-time manual cross-check. Adding `FDED 664A` to
+`code-at.txt` gives the *reference* build a decompiler-generated `$664A`
+(`$664A-$66A3`, correctly stopping before the font at `$66A9`). In the extern
+build `$FDED` is replaced by hand-written `rom_cout`, so the generated `$664A`
+is deleted as unreachable and `game_cout_hook` runs instead. The two builds
+therefore execute genuinely different code for the same scenario and are
+compared frame for frame on every run.
+
+**Evidence:** 1,300 frames, identical video hashes and cycle counts on both
+builds. `play.frames` was re-recorded and is byte-identical to the committed
+version, confirming the added edges changed no existing behaviour.
+
+**Scenario extended:** `play-hires.keys` now presses six keys after `C`,
+reassigning all six directions to `W A D X Q E`. Verified via `--trace-mem`:
+`$757C` writes `$D7 $C1 $C4 $D8 $D1 $C5` to `$6C63-$6C68` and `$7587` restores
+CSWL/CSWH to `$FDF0`. Without those keys the trace only covers the screen draw
+and the blink loop, never the accept/write-back/exit path.
+
+**Coverage note:** the byte table in the 2026-08-04 entry is now stale by the
+212 bytes of `$7541-$75B2` and `$75D1-$7632`. It has not been re-measured.
