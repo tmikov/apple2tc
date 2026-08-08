@@ -19,3 +19,9 @@ target_link_libraries(a2host a2io)
 # in. Objects are always linked.
 add_library(a2host_gui OBJECT a2host_gui.c)
 target_link_libraries(a2host_gui PUBLIC a2host sokol a2io)
+
+# The console front end. An OBJECT library for the same reason as a2host_gui:
+# nothing in a program's own objects references main(), so a static archive
+# would never be pulled in.
+add_library(a2host_console OBJECT console_main.c)
+target_link_libraries(a2host_console PUBLIC a2host)

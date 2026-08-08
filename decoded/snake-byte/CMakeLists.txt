@@ -3,9 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-link_libraries(a2host a2host_gui)
-
-add_executable(snake-byte
+add_a2_program(snake-byte
   snake-byte.c ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   )
 
@@ -13,7 +11,7 @@ add_executable(snake-byte
 # decompiled alongside the game, so it is self-contained and links on its own.
 # play.frames was recorded from this, and it is the control that snake-bytec1-ext
 # is checked against. Do not make this one depend on hand-written code.
-add_executable(snake-bytec1
+add_a2_program(snake-bytec1
   snake-bytec1.c ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   )
 
@@ -25,7 +23,7 @@ add_executable(snake-bytec1
 # in snake-byte-ext.c. The other sources are listed so they show up in IDEs; they
 # must never be compiled separately, hence HEADER_FILE_ONLY -- doing so would
 # give each object file its own private copy of s_ram and still link cleanly.
-add_executable(snake-bytec1-ext
+add_a2_program(snake-bytec1-ext
   snake-byte-ext.c
   snake-bytec1-ext.c a2rom.c a2rom.h game.c game.h
   ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h

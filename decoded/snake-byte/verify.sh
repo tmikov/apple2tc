@@ -39,8 +39,13 @@ bin=${BIN:-../../cmake-build-debug}
 here=$(cd "$(dirname "$0")" && pwd)
 cd "$here"
 
-ref="$bin/decoded/snake-byte/snake-bytec1"
-ext="$bin/decoded/snake-byte/snake-bytec1-ext"
+# The console builds. Each decompiled program is built twice -- the plain name
+# is the GUI version, -run is a console one -- because on Windows console versus
+# GUI is a link-time subsystem property that no runtime flag can bridge. The
+# console binaries link no graphics or audio at all, which is what verification
+# wants: there is nothing here for a display to affect.
+ref="$bin/decoded/snake-byte/snake-bytec1-run"
+ext="$bin/decoded/snake-byte/snake-bytec1-ext-run"
 
 # name:keys:frames:trace
 scenarios=(
@@ -50,7 +55,7 @@ scenarios=(
 
 run() {
   # $1: executable, $2: key file, $3: frames, $4: output path
-  "$1" --headless --key-file="$2" --frames="$3" --hash-frames="$4" >/dev/null
+  "$1" --key-file="$2" --frames="$3" --hash-frames="$4" >/dev/null
 }
 
 if [ "$1" = "--record" ]; then

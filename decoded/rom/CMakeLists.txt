@@ -7,13 +7,11 @@ if (EMSCRIPTEN)
   set(CMAKE_EXECUTABLE_SUFFIX ".html")
 endif ()
 
-link_libraries(a2host a2host_gui)
-
-add_executable(rom
+add_a2_program(rom
   ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   rom.c
   )
-add_executable(romc1
+add_a2_program(romc1
   ${A2TC_INC}/system.h ${A2TC_INC}/system2-inc.h
   romc1.c
   )
