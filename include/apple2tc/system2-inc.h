@@ -295,3 +295,16 @@ void shutdown_emulated(void) {
   mtx_unlock(&s_emu_mutex);
   thrd_join(s_emu_thread, NULL);
 }
+
+/* --- a2engine.h hooks. The generated engines have no options of their own and
+   never stop early; they exist so the host can be written against one
+   contract. --- */
+a2_stop_reason_t engine_stop_reason(void) {
+  return A2_STOP_CYCLES;
+}
+bool engine_parse_arg(const char *arg) {
+  (void)arg;
+  return false;
+}
+void engine_print_help(void) {
+}

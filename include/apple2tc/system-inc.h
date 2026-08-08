@@ -232,3 +232,16 @@ static uint8_t sbc_decimal(uint8_t a, uint8_t b) {
 }
 
 void shutdown_emulated(void) {}
+
+/* --- a2engine.h hooks. The generated engines have no options of their own and
+   never stop early; they exist so the host can be written against one
+   contract. --- */
+a2_stop_reason_t engine_stop_reason(void) {
+  return A2_STOP_CYCLES;
+}
+bool engine_parse_arg(const char *arg) {
+  (void)arg;
+  return false;
+}
+void engine_print_help(void) {
+}

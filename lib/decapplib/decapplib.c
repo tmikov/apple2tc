@@ -39,6 +39,9 @@ static FILE *hash_file_ = NULL;
 static unsigned frame_limit_ = 0;
 /// Frames simulated so far.
 static unsigned frame_no_ = 0;
+/// Set when the engine asks to stop early -- a breakpoint, or a collection
+/// limit. The generated engines never do; an interpreter will.
+static bool engine_stopped_ = false;
 /// If true, run without opening a window or initialising graphics/audio.
 static bool headless_ = false;
 /// Key-presses loaded from disk.
@@ -404,6 +407,8 @@ static void simulate_frame(void) {
       runCycles = (unsigned)((elapsed < 0.200 ? elapsed : 0.200) * clock_freq_);
     }
     run_emulated(runCycles);
+    if (engine_stop_reason() == A2_STOP_REQUESTED)
+      engine_stopped_ = true;
     if (sound_enabled_)
       a2_sound_submit(&sound_, A2_CLOCK_FREQ, saudio_sample_rate(), get_cycles());
   }
@@ -592,6 +597,7 @@ static void print_help() {
   printf(" --frames=n       Quit after simulating n frames\n");
   printf(" --headless       Run with no window. Requires --frames\n");
   printf(" --count-bt       Count branch targets\n");
+  engine_print_help();
 }
 
 static void parse_args(int argc, char *argv[]) {
@@ -668,6 +674,11 @@ static void parse_args(int argc, char *argv[]) {
       continue;
     }
 
+    // Not ours -- it may be the engine's. An interpreter has options a
+    // generated program cannot have: which ROM, which disk, which binary.
+    if (engine_parse_arg(arg))
+      continue;
+
     if (arg[0] == '-') {
       fprintf(stderr, "Invalid option '%s'\n", arg);
       print_help();
@@ -694,7 +705,7 @@ static void run_headless(void) {
   for (;;) {
     curFrameTick_ = stm_now();
     simulate_frame();
-    if (record_frame())
+    if (record_frame() || engine_stopped_)
       break;
   }
 

@@ -182,10 +182,18 @@ keys into it and hashes it.
 
 ### Contract changes needed
 
-1. **`run_emulated` returns a stop reason.** The interpreter needs to report
-   breakpoints and `--limit`; the generated engine always returns
-   "cycles expired". `run_emulated` is hand-written in `system2-inc.h`, not
-   generated, so this costs nothing on the decompiled side.
+1. **`engine_stop_reason()`, queried after each `run_emulated()`.** The
+   interpreter needs to report breakpoints and `--limit`; the generated engines
+   always answer "cycles expired".
+
+   Originally specified as a return value on `run_emulated`, on the grounds that
+   it is hand-written in `system2-inc.h`. That was wrong: only the `--irc1`
+   engine has it there — the `--simple-c` engine has `run_emulated` *emitted* by
+   `PrintSimpleC.cpp`, so changing the signature would force regenerating every
+   committed `--simple-c` output (`snake-byte.c`, `robotron.c`, `rom.c`,
+   `bolo.c`), none of which `decompile.sh` still regenerates. A separate query
+   costs one call per frame and keeps the change confined to hand-written
+   headers, which is what lets stages 0-3 stay provably inert.
 2. **`engine_parse_arg(const char *) -> bool` and `engine_print_help()`.** The
    host owns the common options (`--headless`, `--frames`, `--key-file`,
    `--hash-frames`, `--no-sound`, `--fast`); engine-specific ones (`--rom`,

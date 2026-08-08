@@ -98,3 +98,32 @@ uint16_t ram_peek16(uint16_t addr);
 void init_emulated(void);
 void run_emulated(unsigned run_cycles);
 void shutdown_emulated(void);
+
+/// Why the last run_emulated() returned.
+typedef enum {
+  /// The cycle budget was spent. The ordinary case, and all the generated
+  /// engines ever report.
+  A2_STOP_CYCLES,
+  /// The engine chose to stop early -- a breakpoint, or a collection limit
+  /// reached. The host should stop driving frames.
+  A2_STOP_REQUESTED,
+} a2_stop_reason_t;
+
+/// Queried by the host after each run_emulated().
+///
+/// Deliberately a query rather than run_emulated()'s return value: the --irc1
+/// engine defines run_emulated() in system2-inc.h, but the --simple-c engine
+/// has it *emitted* by the decompiler, so changing its signature would mean
+/// regenerating every committed --simple-c output. This costs one call per
+/// frame and keeps the contract confined to hand-written headers.
+a2_stop_reason_t engine_stop_reason(void);
+
+/// Offered every command-line argument the host does not recognise, in order.
+/// Return true if it was consumed.
+///
+/// This is what lets an engine own its own options -- which ROM, which disk
+/// image, which binary to run -- without the host knowing they exist.
+bool engine_parse_arg(const char *arg);
+
+/// Print the engine's own options, for --help.
+void engine_print_help(void);
