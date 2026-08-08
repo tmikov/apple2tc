@@ -21,7 +21,7 @@
 /// `run_emulated()`, so they may touch host state without synchronisation —
 /// including when the engine runs on its own thread, as the generated C does.
 ///
-/// Note this is the engine-facing surface only. `decapplib.h` separately
+/// Note this is the engine-facing surface only. `a2host_api.h` separately
 /// declares what the host offers to a *program* embedding it.
 
 #pragma once

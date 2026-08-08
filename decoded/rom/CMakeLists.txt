@@ -7,7 +7,7 @@ if (EMSCRIPTEN)
   set(CMAKE_EXECUTABLE_SUFFIX ".html")
 endif ()
 
-link_libraries(decapplib)
+link_libraries(a2host a2host_gui)
 
 add_executable(rom
   ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
