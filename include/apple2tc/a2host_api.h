@@ -33,6 +33,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* --- Setup ---------------------------------------------------------------- */
 
 /// Parse the options this library owns. Anything unrecognised is offered to the
@@ -104,3 +108,7 @@ void a2host_push_key_if_empty(uint8_t ch);
 void add_watch(uint16_t addr, uint8_t size);
 void add_nondebug(uint16_t from, uint16_t to);
 void add_default_nondebug(void);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif

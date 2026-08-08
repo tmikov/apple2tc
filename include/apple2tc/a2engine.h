@@ -41,6 +41,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum {
   /// Negative.
   STATUS_N = 0x80,
@@ -127,3 +131,7 @@ bool engine_parse_arg(const char *arg);
 
 /// Print the engine's own options, for --help.
 void engine_print_help(void);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif

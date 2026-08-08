@@ -28,6 +28,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /// Read the $C000-$CFFF soft-switch range.
 uint8_t io_peek(uint16_t addr);
 /// Write the $C000-$CFFF soft-switch range.
@@ -39,3 +43,7 @@ void debug_asm(uint16_t pc);
 /// The engine has reached something it cannot execute — an unknown address, an
 /// unimplemented vector target. Reports and does not return.
 void error_handler(uint16_t pc);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
