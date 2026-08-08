@@ -11,6 +11,12 @@ apple2tc=$bin/tools/apple2tc/apple2tc
 # behind each edge. It is deliberately a separate input rather than an edit to
 # snake-byte.json, which must stay a faithful recording.
 #
+# The coverage accounting is regenerated alongside the C, so it cannot go stale.
+# known-data.txt declares the identified non-code regions; the report flags any
+# of them that the disassembler also reached as code.
+$apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt \
+  --known-data=known-data.txt -O3 --irc1 --coverage=coverage.txt > /dev/null
+
 # Two variants are generated, and both are built.
 #
 # snake-bytec1.c is self-contained: it decompiles the Apple II ROM along with

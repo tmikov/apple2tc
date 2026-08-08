@@ -159,29 +159,34 @@ The two builds run different code and must agree frame for frame.
 
 ## Coverage — what is left
 
-Of 19,967 bytes at `$3750-$854E`:
-
-| | bytes | |
-| --- | --- | --- |
-| Decompiled as code | ~3,931 | 1,696 instructions, 19.7% |
-| Known assets | 10,139 | 8KB hi-res title image `$4000-$5FFF`; 2KB level data `$3800-$3FFF` → `$1800`; 768B font `$66A9` |
-| Zero-filled buffers | 3,284 | |
-| **Unknown nonzero** | **2,657** | untraced code + unidentified tables |
-
-**The remaining job is bounded at roughly 1,200 bytes**, none of it in a named
-cluster any more. The 2,657 figure has come down by the 212 newly covered at
-`$7541-$75B2` and `$75D1-$7632`, the 22 at `$794D-$797D`, about 1,035 that
-turned out not to be code, and 206 more that were table all along. Every range
-the 2026-08-04 measurement named is now accounted for; what is left is
-scattered gaps, and the table has not been re-measured.
-
-Reclassified as known assets, not code:
+**Measured, not estimated.** `decompile.sh` regenerates
+`decoded/snake-byte/coverage.txt` alongside the C, so it cannot go stale:
 
 ```
-$8000-$853D  1342  29 vector display lists, one per level (2026-08-07)
-$6000-$60E3   228  hi-res line address, mask and pattern tables (2026-08-07)
-$7499-$753F   167  inline string data, correctly classified all along
+range $3750-$854E  19967 bytes
+  code              4244   21.3%
+  declared data    12883   64.5%
+  unknown zero      2389   12.0%
+  unknown nonzero    451    2.3%   <- what is left to identify
 ```
+
+`known-data.txt` declares the identified non-code regions, each with its
+evidence; the report flags any of them the disassembler also reached as code, so
+a wrong declaration cannot sit there quietly. The 2026-08-04 figure of 2,657
+unknown bytes was a hand count that lumped assets, tables and buffers together.
+
+The largest remaining gaps:
+
+```
+$799B-$7FFF  1637 bytes,  275 nonzero   84% zero -- a buffer with scattered state
+$616B-$61FF   149 bytes,   98 nonzero   tbl_hgr_masks, extent not yet derived
+$7680-$7690    17 bytes,   17 nonzero
+$6633-$6640    14 bytes,   14 nonzero
+$6232-$6255    36 bytes,   11 nonzero   near buf_keys
+```
+
+then a long tail of runs under 10 bytes. Nothing left is a cluster; this is
+variables and small tables, not undiscovered subsystems.
 
 ---
 

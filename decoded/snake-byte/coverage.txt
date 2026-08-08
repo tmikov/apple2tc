@@ -1,0 +1,106 @@
+declared data:
+  $3800-$3FFF   2048 bytes  level/map data
+  $4000-$5FFF   8192 bytes  hi-res title image
+  $66A9-$69A8    768 bytes  tbl_font
+  $6000-$602F     48 bytes  tbl_hgr_lo
+  $6030-$605F     48 bytes  tbl_hgr_hi
+  $6060-$6063      4 bytes  var_hgr_mask
+  $6064-$60E3    128 bytes  tbl_hgr_pattern
+  $8000-$853D   1342 bytes  tbl_display_lists
+  $7499-$7540    168 bytes  str_redefine_screen
+  $7869-$7885     29 bytes  str_press_space
+  $7400-$7413     20 bytes  str_how_many_plums
+  $7394-$73A1     14 bytes  str_snakes_left
+  $7349-$734C      4 bytes  str_apples_left
+  $730F-$7313      5 bytes  str_hi_score
+  $72DA-$72E1      8 bytes  str_score
+  $7946-$794C      7 bytes  str_bonus
+  $6C63-$6C71     15 bytes  tbl_keys
+  $75B3-$75D0     30 bytes  tbl_redefine_screen
+  $6A55-$6A59      5 bytes  tbl_6A55
+
+range $00B1-$00C8  24 bytes
+  code                24  100.0%
+  declared data        0    0.0%
+  unknown zero         0    0.0%
+  unknown nonzero      0    0.0%   <- what is left to identify
+    (no unidentified nonzero bytes)
+range $3750-$854E  19967 bytes
+  code              4244   21.3%
+  declared data    12883   64.5%
+  unknown zero      2389   12.0%
+  unknown nonzero    451    2.3%   <- what is left to identify
+    $799B-$7FFF   1637 bytes, 275 nonzero
+    $616B-$61FF    149 bytes, 98 nonzero
+    $7680-$7690     17 bytes, 17 nonzero
+    $6633-$6640     14 bytes, 14 nonzero
+    $6232-$6255     36 bytes, 11 nonzero
+    $6387-$639A     20 bytes, 8 nonzero
+    $7252-$7266     21 bytes, 6 nonzero
+    $6B38-$6B3C      5 bytes, 5 nonzero
+    $71C8-$71CC      5 bytes, 4 nonzero
+    $6C46-$6C4A      5 bytes, 3 nonzero
+    $66A6-$66A8      3 bytes, 3 nonzero
+    $3786-$37FF    122 bytes, 3 nonzero
+    $730C-$730D      2 bytes, 2 nonzero
+    $73D7-$73D7      1 bytes, 1 nonzero
+    $78B0-$78B2      3 bytes, 1 nonzero
+range $D000-$FFFF  12288 bytes
+  code              6137   49.9%
+  declared data        0    0.0%
+  unknown zero       161    1.3%
+  unknown nonzero   5990   48.7%   <- what is left to identify
+    $F318-$F7FF   1256 bytes, 1240 nonzero
+    $D000-$D392    915 bytes, 910 nonzero
+    $EEDB-$F127    589 bytes, 565 nonzero
+    $DB71-$DD66    502 bytes, 484 nonzero
+    $D6A5-$D7D1    301 bytes, 296 nonzero
+    $F948-$FA3F    248 bytes, 233 nonzero
+    $F882-$F93F    190 bytes, 187 nonzero
+    $E646-$E6F1    172 bytes, 166 nonzero
+    $FF59-$FFFF    167 bytes, 163 nonzero
+    $DF4F-$DFE2    148 bytes, 143 nonzero
+    $D8B0-$D93D    142 bytes, 140 nonzero
+    $FEAE-$FF39    140 bytes, 136 nonzero
+    $FE00-$FE83    132 bytes, 132 nonzero
+    $F280-$F2E8    105 bytes, 105 nonzero
+    $F209-$F272    106 bytes, 105 nonzero
+    $E913-$E97E    108 bytes, 101 nonzero
+    $EE64-$EECF    108 bytes, 93 nonzero
+    $FCB4-$FD0B     88 bytes, 88 nonzero
+    $FAD5-$FB2E     90 bytes, 86 nonzero
+    $FDA3-$FDD9     55 bytes, 55 nonzero
+    $E764-$E79E     59 bytes, 54 nonzero
+    $DB03-$DB39     55 bytes, 54 nonzero
+    $E707-$E73C     54 bytes, 50 nonzero
+    $E313-$E340     46 bytes, 46 nonzero
+    $DACF-$DAFA     44 bytes, 43 nonzero
+    $D9C9-$D9F3     43 bytes, 41 nonzero
+    $D984-$D9A1     30 bytes, 30 nonzero
+    $EC23-$EC3F     29 bytes, 29 nonzero
+    $D896-$D8AE     25 bytes, 25 nonzero
+    $E2DE-$E2F1     20 bytes, 19 nonzero
+    $E7A7-$E7B8     18 bytes, 18 nonzero
+    $D96B-$D97B     17 bytes, 17 nonzero
+    $E3C5-$E3D4     16 bytes, 14 nonzero
+    $ED0A-$ED18     15 bytes, 14 nonzero
+    $F1DE-$F1EB     14 bytes, 14 nonzero
+    $FF3F-$FF4B     13 bytes, 13 nonzero
+    $E746-$E751     12 bytes, 12 nonzero
+    $FB6F-$FB77      9 bytes, 9 nonzero
+    $FA59-$FA61      9 bytes, 9 nonzero
+    $EB1E-$EB26      9 bytes, 8 nonzero
+    $EA2B-$EA30      6 bytes, 6 nonzero
+    $F85F-$F863      5 bytes, 5 nonzero
+    $F832-$F835      4 bytes, 4 nonzero
+    $E003-$E006      4 bytes, 3 nonzero
+    $D9A3-$D9A5      3 bytes, 3 nonzero
+    $E5FD-$E5FF      3 bytes, 3 nonzero
+    $EBAF-$EBB1      3 bytes, 3 nonzero
+    $EB90-$EB92      3 bytes, 3 nonzero
+    $EA66-$EA68      3 bytes, 3 nonzero
+    $D649-$D64A      2 bytes, 2 nonzero
+    $EA50-$EA54      5 bytes, 2 nonzero
+    $E6F5-$E6F7      3 bytes, 2 nonzero
+    $E0FE-$E101      4 bytes, 2 nonzero
+    $E2FF-$E300      2 bytes, 2 nonzero

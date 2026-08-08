@@ -1,0 +1,51 @@
+# Regions of snake-byte.b33 identified as something other than code, for
+# apple2tc's --coverage report.
+#
+# Format: "FROM TO name", addresses hexadecimal with an optional '$' prefix,
+# '#' starts a comment.
+#
+# Deciding that bytes are data is a conclusion about the program, not something
+# the disassembler can derive, so every line here needs its evidence. The
+# coverage report flags any range that the disassembler also reached as code,
+# which is the check that these claims stay true.
+
+# --- assets ----------------------------------------------------------------
+3800 3FFF level/map data      # copied to $1800 by relocate_1800; values cluster
+                              # in $02-$1D, and nothing is decompiled at $1800
+4000 5FFF hi-res title image  # 28% is $2A, the classic hi-res dither; only 1.7%
+                              # has the colour bit set
+66A9 69A8 tbl_font            # 768 bytes, 8 per glyph, first glyph is $20
+
+# --- hi-res drawing tables -------------------------------------------------
+# Extents derived, not guessed: the 48 lo/hi pairs decode to $2000 $3000 $2080
+# $3080 ... all inside hi-res page 1, and $60F7 builds the pattern index as
+# $01*8 + bit*4 + ($02 & 3), which with $01 in 0..15 reaches 127 exactly.
+6000 602F tbl_hgr_lo          # 48 line address low bytes
+6030 605F tbl_hgr_hi          # 48 line address high bytes
+6060 6063 var_hgr_mask        # rewritten at run time by hgr_set_masks
+6064 60E3 tbl_hgr_pattern     # 128 entries, ends exactly at hgr_draw
+
+# --- the vector display list -----------------------------------------------
+# 29 '*'-terminated drawing scripts, one per level, read as a byte stream by
+# $7019 and interpreted by $7100. The command grammar (H/V/P +operands, T, E,
+# '*') parses the whole region with nothing left over: 133 H, 129 V, 1 T,
+# 29 '*', and the final E at $853D that loops back to the first script.
+8000 853D tbl_display_lists
+
+# --- inline strings ---------------------------------------------------------
+# Bytes following a `JSR $7230`, printed by it and skipped past. All ten call
+# sites were enumerated by scanning for `20 30 72`; these are the ones long
+# enough to show up as a coverage gap.
+7499 7540 str_redefine_screen # "ABSOLUTE DIRECTION ... PRESS THE KEY ..."
+7869 7885 str_press_space     # "PRESS SPACE TO CONTINUE"
+7400 7413 str_how_many_plums  # tail of "HOW MANY PLUMS (0-2)?"
+7394 73A1 str_snakes_left     # "SNAKES LEFT: "
+7349 734C str_apples_left     # tail of "APPLES LEFT: "
+730F 7313 str_hi_score        # tail of "HI SCORE: "
+72DA 72E1 str_score           # "SCORE:  "
+7946 794C str_bonus           # "BONUS: "
+
+# --- small tables -----------------------------------------------------------
+6C63 6C71 tbl_keys            # current and default key assignments, 6 + 6 bytes
+75B3 75D0 tbl_redefine_screen # CH/CV cursor tables and the arrow glyphs
+6A55 6A59 tbl_6A55            # indexed by $6A51 LDA $6A55,X
