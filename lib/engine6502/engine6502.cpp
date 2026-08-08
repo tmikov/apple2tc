@@ -72,6 +72,29 @@ bool s_collect = false;
 /// Collect from the reset vector rather than from the loaded program, so the
 /// trace covers the ROM boot the program is entered from.
 bool s_fromRom = false;
+/// Put the program in RAM before the machine starts, and then just boot.
+///
+/// This is what a decompiled build looks like: apple2tc bakes the binary into
+/// init_emulated(), so from cycle zero the program is simply *there* and the
+/// ROM boots around it. Reproducing that is what makes an interpreter run
+/// comparable with a generated one -- otherwise the two differ from frame zero,
+/// because 2224 bytes of the binary sit inside hi-res page 1, which the frame
+/// hash covers.
+///
+/// Nothing is injected on the keyboard either. The recorded key file already
+/// types "CALL 14160" at the BASIC prompt, which is how the program gets
+/// entered in both.
+bool s_preload = false;
+
+/// Cycles owed to, or borrowed from, the caller of run_emulated().
+///
+/// Emu6502::runFor() re-baselines on entry, so it overshoots its budget by the
+/// last instruction and forgets. Over a frame that is a couple of cycles, and
+/// over a replay it is a steady drift -- enough to move where a cycle-stamped
+/// keystroke lands. The generated engine carries the debt instead
+/// (s_remaining_cycles += run_cycles), so this does the same at the adapter,
+/// leaving Emu6502 itself alone for a2emu and textemu.
+int s_cycleDebt = 0;
 
 std::vector<uint8_t> readFileOrDie(const std::string &path) {
   FILE *f = fopen(path.c_str(), "rb");
@@ -242,7 +265,14 @@ void init_emulated(void) {
   if (s_collect && s_fromRom)
     startCollecting();
 
-  if (!s_runPath.empty()) {
+  if (!s_runPath.empty() && s_preload) {
+    // Straight into RAM, before anything runs. The ROM boot then proceeds
+    // around it exactly as it does in a decompiled build.
+    if (!loadB33(readFileOrDie(s_runPath)))
+      exit(2);
+    if (s_collect)
+      startCollecting();
+  } else if (!s_runPath.empty()) {
     s_emu.addDebugFlags(Emu6502::DebugASM);
     s_dbg.setBreakpoint(0xD43C); // Warm restart, i.e. the BASIC prompt.
     s_dbg.setBreakpointCB([](uint16_t addr) {
@@ -255,7 +285,14 @@ void init_emulated(void) {
 }
 
 void run_emulated(unsigned run_cycles) {
-  auto reason = s_emu.runFor(run_cycles);
+  s_cycleDebt += (int)run_cycles;
+  if (s_cycleDebt <= 0) {
+    s_stopReason = A2_STOP_CYCLES;
+    return;
+  }
+  unsigned before = s_emu.getCycles();
+  auto reason = s_emu.runFor((unsigned)s_cycleDebt);
+  s_cycleDebt -= (int)(s_emu.getCycles() - before);
   if (reason == Emu6502::StopReason::StopRequesed) {
     s_stopReason = A2_STOP_REQUESTED;
     finishCollecting();
@@ -299,6 +336,10 @@ bool engine_parse_arg(const char *arg) {
     s_fromRom = true;
     return true;
   }
+  if (strcmp(arg, "--preload") == 0) {
+    s_preload = true;
+    return true;
+  }
   if (strncmp(arg, "--limit=", 8) == 0) {
     s_limit = (unsigned)strtoul(arg + 8, nullptr, 10);
     return true;
@@ -319,6 +360,9 @@ void engine_print_help(void) {
   printf(" --disk2=path     Mount a disk image in drive 2\n");
   printf(" --from-rom       Enter the program via CALL from BASIC, so a\n");
   printf("                  collection covers the ROM boot as well\n");
+  printf(" --preload        Put the program in RAM before the machine starts\n");
+  printf("                  and just boot, the way a decompiled build does.\n");
+  printf("                  Nothing is typed for you; the key file does that\n");
   printf(" --collect        Collect run data for apple2tc\n");
   printf(" --limit=n        Stop collecting after n basic blocks\n");
   printf(" --out=path       Write collected data here instead of stdout\n");
