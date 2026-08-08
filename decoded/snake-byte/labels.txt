@@ -80,7 +80,17 @@
 7045 set_video_mode    # $C050 graphics, $C057 hi-res, $C055 page 2, $C052 full
 
 # --- routines the recovery pass still rejects ------------------------------
-# Kept here so the reasons stay attached to the addresses.
-60E7 rej_60E7          # "invalid predecessor inst RTS at $6147"
-6A32 rej_6A32          # Pop8 stack underflow at $6AB3
-7226 rej_7226          # JmpInd terminator
+# Kept here so the reasons stay attached to the addresses. Two roots are left
+# in the game range; between them they block 7 routines in the extern build.
+6A32 rej_6A32          # Pop8 stack underflow at $6AB3; blocks $6256, $6288
+7230 rej_7230          # inline-string idiom; blocks $72CE, $78B3, $7980
+
+# $60E7 used to be a third root, rejected with "invalid predecessor inst RTS at
+# $6147" because $60E4 calls $6127 and falls into it. Recovered as of the
+# routines.cpp fix, along with $6148, $615A, $6B3D, $7045 and $78B3.
+60E7 hgr_plot          # the plotter proper; $60E4 is hgr_set_masks + this
+6148 hgr_draw_hline    # loops $60E7 from $02 to $08
+615A hgr_draw_vline    # loops $60E7 from $03 to $08
+
+# $7226 is no longer rejected in the extern build either: it was a JmpInd
+# terminator through $FDED, which rom.externs replaces.

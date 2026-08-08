@@ -626,3 +626,53 @@ and the blink loop, never the accept/write-back/exit path.
 
 **Coverage note:** the byte table in the 2026-08-04 entry is now stale by the
 212 bytes of `$7541-$75B2` and `$75D1-$7632`. It has not been re-measured.
+
+---
+
+## 2026-08-07 — A routine entry can also be a call's return point
+
+**Scope:** apple2tc · **Status:** validated
+
+**Decision:** `scanCandidate` now accepts an `RTS` predecessor of a routine
+entry when that entry is also the fall block of a `JSR` from outside the
+routine, and the extraction retargets those return edges.
+
+**Evidence:** The shape is a caller that does `JSR <helper>` and falls straight
+into a block which is itself a subroutine. Snake Byte's `$60E4` calls `$6127`
+and falls into `$60E7`, while `$6148` and `$615A` call `$60E7` directly. That
+gives `$60E7` two predecessor edges for *one* control transfer — the JSR, whose
+fall operand is `$60E7`, and `$6127`'s `RTS` at `$6147`, which returns there.
+The JSR leg was already accepted as a jump-in; rejecting the RTS leg cost six
+routines through the invalid-JSR cascade. 74 → 81 identified, game-range
+rejections 12 → 7.
+
+**Rejected:** Deleting the redundant `RTS → fall-block` operand instead. It
+looks like pure CFG cleanup, but that operand is what puts the address in the
+generated block map; without it a real return to that address fails at run time
+with `Unknown address`.
+
+**What the fix actually cost.** Accepting the candidate was one line; three
+further defects only surfaced afterwards, each caught by running rather than by
+reading:
+
+1. The predecessor snapshot is stale by the time the edges are retargeted,
+   because converting a predecessor erases it. Reusing it walks freed memory.
+2. The block to retarget *to* cannot be assumed to exist. `scanCandidate` runs
+   over the whole function before anything is split out, so an earlier
+   extraction can rewrite away the JSR that would have built it. Visible only
+   in ROM code (`$FD8E`, `$DB5C`) — the game range never hit it.
+3. That block has to take over the entry's address, or a JSR falling into it
+   cannot compute what it pushes and a return to it is not in the block map.
+   This path had simply never executed before, since no candidate of this shape
+   ever got past the predecessor check.
+
+**Method note:** the reproduction, `tests/retpoint.s`, needs `--code-at` to
+supply the return edges. An `RTS` only gets successor operands from observed
+runtime data, so with no recording the edges do not exist, every routine is
+trivially accepted, and the bug does not reproduce at all. The tool built for
+the `$7541` work turned out to be what made this one testable in isolation.
+
+**Coverage note:** the two roots left in the game range are `$6A32` (`Pop8`
+underflow at `$6AB3`, blocks `$6256` and `$6288`) and `$7230` (the inline-string
+idiom, blocks `$72CE`, `$78B3`, `$7980`). Everything else rejected is ROM, which
+Phase 1b deletes wholesale — worth measuring before treating any of it as work.
