@@ -97,6 +97,69 @@ static uint8_t printInst(uint16_t pc) {
   return inst.size;
 }
 
+/// Find everything that could refer to an address in [lo, hi].
+///
+/// Two independent scans, because a reference can be either kind and the
+/// disassembler has no idea which bytes are code:
+///
+///   - every offset decoded as an instruction, reported when its operand lands
+///     in the range. This finds calls, jumps and table reads.
+///   - every little-endian word whose value lands in the range. This finds
+///     address tables and indirect-jump vectors, which is usually how an
+///     otherwise unreferenced region turns out to be reached.
+///
+/// Both are *candidates*. The code scan decodes at every offset rather than
+/// following instruction boundaries, so a hit inside a longer instruction or
+/// inside data is possible; the bytes are printed so it can be judged.
+///
+/// [from, to] bounds where to look. Narrowing it to the code is what makes the
+/// output readable: a large data region -- a bitmap, a font, level data --
+/// produces a steady drizzle of bytes that decode as a matching instruction or
+/// read as a matching word, and can easily bury every real hit.
+static void xref(uint16_t lo, uint16_t hi, uint16_t from, uint16_t to) {
+  unsigned codeHits = 0, dataHits = 0;
+
+  printf("code candidates (instruction operand in $%04X..$%04X):\n", lo, hi);
+  for (unsigned addr = from; addr <= to; ++addr) {
+    ThreeBytes bytes{0};
+    for (unsigned i = 0; i != 3; ++i)
+      bytes.d[i] = peek((uint16_t)(addr + i));
+    CPUInst inst = decodeInst((uint16_t)addr, bytes);
+    if (inst.isInvalid() || !cpuAddrModeHasOperand(inst.addrMode) ||
+        inst.addrMode == CPUAddrMode::Imm)
+      continue;
+    // Zero page operands are compared too, so "xref $06" finds its users.
+    if (inst.operand < lo || inst.operand > hi)
+      continue;
+    // A hit on the range's own bytes is the region referring to itself.
+    if (addr >= lo && addr <= hi)
+      continue;
+    FormattedInst fmt = formatInst(inst, bytes, symbolResolver);
+    printf("  $%04X: %-8s  %s", addr, fmt.bytes, fmt.inst);
+    if (!fmt.operand.empty())
+      printf("  %s", fmt.operand.c_str());
+    printf("\n");
+    ++codeHits;
+  }
+  if (!codeHits)
+    printf("  none\n");
+
+  printf("data candidates (little-endian word in $%04X..$%04X):\n", lo, hi);
+  for (unsigned addr = from; addr < to; ++addr) {
+    uint16_t w = (uint16_t)(peek((uint16_t)addr) | (peek((uint16_t)(addr + 1)) << 8));
+    if (w < lo || w > hi)
+      continue;
+    if (addr >= lo && addr <= hi)
+      continue;
+    printf("  $%04X: $%04X\n", addr, w);
+    ++dataHits;
+  }
+  if (!dataHits)
+    printf("  none\n");
+
+  printf("%u code, %u data candidates\n", codeHits, dataHits);
+}
+
 static void loadROM(const char *path) {
   FILE *f = fopen(path, "rb");
   if (!f) {
@@ -277,6 +340,9 @@ static void printHelp() {
   printf("dis count - Disassemble count instructions\n");
   printf("dis addr end - Disassemble the range [addr, end]\n");
   printf("labels file - Load \"ADDR name\" pairs; they override built-in symbols\n");
+  printf("xref addr - Find candidate references to an address\n");
+  printf("xref lo hi - Find candidate references into a range\n");
+  printf("xref lo hi from to - ...searching only [from, to]\n");
   printf("db - print up to 64 bytes/words\n");
   printf("dw - print 8 words\n");
   printf("memcpy dest src len - copy memory\n");
@@ -393,6 +459,21 @@ int main() {
             break;
         }
       }
+    } else if (tokens[0] == "xref" && tokens.size() >= 2 && tokens.size() <= 5) {
+      // xref addr [lo hi] / xref lo hi [from to].
+      auto lo = parse16(tokens[1].c_str());
+      auto hi = tokens.size() >= 3 ? parse16(tokens[2].c_str()) : lo;
+      std::optional<uint16_t> from = 0, to = 0xFFFF;
+      if (tokens.size() == 5) {
+        from = parse16(tokens[3].c_str());
+        to = parse16(tokens[4].c_str());
+      }
+      if (!lo || !hi || !from || !to)
+        printf("Error: invalid number.\n");
+      else if (*lo > *hi || *from > *to)
+        printf("Error: start address is above end address.\n");
+      else
+        xref(*lo, *hi, *from, *to);
     } else if (tokens[0] == "labels" && tokens.size() == 2) {
       loadLabels(tokens[1].c_str());
     } else if (tokens[0] == "db" && tokens.size() == 1) {

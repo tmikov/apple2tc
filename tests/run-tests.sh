@@ -16,13 +16,14 @@ fi
 
 a6502=$bin/tools/a6502/a6502
 apple2tc=$bin/tools/apple2tc/apple2tc
+id=$bin/tools/id/id
 
-if [ ! -x "$a6502" ] || [ ! -x "$apple2tc" ]; then
-  echo "Error: required binaries not found in '$bin'" >&2
-  echo "  Expected: $a6502" >&2
-  echo "  Expected: $apple2tc" >&2
-  exit 1
-fi
+for tool in "$a6502" "$apple2tc" "$id"; do
+  if [ ! -x "$tool" ]; then
+    echo "Error: required binary not found: $tool" >&2
+    exit 1
+  fi
+done
 
 $a6502 trees.s trees.b33 && $apple2tc trees.b33 -O3 --ir > trees-test.ir
 diff -q trees.ir trees-test.ir
@@ -114,5 +115,13 @@ if grep -q "^REJECT" retpoint-report.txt; then
   exit 1
 fi
 rm retpoint-test.ir retpoint-report.txt retpoint.b33
+
+# `id`'s cross-reference search, over a target reached four different ways.
+# The indirect jump is deliberately *not* expected as a code hit -- it names the
+# vector, not the target -- while the vector itself is what the data scan is for.
+$a6502 xref.s xref.b33 && printf 'loadb33 xref.b33\nxref $310 $31F $300 $321\n' \
+  | $id > xref-test.txt 2>&1
+diff -q xref.expected xref-test.txt
+rm xref-test.txt xref.b33
 
 echo "Success!"

@@ -1,0 +1,17 @@
+Interactive 6502 Disassembler
+
+Use "help" for help
+
+> loaded: [$0300..$0321]
+len   : 34
+
+> code candidates (instruction operand in $0310..$031F):
+  $0300: 20 10 03  JSR  $0310
+  $0303: AD 13 03  LDA  $0313
+data candidates (little-endian word in $0310..$031F):
+  $0301: $0310
+  $0304: $0313
+  $0320: $0310
+2 code, 3 data candidates
+
+> 
