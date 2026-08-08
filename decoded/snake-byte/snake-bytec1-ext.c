@@ -12,6 +12,7 @@ static const uint8_t s_mem_3750[0x4dff];
 static const uint8_t s_mem_d000[0x3000];
 
 void init_emulated(void) {
+  memset(s_ram, 0xff, sizeof(s_ram));
   memcpy(s_ram + 0x00b1, s_mem_00b1, 0x0018);
   memcpy(s_ram + 0x3750, s_mem_3750, 0x4dff);
   memcpy(s_ram + 0xd000, s_mem_d000, 0x3000);
