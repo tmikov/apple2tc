@@ -84,6 +84,29 @@
 793F show_bonus        # installs the hi-res hook, then prints through it
 794D show_bonus_digits # two digits from $78B1/$78B0, then CSWL back to $FDF0
 
+# --- the vector display list -----------------------------------------------
+# $8000-$853D is *data*: 29 drawing scripts, one per level, in a byte stream.
+# Not code, which is why nothing ever jumped into it. $7113 points $0A/$0B at
+# $8000 and skips ($0303 - 1) '*'-terminated scripts to select one, then $7100
+# interprets it. $7019 is the stream reader. Commands are ASCII:
+#
+#   'H' +4  colour, then HLINE (lo-res) and hgr_draw_hline (hi-res)
+#   'V' +4  colour, then hgr_draw_vline
+#   'P' +3  colour, then MON_PLOT and hgr_draw
+#   'T' +1  stored to $0304
+#   'E'     reset $0303 to 1 and restart -- the byte at $853D, ending the list
+#   '*'     end of this script
+#
+# The grammar parses the whole region with no leftovers: 133 H, 129 V, 1 T,
+# 29 '*', 1 'E'. Only H and V are actually used for level geometry.
+7000 script_set_colour2 # helper used by the 'V' command
+7019 script_next_byte  # LDA ($0A),Y / INC $0A -- fetch and advance
+7024 script_set_colour # A = colour index, falls into SETCOL
+7100 run_script        # interprets one display list
+7113 select_script     # skips ($0303 - 1) scripts from $8000
+8000 tbl_display_lists # 29 '*'-terminated drawing scripts
+0303 var_script_index  # 1-based; init_0300 sets it to 1
+
 # --- video soft switches used once, at $704D-$7056 -------------------------
 7045 set_video_mode    # $C050 graphics, $C057 hi-res, $C055 page 2, $C052 full
 

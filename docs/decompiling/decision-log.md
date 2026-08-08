@@ -735,3 +735,57 @@ $7541` edge asserted on 2026-08-05 was the right one. Newly covered:
 **Method note:** enumerating the idiom's call sites is cheap and bounds the
 question exactly. Do that before asserting edges one at a time — the scan tells
 you both how many there are and which ones the recording already covered.
+
+---
+
+## 2026-08-07 — `$8000-$853D` is a vector display list, not untraced code
+
+**Scope:** this game · **Status:** validated
+
+**Decision:** The largest remaining unknown region is **data**, and the open
+question from 2026-08-04 is closed. Nothing reaches it because nothing jumps
+into it; it is read as a byte stream.
+
+**Evidence:** `id xref $8000 $84A4` produced five code candidates, and every one
+was a false positive — three were font bytes inside `$66A9-$69A8`, and `$6C22`
+decodes `JMP ($80C9)` only because `$6C20` is `LDA $6C46` and the scan reads
+mid-instruction. The one real hit came from the data scan: `$7118`/`$711C` store
+`$00`/`$80` into `$0A`/`$0B`, and `$7019` is
+
+```
+7019: LDY #$00 / LDA ($0A),Y / INC $0A / BNE +2 / INC $0B / RTS
+```
+
+a stream reader. `$7100` interprets what it returns as ASCII commands:
+
+| cmd | bytes | action |
+| --- | --- | --- |
+| `H` | +4 | colour, then `HLINE` (lo-res) and `hgr_draw_hline` (hi-res) |
+| `V` | +4 | colour, then `hgr_draw_vline` |
+| `P` | +3 | colour, then `MON_PLOT` and `hgr_draw` |
+| `T` | +1 | stored to `$0304` |
+| `E` | — | reset `$0303` to 1 and restart |
+| `*` | — | end of this script |
+
+`$7113` skips `$0303 - 1` `*`-terminated scripts before interpreting, so `$0303`
+is a 1-based level index — which is what `init_0300` at `$376E` sets to 1.
+
+**Confirmation:** the grammar parses `$8000-$853D` with no leftovers — 29
+scripts, 133 `H`, 129 `V`, 1 `T`, 29 `*`, and a final `E` at `$853D` that loops
+back to the first, followed by zero fill to `$854E`. A grammar derived from the
+interpreter consuming the whole region exactly is much stronger evidence than
+any individual byte would be.
+
+Note it draws each shape *twice*, in lo-res and hi-res. That matches the earlier
+finding that the never-displayed lo-res page is the logical game board read back
+via `SCRN` for collision detection: the display list builds the board and the
+picture of it from one description.
+
+**Coverage:** ~1,035 bytes move from "unknown nonzero" to a known asset,
+leaving roughly 1,400. What is left is `$606C-$60E3` and `$600E-$6063` near the
+hi-res tables, and scattered smaller gaps.
+
+**Method note:** `xref` is worth reaching for before hand-reading a disassembly,
+but restrict the search range. Unrestricted it drowns in a data region's noise —
+`xref $000A $000B` over the whole binary is unreadable, and over `$69A9-$7FFF`
+it returns exactly the five instructions that use the pointer.

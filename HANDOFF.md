@@ -168,16 +168,22 @@ Of 19,967 bytes at `$3750-$854E`:
 | Zero-filled buffers | 3,284 | |
 | **Unknown nonzero** | **2,657** | untraced code + unidentified tables |
 
-**The remaining job is bounded at ~2,445 bytes** (2,657 less the 212 newly
-covered at `$7541-$75B2` and `$75D1-$7632`; the full table has not been
-re-measured). Where the rest is:
+**The remaining job is bounded at roughly 1,400 bytes.** The 2,657 figure has
+come down by the 212 newly covered at `$7541-$75B2` and `$75D1-$7632`, the 22 at
+`$794D-$797D`, and about 1,035 that turned out not to be code at all. What is
+left:
 
 ```
-$8390-$84A4  277   $8000-$80D9  218        <- end of binary, nothing known
-$823C-$82F0  181   $80FF-$8190  146           reaches it
-$831B-$838E  116   $81D5-$8235   97
 $606C-$60E3  120   $600E-$6063   86        <- near the hi-res tables; may be data
-$7499-$753F  167                           <- inline string data, correctly so
+```
+
+plus scattered smaller gaps. The full table has not been re-measured.
+
+Reclassified as known assets, not code:
+
+```
+$8000-$853D  1342  29 vector display lists, one per level (2026-08-07)
+$7499-$753F   167  inline string data, correctly classified all along
 ```
 
 ---
@@ -226,9 +232,10 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
    and resume disassembly past the terminator. `$7230` has 15 call sites and the
    idiom is ubiquitous in Apple II games, so this serves the "repeatable method"
    aim directly. Weigh against item 1 — recovering `$7230` may subsume it.
-3. **`$8000-$84A4`** — the largest unknown region. Find what reaches it first.
-   Worth trying `--code-at` from candidate dynamic branches once something is
-   known to reach it.
+3. ~~**`$8000-$84A4`**~~ — **answered 2026-08-07: it is data**, 29 vector
+   display lists read as a byte stream by `$7019`. Nothing reaches it because
+   nothing jumps into it. See the log entry for the command grammar, which
+   parses the region exactly.
 4. **Phase 1b: retarget the entry to `$3750`.** This is what actually cuts the
    ROM — measured at 1,530 blocks deleted, leaving 4. Needs an entry-state
    snapshot and a re-based trace, because a cold start skips the 168 boot frames
@@ -263,8 +270,6 @@ Mistakes already made here. The log has the full accounts.
 
 ## Open questions
 
-- **`$8000-$84A4`** (~1,035 bytes): nothing in the recording reaches it. Is it
-  code for an unplayed game mode, or data? Unknown.
 - **`$600E-$6063` and `$606C-$60E3`**: adjacent to the hi-res address tables.
   Probably more tables, not verified.
 - **The `$93`/`$83` Ctrl-S handshake** in `rom_coutz`: reachable at runtime
