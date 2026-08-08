@@ -1,0 +1,40 @@
+# Extra dynamic control-flow edges for apple2tc's --code-at.
+#
+# Format: "ORIGIN TARGET", hexadecimal, '$' optional, '#' starts a comment.
+# Each line asserts that the branch at ORIGIN can transfer control to TARGET.
+#
+# These edges are *asserted by hand*, not observed. That is exactly why they
+# live here and not in snake-byte.json: the JSON is a recording of what
+# actually happened during a play session, and editing it to claim reachability
+# the run never saw would destroy its value as evidence. Every line below must
+# carry the argument for why the edge is real.
+
+# --------------------------------------------------------------------------
+# $7251: the RTS of $7230 print_inline_str.
+#
+# $7230 is the Apple II "inline string after JSR" idiom. It pops its own return
+# address into $0C/$0D, walks the $00-terminated bytes that follow the JSR
+# printing each through COUT, then pushes the address of the terminator and
+# RTSes -- landing on the byte after the string:
+#
+#     7230: PLA / STA $0C / PLA / STA $0D
+#     7236: JSR $FC68                       ; VTAB to the current CV
+#     7239: INC $0C / BNE $723F / INC $0D
+#     723F: LDY #$00 / LDA ($0C),Y / BEQ $724B / JSR COUT / JMP $7239
+#     724B: LDA $0D / PHA / LDA $0C / PHA / RTS
+#
+# The target is computed, so the static tracer cannot follow it, and the
+# disassembler only knows the continuations the recording happened to execute.
+#
+# $7541 is the one it missed. $747F hires_text_screen switches to full-screen
+# hi-res, installs the game's own COUT handler at $664A ($6641), sets CV=1 and
+# JSRs $7230 at $748C. The inline string runs $748F..$7540 -- the layout of the
+# key-redefinition screen, "ABSOLUTE DIRECTION / RELATIVE DIRECTION" with the
+# arrow glyphs and "PRESS THE KEY FOR THIS FUNCTION" -- and terminates with the
+# $00 at $7540. So the RTS at $7251 necessarily lands on $7541, which is the
+# body of that screen: a six-slot loop over the key table at $6C63.
+#
+# Reachable in play-hires.keys (SPACE, then C at the attract screen). Before
+# this edge existed both builds stopped there with "Unknown address $7541".
+7251 7541
+

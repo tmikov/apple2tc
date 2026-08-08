@@ -226,6 +226,32 @@ absent from the generated C entirely — despite decoding cleanly as a glyph
 blitter. Look for vector writes whose targets were never traced. The decompiler's
 code/data classification is evidence, not a verdict; decode the bytes yourself.
 
+**`[6502]` The inline-string-after-`JSR` idiom is a reachability barrier, not
+just a disassembly nuisance.** The printer pops its own return address, walks the
+`$00`-terminated bytes following the call, then pushes the terminator's address
+and `RTS`es past it. The continuation is therefore a *computed* target: the
+static tracer cannot follow it, so any call site the recording did not execute
+leaves everything after its string classified as data. In Snake Byte one such
+site (`$7230`'s `RTS` at `$7251`) hid the entire key-redefinition screen,
+`$7541-$7632`. When a region looks like unreachable data, check whether an inline
+string ends just before it.
+
+**`[apple2tc]` Reaching untraced code takes an *edge*, not just an address.**
+`--code-at=<file>` takes `ORIGIN TARGET` lines and merges them into the runtime
+data before disassembly. Adding the target to `branchTargets` only gets it
+disassembled; it must also become a successor of the branch at `ORIGIN`, because
+only a *dynamic* block earns an entry in the generated address-to-block map — and
+without a map entry the code is decompiled but still reports `Unknown address` at
+runtime. Keep these claims in their own file, never in the recording: the
+recording's worth is that it is a faithful record of what happened, and every
+asserted edge needs its own written argument.
+
+**`[apple2tc]` The check that an asserted edge points at code is where the
+*data* boundaries land.** Nothing can tell you untraced bytes are code — that is
+what you are asserting. But if the disassembler, following your edge, stops
+exactly at the tables and font you expected (`$75B3-$75D0`, `$66A9`) rather than
+running through them, the edge was pointed at something real.
+
 **`[6502]` Self-modifying code may be rarer than the warnings suggest.** Snake
 Byte reported three self-modifying game blocks; two are a one-shot startup
 relocator (a block copy) and one is a false positive from the inline-string
@@ -295,3 +321,6 @@ them.
 | Replacing a routine that dispatches through a vector | The vector may point at game code. Honour it; abort loudly on an unknown target. |
 | Externalizing entry points to shrink output | You also delete everything only they reached — and the library stays reachable via the start PC. Measure both routes. |
 | A bodyless `ir::Function` | `getAddress()` derives from `getEntryBlock()`, which asserts on an empty block list: silent UB under NDEBUG. Use the explicit `isExternal()` flag. |
+| Region of "data" sitting right after an inline string | The string's `RTS` continuation is a computed target. If the recording never ran that call site, real code reads as data. |
+| Asserting a code address without the branch it comes from | Half the edge. The target gets disassembled but never reaches the address-to-block map, so it stays unreachable at runtime. |
+| A hand-written replacement only one build can run | It is a regression test against itself, not an oracle. Arrange for the other build to run generated code for the same address and compare. |

@@ -543,3 +543,54 @@ markers.
 Deferred and still open: the headless-vs-windowed trace comparison (needs a
 display), and regenerating `decoded/robotron/**` and `decoded/bolo/**`, which
 would now pick up both the recovery fix and `--extern-routines`.
+
+---
+
+## 2026-08-05 — `--code-at`: hand-asserted branch edges as a separate input
+
+**Scope:** apple2tc · **Status:** validated
+
+**Decision:** Addresses the recording never reached are made reachable with a
+new `apple2tc --code-at=<file>` option. Each line is `ORIGIN TARGET`: the
+dynamic branch at `ORIGIN` can transfer control to `TARGET`. The edge is merged
+into the runtime data before disassembly — `TARGET` is added to `branchTargets`
+so it gets disassembled, and to `allBranches[ORIGIN]` so it becomes a successor
+of that branch. The second half is the load-bearing one: only a *dynamic block*
+gets an entry in the generated address-to-block map, and without a map entry the
+target is decompiled but unreachable.
+
+**Why a separate file and not `snake-byte.json`:** the JSON is a recording of
+what actually happened. Editing it to assert reachability the run never observed
+destroys its value as evidence. These edges are asserted, so they live in
+`decoded/snake-byte/code-at.txt`, where each one carries the argument for why it
+is real and can be reviewed independently.
+
+**Tension, recorded deliberately:** the working agreement in `HANDOFF.md` says
+"hand-decompile what the tool cannot reach; do not feed the decompiler more
+input to route around a gap." This option *is* more input. It was chosen over
+hand-decompiling `$7541` after the alternatives were costed:
+
+- Hand-decompiling needed ~300 bytes of C (`$7541`, `$7590`, `$75D1`, `$615A`,
+  `$60E7`) **and** a new integration mechanism, because there was no way to call
+  hand-written code at an untraced address. `$664A` only works because `$FDED`
+  is an externalised ROM vector that hand-written `rom_cout` dispatches;
+  `--extern-routines` cannot help in general, since `loadExternRoutines` rejects
+  any address that is not already a known block.
+- Teaching the disassembler the inline-string idiom directly was judged higher
+  leverage but heuristic.
+
+**Evidence:** `7251 7541` alone moved the game from 1,490 to 1,576 distinct
+decompiled instruction addresses in `$3750-$854E`, newly covering `$7541-$75B2`
+and `$75D1-$7632`. The gap between them, `$75B3-$75D0`, is the CH/CV cursor
+tables and the direction-glyph table — the disassembler classified them as data
+unaided, which is the check that the edge was pointed at real code.
+
+**Limits, honestly:** whether untraced bytes are code is exactly what the option
+asserts, so a target pointing at data cannot be diagnosed in general. What *is*
+checked and fatal: the target must start a basic block, the origin must be the
+start of a disassembled instruction, and that instruction must be one GenIR
+consults branch targets for (RTS, RTI, JMP, JSR, conditional). A target that
+does not itself decode to a valid instruction warns but does not fail — and it
+is deliberately the first instruction, not "the block ends invalid", which fires
+on real code that runs into undecodable bytes past a `BRK`.
+

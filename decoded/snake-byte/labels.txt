@@ -46,7 +46,35 @@
 741C attract_loop      # polls $C000; any key dispatches at key_dispatch
 7461 key_dispatch      # CMP #$C3 -> hires_text_screen; '0'..'2' select an option
 747F hires_text_screen # pressing C: full-screen graphics, install hook, print
-7541 UNTRACED_7541     # reached from hires_text_screen; not in the recording
+
+# --- the key-redefinition screen -------------------------------------------
+# Reached by falling off the end of the inline string that hires_text_screen
+# prints: the RTS at $7251 lands on $7541. Supplied to apple2tc via code-at.txt,
+# since the recording never took that edge. The screen reads:
+#
+#         ABSOLUTE            RELATIVE
+#        DIRECTION           DIRECTION
+#            b                                 b/c/d/e are font glyphs
+#          d + e               d   e           $E2/$E3/$E4/$E5 = the arrows
+#            c
+#       PRESS THE KEY FOR THIS FUNCTION
+#
+# Six slots: absolute up/left/right/down, then relative turn-left/turn-right.
+7541 redefine_keys     # 6 slots: show current key, blink, read new, write back
+6C63 tbl_keys          # 6 bytes, C9 CA CB CD 88 95 = I J K M left-arr right-arr
+6C6A tbl_keys_default  # the same six bytes again, never written by $7541
+7590 print_key_at      # A=char, X=slot; maps $88/$95 to glyphs $E6/$E7 for COUT
+75B3 tbl_key_ch        # CH per slot for print_key_at: 0A 06 0E 0A 1A 22
+75B9 tbl_key_cv        # CV per slot for print_key_at: 05 09 09 0D 09 09
+75BF tbl_arrow_ch      # CH per slot for the blinking arrow: 0A 08 0C 0A 1C 20
+75C5 tbl_arrow_cv      # CV per slot for the blinking arrow: 07 09 09 0B 09 09
+75CB tbl_arrow_glyph   # E2 E4 E5 E3 E4 E5 = up left right down left right
+75D1 read_key_for_slot # blinks the slot's arrow, returns an accepted key in A
+761C accept_key        # >= $A1, or $88/$95; anything else resumes the blink
+
+# Both $7590 and $75D1 store CH/CV then JSR $FC68, the tail of the ROM's LF
+# (LDA CV / CMP WNDBTM / BCC VTABZ). Their CV is always well under WNDBTM, so
+# it acts as a plain VTAB and never scrolls. See a2rom.h.
 
 # --- video soft switches used once, at $704D-$7056 -------------------------
 7045 set_video_mode    # $C050 graphics, $C057 hi-res, $C055 page 2, $C052 full
