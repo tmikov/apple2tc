@@ -17,8 +17,10 @@ fi
 a6502=$bin/tools/a6502/a6502
 apple2tc=$bin/tools/apple2tc/apple2tc
 id=$bin/tools/id/id
+a2run=$bin/tools/a2run/a2run
+a2emu=$bin/tools/a2emu/a2emu
 
-for tool in "$a6502" "$apple2tc" "$id"; do
+for tool in "$a6502" "$apple2tc" "$id" "$a2run" "$a2emu"; do
   if [ ! -x "$tool" ]; then
     echo "Error: required binary not found: $tool" >&2
     exit 1
@@ -141,5 +143,18 @@ if ! grep -q "also decompiled as code" coverage-test.txt; then
   exit 1
 fi
 rm coverage-test.txt coverage-bad.txt coverage.b33
+
+# a2emu and a2run are the same host and the same engine, differing only in that
+# one has a window. Headless they must agree exactly -- which is the regression
+# test for a2emu, a GUI program that otherwise has none. Booting the ROM is
+# enough; no game data is needed, which keeps this out of decoded/.
+$a2run --frames=40 --hash-frames=frontend-run.txt > /dev/null
+$a2emu --headless --frames=40 --hash-frames=frontend-emu.txt > /dev/null
+if ! diff -q frontend-run.txt frontend-emu.txt > /dev/null; then
+  echo "FAIL: a2emu and a2run disagree headless; they share everything but the window" >&2
+  diff frontend-run.txt frontend-emu.txt | head -5 >&2
+  exit 1
+fi
+rm frontend-run.txt frontend-emu.txt
 
 echo "Success!"

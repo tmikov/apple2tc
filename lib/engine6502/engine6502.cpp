@@ -26,6 +26,7 @@
 #include "apple2tc/a2engine.h"
 #include "apple2tc/a2host.h"
 #include "apple2tc/a2host_api.h"
+#include "apple2tc/engine6502.h"
 
 #include "apple2tc/DebugState6502.h"
 #include "apple2tc/a2io.h"
@@ -366,4 +367,17 @@ void engine_print_help(void) {
   printf(" --collect        Collect run data for apple2tc\n");
   printf(" --limit=n        Stop collecting after n basic blocks\n");
   printf(" --out=path       Write collected data here instead of stdout\n");
+}
+
+/* --- engine6502.h --------------------------------------------------------- */
+
+void engine6502_run_b33(const uint8_t *data, size_t len) {
+  std::vector<uint8_t> v(data, data + len);
+  if (auto addr = loadB33(v)) {
+    auto r = s_emu.getRegs();
+    r.pc = *addr;
+    r.status = Emu6502::STATUS_IGNORED;
+    s_emu.setRegs(r);
+    fprintf(stderr, "Executing at $%04X\n", *addr);
+  }
 }

@@ -15,6 +15,7 @@
 /// and frame hashing must not have one, or they would not be reproducible.
 
 #include "apple2tc/a2host_api.h"
+#include "apple2tc/a2host_gui.h"
 
 #include "apple2tc/a2io.h"
 #include "apple2tc/apple2iodefs.h"
@@ -48,6 +49,12 @@ static bool haveFirstTick_ = false;
 /// This is used on same platforms where some keys like ENTER arrive both as
 /// characters and as keydown events.
 static int ignoreNextCh_ = -1;
+
+static a2host_gui_event_hook event_hook_ = NULL;
+
+void a2host_gui_set_event_hook(a2host_gui_event_hook hook) {
+  event_hook_ = hook;
+}
 
 /// Wall-clock pacing, handed to a2host. Only consulted for runs that are not
 /// required to be reproducible.
@@ -222,6 +229,10 @@ static void frame_cb(void) {
 }
 
 static void event_cb(const sapp_event *ev) {
+  // The front end gets first refusal, so it can add keys of its own.
+  if (event_hook_ && event_hook_(ev))
+    return;
+
   int toIgnore = ignoreNextCh_;
   ignoreNextCh_ = -1;
 
