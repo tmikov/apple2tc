@@ -2,6 +2,8 @@
 
 Date: 2026-08-11
 
+The language reference is `docs/probes.md`. This document is the rationale.
+
 ## The problem
 
 Question 1 of the three in `2026-08-07-host-engine-split-design.md` — *is
