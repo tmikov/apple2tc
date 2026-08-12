@@ -1,0 +1,23 @@
+# Every non-commutative operator appears with operands that make a reversed
+# pop *visibly wrong* -- that is the whole point of this test, since part 1's
+# suite could not catch a VM that pops SUB (or DIV/MOD/SHL/SHR/LT/LE/GT/GE)
+# backwards, because nothing in part 1 executed bytecode. See the commit
+# message / task report for the hand-derived expected output.
+probe m() {
+  printf("sub %d\n", 100 - 30)
+  printf("div %u\n", 100 / 4)
+  printf("mod %u\n", 100 % 30)
+  printf("shl %u\n", 3 << 2)
+  printf("shr %u\n", 96 >> 2)
+  printf("lt %u %u\n", 3 < 9, 9 < 3)
+  printf("le %u %u\n", 9 <= 9, 9 <= 3)
+  printf("gt %u %u\n", 9 > 3, 3 > 9)
+  printf("ge %u %u\n", 3 >= 3, 3 >= 9)
+  printf("add %u mul %u\n", 3 + 4, 3 * 4)
+  printf("and %04X or %04X xor %04X\n", $FF00 & $0FF0, $FF00 | $000F, $FF00 ^ $0F0F)
+  printf("eq %u ne %u\n", 5 == 5, 5 != 5)
+  printf("not %u %u bitnot %08X neg %d\n", !0, !7, ~$0F, -5)
+  printf("pad [%5u] [%-5u] [%05u] [%+d] [% d]\n", 42, 42, 42, 42, 42)
+}
+
+install m at $FA62

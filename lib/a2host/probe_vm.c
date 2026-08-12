@@ -11,9 +11,11 @@
 /// order of OP_PRINTF, both of which a VM can get backwards while passing
 /// every compiler test, because nothing in part 1 executed bytecode.
 ///
-/// Only OP_END, OP_PUSH_LIT and OP_PRINTF are implemented here. Every other
-/// opcode hits the `default:` case in probe_vm_run() and reports clearly --
-/// later tasks add them to this same loop.
+/// OP_END, OP_PUSH_LIT, OP_PRINTF (Task 1) and now the arithmetic, bitwise,
+/// comparison and unary opcodes (Task 2) are implemented here. Everything
+/// else -- state (counters/params/registers), control flow, memory, hash,
+/// stop and key -- still hits the `default:` case in probe_vm_run() and
+/// reports clearly; later tasks add them to this same loop.
 
 #include "probe_internal.h"
 
@@ -181,6 +183,84 @@ void probe_vm_run(const script_t *sc, uint32_t ip) {
       probe_vm_printf(sc->formats[fmt], args, argc);
       break;
     }
+
+// Both operands are pushed in source order (probe_internal.h), so the right
+// operand is on top: pop it first. Each invocation below expands into its
+// own `case` with its own braces, so `r`/`l` never collide with another
+// invocation's `r`/`l`, or with anything outside the switch.
+#define BINOP(name, expr)  \
+  case name: {             \
+    uint32_t r = vm_pop(); \
+    uint32_t l = vm_pop(); \
+    vm_push(expr);         \
+    break;                 \
+  }
+
+      BINOP(OP_ADD, l + r)
+      BINOP(OP_SUB, l - r)
+      BINOP(OP_MUL, l * r)
+      BINOP(OP_AND, l & r)
+      BINOP(OP_OR, l | r)
+      BINOP(OP_XOR, l ^ r)
+      // 0/1, exactly what C's relational/equality operators already give --
+      // OP_JZ (Task 3) tests a popped value against 0, and its lowering of
+      // `&&`/`||` depends on that being the whole range of results a
+      // comparison can produce.
+      BINOP(OP_EQ, l == r)
+      BINOP(OP_NE, l != r)
+      BINOP(OP_LT, l < r)
+      BINOP(OP_LE, l <= r)
+      BINOP(OP_GT, l > r)
+      BINOP(OP_GE, l >= r)
+#undef BINOP
+
+    case OP_DIV:
+    case OP_MOD: {
+      uint32_t r = vm_pop();
+      uint32_t l = vm_pop();
+      // A script's divide-by-zero is a bug in the script, not in the machine
+      // being probed. Defining it as some value (say, 0) would let that bug
+      // produce a report that reads as clean -- the exact failure mode this
+      // facility exists to rule out -- so it is fatal instead, like a stack
+      // overflow above.
+      if (r == 0)
+        probe_fatal("probe VM: division by zero");
+      vm_push(op == OP_DIV ? l / r : l % r);
+      break;
+    }
+    case OP_SHL:
+    case OP_SHR: {
+      uint32_t r = vm_pop();
+      uint32_t l = vm_pop();
+      // A shift of 32 or more is undefined in C, and probe_vm.c is one
+      // implementation shared by every engine -- unlike the interpreter vs.
+      // generated-code split elsewhere, there is no second copy of this file
+      // to disagree with. Left undefined, the *same* source could still
+      // legally return different values on different compilers/platforms
+      // (Windows/LLP64 is a supported target), which is indistinguishable
+      // from a real bug once it shows up as noise in a report. Defining it
+      // as zero -- consistent with "shifted every bit out" -- removes that
+      // platform dependence; the 6502 itself has no variable-count shift to
+      // be bit-compatible with, so nothing is owed to hardware behaviour
+      // here.
+      uint32_t v = r >= 32 ? 0u : (op == OP_SHL ? l << r : l >> r);
+      vm_push(v);
+      break;
+    }
+    case OP_NOT:
+      vm_push(vm_pop() == 0);
+      break;
+    case OP_BITNOT:
+      vm_push(~vm_pop());
+      break;
+    case OP_NEG:
+      // Unsigned subtraction is fully defined for every operand, including
+      // 0x80000000: the result wraps to 0x80000000 itself, which as %d's
+      // (int32_t) is INT32_MIN -- the same value two's-complement negation
+      // of INT32_MIN produces elsewhere, reached here without the signed
+      // overflow that spelling it as `-(int32_t)v` would risk.
+      vm_push((uint32_t)(0u - vm_pop()));
+      break;
 
     default: {
       // opname() returns NULL only for a code[] cell that isn't one of the

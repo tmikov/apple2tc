@@ -1,0 +1,14 @@
+sub 70
+div 25
+mod 10
+shl 12
+shr 24
+lt 1 0
+le 1 0
+gt 1 0
+ge 1 0
+add 7 mul 12
+and 0F00 or FF0F xor F00F
+eq 1 ne 0
+not 1 0 bitnot FFFFFFF0 neg -5
+pad [   42] [42   ] [00042] [+42] [ 42]
