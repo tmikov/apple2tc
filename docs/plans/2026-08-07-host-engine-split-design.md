@@ -1,6 +1,58 @@
 # Splitting the Apple II host from the execution engine
 
-Date: 2026-08-07
+Date: 2026-08-07 · **Outcome recorded 2026-08-11**
+
+## Outcome, and a correction to the reasoning below
+
+Stages 0-6 are done and `verify.sh` stayed 4/4 throughout. What it delivered:
+
+- **`a2run` regenerates run data headlessly.** Impossible before —
+  `snake-byte.json` was a 2022 artefact of a windowed `a2emu` and nothing in the
+  tree reproduced it. See `decoded/snake-byte/README.md` for the recipe, and for
+  why it does not reproduce that file byte for byte.
+- **The verification binaries link no graphics at all.** `verify.sh` no longer
+  depends on a display stack existing or behaving.
+- **One host instead of two.** `a2emu` went from 748 lines to 131 and gained its
+  first test of any kind: sharing everything but the window, `a2emu --headless`
+  must byte-match `a2run`.
+
+**The third justification below — "there is no independent oracle" — was
+overstated, and this section exists to say so.** Three things came out of
+trying it:
+
+1. **Cycle accuracy is a property to preserve *within* an implementation, not to
+   match *between* two.** Frame hashing asks "is the screen identical at
+   host-observation moment N", which presumes a shared sampling clock. The
+   generated engine can only yield at block boundaries and an interpreter yields
+   between instructions, so no such clock exists — and *two perfectly equivalent
+   implementations still fail that test*. Measured: agreement whenever the
+   machine settles, disagreement in 1-3 frame bursts around transitions.
+2. **Registers cannot be compared.** `CPURegLiveness` and `dce` deliberately
+   drop stores to dead registers, so the generated code does not maintain `Y` or
+   the flags when nothing reads them. Traces diverge on line 2. `--compat` makes
+   the format diffable, not the content. A conformance build would need a switch
+   suppressing register DCE.
+3. **PC-only control flow, with no input, does work.** 1,991 of 1,991 branch
+   targets match exactly over 120 frames of ROM boot, no drift. Reaching *game*
+   code needs both engines to receive identical input, which they do not: key
+   delivery is decided by `get_cycles() >= stamp` at frame boundaries, and 21 of
+   23 keys land a frame apart.
+
+And the framing that matters most: there are **three** questions, not one, and
+only the first can use registers or traces at all.
+
+| | question | subject | instrument |
+| --- | --- | --- | --- |
+| 1 | is apple2tc correct? | the **tool** | PC trace, cross-engine, timing-free |
+| 2 | did a refactor break the game? | the **hand-written C** | frame hash + cycles, same engine |
+| 3 | does the hand-written C match the original? | the **hand-written C** | same, against the recorded trace |
+
+A decompiled game is *meant* to end up with no registers and no basic blocks —
+that is what playbook steps 5 and 6 do — so any oracle built on them expires
+exactly when the real work starts. It validates the bootstrap, not the product.
+
+**So: this refactor was worth doing for run-data regeneration and
+deduplication. The cross-check was a bonus that came out weaker than pitched.**
 
 ## Problem
 
@@ -232,39 +284,40 @@ Every stage ends somewhere verifiable. `tests/run-tests.sh` and all four
 not move a single frame hash** -- they are code motion and build topology, not
 behaviour.
 
-**0 — name the contract.** Split `system.h` into `a2engine.h` and `a2host.h`
+**0 — name the contract.** *(done)* Split `system.h` into `a2engine.h` and `a2host.h`
 with the call direction stated; `system.h` keeps including both. No code moves.
 
-**1 — engine hooks.** Add the stop reason, `engine_parse_arg`,
+**1 — engine hooks.** *(done)* Add the stop reason, `engine_parse_arg`,
 `engine_print_help` and `host_io`, with the generated engine implementing them
 trivially. Still one engine.
 
-**2 — split the host.** `lib/decapplib` becomes `lib/a2host` (sokol-free) plus
+**2 — split the host.** *(done)* `lib/decapplib` becomes `lib/a2host` (sokol-free) plus
 `lib/a2host_gui`. `decoded/*` still build one GUI binary each, now linking both.
 This absorbs the `decapplib` → `a2host` rename, so there is no separate rename
 stage.
 
-**3 — GUI/console pairs.** Add `add_a2_program`, give every `decoded/*` target
+**3 — GUI/console pairs.** *(done)* Add `add_a2_program`, give every `decoded/*` target
 its `-run` twin, and point `verify.sh` at the console binaries. Verification
 stops depending on sokol.
 
-**4 — `engine6502` and `a2run`.** The interpreter behind `a2engine.h`, plus the
+**4 — `engine6502` and `a2run`.** *(done)* The interpreter behind `a2engine.h`, plus the
 console tool. **This is what unblocks run-data regeneration.** *Verify:*
 regenerate `snake-byte.json` and diff it against the committed 2022 copy.
 
-**5 — the cross-check.** Replay `play.keys` through `a2run` and diff frame
-hashes against `snake-bytec1-run`. The independent oracle the project has never
-had. **Open-ended discovery, not a gate** — see Risks.
+**5 — the cross-check.** *(done — the Outcome section downgrades what this was
+expected to be worth)* Frame hashes turn out to be the wrong instrument across
+engines; PC traces are the right one, and validate the ROM path exactly.
 
-**6 — fold `a2emu` in.** Port its debug UI onto the host; delete its duplicated
-frame loop, video, sound and CLI.
+**6 — fold `a2emu` in.** *(done)* 748 lines to 131. Its debug helpers survive as
+free functions, easier to call from gdb than they were as private methods.
 
 **7 — `--snapshot-at` / `--snapshot-out`** in `a2host`, once, available to both
 engines and in particular to `snake-bytec1-run`. Then Phase 1b.
 
 ## Risks
 
-**Cycle accounting will probably diverge (stage 5).** The generated code adds
+**Cycle accounting diverges — and measuring it was the wrong idea; see the
+Outcome section.** As predicted: The generated code adds
 whole-block totals via `CYCLES(pc, n)`; the interpreter adds per-instruction and
 models page-crossing and branch-taken penalties as it goes. If the block totals
 were computed from the same tables these agree, but that has never been tested.
