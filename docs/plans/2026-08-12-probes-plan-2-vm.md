@@ -77,14 +77,17 @@ adds opcodes to a loop that already runs.
 - [ ] **Step 1: Write the failing test**
 
 `tests/probe/hello.probe` — `$FA62` is the ROM reset entry, executed once
-during boot:
+during boot. **A literal, not a counter:** `inc hits` compiles to
+`LOAD_COUNTER`/`ADD`/`STORE_COUNTER`, none of which this task implements, so
+the probe would die on `opcode 3 is not implemented` rather than print. The
+single-line baseline still proves dispatch fires exactly once — any extra or
+missing firing changes the line count.
 
 ```
-counter hits
-
+# A literal rather than a counter: Task 1 implements only PUSH_LIT, PRINTF and
+# END, and `inc` needs three opcodes that do not exist yet.
 probe reset() {
-  inc hits
-  printf("reset %u\n", hits)
+  printf("reset %u\n", 1)
 }
 
 install reset at $FA62
@@ -244,19 +247,27 @@ enum { PROBE_MAX_PRINTF_ARGS = 32 };
 void probe_vm_run(const script_t *sc, uint32_t ip);
 /// Record the address dispatch reached, for LOAD_REG REG_PC.
 void probe_vm_set_pc(uint16_t pc);
-/// Render one format string against argc values already in source order.
-void probe_vm_printf(const char *fmt, const uint32_t *args, unsigned argc);
-/// Initialise the VM's counters from the script's declared values.
-void probe_vm_init_counters(const script_t *sc);
-/// True once a probe executed `stop`. The host consults this after
-/// run_emulated returns; the VM cannot unwind out of a block mid-flight.
-bool probe_stop_requested(void);
-/// Deliver every pending key whose stamp is <= `now`. Defined in a2host.c,
-/// beside the key list it draws from.
-void probe_deliver_keys(uint32_t now);
 ```
 
-`probe_vm_hash` in Task 4 stays `static` — only `probe_vm.c` calls it.
+`probe_vm_printf` and `probe_vm_hash` (Task 4) stay `static` — each has one
+caller, in `probe_vm.c` itself. Declare `probe_vm_init_counters` (Task 3),
+`probe_stop_requested` and `probe_deliver_keys` (Task 5) **in the task that
+defines them, not here**: a header that documents behaviour four tasks before
+it exists is a small lie with a long shelf life, in a codebase whose convention
+is that comments are load-bearing.
+
+### `Emu6502::DebugASM` now has three owners
+
+`init_emulated` enables it for probes, but it already meant "trace" (`g_debug &
+DebugASM`) and "collect", and `finishCollecting()` at `engine6502.cpp:163`
+**clears it unconditionally**. Measured before this was fixed: a script that
+produced 2,369 report lines produced 47 under `--collect --from-rom
+--limit=2000`, exit 0, no diagnostic.
+
+That matters beyond Task 1. Task 7 compares two reports, and a truncation that
+hits both sides identically passes the diff — the "reads as agreement" failure
+the whole design exists to prevent. Whatever the fix, leave the pattern visible
+for a fourth owner.
 
 `PROBE_MAX_PRINTF_ARGS` is a new limit; the compiler does not enforce one, so
 add the check in `parse_printf` too — a format with 33 conversions must be a
