@@ -79,7 +79,7 @@ only where the default fails."
 
 | form | notes |
 |---|---|
-| `counter <name> [= <expr>]` | init defaults to 0, constant-folded at compile |
+| `counter <name> [= <literal>]` | defaults to 0; a literal, optionally negated — not an expression, since machine state does not exist yet when counters initialise |
 | `probe <name>([p = expr, ...]) { ... }` | params are the signature |
 | `install <probe> at <sites>` | `$ADDR`, `$LO-$HI`, `@"file"`, comma-separated mix |
 
@@ -89,7 +89,7 @@ only where the default fails."
 |---|---|
 | `{ ... }` | block |
 | `if (e) s [else s]` | compiles to branches |
-| `printf("fmt", ...)` | `%d %u %x %X` with width and zero-pad, and `%%` |
+| `printf("fmt", ...)` | `%d %u %x %X` with `0 - +` and space flags and a width up to 999, plus `%%` |
 | `<counter> = e`, `<param> = e` | assignment |
 | `inc <counter>` | sugar for `c = c + 1` |
 | `key e` | deliver every pending key stamped ≤ `e` |

@@ -2133,3 +2133,11 @@ semantics — which hash, over what — are part 2's to define, and both engines
 must produce identical values from identical memory. Use a plain FNV-1a over
 the byte range read through `ram_peek`, and write that down where the opcode is
 implemented.
+
+**One wart found while writing the reference, left for part 2.**
+`counter n = 1 + 1` is rejected, but with `expected 'counter', 'probe' or
+'install'`: the parser accepts `= 1`, returns, and then trips over `+` at top
+level. The message names the wrong problem for a plausible mistake. Checking
+whether an operator follows the literal, and saying "a counter initialiser must
+be a literal" if so, is a few lines — but it needs a Task 6 rejection case
+alongside it, so it belongs in a commit that can carry both.
