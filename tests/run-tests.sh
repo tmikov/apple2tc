@@ -460,6 +460,7 @@ probe_run_test hello 2
 probe_run_test format 2
 probe_run_test chain 2
 probe_run_test arith 2
+probe_run_test flow 2
 
 rm -rf probe-tmp
 

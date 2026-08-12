@@ -156,6 +156,7 @@ void probe_load_script(const char *path) {
   probe_parse_script(s_script, src, path);
   free(src);
   probe_build_sites(s_script);
+  probe_vm_init_counters(s_script);
   s_loaded = true;
   // Only now, and only if something was actually installed: an empty script
   // must leave the hot path untouched.

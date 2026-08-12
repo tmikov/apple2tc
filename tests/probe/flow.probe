@@ -1,0 +1,33 @@
+# Counters, parameters, registers and control flow: `inc`, parameter
+# initializers that read a counter, `if`/`else if`, `&&`, and LOAD_REG PC.
+#
+# Install sites, and why they are $FA62/$FA63/$FA66 and not the naively
+# "consecutive" $FA62/$FA63/$FA64: the interpreter dispatches once per
+# instruction, so a site only ever fires if it is the *start* of an
+# instruction some control-flow path actually reaches. decoded/rom/rom.lst
+# shows the reset entry as
+#   $FA62  CLD                (1 byte:  $FA62)
+#   $FA63  JSR L_FE84         (3 bytes: $FA63-$FA65)
+#   $FA66  JSR L_FB2F         (3 bytes: $FA66-$FA68)
+# so $FA64 is the low operand byte of the JSR at $FA63, never itself a value
+# of pc at dispatch -- installing there would silently never fire, which is
+# exactly the failure this facility exists to catch, not exercise. $FA62,
+# $FA63 and $FA66 are each real instruction starts on the one-time boot path,
+# so f fires exactly three times in two frames, once per address, in that
+# order.
+counter n
+counter every = 0
+
+probe f(pc_at = pc, doubled = n * 2) {
+  inc n
+  if (n == 1)
+    printf("first pc=%04X doubled=%u\n", pc_at, doubled)
+  else if (n == 3)
+    printf("third pc=%04X doubled=%u\n", pc_at, doubled)
+  if (n >= 2 && n <= 3)
+    every = every + n
+  if (n == 3)
+    printf("every=%u\n", every)
+}
+
+install f at $FA62, $FA63, $FA66

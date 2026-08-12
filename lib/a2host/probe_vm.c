@@ -11,13 +11,15 @@
 /// order of OP_PRINTF, both of which a VM can get backwards while passing
 /// every compiler test, because nothing in part 1 executed bytecode.
 ///
-/// OP_END, OP_PUSH_LIT, OP_PRINTF (Task 1) and now the arithmetic, bitwise,
-/// comparison and unary opcodes (Task 2) are implemented here. Everything
-/// else -- state (counters/params/registers), control flow, memory, hash,
-/// stop and key -- still hits the `default:` case in probe_vm_run() and
-/// reports clearly; later tasks add them to this same loop.
+/// OP_END, OP_PUSH_LIT, OP_PRINTF (Task 1), the arithmetic, bitwise,
+/// comparison and unary opcodes (Task 2), and now counters, parameters,
+/// registers and control flow (Task 3) are implemented here. Still missing:
+/// memory, hash, stop and key (Tasks 4-5) -- those still hit the `default:`
+/// case in probe_vm_run() and report clearly.
 
 #include "probe_internal.h"
+
+#include "apple2tc/a2engine.h" // get_regs/regs_t, for OP_LOAD_REG
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -40,6 +42,16 @@ static unsigned s_sp;
 /// variable is exactly the kind of asymmetry that would only show up as a
 /// disagreement between the two, not as a bug in either one alone.
 static uint16_t s_dispatch_pc;
+
+/// Counter storage, indexed by the same slot a counter got in the compiler's
+/// symbol table (script_t::counters). Lives in the VM rather than in
+/// script_t: script_t is the compiled *program* -- reloading a script (the
+/// `only one probe script may be loaded` check in probe.c means that never
+/// happens today, but nothing here should assume it never will) should not
+/// require deciding whether counter state carries over, and a plain array
+/// here sidesteps that question entirely by always starting fresh in
+/// probe_vm_init_counters.
+static uint32_t s_counters[PROBE_MAX_COUNTERS];
 
 static void vm_push(uint32_t v) {
   if (s_sp == PROBE_STACK_SIZE)
@@ -262,6 +274,75 @@ void probe_vm_run(const script_t *sc, uint32_t ip) {
       vm_push((uint32_t)(0u - vm_pop()));
       break;
 
+    case OP_LOAD_PARAM:
+      // frame_base + idx, not s_sp-relative: see probe_t::init_offset in
+      // probe_internal.h. The compiler emits idx values that only ever
+      // address this probe's own frame, so no bounds check against
+      // PROBE_MAX_PARAMS is needed beyond the ip range check already above.
+      vm_push(s_stack[frame_base + sc->code[ip++]]);
+      break;
+    case OP_STORE_PARAM: {
+      uint32_t idx = sc->code[ip++];
+      s_stack[frame_base + idx] = vm_pop();
+      break;
+    }
+    case OP_LOAD_COUNTER:
+      vm_push(s_counters[sc->code[ip++]]);
+      break;
+    case OP_STORE_COUNTER: {
+      uint32_t idx = sc->code[ip++];
+      s_counters[idx] = vm_pop();
+      break;
+    }
+    case OP_LOAD_REG: {
+      regs_t r = get_regs();
+      switch ((reg_t)sc->code[ip++]) {
+      case REG_A:
+        vm_push(r.a);
+        break;
+      case REG_X:
+        vm_push(r.x);
+        break;
+      case REG_Y:
+        vm_push(r.y);
+        break;
+      case REG_SP:
+        vm_push(r.sp);
+        break;
+      case REG_SR:
+        vm_push(r.status);
+        break;
+      // Not r.pc -- see s_dispatch_pc's comment above the file-scope
+      // declaration for why the two are not interchangeable in a generated
+      // program even though they agree in the interpreter.
+      case REG_PC:
+        vm_push(s_dispatch_pc);
+        break;
+      }
+      break;
+    }
+    case OP_JMP:
+      // Overwrites ip with the target, so there is nothing to advance past.
+      // Do not "fix" this to `ip = sc->code[ip++]`: that assigns to ip and
+      // reads it (for the postfix ++) with no sequence point between them,
+      // which is undefined behaviour in C, not merely a style nit -- unlike
+      // the JZ/JNZ cases below, which read the operand with `ip++` and only
+      // assign to ip afterwards, in a separate statement.
+      ip = sc->code[ip];
+      break;
+    case OP_JZ: {
+      uint32_t target = sc->code[ip++];
+      if (vm_pop() == 0)
+        ip = target;
+      break;
+    }
+    case OP_JNZ: {
+      uint32_t target = sc->code[ip++];
+      if (vm_pop() != 0)
+        ip = target;
+      break;
+    }
+
     default: {
       // opname() returns NULL only for a code[] cell that isn't one of the
       // opcode_t enumerators at all -- corrupt bytecode, distinct from an
@@ -278,4 +359,9 @@ void probe_vm_run(const script_t *sc, uint32_t ip) {
 
 void probe_vm_set_pc(uint16_t pc) {
   s_dispatch_pc = pc;
+}
+
+void probe_vm_init_counters(const script_t *sc) {
+  for (unsigned i = 0; i != sc->ncounters; ++i)
+    s_counters[i] = sc->counters[i].init;
 }

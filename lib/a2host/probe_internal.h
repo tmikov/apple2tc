@@ -333,10 +333,15 @@ enum {
 void probe_vm_run(const script_t *sc, uint32_t ip);
 /// Record the address dispatch reached, for LOAD_REG REG_PC.
 void probe_vm_set_pc(uint16_t pc);
+/// Reset every counter to its `counter x = <init>` value (0 if the script
+/// left it implicit). Call once, after probe_build_sites() has run, when a
+/// script loads -- counter storage is process-lifetime in the VM (see
+/// s_counters in probe_vm.c), so this is what gives a freshly loaded script
+/// a clean start rather than whatever a previous load left behind.
+void probe_vm_init_counters(const script_t *sc);
 //
-// probe_vm_init_counters, probe_stop_requested and probe_deliver_keys are
-// declared by Tasks 3 and 5, which are also the tasks that define them --
-// not here, ahead of time: a declaration with no definition anywhere yet
-// documents behaviour (Task 5's own draft of this file said "True once a
-// probe executed `stop`" while OP_STOP did not exist) that this task does
-// not implement.
+// probe_stop_requested and probe_deliver_keys are declared by Task 5, which
+// is also the task that defines them -- not here, ahead of time: a
+// declaration with no definition anywhere yet documents behaviour (Task 5's
+// own draft of this file said "True once a probe executed `stop`" while
+// OP_STOP did not exist) that this task does not implement.
