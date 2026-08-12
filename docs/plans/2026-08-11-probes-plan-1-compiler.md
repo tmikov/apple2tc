@@ -1990,6 +1990,38 @@ expect_bad_script "assignment to an unknown name" "expected a statement" \
   'probe p() { nosuch = 1 }'
 ```
 
+The site-list reader needs its own cases, because `@"file"` is the load-bearing
+input — it is what guarantees both engines install at an identical set, so a
+list that quietly shrinks or grows is the exact failure probes exist to prevent.
+Every one of these silently exited 0 when Task 5 was first written:
+
+```sh
+expect_site_reject() {
+  # $1: description, $2: expected substring, $3: site-list contents
+  printf '%s\n' "$3" > probe-tmp/sites.txt
+  printf 'probe p() { }\ninstall p at @"sites.txt"\n' > probe-tmp/bad.probe
+  expect_probe_reject "$1" "$2" --probe=probe-tmp/bad.probe --probe-dump
+}
+
+expect_site_reject "trailing text after an address" "expected" '300 400'
+expect_site_reject "a site list with no addresses" "no addresses" '# only a comment'
+expect_site_reject "an empty site list" "no addresses" ''
+# A line longer than the read buffer used to arrive in chunks, each parsed as a
+# fresh line -- a 270-character comment installed $000F from its tail.
+expect_site_reject "an over-long line" "too long" \
+  "# $(printf 'x%.0s' $(seq 250)) beef and more text"
+
+expect_probe_reject "a directory as a site list" "site list" \
+  --probe=probe/dirlist.probe --probe-dump
+expect_bad_script "a duplicate install" "already installed" \
+  'probe p() { }
+install p at $300
+install p at $300'
+```
+
+`probe/dirlist.probe` installs from `@"."`, since `fopen(dir, "rt")` succeeds on
+Linux and the failure has to come from the reader rather than the open.
+
 Two more about option combinations rather than script contents:
 
 ```sh

@@ -283,12 +283,13 @@ surfaces as a divergence rather than passing quietly.
 
 ### Dispatch table
 
-An open-addressed hash keyed on address, with the site record inline:
+An open-addressed hash keyed on address. Chains live in a separate array rather
+than in spare slots, so a chain node can never sit in the path of a linear
+probe — every occupied slot is a real key:
 
 ```c
-typedef struct { uint16_t addr; uint16_t next; uint32_t probe_id; } site_t;
-static site_t *s_sites;   // NULL until a script loads; power-of-two sized
-static uint32_t s_mask;
+typedef struct { uint16_t addr; uint16_t used; uint32_t first; } slot_t;
+typedef struct { uint32_t probe_id; uint32_t next; } inst_t;
 ```
 
 Not a direct `uint16_t map[0x10000]`. The deciding argument is footprint: 128KB
