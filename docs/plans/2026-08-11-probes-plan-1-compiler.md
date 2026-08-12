@@ -1019,10 +1019,38 @@ static void parse_expr(parser_t *P, int min_prec) {
 }
 ```
 
-`&&` and `||` compile to `OP_AND`/`OP_OR` on 0/1 comparison results rather than
-short-circuiting. Comparisons already yield 0 or 1, so the result is correct for
-every expression the language can express — there are no side effects in an
-expression to skip. Revisit if `key` or a call ever becomes an expression.
+**`&&` and `||` generate real short-circuit branches**, and are the only
+operators that branch — which is why `binop_opcode` does not handle them.
+Reaching it with either is an internal error.
+
+An earlier draft mapped them onto `OP_AND`/`OP_OR`, on the reasoning that
+comparisons yield 0 or 1. That reasoning was wrong and shipped: only the six
+comparisons and `!` yield 0/1, while literals, counters, parameters, registers,
+`peek8`, `peek16`, `hash` and every arithmetic and bitwise operator yield
+arbitrary values and are all legal operands. `2 && 1` compiled to `2 & 1` = 0.
+`OP_AND` does not even preserve truthiness, so `if (frame && 2)` took the wrong
+branch. Short-circuiting also makes `x != 0 && 100 / x > 5` safe, which no
+non-branching form can be.
+
+With the left operand on the stack, `a && b` emits:
+
+```c
+emit(P, OP_JZ);
+uint32_t j_false = emit(P, 0);
+parse_expr(P, prec + 1);
+emit(P, OP_JZ);
+uint32_t j_false2 = emit(P, 0);
+emit_op1(P, OP_PUSH_LIT, 1);
+emit(P, OP_JMP);
+uint32_t j_end = emit(P, 0);
+P->sc->code[j_false] = P->sc->ncode;
+P->sc->code[j_false2] = P->sc->ncode;
+emit_op1(P, OP_PUSH_LIT, 0);
+P->sc->code[j_end] = P->sc->ncode;
+```
+
+`||` is the mirror image, with `JNZ` to a true arm. `JZ`/`JNZ` pop, so the stack
+is balanced on every path.
 
 - [ ] **Step 5: Add declaration parsing and generate the baseline**
 
@@ -1886,6 +1914,22 @@ expect_bad_script "a duplicate probe" "already declared" \
 probe p() { }'
 expect_bad_script "a duplicate parameter" "duplicate parameter" \
   'probe p(v = 1, v = 2) { }'
+# Self-reference is prevented by nparams not being incremented until after the
+# initialiser parses -- a fragile-looking invariant, so assert it directly.
+expect_bad_script "a self-referential parameter" "unknown name 'v'" \
+  'probe p(v = v) { }'
+expect_bad_script "a counter named after a builtin" "reserved" \
+  'counter hash'
+expect_bad_script "a parameter named after a keyword" "reserved" \
+  'probe p(printf = 1) { }'
+expect_bad_script "a probe named after a keyword" "reserved" \
+  'probe install() { }'
+# Registers are shadowable, but not retroactively: the same spelling must not
+# mean LOAD_REG above a counter declaration and LOAD_COUNTER below it.
+expect_bad_script "a counter declared after its name resolved to a register" \
+  "as a register" \
+  'probe before(v = x) { }
+counter x'
 expect_bad_script "a non-literal counter init" "must be a literal" \
   'counter c = peek8($10)'
 expect_bad_script "install of an unknown probe" "unknown probe" \
@@ -2014,10 +2058,10 @@ acceptance test against `romc1-run`.
 
 **Two decisions this plan makes that the spec left open:**
 
-1. **`&&` and `||` do not short-circuit.** They compile to `OP_AND`/`OP_OR`
-   over comparison results, which are 0 or 1. Correct for everything the
-   language can currently express, since expressions have no side effects.
-   Revisit if an expression ever gains one.
+1. **`&&` and `||` short-circuit**, via `JZ`/`JNZ` branches. An earlier draft
+   of this plan claimed they could safely reuse `OP_AND`/`OP_OR` because
+   comparisons yield 0/1; that was false for every other kind of operand, and
+   it shipped before review caught it. See Task 3 for the correction.
 2. **`@file` names are quoted strings**, not bare identifiers, so a path with a
    dot needs no lexer state.
 

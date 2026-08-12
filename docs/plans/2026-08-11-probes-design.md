@@ -102,6 +102,26 @@ Initializers are ordinary expressions rather than a prefix sublanguage, and each
 renders to C for phase 3: `peek8($1F00)` → `ram_peek(0x1F00)`, `a` → `s_a`, `pc`
 → the literal block address.
 
+Names resolve **params → counters → registers**, so a declared name shadows a
+register of the same name, in reads and in assignments alike. `x` and `y` are
+the obvious names for coordinates — the `pos` example above declares both — so
+forbidding them would be a bad language for an implementation's convenience. The
+order has to be identical on both paths: resolving registers first on reads
+while assignment saw only counters would make `counter y` … `y = y + 1` read the
+register and write the counter, a silent divergence in the one tool built to
+find divergences.
+
+Shadowing is resolved as the script is read, so a counter must be declared
+before any probe that would otherwise resolve its name to a register. Declaring
+it later is an error rather than a silent change of meaning: the same spelling
+would compile to `LOAD_REG` above the declaration and `LOAD_COUNTER` below it,
+and phase 3 has apple2tc generating these scripts, where declaration placement
+is a code-generator detail rather than a considered choice.
+
+`peek8`, `peek16`, `hash` and the statement keywords are matched before
+identifier lookup and cannot be shadowed coherently, so declaring one — as a
+counter, a parameter or a probe — is an error.
+
 **Operators**, C precedence: `||` · `&&` · `|` `^` `&` · `==` `!=` · `<` `<=`
 `>` `>=` · `<<` `>>` · `+` `-` · `*` `/` `%` · unary `!` `~` `-`
 
