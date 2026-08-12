@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "apple2tc/probe.h"
 #include "apple2tc/system.h"
 
 #include <assert.h>
@@ -34,6 +35,14 @@ uint8_t g_debug = 0;
       branchTarget = false;                                                \
       debug_asm(pc);                                                       \
     }                                                                      \
+    /* At the end, not beside debug_asm above, and not gated by g_debug:   \
+       the probe must observe the block's entry state, which is fixed by   \
+       now, and probes are deliberately not a debug feature -- they must   \
+       fire even when tracing is off, since add_default_nondebug() blanks  \
+       exactly the ranges (e.g. $FCA8-$FCB3, $FD0C-$FD3C) a keyboard       \
+       probe wants to sit in. */                                           \
+    if (g_probe_sites)                                                     \
+      probe_dispatch(pc);                                                  \
   } while (0)
 
 void reset_regs(void) {

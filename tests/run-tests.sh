@@ -492,6 +492,23 @@ if grep -q "^  s " probe-tmp/unfired.txt; then
   exit 1
 fi
 
+# The same probe script through both front ends. a2emu and a2run share a host
+# and an interpreter engine, differing only in the window (see the frontend
+# equivalence check above), so any difference here is a bug in a front end,
+# not in the probe VM. Note what this does and does not prove: both tools are
+# still the interpreter, so this pins the front ends against each other, not
+# the interpreter against a generated program -- that cross-engine assertion
+# is the ROM-boot acceptance test.
+$a2run --frames=40 --probe=probe/hello.probe --probe-out=probe-tmp/fe-run.txt \
+  > /dev/null
+$a2emu --headless --frames=40 --probe=probe/hello.probe \
+  --probe-out=probe-tmp/fe-emu.txt > /dev/null
+if ! diff -q probe-tmp/fe-run.txt probe-tmp/fe-emu.txt > /dev/null; then
+  echo "FAIL: a2emu and a2run disagree on a probe report" >&2
+  diff probe-tmp/fe-run.txt probe-tmp/fe-emu.txt | head -5 >&2
+  exit 1
+fi
+
 rm -rf probe-tmp
 
 echo "Success!"

@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "apple2tc/probe.h"
 #include "apple2tc/system.h"
 
 #include "c11threads/c11threads.h"
@@ -250,6 +251,19 @@ static void cycles_expired() {
       branchTarget = false;                                                \
       debug_asm(pc);                                                       \
     }                                                                      \
+    /* At the end, not beside debug_asm above, and not gated by g_debug:   \
+       the probe must observe the block's entry state, which is fixed by   \
+       now, and probes are deliberately not a debug feature -- they must   \
+       fire even when tracing is off, since add_default_nondebug() blanks  \
+       exactly the ranges (e.g. $FCA8-$FCB3, $FD0C-$FD3C) a keyboard       \
+       probe wants to sit in. Placing this after cycles_expired() (above)  \
+       is safe, not "on the wrong side of a yield": cycles_expired() only  \
+       returns once the host has re-armed s_remaining_cycles and handed    \
+       control back, at which point this thread again holds s_emu_mutex    \
+       exclusively -- the host is parked in cnd_wait, touching nothing --  \
+       until the *next* cycles_expired() or shutdown_emulated(). */        \
+    if (g_probe_sites)                                                     \
+      probe_dispatch(pc);                                                  \
   } while (0)
 
 void run_emulated(unsigned run_cycles) {
