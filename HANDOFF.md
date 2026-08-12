@@ -4,9 +4,12 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
-**Last commit:** `7479aed`. 38 commits on `snake-byte`, nothing pushed, tree
-clean. The `$7541` work landed in five commits (two for `--code-at` in
-`tools/apple2tc/`, three for the game); the `$60E7` routine recovery in two.
+**Last commit:** `4ffb88a`. 78 commits on `snake-byte`, nothing pushed, tree
+clean. The most recent 28 are two pieces of infrastructure that did not touch
+the game at all: the **host/engine split** (2026-08-11 log entry) and the
+**probe compiler** (2026-08-12). Both are summarised under "Host, engines and
+probes" below; read that before assuming anything about how verification runs,
+because it changed.
 
 ---
 
@@ -55,6 +58,15 @@ and its code/data classifications are evidence, not verdicts.
 
 The two plans in `docs/superpowers/plans/` are executed and historical.
 
+Infrastructure, only if you are touching how things run or are verified:
+
+| File | What it holds |
+| --- | --- |
+| `docs/plans/2026-08-07-host-engine-split-design.md` | Why `a2run` exists. Leads with an outcome section that retracts part of its own reasoning — read that first, not the design below it. |
+| `docs/plans/2026-08-11-probes-design.md` | Why probes exist: every other way of comparing the two engines failed, and all of them failed the same way. |
+| `docs/probes.md` | The probe language reference. The design doc is the rationale; this is the *what*. |
+| `docs/plans/2026-08-11-probes-plan-1-compiler.md` | The executed plan. Its closing self-review is the most useful part — it names what part 2 inherits. |
+
 **Read the log before acting on anything that seems obvious.** It deliberately
 preserves the wrong turns so they are not repeated. See "Traps" below.
 
@@ -88,6 +100,48 @@ preserves the wrong turns so they are not repeated. See "Traps" below.
   `$664A` are reached.
 - **`Dominators.{h,cpp}`** — Cooper-Harvey-Kennedy, validated against a DAG, a
   single-loop routine and a nested delay loop. The codebase had none before.
+
+### Host, engines and probes (`lib/a2host`, `lib/engine6502`, `tools/a2run`)
+
+Added 2026-08-11/12. None of it touches the game; all of it changes how you run
+and verify one.
+
+**`system.h` is now two contracts.** `a2engine.h` is what an engine provides and
+the host calls; `a2host.h` is what the host provides and an engine calls;
+`a2host_api.h` is what the host offers a *front end*. There are two front ends —
+`a2host_gui` (sokol) and a console `main` — and they are **separate executables
+rather than one binary with a flag, because on Windows console versus GUI is a
+link-time subsystem property**. So:
+
+| Binary | What it is |
+| --- | --- |
+| `a2emu` | the windowed emulator; now 131 lines, all of it F1/F2 game loading and two gdb helpers |
+| `a2run` | the same host and engine with a console `main` and no graphics |
+| `<name>` / `<name>-run` | every decompiled game now builds both, via `add_a2_program` |
+
+**Three things this bought, and they matter to the questions below:**
+
+1. **Run data can be regenerated headlessly.** Previously impossible —
+   `snake-byte.json` is a 2022 artefact of a windowed `a2emu`. Recipe in
+   `decoded/snake-byte/README.md`, which is explicit that it does *not*
+   reproduce that file byte for byte.
+2. **`verify.sh` links no graphics at all.** It drives `snake-bytec1-run` and
+   `snake-bytec1-ext-run`.
+3. **`a2emu` has a test for the first time**, in `tests/run-tests.sh`: sharing
+   everything but the window, `a2emu --headless` must byte-match `a2run`.
+
+**Probes** (`lib/a2host/probe*.c`, `include/apple2tc/probe.h`) are a compiler
+only — nothing executes. A probe is a small program bound to install sites, so
+the two engines can be compared at points *the program* defines rather than at
+moments the host defines. Read `docs/probes.md` for the language and the
+2026-08-12 log entry for why. Options: `--probe=`, `--probe-out=`,
+`--probe-dump`.
+
+**The hazard, stated once here because it is easy to lose:** `CYCLES` is emitted
+per basic block, not per instruction, so a probe installed at a non-block-head
+address fires under `a2emu`/`a2run` and *does not exist* in a generated program
+— and the report still reads as agreement. Cross-engine comparison must install
+from `@"file"`, using a block-head list.
 
 ### Tooling (`tools/id/`)
 
@@ -133,6 +187,11 @@ cd tests && ./run-tests.sh ../cmake-build-debug     # expect: Success!
 cd decoded/snake-byte && ./verify.sh                # expect: 4x PASS
 ./decompile.sh                                      # regenerates both c1 variants
 ```
+
+`run-tests.sh` is no longer only decompiler regression. It also asserts that
+`a2emu --headless` byte-matches `a2run`, and carries the probe compiler's 4
+baseline diffs and 63 rejection assertions. Both were verified green at
+`4ffb88a`, as was `verify.sh` at 4/4.
 
 `verify.sh` replays two scenarios against both builds:
 
@@ -243,10 +302,22 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
    snapshot and a re-based trace, because a cold start skips the 168 boot frames
    `play.frames` opens with.
 
-**Deferred:** the headless-vs-windowed trace comparison (needs a display; this
-environment has no usable X server), and regenerating `decoded/robotron/**` and
-`decoded/bolo/**`, which would pick up both the recovery fix and
-`--extern-routines`.
+   **There is no `--snapshot-at`, and no format for one.** Stage 7 of the
+   host/engine split design was never started; the option does not exist
+   anywhere in the tree. Phase 1b is still blocked on it, and whoever picks it
+   up is designing it from scratch, not using something already built.
+5. **The probe VM** — part 2 of the probe plan. `docs/plans/2026-08-11-probes-plan-1-compiler.md`
+   ends with a self-review naming exactly what part 2 inherits, including that
+   `probe_installed()` cannot serve as the inline test `CYCLES` needs. First
+   real use is the frame-472 attribution, which is a dead end today because
+   "frame 472" is a host-side count with no meaning inside either program.
+
+**No longer deferred:** the headless-vs-windowed trace comparison was deferred
+for want of a display. `a2run` removes the need for one, and the comparison is
+now a test that runs on every invocation of `tests/run-tests.sh`.
+
+**Still deferred:** regenerating `decoded/robotron/**` and `decoded/bolo/**`,
+which would pick up both the recovery fix and `--extern-routines`.
 
 ---
 
@@ -267,6 +338,10 @@ Mistakes already made here. The log has the full accounts.
 | Adding a `--code-at` target is enough to reach it | It also needs the `ORIGIN` half. Only a block that is a successor of a *dynamic* branch gets an address-to-block map entry; without one the code is decompiled but unreachable, and you still get `Unknown address`. |
 | `--code-at` will tell you if you point it at data | It cannot. That untraced bytes are code is exactly what you are asserting. It only checks the target starts a block and the origin is a branch, and warns if the target decodes to an invalid instruction. The real check is that the surrounding data boundaries come out right. |
 | The compiler will DCE unreachable blocks | It will not. `dce()` removes only instructions, and every `Void`-typed instruction counts as having side effects. A pass that orphans blocks must delete them itself. |
+| Two frame-hash traces that disagree mean one engine is wrong | Not between *different* engines. Frame hashing presumes a shared sampling clock; the generated engine yields only at block boundaries and an interpreter between instructions, so two perfectly equivalent implementations still disagree in 1-3 frame bursts around transitions. Same-engine comparison is fine, and is what `verify.sh` does. |
+| Comparing register traces across engines | `CPURegLiveness` and `dce` drop stores to dead registers by design, so the generated code does not maintain `Y` or the flags where nothing reads them. Traces diverge on line 2. `--compat` makes the format diffable, not the content. |
+| A rejection test that greps for `FATAL` | Twice during the probe work a test passed while covering nothing, because a *different* check fired first and satisfied the grep. Assert the specific message, and prove the test can fail by deleting the check it covers and watching the suite go red. |
+| A probe that produces no output | Says nothing about agreement. A probe on a non-block-head address fires in the interpreter and does not exist in the generated program; the report then reads as agreement while covering less than you think. |
 
 ---
 

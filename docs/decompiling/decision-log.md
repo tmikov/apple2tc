@@ -911,3 +911,124 @@ rather than a gate, precisely so the refactor's value would already be banked
 before anyone went looking for a bug in one of two 6502 implementations. It is
 the obvious next investigation, and it now has a reproducible 1,300-frame
 handle and a first divergent frame to bisect from.
+
+## 2026-08-11 — The host and the engine, split; and a correction to why
+
+**Scope:** apple2tc · **Status:** landed (stages 0-6); the justification below is
+partly retracted
+
+**Decision:** `system.h` was already a contract between the Apple II machine and
+whatever executes 6502. It is now two: `a2engine.h` (what an engine provides,
+the host calls) and `a2host.h` (what the host provides, an engine calls), with
+`system.h` an umbrella over both. The host library became sokol-free, and
+`a2run` — a console front end — joined `a2emu`, which was rebuilt on the same
+pieces.
+
+**Why two executables rather than one with a flag.** On Windows, console versus
+GUI is a link-time subsystem property; no runtime flag bridges it. So `a2run`
+and `a2emu` are separate binaries over one host, and every decompiled game gains
+a `<name>-run` alongside `<name>`. This is recorded because it looks like
+over-engineering until you know the reason.
+
+**What it bought, measured:**
+
+- **Run data can be regenerated headlessly.** This was impossible before:
+  `snake-byte.json` is a 2022 artefact of a windowed `a2emu`, and nothing in the
+  tree reproduced it. `decoded/snake-byte/README.md` has the recipe, and is
+  explicit that it does not reproduce that file byte for byte.
+- **The verification binaries link no graphics at all.** `verify.sh` drives
+  `snake-bytec1-run` and `snake-bytec1-ext-run`, and no longer depends on a
+  display stack existing or behaving.
+- **One host instead of two.** `a2emu` went from 748 lines to 131 and gained its
+  first test of any kind: sharing everything but the window, `a2emu --headless`
+  must byte-match `a2run`. That test is in `tests/run-tests.sh`.
+
+**The third justification was overstated, and this is the retraction.** The
+design argued the split would give "an independent oracle" — the interpreter
+checking the generated C. Three things came out of trying it:
+
+1. **Cycle accuracy is a property to preserve *within* an implementation, not to
+   match *between* two.** Frame hashing asks "is the screen identical at
+   host-observation moment N", which presumes a shared sampling clock. The
+   generated engine yields only at block boundaries, an interpreter between
+   instructions, so no such clock exists — and *two perfectly equivalent
+   implementations still fail that test*.
+2. **Registers cannot be compared.** `CPURegLiveness` and `dce` deliberately
+   drop stores to dead registers, so the generated code does not maintain `Y` or
+   the flags where nothing reads them. Traces diverge on line 2.
+3. **PC-only control flow, with no input, does work** — 1,991 of 1,991 branch
+   targets over 120 frames of ROM boot, no drift. Reaching *game* code needs
+   both engines to receive identical input, which they do not: key delivery is
+   `get_cycles() >= stamp` at frame boundaries, and 21 of 23 keys land a frame
+   apart.
+
+**`--snapshot-at` does not exist.** Stage 7 of the split design was never
+started, so there is no snapshot option and no format for one. Anything that was
+waiting on it still is.
+
+**Open:** the frame-472 divergence from the 2026-08-08 entry is unchanged and
+unattributed. It is reproducible, so it is a genuine difference between two 6502
+implementations rather than noise.
+
+## 2026-08-12 — Probes: let the program supply the coordinate
+
+**Scope:** apple2tc · **Status:** compiler landed and tested; nothing executes yet
+
+**Decision:** compare the two implementations at points *the program* defines,
+not at moments the host defines. A **probe** is a small program bound to one or
+more install sites; both engines reach a site in the same order the same number
+of times, because that is what equivalence means. Design:
+`docs/plans/2026-08-11-probes-design.md`. Language reference: `docs/probes.md`.
+
+**Why, given the entry above.** Every observable tried had failed the same way —
+registers, cycle counts, frame hashes, key-driven PC traces — and the common
+cause was sampling on a clock the two programs do not share. Frame boundaries,
+cycle counts and wall time are all coordinates external to the program. A probe
+has no such coordinate to disagree about.
+
+**Three questions, not one.** The retraction above collapsed because "is it
+correct" was being asked of three different subjects at once:
+
+| | question | subject | instrument |
+|---|---|---|---|
+| 1 | is apple2tc correct? | the **tool** | control flow, cross-engine, timing-free |
+| 2 | did a refactor break the game? | the **hand-written C** | frame hash + cycles, same engine |
+| 3 | does the hand-written C match the original? | the **hand-written C** | same, against a recorded trace |
+
+Only question 1 can use registers or block traces — a decompiled game is *meant*
+to end with neither. Question 3 has no address correspondence at all between the
+two programs, so nothing automatic can compare them; a probe is a **manually
+declared correspondence**, which is exactly and only what it needs.
+
+**Design points worth not rediscovering:**
+
+- **A probe's parameter list is its signature** — name, arity, order — and that
+  is what both implementations must satisfy. The initializers are merely a
+  default way to obtain each value, correct in the emulator; in generated C an
+  individual one is overridden where a register is dead or the value lives in a
+  C variable. That shrinks the divergence surface from "a body per side" to "one
+  expression, only where the default fails".
+- **One program, two entry offsets.** Initializers, or straight into the body
+  with values supplied by a caller. So the body is byte-identical bytecode on
+  both sides and counters, gating, formatting and key-fetch cannot diverge.
+- **`CYCLES` is emitted per block, not per instruction.** The interpreter can
+  probe any address; a generated program can only probe block heads. A probe on
+  a non-block-head fires under `a2emu` and does not exist in the generated C —
+  **and the report still reads as agreement.** This is the design's main hazard.
+- **Hence `@"file"` installs.** With apple2tc emitting the block-head list, both
+  sides install at an identical finite set, the reports have equal length, and
+  `diff` compares them directly. That retires the subsequence matcher, which
+  during the 2026-08-08 investigation drifted and reported a meaningless "50%
+  match" — a tool that degrades gracefully on divergent input manufactures
+  agreement.
+
+**What landed:** the compiler only — lexer, precedence expression parser,
+statements, install sites, an address→probe hash, a disassembler behind
+`--probe-dump`, 63 rejection assertions and 4 baseline diffs. **No VM**;
+`probe_dispatch` is a stub with no caller and nothing is wired into `CYCLES`.
+
+**Deliberately not chased here.** Key fetch in counter coordinates, and the
+frame-472 attribution it unblocks, both wait on the VM. So does the acceptance
+test — replicating the trusted 1,991/1,991 ROM boot through probes, which
+validates the mechanism against a result already believed rather than merely
+exercising it.
