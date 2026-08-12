@@ -1596,6 +1596,37 @@ git add lib/a2host/probe_parse.c tests/probe/stmt.probe tests/probe/stmt.expecte
 git commit -m "probe: statements, control flow and printf validation"
 ```
 
+### As built — where the code differs from the text above
+
+Recorded rather than rewritten, so the reasoning stays visible.
+
+- **`inc` and assignment go through `resolve_name()`,** not the `find_counter` /
+  `find_param` lookups written above. Task 3's review extracted `resolve_name`
+  precisely so this task would not re-derive the params → counters → registers
+  order; the literal code above would have shipped the read/write desync the
+  design doc warns about. Assigning to a register is rejected — a probe that
+  could write `a = 5` would perturb the machine it observes, the same reason
+  `PEEK8` goes through `ram_peek`.
+- **Both printf diagnostics capture the source line before the lexer advances.**
+  As written they run after `expect(P, TOK_RPAREN, ...)` and report the line of
+  the *following* token — the only two diagnostics in the module that pointed at
+  the wrong place.
+- **`dump_escaped` renders any non-printable byte as `\xNN`,** not only the four
+  escapes above. The lexer rejects a raw CR because an invisible byte "would
+  vanish from a diff of the report"; that argument covers BEL, ESC, VT and FF
+  identically.
+- **`sc->formats[]` is freed in the probe teardown** that `a2host_shutdown`
+  already calls. The module frees its source buffer and closes its output, so
+  leaving one allocation to process exit was inconsistent — and the sanitizer
+  build CLAUDE.md advertises would fail every probe test on it.
+- **The printf width is capped,** since nothing otherwise stops
+  `printf("%2000000000d", x)` from becoming a two-gigabyte write once the VM
+  exists.
+- **`stmt.probe` covers more than the version above:** a short-circuit inside an
+  `if` condition (the only place the two independent forward-branch patchers
+  meet), a nested `if` with a dangling `else`, a `key` statement, and one format
+  string used twice. Without those, `OP_KEY` appeared in no baseline at all.
+
 ---
 
 ## Task 5: Install sites and the dispatch hash
