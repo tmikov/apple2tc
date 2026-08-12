@@ -1,0 +1,255 @@
+counters: 2
+  0 frame = 0
+  1 limit = 500
+formats: 0
+probes: 3
+  0 e(prec, paren, arith, cmp, bool, orb, bits, un, mem, reg, hashv) init=0 body=159
+        0: PUSH_LIT 1
+        2: PUSH_LIT 2
+        4: PUSH_LIT 3
+        6: MUL
+        7: ADD
+        8: PUSH_LIT 1
+       10: PUSH_LIT 2
+       12: ADD
+       13: PUSH_LIT 3
+       15: MUL
+       16: PUSH_LIT 10
+       18: PUSH_LIT 3
+       20: SUB
+       21: PUSH_LIT 2
+       23: DIV
+       24: PUSH_LIT 3
+       26: MOD
+       27: LOAD_COUNTER 0
+       29: LOAD_COUNTER 1
+       31: LT
+       32: LOAD_COUNTER 0
+       34: LOAD_COUNTER 1
+       36: LE
+       37: ADD
+       38: LOAD_COUNTER 0
+       40: LOAD_COUNTER 1
+       42: GE
+       43: ADD
+       44: LOAD_COUNTER 0
+       46: LOAD_COUNTER 1
+       48: EQ
+       49: ADD
+       50: LOAD_COUNTER 0
+       52: LOAD_COUNTER 1
+       54: NE
+       55: ADD
+       56: LOAD_COUNTER 0
+       58: PUSH_LIT 1
+       60: GT
+       61: ADD
+       62: LOAD_COUNTER 0
+       64: PUSH_LIT 1
+       66: GT
+       67: JZ 80
+       69: LOAD_COUNTER 0
+       71: PUSH_LIT 9
+       73: LT
+       74: JZ 80
+       76: PUSH_LIT 1
+       78: JMP 82
+       80: PUSH_LIT 0
+       82: LOAD_COUNTER 0
+       84: PUSH_LIT 1
+       86: GT
+       87: JNZ 100
+       89: LOAD_COUNTER 0
+       91: PUSH_LIT 9
+       93: LT
+       94: JNZ 100
+       96: PUSH_LIT 0
+       98: JMP 102
+      100: PUSH_LIT 1
+      102: LOAD_COUNTER 0
+      104: PUSH_LIT 240
+      106: AND
+      107: PUSH_LIT 15
+      109: OR
+      110: PUSH_LIT 255
+      112: XOR
+      113: PUSH_LIT 4
+      115: SHR
+      116: PUSH_LIT 2
+      118: SHL
+      119: PUSH_LIT 1
+      121: NEG
+      122: PUSH_LIT 0
+      124: BITNOT
+      125: ADD
+      126: PUSH_LIT 0
+      128: NOT
+      129: ADD
+      130: PUSH_LIT 7936
+      132: PEEK8
+      133: PUSH_LIT 6
+      135: PEEK16
+      136: ADD
+      137: LOAD_REG 0
+      139: LOAD_REG 1
+      141: ADD
+      142: LOAD_REG 2
+      144: ADD
+      145: LOAD_REG 3
+      147: ADD
+      148: LOAD_REG 4
+      150: ADD
+      151: LOAD_REG 5
+      153: ADD
+      154: PUSH_LIT 8192
+      156: PUSH_LIT 16383
+      158: HASH
+      159: END
+  1 pos(x, y, site, sum) init=160 body=173
+      160: PUSH_LIT 7936
+      162: PEEK8
+      163: PUSH_LIT 7937
+      165: PEEK8
+      166: LOAD_REG 5
+      168: LOAD_PARAM 0
+      170: LOAD_PARAM 1
+      172: ADD
+      173: END
+  2 sc(chain_and, mixed, grouped, in_peek, in_hash, under_unary, in_arith, base, reused) init=174 body=416
+      174: LOAD_COUNTER 0
+      176: PUSH_LIT 0
+      178: GT
+      179: JZ 192
+      181: LOAD_COUNTER 0
+      183: PUSH_LIT 100
+      185: LT
+      186: JZ 192
+      188: PUSH_LIT 1
+      190: JMP 194
+      192: PUSH_LIT 0
+      194: JZ 207
+      196: LOAD_COUNTER 1
+      198: PUSH_LIT 0
+      200: GT
+      201: JZ 207
+      203: PUSH_LIT 1
+      205: JMP 209
+      207: PUSH_LIT 0
+      209: LOAD_COUNTER 0
+      211: PUSH_LIT 100
+      213: GT
+      214: JNZ 242
+      216: LOAD_COUNTER 0
+      218: PUSH_LIT 0
+      220: LT
+      221: JZ 234
+      223: LOAD_COUNTER 1
+      225: PUSH_LIT 0
+      227: GT
+      228: JZ 234
+      230: PUSH_LIT 1
+      232: JMP 236
+      234: PUSH_LIT 0
+      236: JNZ 242
+      238: PUSH_LIT 0
+      240: JMP 244
+      242: PUSH_LIT 1
+      244: LOAD_COUNTER 0
+      246: PUSH_LIT 0
+      248: GT
+      249: JZ 262
+      251: LOAD_COUNTER 0
+      253: PUSH_LIT 9
+      255: LT
+      256: JZ 262
+      258: PUSH_LIT 1
+      260: JMP 264
+      262: PUSH_LIT 0
+      264: JNZ 292
+      266: LOAD_COUNTER 1
+      268: PUSH_LIT 0
+      270: GT
+      271: JZ 284
+      273: LOAD_COUNTER 1
+      275: PUSH_LIT 999
+      277: LT
+      278: JZ 284
+      280: PUSH_LIT 1
+      282: JMP 286
+      284: PUSH_LIT 0
+      286: JNZ 292
+      288: PUSH_LIT 0
+      290: JMP 294
+      292: PUSH_LIT 1
+      294: PUSH_LIT 7936
+      296: LOAD_COUNTER 0
+      298: PUSH_LIT 0
+      300: GT
+      301: JZ 314
+      303: LOAD_COUNTER 0
+      305: PUSH_LIT 9
+      307: LT
+      308: JZ 314
+      310: PUSH_LIT 1
+      312: JMP 316
+      314: PUSH_LIT 0
+      316: ADD
+      317: PEEK8
+      318: PUSH_LIT 8192
+      320: LOAD_COUNTER 0
+      322: PUSH_LIT 0
+      324: GT
+      325: JNZ 338
+      327: LOAD_COUNTER 0
+      329: PUSH_LIT 9
+      331: LT
+      332: JNZ 338
+      334: PUSH_LIT 0
+      336: JMP 340
+      338: PUSH_LIT 1
+      340: ADD
+      341: PUSH_LIT 16383
+      343: HASH
+      344: LOAD_COUNTER 0
+      346: PUSH_LIT 0
+      348: GT
+      349: JZ 362
+      351: LOAD_COUNTER 0
+      353: PUSH_LIT 9
+      355: LT
+      356: JZ 362
+      358: PUSH_LIT 1
+      360: JMP 364
+      362: PUSH_LIT 0
+      364: NOT
+      365: PUSH_LIT 1
+      367: LOAD_COUNTER 0
+      369: PUSH_LIT 0
+      371: GT
+      372: JZ 385
+      374: LOAD_COUNTER 0
+      376: PUSH_LIT 9
+      378: LT
+      379: JZ 385
+      381: PUSH_LIT 1
+      383: JMP 387
+      385: PUSH_LIT 0
+      387: PUSH_LIT 10
+      389: MUL
+      390: ADD
+      391: LOAD_COUNTER 0
+      393: PUSH_LIT 0
+      395: GT
+      396: JZ 409
+      398: LOAD_COUNTER 0
+      400: PUSH_LIT 9
+      402: LT
+      403: JZ 409
+      405: PUSH_LIT 1
+      407: JMP 411
+      409: PUSH_LIT 0
+      411: LOAD_PARAM 7
+      413: PUSH_LIT 1
+      415: ADD
+      416: END
+sites: 0

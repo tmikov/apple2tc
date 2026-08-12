@@ -1,0 +1,53 @@
+# Precedence, associativity, and every atom that does not need a running
+# machine. Every binary and unary operator appears at least once; `&&`/`||`
+# use operands that would misbehave under a naive bitwise-AND/OR compilation
+# (2 && 1 is not 2 & 1), so a regression in the short-circuit codegen fails
+# this test instead of hiding behind it. The compiled form below is the
+# assertion.
+counter frame
+counter limit = $1F4
+
+probe e(
+  prec  = 1 + 2 * 3,
+  paren = (1 + 2) * 3,
+  arith = (10 - 3) / 2 % 3,
+  cmp   = (frame < limit) + (frame <= limit) + (frame >= limit) + (frame == limit) + (frame != limit) + (frame > 1),
+  bool  = frame > 1 && frame < 9,
+  orb   = frame > 1 || frame < 9,
+  bits  = ((((frame & $F0) | $0F) ^ $FF) >> 4) << 2,
+  un    = -1 + ~0 + !0,
+  mem   = peek8($1F00) + peek16($06),
+  reg   = a + x + y + sp + sr + pc,
+  hashv = hash($2000, $3FFF)
+) {
+}
+
+# The design doc's canonical example: a parameter named after a register
+# shadows it. `sum` resolves `x`/`y` through LOAD_PARAM, not LOAD_REG;
+# `site` proves an *unshadowed* register in the same probe still resolves
+# through LOAD_REG.
+probe pos(
+  x = peek8($1F00),
+  y = peek8($1F01),
+  site = pc,
+  sum = x + y
+) {
+}
+
+# The trivial `a && b` / `a || b` shapes above are the whole risk surface a
+# naive OP_AND/OP_OR compilation gets right by accident (both operands
+# happen to be 0/1 already). Chained, mixed, nested, and embedded
+# short-circuits exercise shapes that would not survive that bug, and
+# nothing else in this file would notice if the branch codegen regressed.
+probe sc(
+  chain_and   = frame > 0 && frame < 100 && limit > 0,
+  mixed       = frame > 100 || frame < 0 && limit > 0,
+  grouped     = (frame > 0 && frame < 9) || (limit > 0 && limit < 999),
+  in_peek     = peek8($1F00 + (frame > 0 && frame < 9)),
+  in_hash     = hash($2000 + (frame > 0 || frame < 9), $3FFF),
+  under_unary = !(frame > 0 && frame < 9),
+  in_arith    = 1 + (frame > 0 && frame < 9) * 10,
+  base        = frame > 0 && frame < 9,
+  reused      = base + 1
+) {
+}

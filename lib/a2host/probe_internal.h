@@ -84,3 +84,109 @@ void probe_lex_next(lexer_t *lx);
 /// Report at the current line and exit(2). Never returns.
 _Noreturn void probe_error(lexer_t *lx, const char *fmt, ...)
     __attribute__((__format__(__printf__, 2, 3)));
+
+/* --- Bytecode ------------------------------------------------------------- */
+
+/// One opcode per cell, operands in following cells. Variable length, so
+/// control flow and new operations can be added without changing the shape.
+typedef enum {
+  OP_END,
+  OP_PUSH_LIT, // <value>
+  OP_LOAD_PARAM, // <index>
+  OP_LOAD_COUNTER, // <index>
+  OP_STORE_PARAM, // <index>
+  OP_STORE_COUNTER, // <index>
+  OP_LOAD_REG, // <reg_t>
+  OP_PEEK8, // pops addr
+  OP_PEEK16, // pops addr
+  OP_HASH, // pops end, then start; source order is hash(start, end)
+  OP_ADD,
+  OP_SUB,
+  OP_MUL,
+  OP_DIV,
+  OP_MOD,
+  OP_AND,
+  OP_OR,
+  OP_XOR,
+  OP_SHL,
+  OP_SHR,
+  OP_EQ,
+  OP_NE,
+  OP_LT,
+  OP_LE,
+  OP_GT,
+  OP_GE,
+  OP_NOT,
+  OP_BITNOT,
+  OP_NEG,
+  OP_JMP, // <target>
+  OP_JZ, // <target>  pops
+  OP_JNZ, // <target>  pops
+  OP_PRINTF, // <fmt index> <argc>  pops argc
+  OP_KEY, // pops stamp
+  OP_STOP,
+} opcode_t;
+
+typedef enum { REG_A, REG_X, REG_Y, REG_SP, REG_SR, REG_PC } reg_t;
+
+/// The opcode name table in probe.c must stay in step with opcode_t.
+#define PROBE_NUM_OPCODES ((int)OP_STOP + 1)
+
+enum {
+  PROBE_MAX_COUNTERS = 64,
+  PROBE_MAX_PROBES = 256,
+  PROBE_MAX_PARAMS = 16,
+  PROBE_MAX_FORMATS = 256,
+  PROBE_MAX_CODE = 65536,
+};
+
+typedef struct {
+  char name[PROBE_MAX_IDENT];
+  uint32_t init;
+} counter_t;
+
+typedef struct {
+  char name[PROBE_MAX_IDENT];
+  char params[PROBE_MAX_PARAMS][PROBE_MAX_IDENT];
+  uint8_t nparams;
+  uint32_t init_offset; ///< initializer expressions; fall through to the body
+  uint32_t body_offset;
+  uint32_t end_offset; ///< one past the trailing OP_END
+  uint32_t hits;
+} probe_t;
+
+/// A hash slot: an installed address, and the head of its chain. Chains live
+/// in a separate array rather than in spare slots, so a chain node can never
+/// sit in the path of a linear probe.
+typedef struct {
+  uint16_t addr;
+  uint16_t used; ///< 0 free, 1 occupied; addr 0 is otherwise ambiguous
+  uint32_t first; ///< index into `insts`
+} slot_t;
+
+/// One installed probe. Several at one address chain in script order.
+typedef struct {
+  uint32_t probe_id;
+  uint32_t next; ///< index into `insts`, or PROBE_NO_SITE
+} inst_t;
+
+#define PROBE_NO_SITE 0xFFFFFFFFu
+
+/// The whole compiled script. One instance, file-scope in probe.c.
+typedef struct {
+  counter_t counters[PROBE_MAX_COUNTERS];
+  unsigned ncounters;
+  probe_t probes[PROBE_MAX_PROBES];
+  unsigned nprobes;
+  char *formats[PROBE_MAX_FORMATS];
+  unsigned nformats;
+  uint32_t code[PROBE_MAX_CODE];
+  uint32_t ncode;
+  slot_t *slots; ///< open-addressed, power-of-two, NULL until installed
+  uint32_t slot_mask;
+  inst_t *insts; ///< one per install declaration
+  uint32_t ninsts;
+  uint32_t nsites; ///< distinct addresses, i.e. occupied slots
+} script_t;
+
+void probe_parse_script(script_t *sc, const char *src, const char *path);

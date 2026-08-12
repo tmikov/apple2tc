@@ -176,6 +176,7 @@ probe_dump_test() {
 }
 
 probe_dump_test empty
+probe_dump_test expr
 
 # Assert that a2run rejects something, with the specific diagnostic we expect.
 # Matching the exact message rather than just "FATAL" is deliberate: an earlier
