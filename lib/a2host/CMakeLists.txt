@@ -7,7 +7,7 @@
 # not at all. See include/apple2tc/a2host_api.h.
 add_library(a2host
   a2host.c ${A2TC_INC}/a2host_api.h
-  probe.c probe_lex.c probe_parse.c probe_internal.h ${A2TC_INC}/probe.h
+  probe.c probe_lex.c probe_parse.c probe_vm.c probe_internal.h ${A2TC_INC}/probe.h
   ${A2TC_INC}/a2engine.h ${A2TC_INC}/a2host.h ${A2TC_INC}/system.h
   )
 target_link_libraries(a2host a2io)

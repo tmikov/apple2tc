@@ -21,7 +21,7 @@
 /// "unset", not "closed" -- `probe_out()` is what maps that to stdout.
 static FILE *s_out = NULL;
 
-static FILE *probe_out(void) {
+FILE *probe_out(void) {
   return s_out ? s_out : stdout;
 }
 
@@ -51,6 +51,13 @@ _Noreturn static void probe_fatal_open(const char *what, const char *path) {
 /// design doc's plan for `CYCLES` to test a core-owned pointer inline.
 static script_t *s_script = NULL;
 static bool s_loaded = false;
+
+/// Non-NULL exactly when a script with at least one install site is loaded --
+/// see the extern declaration in include/apple2tc/probe.h for why this is a
+/// plain pointer and not wrapped in a function. Set at the end of
+/// probe_load_script(), once probe_build_sites() has run, and cleared in
+/// free_script_resources() before the table it points at is freed.
+const void *g_probe_sites = NULL;
 
 static char *read_file(const char *path) {
   FILE *f = fopen(path, "rb");
@@ -113,6 +120,9 @@ static void free_script_resources(void) {
   // enough that asserting the invariant costs nothing.
   if (!s_script)
     return;
+  // Before the table it points at is freed: a dangling g_probe_sites would
+  // pass CYCLES's inline gate and hand probe_dispatch a freed slots pointer.
+  g_probe_sites = NULL;
   for (unsigned i = 0; i != s_script->nformats; ++i)
     free(s_script->formats[i]);
   free(s_script->slots);
@@ -147,6 +157,9 @@ void probe_load_script(const char *path) {
   free(src);
   probe_build_sites(s_script);
   s_loaded = true;
+  // Only now, and only if something was actually installed: an empty script
+  // must leave the hot path untouched.
+  g_probe_sites = s_script->nsites ? (const void *)s_script->slots : NULL;
 }
 
 void probe_set_output_path(const char *path) {
@@ -257,7 +270,11 @@ void probe_build_sites(script_t *sc) {
 // enumerator and has no default makes GCC's -Wswitch (on under -Wall) fail
 // the build instead, so the guarantee is back at compile time, which is
 // where the last two versions of this both should have lived.
-static const char *opname(opcode_t op) {
+//
+// External linkage (not static): probe_vm.c's default case is the second
+// caller, so an unimplemented or corrupt opcode can be named instead of just
+// numbered -- the same move already made for probe_out() above.
+const char *opname(opcode_t op) {
   switch (op) {
   case OP_END:
     return "END";
@@ -474,11 +491,23 @@ void probe_dump(FILE *f) {
 }
 
 bool probe_installed(void) {
-  return s_script && s_script->nsites != 0;
+  return g_probe_sites != NULL;
 }
 
 void probe_dispatch(uint16_t pc) {
-  (void)pc;
+  // g_probe_sites is the inline gate callers test; re-checked here because
+  // debugCB calls unconditionally.
+  if (!g_probe_sites)
+    return;
+  uint32_t slot = probe_find_slot(s_script, pc);
+  if (!s_script->slots[slot].used)
+    return;
+  probe_vm_set_pc(pc);
+  for (uint32_t i = s_script->slots[slot].first; i != PROBE_NO_SITE; i = s_script->insts[i].next) {
+    probe_t *pr = &s_script->probes[s_script->insts[i].probe_id];
+    ++pr->hits;
+    probe_vm_run(s_script, pr->init_offset);
+  }
 }
 
 void probe_report_unfired(void) {}

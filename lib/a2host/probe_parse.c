@@ -495,6 +495,17 @@ static void parse_printf(parser_t *P) {
   unsigned want = count_conversions(P, fmt_line, fmt);
   if (want != argc)
     probe_error_at(P, fmt_line, "format needs %u argument(s), %u given", want, argc);
+  // The VM's OP_PRINTF fills a fixed-size array (PROBE_MAX_PRINTF_ARGS) from
+  // argc; a script that named more conversions than that must fail here,
+  // at compile time, rather than overflow that array the first time this
+  // probe actually fires.
+  if (argc > PROBE_MAX_PRINTF_ARGS)
+    probe_error_at(
+        P,
+        fmt_line,
+        "printf takes at most %u arguments, %u given",
+        (unsigned)PROBE_MAX_PRINTF_ARGS,
+        argc);
 
   emit(P, OP_PRINTF);
   emit(P, intern_format(P, fmt));

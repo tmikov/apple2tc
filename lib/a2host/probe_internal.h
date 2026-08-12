@@ -11,7 +11,9 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 
 /* --- Fatal diagnostics ------------------------------------------------------ */
 
@@ -294,3 +296,47 @@ void probe_build_sites(script_t *sc);
 /// callers on a script with no installs must guard with `sc->nsites != 0` /
 /// `probe_installed()` first).
 uint32_t probe_find_slot(const script_t *sc, uint16_t addr);
+
+/* --- Output ----------------------------------------------------------------- */
+
+/// Where a probe's `printf` output goes: whatever `--probe-out=` set, or
+/// stdout if nothing did. `static` in probe.c until here; the VM
+/// (probe_vm_printf) is the only caller -- probe_dump takes an explicit
+/// `FILE *` and never reaches this.
+FILE *probe_out(void);
+
+/// The mnemonic for \p op, or NULL if \p op is not one of the opcode_t
+/// enumerators (corrupt bytecode, not a missing table entry -- see the
+/// comment on this function's definition in probe.c). `static` there until
+/// here; probe_vm_run's default case is the second caller, so a diagnostic
+/// can name an opcode instead of just numbering it.
+const char *opname(opcode_t op);
+
+/* --- VM ----------------------------------------------------------------- */
+
+enum {
+  /// Ceiling on OP_PRINTF's argc, both here (the VM's fixed-size argument
+  /// buffer) and in parse_printf (a compile-time rejection, so a script that
+  /// exceeds it fails to load rather than overflowing a stack array at
+  /// runtime). Far beyond anything a real report line needs -- PROBE_MAX_STRING
+  /// (256 bytes) loosely bounds how many `%` conversions a format string can
+  /// even contain, and 32 sits comfortably under that ceiling with room to
+  /// spare.
+  PROBE_MAX_PRINTF_ARGS = 32,
+};
+
+/// Execute bytecode from \p ip. Used for the address path with
+/// ip = init_offset; part 3's macro path will enter at body_offset with the
+/// parameter values already pushed. Takes no probe_t: the caller owns hit
+/// counting, and passing one the VM does not read would only warn under
+/// -Wunused-parameter.
+void probe_vm_run(const script_t *sc, uint32_t ip);
+/// Record the address dispatch reached, for LOAD_REG REG_PC.
+void probe_vm_set_pc(uint16_t pc);
+//
+// probe_vm_init_counters, probe_stop_requested and probe_deliver_keys are
+// declared by Tasks 3 and 5, which are also the tasks that define them --
+// not here, ahead of time: a declaration with no definition anywhere yet
+// documents behaviour (Task 5's own draft of this file said "True once a
+// probe executed `stop`" while OP_STOP did not exist) that this task does
+// not implement.

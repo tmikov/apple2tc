@@ -240,6 +240,17 @@ for i in $(seq 0 16); do
   if [ -n "$many_params_list" ]; then many_params_list+=", "; fi
   many_params_list+="p$i = 0"
 done
+# 33 conversions and 33 matching arguments -- one past PROBE_MAX_PRINTF_ARGS
+# (32) -- for the printf-argument-limit rejection below. want == argc, so the
+# ordinary "format needs N argument(s)" check does not fire first; only the
+# VM-limit check does.
+many_printf_fmt=""
+many_printf_args=""
+for i in $(seq 1 33); do
+  many_printf_fmt+="%u "
+  if [ -n "$many_printf_args" ]; then many_printf_args+=", "; fi
+  many_printf_args+="$i"
+done
 # One more address than PROBE_MAX_SITE_DECLS (8192), for the site-list
 # overflow case below -- the file-reading counterpart of the in-script
 # "too many install sites" case above.
@@ -356,6 +367,8 @@ expect_bad_script "a format string ending inside a conversion" "format string en
   'probe p() { printf("val%") }'
 expect_bad_script "an over-wide conversion" "conversion width too large (max 999)" \
   'probe p() { printf("%1000d") }'
+expect_bad_script "printf over the VM's argument limit" "printf takes at most 32 arguments" \
+  "probe p() { printf(\"$many_printf_fmt\", $many_printf_args) }"
 
 # --- Install -------------------------------------------------------------
 
@@ -427,6 +440,25 @@ expect_probe_reject "two --probe= scripts" "only one probe script may be loaded"
   --probe=probe/empty.probe --probe=probe/empty.probe --probe-dump
 expect_probe_reject "an unwritable --probe-out=" "cannot open probe output" \
   --probe=probe/empty.probe --probe-out=probe-tmp/nodir/out.txt
+
+# --- Probes: execution ------------------------------------------------------
+#
+# Unlike the compile tests above, these run the machine. a2run boots the ROM
+# deterministically with no input, so a probe's report is stable.
+
+probe_run_test() {
+  # $1: base name under probe/, $2: frame count
+  if ! $a2run --frames="$2" --probe="probe/$1.probe" \
+              --probe-out="probe-tmp/$1.txt" > /dev/null; then
+    echo "FAIL: running probe/$1.probe" >&2
+    exit 1
+  fi
+  diff -q "probe/$1.expected" "probe-tmp/$1.txt"
+}
+
+probe_run_test hello 2
+probe_run_test format 2
+probe_run_test chain 2
 
 rm -rf probe-tmp
 

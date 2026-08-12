@@ -27,6 +27,7 @@
 #include "apple2tc/a2host.h"
 #include "apple2tc/a2host_api.h"
 #include "apple2tc/engine6502.h"
+#include "apple2tc/probe.h"
 
 #include "apple2tc/DebugState6502.h"
 #include "apple2tc/a2io.h"
@@ -159,7 +160,29 @@ void finishCollecting() {
   os->flush();
   fprintf(stderr, "Collection written to %s\n", s_outPath.empty() ? "stdout" : s_outPath.c_str());
 
-  s_emu.setDebugFlags(s_emu.getDebugFlags() & ~Emu6502::DebugASM);
+  // DebugASM has three independent reasons to be set -- --trace, --collect
+  // (this function's own caller), and probes -- and clearing it here used to
+  // assume collection was the only one. It is not: a probe script installed
+  // for the whole run still needs the per-instruction callback after
+  // collection finishes. Verified directly (not just by absence of a
+  // symptom): instrumented this line to print the flag right after clearing
+  // it, with a probe installed -- the unconditional clear left DebugASM 0;
+  // this guarded version leaves it 1. Whoever turned a flag on owns turning
+  // it off; this only owns the bit it set.
+  //
+  // Both `a2run --headless` and the windowed front end currently stop the
+  // whole process the moment collection's block limit is reached (`--collect
+  // --limit=N`: engine_stopped_ / A2_STOP_REQUESTED, honored in
+  // a2host_run_headless and in a2host_gui.c's frame_cb), so neither shows a
+  // truncated-versus-untruncated probe report today -- there is nothing left
+  // to dispatch to either way once that happens. That stop-the-process
+  // behavior is deliberate (see a2engine.h's a2_stop_reason_t) and out of
+  // scope here. The bug this guards against is real regardless: any host
+  // that keeps driving frames past a collection limit -- which is exactly
+  // what a fixed-size --limit is for, unlike --frames -- must not have its
+  // probes go silently dead because collection happened to finish first.
+  if (!probe_installed())
+    s_emu.setDebugFlags(s_emu.getDebugFlags() & ~Emu6502::DebugASM);
   s_dbg.setModeNone();
 }
 
@@ -193,6 +216,8 @@ void onWarmRestart() {
 Emu6502::StopReason debugCB(void *ctx, Emu6502 *emu, uint16_t pc) {
   if (g_debug & DebugASM)
     debug_asm(pc);
+  if (g_probe_sites)
+    probe_dispatch(pc);
   return DebugState6502::debugStateCB(ctx, emu, pc);
 }
 
@@ -260,7 +285,8 @@ void init_emulated(void) {
     s_dbg.addDefaultNonDebug();
   s_dbg.setResolveApple2Symbols(false);
 
-  if (g_debug & DebugASM)
+  // Probes need the per-instruction callback even when tracing is off.
+  if ((g_debug & DebugASM) || probe_installed())
     s_emu.addDebugFlags(Emu6502::DebugASM);
 
   if (s_collect && s_fromRom)

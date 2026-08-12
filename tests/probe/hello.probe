@@ -1,0 +1,11 @@
+# A literal, not a counter: Task 1 implements only PUSH_LIT/PRINTF/END, and
+# `counter`/`inc` compile to opcodes (LOAD_COUNTER/ADD/STORE_COUNTER) Task 3
+# adds. This still catches a dispatch bug -- firing zero or twice would change
+# the line count against the single-line baseline -- without depending on
+# opcodes this task doesn't implement. Task 2 (arith.probe) is where counters
+# return to this test suite.
+probe reset() {
+  printf("reset %u\n", 1)
+}
+
+install reset at $FA62

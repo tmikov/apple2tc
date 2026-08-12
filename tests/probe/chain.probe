@@ -1,0 +1,20 @@
+# Three probes at one address: probe_dispatch walks the slot's chain, and
+# probe_build_sites' reverse-walk-and-prepend construction exists so that
+# walk comes out in script order. Nothing exercised that at runtime before --
+# every prior execution test used one probe per site -- so the loop in
+# probe_dispatch only ever ran a single iteration.
+probe first() {
+  printf("first\n")
+}
+
+probe second() {
+  printf("second\n")
+}
+
+probe third() {
+  printf("third\n")
+}
+
+install first at $FA62
+install second at $FA62
+install third at $FA62

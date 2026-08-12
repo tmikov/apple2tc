@@ -1,0 +1,24 @@
+# format.expected is not derived from this VM's own printf (emit_conv) --
+# it is glibc's real printf output, so this test checks the VM against the C
+# semantics the design promises rather than merely freezing whatever emit_conv
+# already does. Produced with a throwaway C program (not checked in) that,
+# for each line below in the same order, called:
+#   printf("<fmt>\n", (int32_t)<value>)   for %d conversions
+#   printf("<fmt>\n", (uint32_t)<value>)  for %u/%x/%X conversions
+# where <value> is the same 32-bit pattern as the literal on that line (so
+# $FFFFFFFB, read as int32_t, is -5). glibc itself warns "'0' flag ignored
+# with '-' flag" while generating line 3, confirming this VM's emit_conv
+# should show the same "-" beats "0" behaviour.
+probe m() {
+  printf("[%05d]\n", $FFFFFFFB)
+  printf("[%5d]\n", $FFFFFFFB)
+  printf("[%-05d]\n", $FFFFFFFB)
+  printf("[%+d]\n", 42)
+  printf("[% d]\n", 42)
+  printf("[%x]\n", 0)
+  printf("[%X]\n", $DEADBEEF)
+  printf("[%20u]\n", 42)
+  printf("[%-20x]\n", $FF00)
+}
+
+install m at $FA62
