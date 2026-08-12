@@ -1,0 +1,23 @@
+counter frame
+counter n
+
+probe s(v = peek8($1F00)) {
+  inc frame
+  n = n + v
+  if (frame > 100)
+    printf("over %u\n", frame)
+  else {
+    printf("under %u %02X\n", frame, v)
+    n = 0
+  }
+  if (v == $FF)
+    stop
+  if (frame > 100 && frame < 200)
+    inc n
+  if (frame == 0)
+    if (v == 0)
+      printf("zero\n")
+    else
+      printf("under %u %02X\n", frame, v)
+  key frame
+}

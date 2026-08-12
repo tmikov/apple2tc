@@ -7,8 +7,10 @@
 
 #include "probe_internal.h"
 
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct {
@@ -370,13 +372,253 @@ static void parse_expr(parser_t *P, int min_prec) {
   --P->depth;
 }
 
-/* --- Statements and installation (stubs; Tasks 4 and 5) ------------------- */
+/* --- printf ----------------------------------------------------------- */
 
-/// Replaced in Task 4.
+/// probe_error always reports the lexer's *current* line, but by the time
+/// count_conversions or the printf argument-count check runs, the lexer has
+/// already stepped past the closing ')' -- and past however many lines the
+/// argument list itself spans -- so calling probe_error directly from either
+/// would blame the wrong line. This formats the message the same way and
+/// forwards it through probe_error with the wanted line swapped in first;
+/// probe_error never returns, so there is nothing to restore afterwards.
+static _Noreturn void probe_error_at(parser_t *P, unsigned line, const char *fmt, ...)
+    __attribute__((__format__(__printf__, 3, 4)));
+static _Noreturn void probe_error_at(parser_t *P, unsigned line, const char *fmt, ...) {
+  char msg[512];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(msg, sizeof(msg), fmt, ap);
+  va_end(ap);
+  P->lx.line = line;
+  probe_error(&P->lx, "%s", msg);
+}
+
+/// Count conversions, rejecting anything whose rendering is not a plain
+/// integer. `%s` would need string values on the stack, `%n` writes through a
+/// pointer, and floats bring locale into an equivalence oracle. \p line is
+/// the format string's own source line (see probe_error_at above), not
+/// necessarily the lexer's current one.
+static unsigned count_conversions(parser_t *P, unsigned line, const char *fmt) {
+  unsigned n = 0;
+  for (const char *p = fmt; *p; ++p) {
+    if (*p != '%')
+      continue;
+    ++p;
+    if (*p == '%')
+      continue;
+    while (*p == '0' || *p == '-' || *p == '+' || *p == ' ')
+      ++p;
+    // Width, capped: an uncapped width compiles today but becomes a real
+    // problem the moment the VM's printf actually runs it -- a script that
+    // wrote "%2000000000d" would ask for a two-gigabyte write into the
+    // report. 999 is far past anything a real report column needs.
+    unsigned width = 0;
+    while (*p >= '0' && *p <= '9') {
+      width = width * 10 + (unsigned)(*p - '0');
+      if (width > 999)
+        probe_error_at(P, line, "conversion width too large (max 999)");
+      ++p;
+    }
+    if (*p == '.')
+      // A dedicated message: falling through to the default case below
+      // would report "unsupported conversion '%.'", which does not tell the
+      // reader that dropping the precision (not the whole conversion) fixes
+      // it.
+      probe_error_at(P, line, "precision is not supported in a printf conversion");
+    switch (*p) {
+    case 'd':
+    case 'u':
+    case 'x':
+    case 'X':
+      ++n;
+      break;
+    case 0:
+      probe_error_at(P, line, "format string ends inside a conversion");
+      break;
+    default:
+      probe_error_at(P, line, "unsupported conversion '%%%c'; use %%d %%u %%x %%X", *p);
+    }
+  }
+  return n;
+}
+
+static uint32_t intern_format(parser_t *P, const char *fmt) {
+  script_t *sc = P->sc;
+  for (unsigned i = 0; i != sc->nformats; ++i)
+    if (strcmp(sc->formats[i], fmt) == 0)
+      return i;
+  if (sc->nformats == PROBE_MAX_FORMATS)
+    probe_error(&P->lx, "too many format strings");
+  char *copy = (char *)malloc(strlen(fmt) + 1);
+  if (!copy)
+    probe_fatal("out of memory interning a format string");
+  strcpy(copy, fmt);
+  sc->formats[sc->nformats] = copy;
+  return sc->nformats++;
+}
+
+static void parse_printf(parser_t *P) {
+  expect(P, TOK_LPAREN, "'(' after printf");
+  if (P->lx.tok.kind != TOK_STRING)
+    probe_error(&P->lx, "printf needs a literal format string");
+  // The line the format string itself is on, so diagnostics about its
+  // content (below) blame it rather than wherever the argument list ends.
+  unsigned fmt_line = P->lx.line;
+  char fmt[PROBE_MAX_STRING];
+  // fmt is sized to match token_t::text, so this copy cannot truncate --
+  // but "cannot" only as long as the two stay in sync, which is exactly the
+  // kind of guarantee copy_ident's comment above argues a runtime check
+  // earns and an assumption does not. Here the coupling is compile-time (two
+  // fixed-size arrays), so a _Static_assert is the cheapest honest version:
+  // a silently truncated format would lose its trailing content -- e.g. a
+  // dropped `\n` -- which in a comparison report reads as the two engines
+  // merely disagreeing on whitespace.
+  _Static_assert(
+      sizeof(fmt) == sizeof(P->lx.tok.text),
+      "printf's format buffer must be exactly as large as a string token");
+  snprintf(fmt, sizeof(fmt), "%s", P->lx.tok.text);
+  probe_lex_next(&P->lx);
+
+  unsigned argc = 0;
+  while (accept(P, TOK_COMMA)) {
+    parse_expr(P, 1);
+    ++argc;
+  }
+  expect(P, TOK_RPAREN, "')' after the printf arguments");
+
+  unsigned want = count_conversions(P, fmt_line, fmt);
+  if (want != argc)
+    probe_error_at(P, fmt_line, "format needs %u argument(s), %u given", want, argc);
+
+  emit(P, OP_PRINTF);
+  emit(P, intern_format(P, fmt));
+  emit(P, argc);
+}
+
+/* --- Statements ------------------------------------------------------- */
+
+static void parse_stmt(parser_t *P);
+
 static void parse_block(parser_t *P) {
   expect(P, TOK_LBRACE, "'{'");
-  expect(P, TOK_RBRACE, "'}'");
+  while (!accept(P, TOK_RBRACE)) {
+    if (P->lx.tok.kind == TOK_EOF)
+      probe_error(&P->lx, "unterminated block");
+    parse_stmt(P);
+  }
 }
+
+static void parse_if(parser_t *P) {
+  expect(P, TOK_LPAREN, "'(' after if");
+  parse_expr(P, 1);
+  expect(P, TOK_RPAREN, "')' after the condition");
+
+  emit(P, OP_JZ);
+  uint32_t jz_operand = emit(P, 0); // patched below
+  parse_stmt(P);
+
+  if (is_kw(P, "else")) {
+    probe_lex_next(&P->lx);
+    emit(P, OP_JMP);
+    uint32_t jmp_operand = emit(P, 0);
+    P->sc->code[jz_operand] = P->sc->ncode;
+    parse_stmt(P);
+    P->sc->code[jmp_operand] = P->sc->ncode;
+  } else {
+    P->sc->code[jz_operand] = P->sc->ncode;
+  }
+}
+
+static void parse_stmt(parser_t *P) {
+  if (P->lx.tok.kind == TOK_LBRACE) {
+    parse_block(P);
+    return;
+  }
+  if (is_kw(P, "if")) {
+    probe_lex_next(&P->lx);
+    parse_if(P);
+    return;
+  }
+  if (is_kw(P, "else"))
+    // Reached only when no enclosing parse_if consumed this "else": it is a
+    // reserved word (s_reserved above), so without this check it would fall
+    // all the way to the assignment path and report "unknown name 'else'",
+    // which is technically true but not what a reader needs to hear.
+    probe_error(&P->lx, "'else' without a matching 'if'");
+  if (is_kw(P, "printf")) {
+    probe_lex_next(&P->lx);
+    parse_printf(P);
+    return;
+  }
+  if (is_kw(P, "stop")) {
+    probe_lex_next(&P->lx);
+    emit(P, OP_STOP);
+    return;
+  }
+  if (is_kw(P, "key")) {
+    probe_lex_next(&P->lx);
+    parse_expr(P, 1);
+    emit(P, OP_KEY);
+    return;
+  }
+  if (is_kw(P, "inc")) {
+    probe_lex_next(&P->lx);
+    if (P->lx.tok.kind != TOK_IDENT)
+      probe_error(&P->lx, "expected a counter name after 'inc'");
+    // Through resolve_name, not a bare find_counter: re-deriving the lookup
+    // order here is exactly the params/counters/registers desync Task 3's
+    // extraction of resolve_name exists to prevent (see its comment).
+    resolved_name_t rn = resolve_name(P, P->lx.tok.text);
+    if (rn.kind == NAME_NONE)
+      // Distinct from the "not one" message below: this name is not
+      // anything, so "needs a counter, but 'zz' is not one" would wrongly
+      // imply 'zz' exists as some other kind of name.
+      probe_error(&P->lx, "unknown name '%s'", P->lx.tok.text);
+    if (rn.kind != NAME_COUNTER)
+      probe_error(&P->lx, "'inc' needs a counter, but '%s' is not one", P->lx.tok.text);
+    probe_lex_next(&P->lx);
+    emit_op1(P, OP_LOAD_COUNTER, rn.index);
+    emit_op1(P, OP_PUSH_LIT, 1);
+    emit(P, OP_ADD);
+    emit_op1(P, OP_STORE_COUNTER, rn.index);
+    return;
+  }
+
+  // Assignment: <param> = e or <counter> = e, both resolved through
+  // resolve_name so they agree with every read (and with `inc` above) on
+  // which name means what.
+  if (P->lx.tok.kind == TOK_IDENT) {
+    resolved_name_t rn = resolve_name(P, P->lx.tok.text);
+    switch (rn.kind) {
+    case NAME_PARAM:
+    case NAME_COUNTER: {
+      opcode_t store_op = rn.kind == NAME_PARAM ? OP_STORE_PARAM : OP_STORE_COUNTER;
+      probe_lex_next(&P->lx);
+      expect(P, TOK_ASSIGN, "'=' in an assignment");
+      parse_expr(P, 1);
+      emit_op1(P, store_op, rn.index);
+      return;
+    }
+    case NAME_REG:
+      // Writing a register would perturb the very machine the probe is
+      // observing -- the same reason PEEK8 goes through ram_peek rather than
+      // a live read. A probe able to alter what it watches is no longer a
+      // neutral observer, which defeats the reason probes exist.
+      probe_error(
+          &P->lx,
+          "cannot assign to register '%s': probes must not alter machine state",
+          P->lx.tok.text);
+    case NAME_NONE:
+      // A bare "expected a statement" below would not say which name was
+      // wrong; naming it here is what makes the diagnostic useful.
+      probe_error(&P->lx, "unknown name '%s'", P->lx.tok.text);
+    }
+  }
+
+  probe_error(&P->lx, "expected a statement");
+}
+
+/* --- Installation (stub; Task 5) ------------------------------------------ */
 
 /// Replaced in Task 5.
 static void parse_install(parser_t *P) {

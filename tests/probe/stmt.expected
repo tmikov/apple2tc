@@ -1,0 +1,69 @@
+counters: 2
+  0 frame = 0
+  1 n = 0
+formats: 3
+  0 "over %u\n"
+  1 "under %u %02X\n"
+  2 "zero\n"
+probes: 1
+  0 s(v) init=0 body=3
+        0: PUSH_LIT 7936
+        2: PEEK8
+        3: LOAD_COUNTER 0
+        5: PUSH_LIT 1
+        7: ADD
+        8: STORE_COUNTER 0
+       10: LOAD_COUNTER 1
+       12: LOAD_PARAM 0
+       14: ADD
+       15: STORE_COUNTER 1
+       17: LOAD_COUNTER 0
+       19: PUSH_LIT 100
+       21: GT
+       22: JZ 31
+       24: LOAD_COUNTER 0
+       26: PRINTF fmt=0 argc=1
+       29: JMP 42
+       31: LOAD_COUNTER 0
+       33: LOAD_PARAM 0
+       35: PRINTF fmt=1 argc=2
+       38: PUSH_LIT 0
+       40: STORE_COUNTER 1
+       42: LOAD_PARAM 0
+       44: PUSH_LIT 255
+       46: EQ
+       47: JZ 50
+       49: STOP
+       50: LOAD_COUNTER 0
+       52: PUSH_LIT 100
+       54: GT
+       55: JZ 68
+       57: LOAD_COUNTER 0
+       59: PUSH_LIT 200
+       61: LT
+       62: JZ 68
+       64: PUSH_LIT 1
+       66: JMP 70
+       68: PUSH_LIT 0
+       70: JZ 79
+       72: LOAD_COUNTER 1
+       74: PUSH_LIT 1
+       76: ADD
+       77: STORE_COUNTER 1
+       79: LOAD_COUNTER 0
+       81: PUSH_LIT 0
+       83: EQ
+       84: JZ 105
+       86: LOAD_PARAM 0
+       88: PUSH_LIT 0
+       90: EQ
+       91: JZ 98
+       93: PRINTF fmt=2 argc=0
+       96: JMP 105
+       98: LOAD_COUNTER 0
+      100: LOAD_PARAM 0
+      102: PRINTF fmt=1 argc=2
+      105: LOAD_COUNTER 0
+      107: KEY
+      108: END
+sites: 0

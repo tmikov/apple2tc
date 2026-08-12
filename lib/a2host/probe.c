@@ -9,6 +9,7 @@
 
 #include "probe_internal.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -84,6 +85,22 @@ static char *read_file(const char *path) {
   return buf;
 }
 
+/// Frees the interned format strings on every exit path -- registered with
+/// atexit() below, not called from probe_close_output(). Two reasons that
+/// has to be atexit() rather than a hook off an existing teardown call:
+/// probe_close_output() also fires the moment probe_set_output_path() opens
+/// a *second* output file, which can happen before the probe has actually
+/// run, so freeing the script's formats there would pull them out from under
+/// a live run; and `--probe-dump` -- which is how every test in this module
+/// exercises the compiler -- calls exit(0) directly and never reaches
+/// a2host_shutdown() (hence never probe_close_output()) at all. atexit()
+/// fires on every exit() call, that one included, so it is the only hook
+/// that actually covers the tests LeakSanitizer would otherwise flag.
+static void free_formats(void) {
+  for (unsigned i = 0; i != s_script.nformats; ++i)
+    free(s_script.formats[i]);
+}
+
 void probe_load_script(const char *path) {
   if (s_loaded)
     probe_fatal("only one probe script may be loaded");
@@ -92,6 +109,8 @@ void probe_load_script(const char *path) {
   probe_parse_script(&s_script, src, path);
   free(src);
   s_loaded = true;
+  atexit(free_formats); // see free_formats' comment; registered exactly once
+                        // since s_loaded above allows only one script
 }
 
 void probe_set_output_path(const char *path) {
@@ -242,6 +261,36 @@ static bool has_operand(opcode_t op) {
   return false; // unreachable if -Wswitch is honored; see opname() above
 }
 
+/// Print a format string with escapes restored, so one line of dump stays one
+/// line however many newlines the string contains, and every other
+/// non-printable byte (raw BEL, ESC, VT, FF, ...) renders visibly instead of
+/// vanishing into the terminal or a `diff` of the report -- the same reason
+/// the lexer rejects a raw CR in a string literal, generalized to the rest of
+/// the non-printable range instead of just the one byte that bit first.
+static void dump_escaped(FILE *f, const char *s) {
+  for (const unsigned char *u = (const unsigned char *)s; *u; ++u) {
+    switch (*u) {
+    case '\n':
+      fputs("\\n", f);
+      break;
+    case '\t':
+      fputs("\\t", f);
+      break;
+    case '"':
+      fputs("\\\"", f);
+      break;
+    case '\\':
+      fputs("\\\\", f);
+      break;
+    default:
+      if (isprint(*u))
+        fputc(*u, f);
+      else
+        fprintf(f, "\\x%02X", *u);
+    }
+  }
+}
+
 static uint32_t dump_insn(FILE *f, const script_t *sc, uint32_t ip) {
   opcode_t op = (opcode_t)sc->code[ip];
   const char *name = opname(op);
@@ -268,8 +317,11 @@ void probe_dump(FILE *f) {
     fprintf(f, "  %u %s = %u\n", i, sc->counters[i].name, sc->counters[i].init);
 
   fprintf(f, "formats: %u\n", sc->nformats);
-  for (unsigned i = 0; i != sc->nformats; ++i)
-    fprintf(f, "  %u \"%s\"\n", i, sc->formats[i]);
+  for (unsigned i = 0; i != sc->nformats; ++i) {
+    fprintf(f, "  %u \"", i);
+    dump_escaped(f, sc->formats[i]);
+    fputs("\"\n", f);
+  }
 
   fprintf(f, "probes: %u\n", sc->nprobes);
   for (unsigned i = 0; i != sc->nprobes; ++i) {
