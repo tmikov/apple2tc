@@ -1,0 +1,19 @@
+# Memory reads and range hashing. $FFFC/$FFFD is the reset vector -- a fixed,
+# known value in ROM (rom.lst: /*FFFC*/ DFB $62, /*FFFD*/ DFB $FA), matching
+# the $FA62 install site itself -- so this test asserts real content rather
+# than whatever happens to be there.
+probe m() {
+  printf("vec8 %02X %02X\n", peek8($FFFC), peek8($FFFD))
+  printf("vec16 %04X\n", peek16($FFFC))
+  printf("zp %08X\n", hash($0000, $00FF))
+  printf("same %08X\n", hash($0000, $00FF))
+  printf("one %08X\n", hash($FFFC, $FFFC))
+  # $C050-$C05F (graphics/text/mixed/page soft switches) would flip machine
+  # state if read through the CPU's ordinary peek() -- reading the *same*
+  # address twice through peek8 must come back identical, which is what a
+  # side-effect-free array read guarantees and a soft-switch read (which
+  # toggles on every access) would not.
+  printf("io %02X %02X\n", peek8($C050), peek8($C050))
+}
+
+install m at $FA62

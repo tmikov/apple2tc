@@ -12,10 +12,10 @@
 /// every compiler test, because nothing in part 1 executed bytecode.
 ///
 /// OP_END, OP_PUSH_LIT, OP_PRINTF (Task 1), the arithmetic, bitwise,
-/// comparison and unary opcodes (Task 2), and now counters, parameters,
-/// registers and control flow (Task 3) are implemented here. Still missing:
-/// memory, hash, stop and key (Tasks 4-5) -- those still hit the `default:`
-/// case in probe_vm_run() and report clearly.
+/// comparison and unary opcodes (Task 2), counters, parameters, registers and
+/// control flow (Task 3), and now memory reads and hashing (Task 4) are
+/// implemented here. Still missing: stop and key (Task 5) -- those still hit
+/// the `default:` case in probe_vm_run() and report clearly.
 
 #include "probe_internal.h"
 
@@ -157,6 +157,36 @@ static void probe_vm_printf(const char *fmt, const uint32_t *args, unsigned argc
       probe_fatal("probe VM: format '%s' wants more arguments than were pushed", fmt);
     emit_conv(f, args[ai++], *p, width, zero, left, plus, space);
   }
+}
+
+/// FNV-1a over the \p start..\p end inclusive byte range, read through
+/// ram_peek. This is the one value in the whole design that both engines
+/// compute from the *same* source file (this one) rather than from
+/// independently maintained code, which is exactly why it has to be this
+/// dumb: a probe script cannot see its own hash go wrong. If probe_vm.c
+/// reversed the byte order, used a different constant, or (worse) let
+/// something platform-dependent -- e.g. `int`'s width, or a signed-overflow
+/// UB shift -- leak into the result, the interpreter and the generated
+/// program would still compute the identical wrong value, and Task 7's
+/// acceptance diff would pass anyway. FNV-1a is chosen for being fully
+/// specified bit-for-bit (unlike, say, hashing raw bytes through a
+/// std::hash-shaped API) and endianness-free (it consumes one byte at a
+/// time, so it does not care how a 16-/32-bit load would be laid out on a
+/// given platform) -- there is nothing left in it for two conforming C
+/// implementations to disagree about. `static`: probe_vm_run below is the
+/// only caller.
+static uint32_t probe_vm_hash(uint16_t start, uint16_t end) {
+  uint32_t h = 2166136261u;
+  // `a` is uint32_t, not uint16_t, on purpose: hash($0000, $FFFF) requires
+  // `a` to reach 0x10000 to fall out of the loop after hashing byte $FFFF.
+  // A uint16_t `a` would wrap from 0xFFFF back to 0x0000 and never compare
+  // greater than `end` -- an infinite loop for exactly the range a script is
+  // most likely to want to hash (all of memory).
+  for (uint32_t a = start; a <= end; ++a) {
+    h ^= ram_peek((uint16_t)a);
+    h *= 16777619u;
+  }
+  return h;
 }
 
 void probe_vm_run(const script_t *sc, uint32_t ip) {
@@ -319,6 +349,33 @@ void probe_vm_run(const script_t *sc, uint32_t ip) {
         vm_push(s_dispatch_pc);
         break;
       }
+      break;
+    }
+    case OP_PEEK8:
+      // ram_peek, never peek (a2engine.h's other read): inspecting a machine
+      // must not alter it. peek() decodes the IO range and calls ioPeek(),
+      // which trips the soft switches at $C0xx -- a probe reading through it
+      // would change the very machine it is trying to observe. ram_peek() is
+      // a plain array index (see Emu6502::ram_peek / the generated engines'
+      // ram_peek in system-inc.h and system2-inc.h) with no such branch, so
+      // this is safe by construction for every address, IO range included.
+      vm_push(ram_peek((uint16_t)vm_pop()));
+      break;
+    case OP_PEEK16:
+      // ram_peek16, not two OP_PEEK8-style ram_peek() calls open-coded here:
+      // both engines already define the 16-bit, low-byte-first (6502 /
+      // little-endian) convention once each -- system-inc.h, system2-inc.h,
+      // and Emu6502::ram_peek16 in emu6502.h -- and calling it keeps the VM
+      // from carrying a fourth copy of that byte order that could drift from
+      // the other three.
+      vm_push(ram_peek16((uint16_t)vm_pop()));
+      break;
+    case OP_HASH: {
+      // hash(start, end): start is pushed first, so end pops first (see
+      // OP_HASH's comment in probe_internal.h).
+      uint32_t end = vm_pop();
+      uint32_t start = vm_pop();
+      vm_push(probe_vm_hash((uint16_t)start, (uint16_t)end));
       break;
     }
     case OP_JMP:
