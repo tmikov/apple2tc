@@ -617,13 +617,19 @@ probe f(pc_at = pc, doubled = n * 2) {
     printf("every=%u\n", every)
 }
 
-install f at $FA62, $FA63, $FA64
+install f at $FA62, $FA63, $FA66
 ```
 
-`$FA62`-`$FA64` are consecutive bytes of the reset entry, so under the
-interpreter — which dispatches per instruction — this fires at whichever of
-them begin instructions. That is deliberate: it exercises multiple sites and
-a counter that advances across them.
+Three *instruction starts* on the boot path, each firing exactly once. An
+earlier draft used `$FA62, $FA63, $FA64`, which does not work: `$FA63` is a
+3-byte `JSR`, so `$FA64` and `$FA65` are its operand bytes and are never the
+value of `pc` at dispatch. Measured — a probe at `$FA64` fires **0** times.
+
+That is worth pausing on, because it is the design's central hazard appearing
+in the plan's own test: a probe at an address the engine never dispatches on
+produces no output and no error, and a report missing lines it should have had
+reads exactly like agreement. Verify any new install address by installing a
+bare `printf` there and counting hits before building a test on it.
 
 Add `probe_run_test flow 2`.
 
