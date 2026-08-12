@@ -205,6 +205,203 @@ expect_probe_reject "--probe-dump with no script" "--probe-dump requires" \
 expect_probe_reject "--probe-out with no script" "--probe-out requires" \
   --probe-out=probe-tmp/out.txt
 
+# Compile a script given inline and assert it is rejected with a specific
+# diagnostic. Matching the message rather than just "FATAL" is deliberate:
+# during review, two tests passed while covering nothing because a different
+# check fired first.
+expect_bad_script() {
+  # $1: description, $2: expected substring, $3: script contents
+  printf '%s\n' "$3" > probe-tmp/bad.probe
+  expect_probe_reject "$1" "$2" --probe=probe-tmp/bad.probe --probe-dump
+}
+
+# Same idea, but for a site-list file rather than the script itself: two
+# files are needed, so a wrapper of its own.
+expect_site_reject() {
+  # $1: description, $2: expected substring, $3: site-list contents
+  printf '%s\n' "$3" > probe-tmp/sites.txt
+  printf 'probe p() { }\ninstall p at @"sites.txt"\n' > probe-tmp/bad.probe
+  expect_probe_reject "$1" "$2" --probe=probe-tmp/bad.probe --probe-dump
+}
+
+# Long strings assembled once, used by several cases below.
+long_ident=$(printf 'a%.0s' $(seq 1 70))
+long_str=$(printf 'a%.0s' $(seq 1 300))
+parens_open=$(printf '(%.0s' $(seq 1 260))
+parens_close=$(printf ')%.0s' $(seq 1 260))
+long_comment=$(printf 'zzzzzzzzzz %.0s' $(seq 1 40))
+many_counters_script=""
+for i in $(seq 0 64); do many_counters_script+="counter c$i
+"; done
+many_params_list=""
+for i in $(seq 0 16); do
+  if [ -n "$many_params_list" ]; then many_params_list+=", "; fi
+  many_params_list+="p$i = 0"
+done
+
+# --- Lexer -------------------------------------------------------------
+
+expect_bad_script "'\$' not followed by a hex digit" "expected hex digits after '\$'" \
+  'probe p(v = $g) { }'
+expect_bad_script "a number out of range" "number out of range" \
+  'probe p(v = $100000000) { }'
+expect_bad_script "an invalid number '0x10'" "invalid number" \
+  'probe p(v = 0x10) { }'
+expect_bad_script "an invalid number '2frames'" "invalid number" \
+  'probe p(v = 2frames) { }'
+expect_bad_script "an identifier too long" "identifier too long" \
+  "counter $long_ident"
+expect_bad_script "a string literal too long" "string literal too long" \
+  "probe p() { printf(\"$long_str\") }"
+expect_bad_script "an unknown escape in a string" "unknown escape in string" \
+  'probe p() { printf("bad\qend") }'
+expect_bad_script "a raw newline in a string literal" "raw newline or CR in string literal" \
+  'probe p() {
+  printf("abc
+def")
+}'
+expect_bad_script "an unexpected character" "unexpected character ';'" \
+  'probe p() { ; }'
+
+# "unterminated string literal" needs EOF to land inside the open string with
+# no raw newline first -- but expect_bad_script's printf '%s\n' always adds a
+# trailing newline, and that newline itself would be read as the "raw
+# newline" case before EOF is ever reached. So this one is written directly,
+# with no trailing newline, instead of through the wrapper.
+printf 'probe p() { printf("abc' > probe-tmp/bad.probe
+expect_probe_reject "an unterminated string literal" "unterminated string literal" \
+  --probe=probe-tmp/bad.probe --probe-dump
+
+# --- Declarations --------------------------------------------------------
+
+expect_bad_script "an unknown top-level keyword" "expected 'counter', 'probe' or 'install'" \
+  'foo'
+expect_bad_script "a duplicate counter" "counter 'n' already declared" \
+  'counter n
+counter n'
+expect_bad_script "a duplicate probe" "probe 'p' already declared" \
+  'probe p() { }
+probe p() { }'
+expect_bad_script "a duplicate parameter" "duplicate parameter 'v'" \
+  'probe p(v = 1, v = 2) { }'
+expect_bad_script "a self-referential parameter" "unknown name 'v'" \
+  'probe p(v = v) { }'
+expect_bad_script "a non-literal counter initialiser" "a counter initialiser must be a literal" \
+  'counter n = frame'
+expect_bad_script "a reserved name as a counter" "'install' is a reserved name" \
+  'counter install'
+expect_bad_script "a reserved name as a parameter" "'if' is a reserved name" \
+  'probe p(if = 1) { }'
+expect_bad_script "a reserved name as a probe" "'stop' is a reserved name" \
+  'probe stop() { }'
+expect_bad_script "a counter declared after a probe resolved it as a register" \
+  "counter 'x' is declared after a probe resolved 'x' as a register" \
+  'probe p() { printf("%u\n", x) }
+counter x'
+expect_bad_script "too many counters" "too many counters" \
+  "$many_counters_script"
+expect_bad_script "too many parameters" "too many parameters" \
+  "probe p($many_params_list) { }"
+
+# --- Expressions -----------------------------------------------------------
+
+expect_bad_script "an unknown name in an expression" "unknown name 'qq'" \
+  'probe p(v = qq) { }'
+expect_bad_script "an expression nested too deeply" "expression nested too deeply" \
+  "probe p(v = ${parens_open}1${parens_close}) { }"
+expect_bad_script "an empty parenthesized expression" "expected an expression" \
+  'probe p() { if () { } }'
+
+# --- Statements --------------------------------------------------------
+
+expect_bad_script "a token that cannot start a statement" "expected a statement" \
+  'probe p() { 123 }'
+expect_bad_script "an unterminated block" "unterminated block" \
+  'probe p() { if (1) { '
+expect_bad_script "an assignment to a register" "cannot assign to register 'a'" \
+  'probe p() { a = 1 }'
+expect_bad_script "an assignment to an unknown name" "unknown name 'bar'" \
+  'probe p() { bar = 1 }'
+expect_bad_script "'inc' on a non-counter" "'inc' needs a counter, but 'a' is not one" \
+  'probe p() { inc a }'
+expect_bad_script "'inc' on an unknown name" "unknown name 'baz'" \
+  'probe p() { inc baz }'
+expect_bad_script "a stray 'else'" "'else' without a matching 'if'" \
+  'probe p() { else { } }'
+
+expect_bad_script "printf with too few arguments" 'format needs 1 argument(s), 0 given' \
+  'probe p() { printf("%d") }'
+expect_bad_script "printf with too many arguments" 'format needs 0 argument(s), 1 given' \
+  'probe p() { printf("ok", 1) }'
+expect_bad_script "printf with an unsupported conversion" "unsupported conversion '%s'" \
+  'probe p() { printf("%s") }'
+expect_bad_script "printf with a precision" "precision is not supported in a printf conversion" \
+  'probe p() { printf("%.2d", 1) }'
+expect_bad_script "a format string ending inside a conversion" "format string ends inside a conversion" \
+  'probe p() { printf("val%") }'
+expect_bad_script "an over-wide conversion" "conversion width too large (max 999)" \
+  'probe p() { printf("%1000d") }'
+
+# --- Install -------------------------------------------------------------
+
+expect_bad_script "install of an unknown probe" "unknown probe 'nope'" \
+  'install nope at $100'
+expect_bad_script "install missing 'at'" "expected 'at' after the probe name" \
+  'probe p() { }
+install p $100'
+expect_bad_script "a malformed install site" "expected an address, a range or" \
+  'probe p() { }
+install p at foo'
+expect_bad_script "install with '@' not followed by a string" "expected a quoted file name after" \
+  'probe p() { }
+install p at @123'
+expect_bad_script "an out-of-range install address" "address out of range" \
+  'probe p() { }
+install p at $10000'
+expect_bad_script "a backwards install range" "range ends before it starts" \
+  'probe p() { }
+install p at $200-$100'
+expect_bad_script "too many install sites" "too many install sites" \
+  'probe p() { }
+install p at $0000-$2001'
+expect_bad_script "a duplicate install" 'already installed at $0100' \
+  'probe p() { }
+install p at $100, $100'
+
+# --- Site lists ----------------------------------------------------------
+#
+# probe/dirlist.probe installs from @"." -- a directory, not a file. fopen(dir,
+# "rt") succeeds on Linux, so the rejection has to come from the reader (an
+# I/O error on the first read), not from opening the path.
+expect_probe_reject "a directory used as a site list" "error reading site list" \
+  --probe=probe/dirlist.probe --probe-dump
+
+printf 'probe p() { }\ninstall p at @"does-not-exist.txt"\n' > probe-tmp/bad.probe
+expect_probe_reject "a site list naming a file that does not exist" "cannot open site list" \
+  --probe=probe-tmp/bad.probe --probe-dump
+
+expect_site_reject "trailing text after an address" "unexpected text after the address" \
+  '0300 extra'
+expect_site_reject "an empty site list" "names no addresses" \
+  ''
+expect_site_reject "a comments-only site list" "names no addresses" \
+  '# just a comment'
+expect_site_reject "a comment line longer than the read buffer" "names no addresses" \
+  "#$long_comment"
+expect_site_reject "a malformed hex address" "expected a 16-bit hex address" \
+  'zzzz'
+expect_site_reject "a 0x-prefixed address" "expected a 16-bit hex address" \
+  '0x300'
+expect_site_reject "a leading sign on an address" "expected a 16-bit hex address" \
+  '-300'
+
+# --- Options ---------------------------------------------------------------
+
+expect_probe_reject "two --probe= scripts" "only one probe script may be loaded" \
+  --probe=probe/empty.probe --probe=probe/empty.probe --probe-dump
+expect_probe_reject "an unwritable --probe-out=" "cannot open probe output" \
+  --probe=probe/empty.probe --probe-out=probe-tmp/nodir/out.txt
+
 rm -rf probe-tmp
 
 echo "Success!"

@@ -1,0 +1,8 @@
+# A site list that names a directory, not a file. fopen(path, "rt") succeeds
+# on Linux for a directory, so the rejection has to come from the reader --
+# the first fgets() fails with an I/O error -- not from opening the path.
+# "." resolves relative to this script's own directory (tests/probe/), which
+# is guaranteed to exist and be a directory.
+probe p() { }
+
+install p at @"."
