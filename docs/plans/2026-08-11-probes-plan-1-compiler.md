@@ -48,6 +48,9 @@ Part 2 adds `lib/a2host/probe_vm.c` and modifies `system-inc.h`,
 - Modify: `lib/a2host/CMakeLists.txt:6-10`
 - Modify: `lib/a2host/a2host.c` (option loop at line 451, help at line 424)
 - Modify: `tests/run-tests.sh`
+- Create: `tests/.gitignore` containing `probe-tmp/` — `set -e` aborts before the
+  `rm -rf`, so a failing run leaves the directory behind and `tests/` has no
+  ignore file today
 
 - [ ] **Step 1: Write the failing test**
 
@@ -62,22 +65,46 @@ Append to `tests/run-tests.sh`, immediately before the final `echo "Success!"`:
 
 mkdir -p probe-tmp
 
-if ! $a2run --probe=probe/empty.probe --probe-dump > probe-tmp/empty.txt; then
-  echo "FAIL: --probe-dump on an empty script should succeed" >&2
-  exit 1
-fi
-diff -q probe/empty.expected probe-tmp/empty.txt
+# Compile a script and diff the result against its baseline.
+probe_dump_test() {
+  # $1: base name under probe/
+  if ! $a2run --probe="probe/$1.probe" --probe-dump > "probe-tmp/$1.txt"; then
+    echo "FAIL: --probe-dump failed on probe/$1.probe" >&2
+    exit 1
+  fi
+  diff -q "probe/$1.expected" "probe-tmp/$1.txt"
+}
 
-# A missing script is fatal, not a warning that leaves probes silently absent.
-if $a2run --probe=probe/does-not-exist.probe --probe-dump > /dev/null 2>probe-tmp/err.txt; then
-  echo "FAIL: a missing probe script should be fatal" >&2
-  exit 1
-fi
-if ! grep -q 'FATAL' probe-tmp/err.txt; then
-  echo "FAIL: a missing probe script produced no FATAL diagnostic:" >&2
-  cat probe-tmp/err.txt >&2
-  exit 1
-fi
+probe_dump_test empty
+
+# Assert that a2run rejects something, with the specific diagnostic we expect.
+# Matching the message rather than just "FATAL" is deliberate: during review,
+# two of these tests passed because a different check fired first and satisfied
+# a loose grep. Tasks 3-6 reuse this.
+expect_probe_reject() {
+  # $1: description, $2: expected substring, $3...: a2run arguments
+  desc="$1"; want="$2"; shift 2
+  if $a2run "$@" > /dev/null 2>probe-tmp/err.txt; then
+    echo "FAIL: a2run accepted $desc" >&2
+    exit 1
+  fi
+  if ! grep -q 'FATAL' probe-tmp/err.txt || ! grep -q -- "$want" probe-tmp/err.txt; then
+    echo "FAIL: rejected $desc, but not with the expected diagnostic '$want':" >&2
+    cat probe-tmp/err.txt >&2
+    exit 1
+  fi
+}
+
+expect_probe_reject "a missing probe script" "cannot open probe script" \
+  --probe=probe/does-not-exist.probe --probe-dump
+# Without this, the empty-script case above passes with the --probe= handler
+# deleted, because a dump with no script prints the same three lines.
+expect_probe_reject "--probe-dump with no script" "--probe-dump requires" \
+  --probe-dump
+# Note: no --probe-dump here. With it, the dump check fires first and this test
+# would pass even with the --probe-out validation removed entirely.
+expect_probe_reject "--probe-out with no script" "--probe-out requires" \
+  --probe-out=probe-tmp/out.txt
 
 rm -rf probe-tmp
 ```
@@ -139,8 +166,11 @@ extern "C" {
 /// agreement.
 void probe_load_script(const char *path);
 
-/// Where `printf` output goes. Defaults to stdout.
-void probe_set_output(FILE *f);
+/// Where `printf` output goes; stdout until set. probe.c owns the file and
+/// closes it, so a report survives an abort mid-run -- which matters when the
+/// thing being diagnosed is a divergence.
+void probe_set_output_path(const char *path);
+void probe_close_output(void);
 
 /// Print the compiled form of the loaded script and return. Used by
 /// `--probe-dump` and by every compiler test.
@@ -150,8 +180,8 @@ void probe_dump(FILE *f);
 /// consults this to decide whether it needs per-instruction callbacks.
 bool probe_installed(void);
 
-/// Run whatever is installed at \p pc. Cheap and inlineable-adjacent: the
-/// overwhelmingly common case is no site at this address.
+/// Run whatever is installed at \p pc. Returns immediately when nothing is,
+/// which is the overwhelmingly common case.
 void probe_dispatch(uint16_t pc);
 
 /// Report probes that never fired, to stderr. A probe bound to an address that
@@ -176,21 +206,51 @@ Create `lib/a2host/probe.c`:
  */
 
 #include "apple2tc/probe.h"
+#include "probe_internal.h"
 
+#include <errno.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static FILE *s_out = NULL;
 
-void probe_set_output(FILE *f) {
+/// Every probe failure goes through here, so the diagnostic has one spelling
+/// -- which matters because the tests grep for it. Never returns: a probe that
+/// fails to load would otherwise leave a report that reads as agreement.
+void probe_fatal(const char *fmt, ...) {
+  va_list ap;
+  fputs("FATAL: ", stderr);
+  va_start(ap, fmt);
+  vfprintf(stderr, fmt, ap);
+  va_end(ap);
+  fputc('\n', stderr);
+  exit(2);
+}
+
+static FILE *probe_out(void) {
+  return s_out ? s_out : stdout;
+}
+
+void probe_set_output_path(const char *path) {
+  FILE *f = fopen(path, "wt");
+  if (!f)
+    probe_fatal("cannot open probe output '%s': %s", path, strerror(errno));
   s_out = f;
+}
+
+void probe_close_output(void) {
+  if (s_out) {
+    fclose(s_out);
+    s_out = NULL;
+  }
 }
 
 void probe_load_script(const char *path) {
   FILE *f = fopen(path, "rt");
-  if (!f) {
-    fprintf(stderr, "FATAL: cannot open probe script '%s'\n", path);
-    exit(2);
-  }
+  if (!f)
+    probe_fatal("cannot open probe script '%s': %s", path, strerror(errno));
   fclose(f);
 }
 
@@ -208,8 +268,19 @@ void probe_dispatch(uint16_t pc) {
   (void)pc;
 }
 
-void probe_report_unfired(void) {
-}
+void probe_report_unfired(void) {}
+```
+
+`probe_out()` is unused until the VM in part 2 — but the header promises stdout
+by default, and `s_out` starts NULL, so writing the mapping now is what stops
+that promise from becoming a null dereference for whoever writes the VM.
+
+Declare `probe_fatal` in `probe_internal.h` so later tasks share it:
+
+```c
+/// Report and exit(2). Declared here so the lexer and parser share one
+/// spelling of the diagnostic.
+void probe_fatal(const char *fmt, ...);
 ```
 
 - [ ] **Step 5: Add the sources to the build**
@@ -266,13 +337,7 @@ In `a2host_parse_args`, inside the `for` loop before the final rejection, add:
       continue;
     }
     if (strncmp(arg, "--probe-out=", 12) == 0) {
-      const char *path = arg + 12;
-      FILE *f = fopen(path, "wt");
-      if (!f) {
-        perror(path);
-        exit(2);
-      }
-      probe_set_output(f);
+      probe_out_path_ = arg + 12;
       continue;
     }
     if (strcmp(arg, "--probe-dump") == 0) {
@@ -281,17 +346,38 @@ In `a2host_parse_args`, inside the `for` loop before the final rejection, add:
     }
 ```
 
-At the end of `a2host_parse_args`, after the loop — and **before any
-post-parse validation**, such as the check that `--headless` was given
-`--frames`. `--probe-dump` compiles a script and exits; it must not be made to
-satisfy constraints belonging to a run that will never happen.
+The `--probe-out=` handler only records the path, because otherwise the result
+would depend on whether it appeared before or after `--probe=` on the command
+line. Validation happens once, after the loop:
 
 ```c
+  // Both of these would otherwise succeed while doing nothing: a dump with no
+  // script prints a well-formed, entirely fictional empty report and exits 0,
+  // which is the failure this whole facility exists to make impossible.
+  if (probe_dump_ && !probe_script_loaded_)
+    probe_fatal("--probe-dump requires --probe=<script>");
+  if (probe_out_path_ && !probe_script_loaded_)
+    probe_fatal("--probe-out requires --probe=<script>");
+  if (probe_out_path_)
+    probe_set_output_path(probe_out_path_);
   if (probe_dump_) {
     probe_dump(stdout);
     exit(0);
   }
 ```
+
+This sits at the end of `a2host_parse_args`, before any other post-parse
+validation. `--probe-dump` compiles a script and exits; it must not be made to
+satisfy constraints belonging to a run that will never happen.
+
+`probe_script_loaded_` is a static set by the `--probe=` handler, and
+`probe_fatal` needs declaring in `probe.h` rather than `probe_internal.h` for
+`a2host.c` to reach it — or keep it internal and have `a2host.c` call a small
+`probe_require_script(const char *why)`. Either is fine; prefer whichever keeps
+`probe.h` smaller.
+
+Add `probe_close_output()` to `a2host_shutdown`, beside the existing
+`fclose(hash_file_)`.
 
 In `print_help`, before `engine_print_help();`:
 
@@ -313,7 +399,7 @@ Expected: `Success!`
 
 ```bash
 git add include/apple2tc/probe.h lib/a2host/probe.c lib/a2host/probe_internal.h \
-        lib/a2host/CMakeLists.txt lib/a2host/a2host.c \
+        lib/a2host/CMakeLists.txt lib/a2host/a2host.c tests/.gitignore \
         tests/run-tests.sh tests/probe/empty.probe tests/probe/empty.expected
 git commit -m "probe: script loading skeleton and --probe-dump"
 ```
@@ -609,8 +695,7 @@ emitted code once.
 Add to the probe section of `tests/run-tests.sh`, after the empty-script case:
 
 ```sh
-$a2run --probe=probe/expr.probe --probe-dump > probe-tmp/expr.txt
-diff -q probe/expr.expected probe-tmp/expr.txt
+probe_dump_test expr
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
@@ -1247,8 +1332,7 @@ probe s(v = peek8($1F00)) {
 Add to `tests/run-tests.sh`:
 
 ```sh
-$a2run --probe=probe/stmt.probe --probe-dump > probe-tmp/stmt.txt
-diff -q probe/stmt.expected probe-tmp/stmt.txt
+probe_dump_test stmt
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
@@ -1490,8 +1574,7 @@ install one at @"sites.txt"
 Add to `tests/run-tests.sh`:
 
 ```sh
-$a2run --probe=probe/install.probe --probe-dump > probe-tmp/install.txt
-diff -q probe/install.expected probe-tmp/install.txt
+probe_dump_test install
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
@@ -1744,61 +1827,74 @@ nobody has watched fail is not a check — the same reasoning behind the existin
 
 Add to the probe section of `tests/run-tests.sh`:
 
+Task 1 already provides `expect_probe_reject <desc> <expected-substring>
+<a2run args...>`. Every case names the diagnostic it expects rather than
+grepping for `FATAL` alone — during Task 1's review, two separate tests passed
+because a *different* check fired first and satisfied a loose grep. Add a thin
+wrapper for the common case of rejecting a script's *contents*:
+
 ```sh
-# Each compiler rejection, asserted to reject with a FATAL diagnostic.
-expect_probe_reject() {
-  # $1: what is wrong with it, $2: script contents
-  printf '%s\n' "$2" > probe-tmp/bad.probe
-  if $a2run --probe=probe-tmp/bad.probe --probe-dump >/dev/null 2>probe-tmp/bad.err; then
-    echo "FAIL: the probe compiler accepted $1" >&2
-    exit 1
-  fi
-  if ! grep -q 'FATAL' probe-tmp/bad.err; then
-    echo "FAIL: rejected $1, but without a FATAL diagnostic:" >&2
-    cat probe-tmp/bad.err >&2
-    exit 1
-  fi
+# Compile a script given inline and assert it is rejected with a specific
+# diagnostic.
+expect_bad_script() {
+  # $1: description, $2: expected substring, $3: script contents
+  printf '%s\n' "$3" > probe-tmp/bad.probe
+  expect_probe_reject "$1" "$2" --probe=probe-tmp/bad.probe --probe-dump
 }
 
-expect_probe_reject "an unknown top-level keyword"   'frobnicate x'
-expect_probe_reject "an unknown name in an expression" \
-                    'probe p(v = nosuch) { }'
-expect_probe_reject "a duplicate counter"            'counter c
+expect_bad_script "an unknown top-level keyword" "expected 'counter'" \
+  'frobnicate x'
+expect_bad_script "an unknown name in an expression" "unknown name 'nosuch'" \
+  'probe p(v = nosuch) { }'
+expect_bad_script "a duplicate counter" "already declared" \
+  'counter c
 counter c'
-expect_probe_reject "a duplicate probe"              'probe p() { }
+expect_bad_script "a duplicate probe" "already declared" \
+  'probe p() { }
 probe p() { }'
-expect_probe_reject "a duplicate parameter"          'probe p(v = 1, v = 2) { }'
-expect_probe_reject "a non-literal counter init"     'counter c = peek8($10)'
-expect_probe_reject "install of an unknown probe"    'install nosuch at $300'
-expect_probe_reject "an unopenable site list"        'probe p() { }
+expect_bad_script "a duplicate parameter" "duplicate parameter" \
+  'probe p(v = 1, v = 2) { }'
+expect_bad_script "a non-literal counter init" "must be a literal" \
+  'counter c = peek8($10)'
+expect_bad_script "install of an unknown probe" "unknown probe" \
+  'install nosuch at $300'
+expect_bad_script "an unopenable site list" "cannot open site list" \
+  'probe p() { }
 install p at @"no-such-file.txt"'
-expect_probe_reject "a backwards range"              'probe p() { }
+expect_bad_script "a backwards range" "ends before it starts" \
+  'probe p() { }
 install p at $400-$300'
-expect_probe_reject "an out-of-range address"        'probe p() { }
+expect_bad_script "an out-of-range address" "out of range" \
+  'probe p() { }
 install p at $10000'
-expect_probe_reject "too few printf arguments"       'probe p() { printf("%u %u\n", 1) }'
-expect_probe_reject "too many printf arguments"      'probe p() { printf("%u\n", 1, 2) }'
-expect_probe_reject "an unsupported conversion"      'probe p() { printf("%s\n", 1) }'
-expect_probe_reject "a truncated conversion"         'probe p() { printf("%") }'
-expect_probe_reject "an unterminated block"          'probe p() { inc'
-expect_probe_reject "an unterminated string"         'probe p() { printf("x) }'
-expect_probe_reject "assignment to an unknown name"  'probe p() { nosuch = 1 }'
-expect_probe_reject "two probe scripts"              'probe p() { }'
+expect_bad_script "too few printf arguments" "argument" \
+  'probe p() { printf("%u %u\n", 1) }'
+expect_bad_script "too many printf arguments" "argument" \
+  'probe p() { printf("%u\n", 1, 2) }'
+expect_bad_script "an unsupported conversion" "unsupported conversion" \
+  'probe p() { printf("%s\n", 1) }'
+expect_bad_script "a truncated conversion" "ends inside a conversion" \
+  'probe p() { printf("%") }'
+expect_bad_script "an unterminated block" "unterminated block" \
+  'probe p() { inc'
+expect_bad_script "an unterminated string" "unterminated string" \
+  'probe p() { printf("x) }'
+expect_bad_script "assignment to an unknown name" "expected a statement" \
+  'probe p() { nosuch = 1 }'
 ```
 
-The last case needs a second `--probe=`; write it separately:
+Two more about option combinations rather than script contents:
 
 ```sh
-if $a2run --probe=probe/empty.probe --probe=probe/empty.probe --probe-dump \
-     >/dev/null 2>probe-tmp/bad.err; then
-  echo "FAIL: the probe compiler accepted two scripts" >&2
-  exit 1
-fi
-grep -q 'FATAL' probe-tmp/bad.err || { echo "FAIL: no FATAL for two scripts" >&2; exit 1; }
+expect_probe_reject "two probe scripts" "only one probe script" \
+  --probe=probe/empty.probe --probe=probe/empty.probe --probe-dump
+expect_probe_reject "an unwritable report file" "cannot open probe output" \
+  --probe=probe/empty.probe --probe-out=probe-tmp/nodir/out.txt
 ```
 
-Remove the trailing `expect_probe_reject "two probe scripts" ...` line from the
-list above; it is covered by the block just given.
+If any expected substring does not match what the compiler actually emits,
+fix whichever is wrong — but do not weaken the assertion back to a bare
+`FATAL`.
 
 - [ ] **Step 2: Run them**
 
@@ -1866,6 +1962,15 @@ opcode set, initializers as ordinary expressions, the two entry offsets
 them yet), install by address, range and `@file`, the site hash with mixing and
 script-order chaining, `printf` conversion validation at compile time, and loud
 parse errors.
+
+**One public-API change part 2 must make, found in review of Task 1.** The
+design says `CYCLES` "tests a core-owned pointer inline, null when no script is
+loaded" (`system-inc.h:29` is a macro expanded into the hot path of every
+generated program, where the precedent is an inline test of the global
+`g_debug`). `probe_installed()` is a function call and cannot serve that
+purpose. Part 2 needs an `extern` flag or table pointer in `probe.h`, with
+`probe_installed()` either dropped or kept as the init-time query it actually
+is. Not added now, because nothing would set it.
 
 **Deferred to part 2, by design:** the VM, `probe_dispatch`, `probe_installed`,
 the `printf` renderer, `ram_peek`-based `PEEK8`/`PEEK16`, `OP_KEY` (which needs
