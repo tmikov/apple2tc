@@ -1,0 +1,9 @@
+# The acceptance test's probe: one instance of `trace`, printing the address
+# dispatch reached, at every block head the generated ROM can probe. See
+# probe-acceptance.sh for why the site list comes from romc1.c rather than
+# being written here.
+probe trace(site = pc) {
+  printf("%04X\n", site)
+}
+
+install trace at @"blocks.txt"

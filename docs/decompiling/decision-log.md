@@ -1032,3 +1032,109 @@ frame-472 attribution it unblocks, both wait on the VM. So does the acceptance
 test — replicating the trusted 1,991/1,991 ROM boot through probes, which
 validates the mechanism against a result already believed rather than merely
 exercising it.
+
+## 2026-08-12 — The probe acceptance test: coverage agrees, dwell time does not
+
+**Scope:** apple2tc · **Status:** validated (the mechanism); a real divergence,
+diagnosed and left unfixed
+
+**Decision:** `decoded/rom/probe-acceptance.sh` installs `trace.probe` — one
+`printf("%04X\n", pc)` probe — at every address in `decoded/rom/blocks.txt`
+(1,718 addresses, `grep`'d live from `romc1.c`'s `CYCLES(` calls) on both
+`a2run` and `romc1-run`, over 120 frames of ROM boot with no key pressed, and
+diffs the two reports. **It fails, on purpose left failing**: the task that
+specified this test was explicit that a real divergence here is a more
+valuable result than a pass, and this is one.
+
+**The result.** Over 120 frames: `a2run` produces 336,825 probe hits;
+`romc1-run` produces 256,616. `diff` reports exactly one hunk —
+`256617,336825d256616` — meaning `romc1-run`'s report is a **byte-exact
+prefix** of `a2run`'s, not a scatter of mismatches. Both engines' `stderr`
+report no probe as never-fired, so this is not the install-site hazard the
+whole design exists to catch.
+
+**What was ruled out, each with its own measurement:**
+
+- **Different install sites.** Both binaries installed at the same 1,718
+  addresses; neither ever reported a probe that didn't fire.
+- **A different boot path.** `--hash-frames` on both engines shows the video
+  state hash matches at all 120 frame boundaries (identical mode, page and
+  content), and the *set* of distinct addresses either engine actually
+  dispatched through is identical — 121 of 121 — in identical first-occurrence
+  order (`awk '!seen[$0]++'` on each report, then `diff`, empty). That set is
+  this test's direct analogue of the 2026-08-08 entry's "1,991 of 1,991 branch
+  targets match": at the level of *which places the program goes*, the two
+  engines still agree completely. The divergence is not in control flow.
+- **Blocks apple2tc dropped as unreachable.** The 24,366 probe hits that occur
+  before the machine settles into the loop below match exactly between the two
+  reports, hit for hit. Nothing decompiled-but-unreached is hiding here.
+- **Total elapsed cycles.** `get_cycles()` at frame 119 is 2,028,951
+  (`a2run`) vs. 2,028,954 (`romc1-run`) — 3 cycles apart out of ~2.03M. The two
+  engines were given, and consumed, essentially the same amount of emulated
+  6502 time.
+
+**What actually diverges: dwell time in one idle loop.** Every extra line past
+byte 256,616 is `FD1B`/`FD21` alternating — the ROM's keyboard-wait spin at
+`$FD1B-$FD26` (`INC $4E` / `BNE $FD21` / `BIT $C000` / `BPL $FD1B`), which the
+machine parks in for the rest of the run once no key arrives. `a2run` executes
+it 155,925 times before frame 120; `romc1-run` executes it only 115,899 times
+— for the *same* total elapsed cycles. Root cause, found by reading rather than
+guessing: **neither engine's cycle charge is real 6502 timing, and the two
+approximations disagree on this specific instruction mix.**
+`Emu6502::runFor` (`lib/cpuemu/emu6502.cpp:112`) charges a flat `cycles_ += 3`
+per instruction executed, regardless of opcode — so one loop pass (`INC`,
+`BNE` taken, `BIT`, `BPL` taken: 4 instructions) costs 12. The generated
+engine's `CYCLES()` argument is computed once per basic block at decompile
+time as `lround(block.size() * 1.7 + 0.5)` bytes-to-cycles
+(`tools/apple2tc/GenIR.cpp:77`, mirrored in `PrintSimpleC.cpp:103`) — so the
+same loop pass, split into the `$FD1B` (4 bytes → 7) and `$FD21` (5 bytes → 9)
+blocks, costs 16. 16/12 ≈ 1.33, and the measured hit ratio is 336,825/256,616
+≈ 1.313 — the same effect, attenuated only by the shared, matching prefix
+before the loop. Both figures were already on record as approximations (the
+2026-08-08 and 2026-08-11 entries above call the two cycle models
+"effectively agree[ing]" only in aggregate, "granularity, not arithmetic");
+this test is the first place a 100,000-iteration loop turned that granularity
+into a visible, six-figure divergence instead of a bounded few-cycle one.
+
+**Does not stabilize.** `--frames=60`/`120`/`240` give hit-count ratios
+1.292 / 1.313 / 1.323 and absolute gaps 37,543 / 80,209 / 165,543 — growing,
+not converging, roughly doubling as frames double. There is no frame count
+that makes this pass; every count past the point the ROM parks in the loop
+(around frame 7-8) only widens the gap. 120 was not a bad choice — the
+divergence is already fully present by then — it is simply not a number this
+mechanism can be tuned around.
+
+**Answering the plan's open questions:**
+
+- *Is `--frames=120` right, and does the report stabilize?* It does not
+  stabilize, per above, and no frame count would make it. 120 is fine as a
+  boot-length sample; it is not a knob that fixes this.
+- *Should `blocks.txt` be committed?* Yes — committed alongside the script.
+  It is regenerated by the script on every run (so it can never go stale
+  against the `romc1.c` under test), but a committed copy is what lets a
+  future failure be diffed against today's site list instead of merely
+  today's report.
+- *Should the two sides produce the same hit count at all, given apple2tc may
+  eliminate code the interpreter still executes as unreachable?* Not
+  necessarily in general, but it was not the cause here: the pre-loop hit
+  counts match exactly (24,366 = 24,366), and the reachable-block-set matches
+  (121/121). This run's divergence is entirely dwell time in one loop, not
+  missing coverage.
+- *Does `romc1-run` boot from the same initial state as `a2run`?* Yes,
+  confirmed beyond the one `hello.probe` data point: video-state hashes match
+  at all 120 frame boundaries, and first-occurrence order over the full
+  address set matches too.
+
+**What this validates, and what it doesn't.** The probe mechanism itself
+checks out: dispatch fires from both engines, `@"file"` installs land on an
+identical, complete site set, and — at the coverage granularity the
+2026-08-08 comparison used — the trusted result reproduces exactly (121/121,
+same order). What the mechanism additionally exposes, which the coarser
+comparison could not, is that the two engines' *notions of elapsed time*
+diverge on a narrow, highly-repetitive instruction mix even while agreeing on
+totals and on every other measure tried. That is a genuine property of
+`Emu6502`'s flat per-instruction charge and the generated engine's
+per-block byte heuristic, not a defect in probes or in `apple2tc`'s
+control-flow recovery — and not touched here, since fixing either cycle model
+was out of scope for this task.
+
