@@ -1,0 +1,26 @@
+counters: 1
+  0 n = 0
+formats: 0
+probes: 2
+  0 one() init=0 body=0
+        0: LOAD_COUNTER 0
+        2: PUSH_LIT 1
+        4: ADD
+        5: STORE_COUNTER 0
+        7: END
+  1 two() init=8 body=8
+        8: LOAD_COUNTER 0
+       10: PUSH_LIT 1
+       12: ADD
+       13: STORE_COUNTER 0
+       15: END
+sites: 8
+  $0300 one
+  $0310 one
+  $0320 one
+  $6100 one
+  $6100 two
+  $6200 two
+  $6201 two
+  $6202 two
+  $6203 two

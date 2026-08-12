@@ -7,6 +7,7 @@
 
 #include "probe_internal.h"
 
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -618,11 +619,262 @@ static void parse_stmt(parser_t *P) {
   probe_error(&P->lx, "expected a statement");
 }
 
-/* --- Installation (stub; Task 5) ------------------------------------------ */
+/* --- Installation ----------------------------------------------------- */
 
-/// Replaced in Task 5.
+typedef enum { ADD_SITE_OK, ADD_SITE_DUP, ADD_SITE_FULL } add_site_result_t;
+
+/// Appends one (addr, probe_id) to sc->pending_sites, growing it as needed
+/// and capping it at PROBE_MAX_SITE_DECLS. Never raises a diagnostic itself
+/// -- unlike every other "too many X" check in this file, one of this
+/// function's two callers (add_sites_from_file) holds an open FILE* that
+/// must be closed before probe_error_at runs, so the decision of *how* to
+/// report ADD_SITE_DUP/ADD_SITE_FULL is left to the caller.
+static add_site_result_t try_add_site(script_t *sc, uint16_t addr, uint32_t probe_id) {
+  // Same probe, same address, twice: not a hash-table concern (the chain
+  // just gets two links) but a script bug -- the probe now fires twice per
+  // hit, which for a report compared byte-for-byte is a real divergence, not
+  // a harmless redundancy.
+  for (uint32_t i = 0; i != sc->npending_sites; ++i)
+    if (sc->pending_sites[i].addr == addr && sc->pending_sites[i].probe_id == probe_id)
+      return ADD_SITE_DUP;
+
+  if (sc->npending_sites == PROBE_MAX_SITE_DECLS)
+    return ADD_SITE_FULL;
+  if (sc->npending_sites == sc->pending_sites_cap) {
+    uint32_t new_cap = sc->pending_sites_cap ? sc->pending_sites_cap * 2 : 64;
+    if (new_cap > PROBE_MAX_SITE_DECLS)
+      new_cap = PROBE_MAX_SITE_DECLS;
+    site_decl_t *grown = (site_decl_t *)realloc(sc->pending_sites, new_cap * sizeof(site_decl_t));
+    if (!grown)
+      probe_fatal("out of memory recording an install site");
+    sc->pending_sites = grown;
+    sc->pending_sites_cap = new_cap;
+  }
+  sc->pending_sites[sc->npending_sites].addr = addr;
+  sc->pending_sites[sc->npending_sites].probe_id = probe_id;
+  ++sc->npending_sites;
+  return ADD_SITE_OK;
+}
+
+/// Reports what try_add_site's non-OK results mean, in the one shared wording
+/// used everywhere sites are declared directly in the script (the range/
+/// single-address form in parse_install below). \p line is the source line
+/// to blame -- not necessarily the lexer's *current* line: by the time a
+/// range like `install p at $100-$3000` finishes filling and this can fail
+/// with "too many install sites", the lexer has already stepped past the
+/// range and onto whatever follows it (possibly the next statement, on the
+/// next line), the same reason parse_printf's fmt_line exists.
+static void add_site(parser_t *P, unsigned line, uint16_t addr, uint32_t probe_id) {
+  switch (try_add_site(P->sc, addr, probe_id)) {
+  case ADD_SITE_OK:
+    return;
+  case ADD_SITE_DUP:
+    probe_error_at(
+        P, line, "probe '%s' is already installed at $%04X", P->sc->probes[probe_id].name, addr);
+  case ADD_SITE_FULL:
+    probe_error_at(
+        P,
+        line,
+        "too many install sites (max %u) while installing '%s'",
+        (unsigned)PROBE_MAX_SITE_DECLS,
+        P->sc->probes[probe_id].name);
+  }
+}
+
+/// Reads one logical line, however long, growing `*buf`/`*cap` as needed so a
+/// long line is never silently split into several -- `fgets` alone truncates
+/// at the buffer size and hands back the remainder as if it started a new
+/// line, which is exactly how a long comment (this project's own sites.txt
+/// opens with one) can spill non-'#' text into what looks like a fresh
+/// address line. Returns false only when nothing at all was read (genuine
+/// EOF, or a read error -- the caller tells the two apart with ferror() once
+/// this returns false for good).
+static bool read_line(FILE *f, char **buf, size_t *cap) {
+  size_t len = 0;
+  for (;;) {
+    if (len + 2 > *cap) { // room for at least one more byte plus the NUL
+      size_t new_cap = *cap ? *cap * 2 : 256;
+      char *grown = (char *)realloc(*buf, new_cap);
+      if (!grown)
+        probe_fatal("out of memory reading a site list");
+      *buf = grown;
+      *cap = new_cap;
+    }
+    if (!fgets(*buf + len, (int)(*cap - len), f))
+      return len != 0; // EOF/error; whatever was collected is the last line
+    len += strlen(*buf + len);
+    if (len > 0 && (*buf)[len - 1] == '\n')
+      return true;
+    // fgets stopped only because the buffer filled, with more of the same
+    // line still unread (no trailing '\n' yet, and not EOF, or the next
+    // fgets would have returned NULL above) -- loop and grow.
+  }
+}
+
+/// One hex address per line; '#' comments and blank lines ignored. This is the
+/// form that makes cross-engine comparison work: both sides install at exactly
+/// the same finite set, so the reports have the same length and diff compares
+/// them directly, with no subsequence matching -- which only holds if a
+/// malformed list fails loudly instead of silently installing a subset (or,
+/// worse, extra addresses it never named), the reason every rejection below
+/// aborts the whole load rather than skipping one line. See read_file()'s
+/// comment in probe.c for the same reasoning applied to the script file
+/// itself.
+static void add_sites_from_file(parser_t *P, const char *name, uint32_t probe_id) {
+  unsigned at_line = P->lx.line; // the `@"..."` token's line; stable for the
+                                 // whole call, since the lexer does not
+                                 // advance past it until after we return
+  // Resolved relative to the script, so a script and its site list travel
+  // together. Split on both '/' and '\\': this project ships a2run/a2emu as
+  // separate Windows executables (see a2host_api.h), so a script's own path
+  // may arrive with either separator.
+  char path[512];
+  const char *slash = strrchr(P->lx.path, '/');
+  const char *bslash = strrchr(P->lx.path, '\\');
+  if (bslash && (!slash || bslash > slash))
+    slash = bslash;
+  int n;
+  if (slash)
+    n = snprintf(path, sizeof(path), "%.*s%s", (int)(slash - P->lx.path + 1), P->lx.path, name);
+  else
+    n = snprintf(path, sizeof(path), "%s", name);
+  if (n < 0 || (size_t)n >= sizeof(path))
+    probe_error_at(P, at_line, "site list path too long: '%s'", name);
+
+  FILE *f = fopen(path, "rt");
+  if (!f)
+    probe_error_at(P, at_line, "cannot open site list '%s'", path);
+
+  char *line = NULL;
+  size_t line_cap = 0;
+  unsigned lineno = 0;
+  unsigned naddrs = 0;
+  while (read_line(f, &line, &line_cap)) {
+    ++lineno;
+    char *s = line;
+    while (*s == ' ' || *s == '\t')
+      ++s;
+    if (*s == '#' || *s == '\n' || *s == '\r' || !*s)
+      continue;
+
+    // Plain hex digits only: no leading '+'/'-' and no "0x" prefix, both of
+    // which strtoul's base-16 mode would otherwise accept silently, letting
+    // a typo like "-0" parse as the legitimate-looking address $0000.
+    if (!isxdigit((unsigned char)*s) || (s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))) {
+      fclose(f);
+      free(line);
+      probe_error_at(P, at_line, "%s:%u: expected a 16-bit hex address", path, lineno);
+    }
+    char *end;
+    unsigned long v = strtoul(s, &end, 16);
+    if (v > 0xFFFF) {
+      fclose(f);
+      free(line);
+      probe_error_at(P, at_line, "%s:%u: expected a 16-bit hex address", path, lineno);
+    }
+    // Nothing but trailing whitespace and an optional comment may follow the
+    // address -- "300 400" on one line must fail, not silently install $0300
+    // and drop $0400.
+    char *t = end;
+    while (*t == ' ' || *t == '\t')
+      ++t;
+    if (*t && *t != '#' && *t != '\n' && *t != '\r') {
+      fclose(f);
+      free(line);
+      probe_error_at(P, at_line, "%s:%u: unexpected text after the address", path, lineno);
+    }
+
+    // Not add_site: this loop holds `f` and `line` open, and both diagnostics
+    // below need them closed/freed first, the same reason every other error
+    // exit in this loop does its own cleanup instead of calling probe_error
+    // straight away.
+    add_site_result_t r = try_add_site(P->sc, (uint16_t)v, probe_id);
+    if (r != ADD_SITE_OK) {
+      fclose(f);
+      free(line);
+      if (r == ADD_SITE_DUP)
+        probe_error_at(
+            P,
+            at_line,
+            "%s:%u: probe '%s' is already installed at $%04X",
+            path,
+            lineno,
+            P->sc->probes[probe_id].name,
+            (unsigned)v);
+      else
+        probe_error_at(
+            P,
+            at_line,
+            "%s:%u: too many install sites (max %u) while installing '%s'",
+            path,
+            lineno,
+            (unsigned)PROBE_MAX_SITE_DECLS,
+            P->sc->probes[probe_id].name);
+    }
+    ++naddrs;
+  }
+  // ferror(), not just "the loop ended": a read error (e.g. `@"a-directory"`,
+  // which fopen("rt") happily opens on Linux) must not be mistaken for a
+  // clean, empty file -- both would otherwise install nothing and exit 0. Not
+  // strerror(errno): ferror() does not guarantee errno was left meaningful
+  // (same caution as read_file's, in probe.c).
+  bool had_error = ferror(f) != 0;
+  fclose(f);
+  free(line);
+  if (had_error)
+    probe_error_at(P, at_line, "error reading site list '%s'", path);
+  if (naddrs == 0)
+    probe_error_at(P, at_line, "site list '%s' names no addresses", path);
+}
+
 static void parse_install(parser_t *P) {
-  probe_error(&P->lx, "install: not yet implemented");
+  if (P->lx.tok.kind != TOK_IDENT)
+    probe_error(&P->lx, "expected a probe name after install");
+  int probe_id = find_probe(P->sc, P->lx.tok.text);
+  if (probe_id < 0)
+    probe_error(&P->lx, "unknown probe '%s'", P->lx.tok.text);
+  probe_lex_next(&P->lx);
+
+  if (!is_kw(P, "at"))
+    probe_error(&P->lx, "expected 'at' after the probe name");
+  probe_lex_next(&P->lx);
+
+  do {
+    if (accept(P, TOK_AT)) {
+      // A quoted string, so a path may contain dots and slashes without the
+      // lexer needing a mode.
+      if (P->lx.tok.kind != TOK_STRING)
+        probe_error(&P->lx, "expected a quoted file name after '@'");
+      add_sites_from_file(P, P->lx.tok.text, (uint32_t)probe_id);
+      probe_lex_next(&P->lx);
+      continue;
+    }
+    if (P->lx.tok.kind != TOK_NUMBER)
+      probe_error(&P->lx, "expected an address, a range or '@\"file\"'");
+    // The address/range's own line, so a diagnostic raised after
+    // probe_lex_next has moved the lexer on (e.g. "too many install sites",
+    // raised from inside the fill loop below) still blames the statement
+    // instead of whatever follows it.
+    unsigned site_line = P->lx.line;
+    uint32_t lo = P->lx.tok.num;
+    if (lo > 0xFFFF)
+      probe_error(&P->lx, "address out of range");
+    probe_lex_next(&P->lx);
+
+    uint32_t hi = lo;
+    if (accept(P, TOK_MINUS)) {
+      if (P->lx.tok.kind != TOK_NUMBER)
+        probe_error(&P->lx, "expected the end of the range");
+      hi = P->lx.tok.num;
+      if (hi > 0xFFFF)
+        probe_error(&P->lx, "address out of range");
+      if (hi < lo)
+        probe_error(&P->lx, "range ends before it starts");
+      probe_lex_next(&P->lx);
+    }
+    for (uint32_t a = lo; a <= hi; ++a)
+      add_site(P, site_line, (uint16_t)a, (uint32_t)probe_id);
+  } while (accept(P, TOK_COMMA));
 }
 
 /* --- Declarations ------------------------------------------------------- */

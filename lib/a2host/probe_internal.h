@@ -172,6 +172,19 @@ typedef struct {
 
 #define PROBE_NO_SITE 0xFFFFFFFFu
 
+enum { PROBE_MAX_SITE_DECLS = 8192 };
+
+/// One `install` target: a probe at one address. The parser appends these to
+/// script_t::pending_sites; probe_build_sites() hashes them into slots/insts
+/// and then frees the array -- it is parse-time scratch, dead the moment the
+/// table exists, so it does not belong in the persistent script_t shape (nor,
+/// worse, in file-scope storage that would sit in every generated program's
+/// BSS whether or not that program's build ever installs a probe).
+typedef struct {
+  uint16_t addr;
+  uint32_t probe_id;
+} site_decl_t;
+
 /// The whole compiled script. One instance, file-scope in probe.c.
 typedef struct {
   counter_t counters[PROBE_MAX_COUNTERS];
@@ -182,6 +195,9 @@ typedef struct {
   unsigned nformats;
   uint32_t code[PROBE_MAX_CODE];
   uint32_t ncode;
+  site_decl_t *pending_sites; ///< parse-time scratch; see site_decl_t above
+  uint32_t npending_sites;
+  uint32_t pending_sites_cap;
   slot_t *slots; ///< open-addressed, power-of-two, NULL until installed
   uint32_t slot_mask;
   inst_t *insts; ///< one per install declaration
@@ -190,3 +206,16 @@ typedef struct {
 } script_t;
 
 void probe_parse_script(script_t *sc, const char *src, const char *path);
+
+/* --- Install sites --------------------------------------------------------- */
+
+/// Hashes sc->pending_sites into sc->slots/sc->insts and frees
+/// sc->pending_sites (see site_decl_t's comment). A no-op, leaving sc->slots
+/// NULL, if no `install` was ever parsed.
+void probe_build_sites(script_t *sc);
+/// Find the slot for \p addr: its own, or the first free one. Precondition:
+/// `sc->slots != NULL`, i.e. at least one site has been installed
+/// (probe_build_sites leaves it NULL otherwise, and this does not check --
+/// callers on a script with no installs must guard with `sc->nsites != 0` /
+/// `probe_installed()` first).
+uint32_t probe_find_slot(const script_t *sc, uint16_t addr);

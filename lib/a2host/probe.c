@@ -85,20 +85,31 @@ static char *read_file(const char *path) {
   return buf;
 }
 
-/// Frees the interned format strings on every exit path -- registered with
-/// atexit() below, not called from probe_close_output(). Two reasons that
-/// has to be atexit() rather than a hook off an existing teardown call:
-/// probe_close_output() also fires the moment probe_set_output_path() opens
-/// a *second* output file, which can happen before the probe has actually
-/// run, so freeing the script's formats there would pull them out from under
-/// a live run; and `--probe-dump` -- which is how every test in this module
-/// exercises the compiler -- calls exit(0) directly and never reaches
-/// a2host_shutdown() (hence never probe_close_output()) at all. atexit()
-/// fires on every exit() call, that one included, so it is the only hook
-/// that actually covers the tests LeakSanitizer would otherwise flag.
-static void free_formats(void) {
+/// Frees the interned format strings, the install-site hash table (`slots`
+/// and `insts`, allocated by probe_build_sites()) and, if parsing failed
+/// before probe_build_sites() ran, the still-pending site declarations -- on
+/// every exit path, registered with atexit() below, not called from
+/// probe_close_output(). Two reasons that has to be atexit() rather than a
+/// hook off an existing teardown call: probe_close_output() also fires the
+/// moment probe_set_output_path() opens a *second* output file, which can
+/// happen before the probe has actually run, so freeing the script's
+/// resources there would pull them out from under a live run; and
+/// `--probe-dump` -- which is how every test in this module exercises the
+/// compiler -- calls exit(0) directly and never reaches a2host_shutdown()
+/// (hence never probe_close_output()) at all. atexit() fires on every exit()
+/// call, that one included, so it is the only hook that actually covers the
+/// tests LeakSanitizer would otherwise flag.
+static void free_script_resources(void) {
   for (unsigned i = 0; i != s_script.nformats; ++i)
     free(s_script.formats[i]);
+  free(s_script.slots);
+  free(s_script.insts);
+  // Ordinarily already NULL: probe_build_sites() frees pending_sites itself
+  // once it has consumed it. It is still non-NULL here only when parsing
+  // failed before probe_build_sites() ever ran (e.g. a syntax error after a
+  // few `install` lines already parsed) -- free(NULL) is a no-op, so this
+  // covers that path without needing to know which case applies.
+  free(s_script.pending_sites);
 }
 
 void probe_load_script(const char *path) {
@@ -106,11 +117,19 @@ void probe_load_script(const char *path) {
     probe_fatal("only one probe script may be loaded");
   char *src = read_file(path);
   memset(&s_script, 0, sizeof(s_script));
+  // Registered before parsing, not after: a script that fails partway
+  // through -- e.g. after interning a printf format string, then hitting a
+  // syntax error -- exits via probe_error before probe_parse_script ever
+  // returns. Registering here means free_script_resources still runs on that
+  // path and reclaims what had already been allocated; registering after
+  // parse_script (as an earlier version of this did) would have skipped it.
+  // s_loaded above guarantees probe_load_script itself never runs twice, so
+  // this still registers exactly once.
+  atexit(free_script_resources);
   probe_parse_script(&s_script, src, path);
   free(src);
+  probe_build_sites(&s_script);
   s_loaded = true;
-  atexit(free_formats); // see free_formats' comment; registered exactly once
-                        // since s_loaded above allows only one script
 }
 
 void probe_set_output_path(const char *path) {
@@ -126,6 +145,92 @@ void probe_close_output(void) {
     fclose(s_out);
     s_out = NULL;
   }
+}
+
+/* --- Install sites -----------------------------------------------------
+ *
+ * An open-addressed, power-of-two-sized hash table over 16-bit addresses.
+ * Sized once (by probe_build_sites, from the final pending-site count) to
+ * keep the load factor at most a half, which is what bounds
+ * probe_find_slot's scan: with at most half the slots ever occupied, at
+ * least one empty slot always exists on the probe sequence for both a
+ * present and an absent address, so the `while (slots[slot].used ...)` loop
+ * below is guaranteed to terminate -- there is no separate "table full" case
+ * to handle. Placed ahead of probe_dump, its first caller, so
+ * probe_find_slot's precondition (declared in probe_internal.h) and the
+ * table's invariants are in scope before anything relies on them.
+ */
+
+/// Mixing matters: 6502 block heads cluster within a page, so `addr & mask`
+/// would pile them into adjacent slots.
+static uint32_t hash_addr(uint16_t addr) {
+  return (uint32_t)addr * 2654435761u >> 13;
+}
+
+// hash_addr discards the low 13 bits of its 32-bit product, leaving 19
+// significant bits (bits 13..31) for `& slot_mask` to draw from below.
+// probe_build_sites' `cap` never needs more mask bits than that: its ceiling
+// is the smallest power of two >= 2*PROBE_MAX_SITE_DECLS, so bounding
+// PROBE_MAX_SITE_DECLS keeps every mask bit backed by a real bit of
+// hash_addr's output. Past this point some mask bits would always see zero
+// from hash_addr, silently shrinking the table's reachable half -- a trap
+// that is invisible at the current cap and stays that way only because the
+// assert below fails the build first if PROBE_MAX_SITE_DECLS ever grows
+// past it.
+_Static_assert(
+    PROBE_MAX_SITE_DECLS <= (1u << 18),
+    "hash_addr's fixed >>13 shift cannot address a slot_mask this wide -- widen the shift too");
+
+uint32_t probe_find_slot(const script_t *sc, uint16_t addr) {
+  uint32_t slot = hash_addr(addr) & sc->slot_mask;
+  while (sc->slots[slot].used && sc->slots[slot].addr != addr)
+    slot = (slot + 1) & sc->slot_mask;
+  return slot;
+}
+
+void probe_build_sites(script_t *sc) {
+  if (!sc->npending_sites)
+    return;
+
+  // Load factor at most a half.
+  uint32_t cap = 16;
+  while (cap < sc->npending_sites * 2)
+    cap *= 2;
+
+  sc->slots = (slot_t *)calloc(cap, sizeof(slot_t));
+  sc->insts = (inst_t *)calloc(sc->npending_sites, sizeof(inst_t));
+  if (!sc->slots || !sc->insts)
+    probe_fatal("out of memory building the probe site table");
+  sc->slot_mask = cap - 1;
+  sc->ninsts = sc->npending_sites;
+  sc->nsites = 0;
+
+  // Walked in reverse and prepended, so chains come out in script order --
+  // which is what makes `install tick` before `install state` mean that
+  // state observes the incremented counter.
+  for (uint32_t i = sc->npending_sites; i-- > 0;) {
+    uint16_t addr = sc->pending_sites[i].addr;
+    uint32_t slot = probe_find_slot(sc, addr);
+
+    sc->insts[i].probe_id = sc->pending_sites[i].probe_id;
+    if (sc->slots[slot].used) {
+      sc->insts[i].next = sc->slots[slot].first;
+    } else {
+      sc->slots[slot].used = 1;
+      sc->slots[slot].addr = addr;
+      sc->insts[i].next = PROBE_NO_SITE;
+      ++sc->nsites;
+    }
+    sc->slots[slot].first = i;
+  }
+
+  // pending_sites is parse-time scratch (see its comment in
+  // probe_internal.h): dead the moment the table above exists, so it is
+  // freed here rather than carried to atexit teardown.
+  free(sc->pending_sites);
+  sc->pending_sites = NULL;
+  sc->npending_sites = 0;
+  sc->pending_sites_cap = 0;
 }
 
 // A switch with no `default`, not a table: a positional array tolerates a
@@ -335,10 +440,24 @@ void probe_dump(FILE *f) {
   }
 
   fprintf(f, "sites: %u\n", sc->nsites);
+  // Walked in address order rather than slot order, so the output does not
+  // depend on hash layout -- a change to hash_addr or the load factor must
+  // not perturb the expected dump. `sc->slots` is hoisted out of the loop
+  // condition (rather than tested 65,536 times): it is loop-invariant, only
+  // ever NULL when there is nothing to walk at all.
+  if (sc->slots) {
+    for (uint32_t a = 0; a <= 0xFFFF; ++a) {
+      uint32_t slot = probe_find_slot(sc, (uint16_t)a);
+      if (!sc->slots[slot].used)
+        continue;
+      for (uint32_t i = sc->slots[slot].first; i != PROBE_NO_SITE; i = sc->insts[i].next)
+        fprintf(f, "  $%04X %s\n", (unsigned)a, sc->probes[sc->insts[i].probe_id].name);
+    }
+  }
 }
 
 bool probe_installed(void) {
-  return false;
+  return s_script.nsites != 0;
 }
 
 void probe_dispatch(uint16_t pc) {

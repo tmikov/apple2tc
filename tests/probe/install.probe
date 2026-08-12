@@ -1,0 +1,8 @@
+counter n
+
+probe one()  { inc n }
+probe two()  { inc n }
+
+install one at $6100
+install two at $6100, $6200-$6203
+install one at @"sites.txt"
