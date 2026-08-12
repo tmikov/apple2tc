@@ -185,7 +185,10 @@ typedef struct {
   uint32_t probe_id;
 } site_decl_t;
 
-/// The whole compiled script. One instance, file-scope in probe.c.
+/// The whole compiled script. One instance, heap-allocated by
+/// probe_load_script() into a file-scope pointer in probe.c (`s_script`,
+/// NULL until a script is loaded) rather than kept as a file-scope value --
+/// see that pointer's comment for why.
 typedef struct {
   counter_t counters[PROBE_MAX_COUNTERS];
   unsigned ncounters;

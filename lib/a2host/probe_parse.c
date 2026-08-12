@@ -19,6 +19,7 @@ typedef struct {
   lexer_t lx;
   probe_t *cur; ///< probe being compiled, for parameter lookup; NULL outside
   unsigned depth; ///< current parse_expr nesting; see PROBE_MAX_EXPR_DEPTH
+  unsigned stmt_depth; ///< current parse_stmt nesting; see PROBE_MAX_STMT_DEPTH
   // Set by resolve_name() the first time some probe resolves a given
   // register-named identifier *as a register* (i.e. neither a parameter nor
   // a counter matched first). parse_counter consults this: without it,
@@ -35,6 +36,20 @@ typedef struct {
 /// and an unbounded parenthesis run recurses this parser straight into a
 /// stack overflow instead of the diagnostic a malformed script deserves.
 enum { PROBE_MAX_EXPR_DEPTH = 250 };
+
+/// Recursion limit for parse_stmt (block nesting `{ { ... } }` and `if`
+/// nesting both go through it -- see parse_stmt's guard below). The same
+/// phase-3-generated-script risk as PROBE_MAX_EXPR_DEPTH above, but this path
+/// had no limit at all: `parse_stmt` -> `parse_block` -> `parse_stmt` and
+/// `parse_stmt` -> `parse_if` -> `parse_stmt` recurse once per nesting level
+/// with nothing to stop them. Measured under `ulimit -s 1024` (Windows's
+/// default 1 MB main-thread stack, a supported target): 16,000 nested blocks
+/// or 16,000 nested `if`s both segfault before any other limit -- the `if`
+/// case is bounded only by accident, since 16,000 `if`s emit 32,000 code
+/// cells, comfortably under PROBE_MAX_CODE's 65,536. 250 matches
+/// PROBE_MAX_EXPR_DEPTH: far beyond anything a hand-written script needs, and
+/// nowhere near the ~16,000-level floor measured above.
+enum { PROBE_MAX_STMT_DEPTH = 250 };
 
 /* --- Emitting ------------------------------------------------------------- */
 
@@ -530,7 +545,11 @@ static void parse_if(parser_t *P) {
   }
 }
 
-static void parse_stmt(parser_t *P) {
+/// The actual statement grammar. Broken out from parse_stmt() below only so
+/// that function can guard every entry with one depth check and one matching
+/// decrement, instead of one of each at every one of this function's several
+/// early returns.
+static void parse_stmt_inner(parser_t *P) {
   if (P->lx.tok.kind == TOK_LBRACE) {
     parse_block(P);
     return;
@@ -617,6 +636,17 @@ static void parse_stmt(parser_t *P) {
   }
 
   probe_error(&P->lx, "expected a statement");
+}
+
+static void parse_stmt(parser_t *P) {
+  // Every nesting level -- a `{`-block or an `if`/`else` body -- re-enters
+  // this function (via parse_block or parse_if, both called from
+  // parse_stmt_inner), so counting entries here bounds both at once. See
+  // PROBE_MAX_STMT_DEPTH's comment.
+  if (++P->stmt_depth > PROBE_MAX_STMT_DEPTH)
+    probe_error(&P->lx, "statement nested too deeply");
+  parse_stmt_inner(P);
+  --P->stmt_depth;
 }
 
 /* --- Installation ----------------------------------------------------- */

@@ -229,6 +229,8 @@ long_ident=$(printf 'a%.0s' $(seq 1 70))
 long_str=$(printf 'a%.0s' $(seq 1 300))
 parens_open=$(printf '(%.0s' $(seq 1 260))
 parens_close=$(printf ')%.0s' $(seq 1 260))
+blocks_open=$(printf '{%.0s' $(seq 1 260))
+blocks_close=$(printf '}%.0s' $(seq 1 260))
 long_comment=$(printf 'zzzzzzzzzz %.0s' $(seq 1 40))
 many_counters_script=""
 for i in $(seq 0 64); do many_counters_script+="counter c$i
@@ -328,6 +330,15 @@ expect_bad_script "'inc' on an unknown name" "unknown name 'baz'" \
   'probe p() { inc baz }'
 expect_bad_script "a stray 'else'" "'else' without a matching 'if'" \
   'probe p() { else { } }'
+# PROBE_MAX_STMT_DEPTH is 250; 260 nested blocks (like the 260-deep
+# parenthesis run above for expressions) trips it well short of any real
+# stack limit -- see probe_parse.c's comment on the constant for the
+# measurement (16,000 nested blocks or `if`s segfault under `ulimit -s
+# 1024`, the unguarded parser's actual failure mode before this test existed).
+expect_bad_script "a block nested too deeply" "statement nested too deeply" \
+  "probe p() { ${blocks_open}${blocks_close} }"
+expect_bad_script "an 'if' nested too deeply" "statement nested too deeply" \
+  "probe p() { $(printf 'if(1)%.0s' $(seq 1 260))stop }"
 
 expect_bad_script "printf with too few arguments" 'format needs 1 argument(s), 0 given' \
   'probe p() { printf("%d") }'

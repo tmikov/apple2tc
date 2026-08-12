@@ -42,7 +42,14 @@ _Noreturn static void probe_fatal_open(const char *what, const char *path) {
   probe_fatal("%s '%s': %s", what, path, strerror(errno));
 }
 
-static script_t s_script;
+/// NULL until a script is loaded. Heap-allocated rather than file-scope: a
+/// file-scope `script_t` sits in every generated program's BSS (552,256
+/// bytes -- `code[65536]` alone is 256 KB, `probes[256]` another ~277 KB
+/// dominated by `params[16][64]`) whether or not that program's build ever
+/// loads a script. NULL doubles as the answer to "is a script loaded" that
+/// does not require calling a function -- see probe_installed() and the
+/// design doc's plan for `CYCLES` to test a core-owned pointer inline.
+static script_t *s_script = NULL;
 static bool s_loaded = false;
 
 static char *read_file(const char *path) {
@@ -100,23 +107,33 @@ static char *read_file(const char *path) {
 /// call, that one included, so it is the only hook that actually covers the
 /// tests LeakSanitizer would otherwise flag.
 static void free_script_resources(void) {
-  for (unsigned i = 0; i != s_script.nformats; ++i)
-    free(s_script.formats[i]);
-  free(s_script.slots);
-  free(s_script.insts);
+  // Registered (see below) only after s_script itself was successfully
+  // allocated, and nothing between that point and here ever sets it back to
+  // NULL, so this guard is defensive rather than load-bearing -- but cheap
+  // enough that asserting the invariant costs nothing.
+  if (!s_script)
+    return;
+  for (unsigned i = 0; i != s_script->nformats; ++i)
+    free(s_script->formats[i]);
+  free(s_script->slots);
+  free(s_script->insts);
   // Ordinarily already NULL: probe_build_sites() frees pending_sites itself
   // once it has consumed it. It is still non-NULL here only when parsing
   // failed before probe_build_sites() ever ran (e.g. a syntax error after a
   // few `install` lines already parsed) -- free(NULL) is a no-op, so this
   // covers that path without needing to know which case applies.
-  free(s_script.pending_sites);
+  free(s_script->pending_sites);
+  free(s_script);
+  s_script = NULL;
 }
 
 void probe_load_script(const char *path) {
   if (s_loaded)
     probe_fatal("only one probe script may be loaded");
   char *src = read_file(path);
-  memset(&s_script, 0, sizeof(s_script));
+  s_script = (script_t *)calloc(1, sizeof(*s_script));
+  if (!s_script)
+    probe_fatal("cannot allocate %zu bytes for the probe script", sizeof(*s_script));
   // Registered before parsing, not after: a script that fails partway
   // through -- e.g. after interning a printf format string, then hitting a
   // syntax error -- exits via probe_error before probe_parse_script ever
@@ -126,9 +143,9 @@ void probe_load_script(const char *path) {
   // s_loaded above guarantees probe_load_script itself never runs twice, so
   // this still registers exactly once.
   atexit(free_script_resources);
-  probe_parse_script(&s_script, src, path);
+  probe_parse_script(s_script, src, path);
   free(src);
-  probe_build_sites(&s_script);
+  probe_build_sites(s_script);
   s_loaded = true;
 }
 
@@ -415,7 +432,7 @@ static uint32_t dump_insn(FILE *f, const script_t *sc, uint32_t ip) {
 }
 
 void probe_dump(FILE *f) {
-  const script_t *sc = &s_script;
+  const script_t *sc = s_script;
 
   fprintf(f, "counters: %u\n", sc->ncounters);
   for (unsigned i = 0; i != sc->ncounters; ++i)
@@ -457,7 +474,7 @@ void probe_dump(FILE *f) {
 }
 
 bool probe_installed(void) {
-  return s_script.nsites != 0;
+  return s_script && s_script->nsites != 0;
 }
 
 void probe_dispatch(uint16_t pc) {
