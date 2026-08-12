@@ -10,6 +10,7 @@
 #include "probe_internal.h"
 
 #include <errno.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,27 +23,34 @@ static FILE *probe_out(void) {
   return s_out ? s_out : stdout;
 }
 
+_Noreturn void probe_fatal(const char *fmt, ...) {
+  fputs("FATAL: ", stderr);
+  va_list ap;
+  va_start(ap, fmt);
+  vfprintf(stderr, fmt, ap);
+  va_end(ap);
+  fputc('\n', stderr);
+  exit(2);
+}
+
 /// Every fatal diagnostic that involves opening a file goes through here, so
 /// each one remembers *why* the open failed -- "no such file" and "permission
-/// denied" are different bugs. (a2host.c has its own FATAL messages for
-/// option validation, which have no errno to report and so have no use for
-/// this helper.)
-static void probe_fatal(const char *what, const char *path) {
-  fprintf(stderr, "FATAL: %s '%s': %s\n", what, path, strerror(errno));
-  exit(2);
+/// denied" are different bugs.
+_Noreturn static void probe_fatal_open(const char *what, const char *path) {
+  probe_fatal("%s '%s': %s", what, path, strerror(errno));
 }
 
 void probe_load_script(const char *path) {
   FILE *f = fopen(path, "rt");
   if (!f)
-    probe_fatal("cannot open probe script", path);
+    probe_fatal_open("cannot open probe script", path);
   fclose(f);
 }
 
 void probe_set_output_path(const char *path) {
   FILE *f = fopen(path, "wt");
   if (!f)
-    probe_fatal("cannot open probe output", path);
+    probe_fatal_open("cannot open probe output", path);
   probe_close_output();
   s_out = f;
 }

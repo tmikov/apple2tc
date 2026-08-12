@@ -23,6 +23,8 @@
 #include "apple2tc/probe.h"
 #include "apple2tc/system.h"
 
+#include "probe_internal.h"
+
 #include <ctype.h>
 #include <limits.h>
 #include <stdio.h>
@@ -558,14 +560,10 @@ void a2host_parse_args(int argc, char *argv[]) {
   // Checked here rather than in the handlers above so the result does not
   // depend on the order --probe=, --probe-dump and --probe-out= were given
   // in.
-  if (probe_dump_ && !probe_loaded_) {
-    fprintf(stderr, "FATAL: --probe-dump requires --probe=<script>\n");
-    exit(2);
-  }
-  if (probe_out_path_ && !probe_loaded_) {
-    fprintf(stderr, "FATAL: --probe-out requires --probe=<script>\n");
-    exit(2);
-  }
+  if (probe_dump_ && !probe_loaded_)
+    probe_fatal("--probe-dump requires --probe=<script>");
+  if (probe_out_path_ && !probe_loaded_)
+    probe_fatal("--probe-out requires --probe=<script>");
   // Before opening --probe-out=: a dump exits immediately and never runs, so
   // it must not truncate an existing report on its way out.
   if (probe_dump_) {
