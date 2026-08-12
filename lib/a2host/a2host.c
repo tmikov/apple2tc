@@ -20,6 +20,7 @@
 
 #include "apple2tc/a2io.h"
 #include "apple2tc/apple2iodefs.h"
+#include "apple2tc/probe.h"
 #include "apple2tc/system.h"
 
 #include <ctype.h>
@@ -36,6 +37,15 @@ typedef struct KeyPress {
 static bool sound_enabled_ = true;
 /// If set, a file to read keyboard input from.
 static FILE *kbd_file_ = NULL;
+/// If set, a probe script was loaded via --probe=. Validated after the
+/// argument loop: --probe-dump and --probe-out= both require it, and that
+/// has to hold regardless of the order the options were given in.
+static bool probe_loaded_ = false;
+/// If set, print the compiled probe script and exit instead of running.
+static bool probe_dump_ = false;
+/// If set, path from --probe-out=, not yet opened -- opening happens after
+/// the argument loop, once we know a script was loaded to write about.
+static const char *probe_out_path_ = NULL;
 /// Assumed clock frequency. Can be used for "overclocking".
 static unsigned clock_freq_ = A2_CLOCK_FREQ;
 /// If true, dump key presses with cycle stamps.
@@ -411,6 +421,7 @@ void a2host_shutdown(void) {
     fclose(hash_file_);
     hash_file_ = NULL;
   }
+  probe_close_output();
   shutdown_emulated();
   a2_io_done(&io_);
 }
@@ -436,6 +447,9 @@ static void print_help(void) {
   printf(" --frames=n       Quit after simulating n frames\n");
   printf(" --headless       Run with no window. Requires --frames\n");
   printf(" --count-bt       Count branch targets\n");
+  printf(" --probe=path     Load a probe script\n");
+  printf(" --probe-out=p    Write probe output to the given file\n");
+  printf(" --probe-dump     Print the compiled probe script and exit\n");
   engine_print_help();
 }
 
@@ -512,6 +526,19 @@ void a2host_parse_args(int argc, char *argv[]) {
       sound_enabled_ = false;
       continue;
     }
+    if (strncmp(arg, "--probe=", 8) == 0) {
+      probe_load_script(arg + 8);
+      probe_loaded_ = true;
+      continue;
+    }
+    if (strncmp(arg, "--probe-out=", 12) == 0) {
+      probe_out_path_ = arg + 12;
+      continue;
+    }
+    if (strcmp(arg, "--probe-dump") == 0) {
+      probe_dump_ = true;
+      continue;
+    }
 
     // Not ours -- it may be the engine's. An interpreter has options a
     // generated program cannot have: which ROM, which disk, which binary.
@@ -527,6 +554,27 @@ void a2host_parse_args(int argc, char *argv[]) {
     print_help();
     exit(1);
   }
+
+  // Checked here rather than in the handlers above so the result does not
+  // depend on the order --probe=, --probe-dump and --probe-out= were given
+  // in.
+  if (probe_dump_ && !probe_loaded_) {
+    fprintf(stderr, "FATAL: --probe-dump requires --probe=<script>\n");
+    exit(2);
+  }
+  if (probe_out_path_ && !probe_loaded_) {
+    fprintf(stderr, "FATAL: --probe-out requires --probe=<script>\n");
+    exit(2);
+  }
+  // Before opening --probe-out=: a dump exits immediately and never runs, so
+  // it must not truncate an existing report on its way out.
+  if (probe_dump_) {
+    probe_dump(stdout);
+    exit(0);
+  }
+
+  if (probe_out_path_)
+    probe_set_output_path(probe_out_path_);
 }
 
 /// Run to the frame limit with no window, hashing frames as we go. Never

@@ -157,4 +157,51 @@ if ! diff -q frontend-run.txt frontend-emu.txt > /dev/null; then
 fi
 rm frontend-run.txt frontend-emu.txt
 
+# --- Probes -----------------------------------------------------------------
+#
+# The probe compiler is tested through --probe-dump, which compiles a script,
+# prints the compiled form and exits without running anything. Every case below
+# is a script/baseline pair; a change in generated code shows up as a diff.
+
+mkdir -p probe-tmp
+
+# Compile a script and diff the result against its baseline.
+probe_dump_test() {
+  # $1: base name under probe/
+  if ! $a2run --probe="probe/$1.probe" --probe-dump > "probe-tmp/$1.txt"; then
+    echo "FAIL: --probe-dump failed on probe/$1.probe" >&2
+    exit 1
+  fi
+  diff -q "probe/$1.expected" "probe-tmp/$1.txt"
+}
+
+probe_dump_test empty
+
+# Assert that a2run rejects something, with the specific diagnostic we expect.
+# Matching the exact message rather than just "FATAL" is deliberate: an earlier
+# version of these tests passed because a different check fired first.
+expect_probe_reject() {
+  # $1: description, $2: expected substring, $3...: a2run arguments
+  local desc="$1" want="$2"
+  shift 2
+  if $a2run "$@" > /dev/null 2>probe-tmp/err.txt; then
+    echo "FAIL: a2run accepted $desc" >&2
+    exit 1
+  fi
+  if ! grep -q "FATAL" probe-tmp/err.txt || ! grep -q -- "$want" probe-tmp/err.txt; then
+    echo "FAIL: rejected $desc, but not with the expected diagnostic '$want':" >&2
+    cat probe-tmp/err.txt >&2
+    exit 1
+  fi
+}
+
+expect_probe_reject "a missing probe script" "cannot open probe script" \
+  --probe=probe/does-not-exist.probe --probe-dump
+expect_probe_reject "--probe-dump with no script" "--probe-dump requires" \
+  --probe-dump
+expect_probe_reject "--probe-out with no script" "--probe-out requires" \
+  --probe-out=probe-tmp/out.txt
+
+rm -rf probe-tmp
+
 echo "Success!"
