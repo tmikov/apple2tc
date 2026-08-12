@@ -79,7 +79,7 @@ only where the default fails."
 |---|---|
 | `counter <name> [= <expr>]` | init defaults to 0, constant-folded at compile |
 | `probe <name>([p = expr, ...]) { ... }` | params are the signature |
-| `install <probe> at <sites>` | `$ADDR`, `$LO-$HI`, `@file`, comma-separated mix |
+| `install <probe> at <sites>` | `$ADDR`, `$LO-$HI`, `@"file"`, comma-separated mix |
 
 **Statements**
 
@@ -114,7 +114,7 @@ probe trace(site = pc) {
   printf("%04X\n", site)
 }
 
-install trace at @blocks.txt
+install trace at @"blocks.txt"
 ```
 
 Attributing a divergence — two probes at one site, where order matters:

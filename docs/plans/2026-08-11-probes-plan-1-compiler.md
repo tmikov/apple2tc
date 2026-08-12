@@ -583,6 +583,11 @@ void probe_lex_next(lexer_t *lx) {
     size_t n = 0;
     while (*lx->p && *lx->p != '"') {
       char c = *lx->p++;
+      // A raw newline means the string was never closed. Checked before escape
+      // processing, or a "\n" escape would look like one -- which would reject
+      // essentially every printf in this design.
+      if (c == '\n')
+        probe_error(lx, "newline in string literal");
       if (c == '\\') {
         switch (*lx->p++) {
         case 'n': c = '\n'; break;
@@ -592,8 +597,6 @@ void probe_lex_next(lexer_t *lx) {
         default: probe_error(lx, "unknown escape in string");
         }
       }
-      if (c == '\n')
-        probe_error(lx, "newline in string literal");
       if (n + 1 >= PROBE_MAX_STRING)
         probe_error(lx, "string literal too long");
       lx->tok.text[n++] = c;
@@ -1520,6 +1523,35 @@ cmake-build-debug/tools/a2run/a2run --probe=tests/probe/stmt.probe --probe-dump 
 **Read it.** Verify the `if`/`else` branch targets: the `JZ` operand must be
 the offset of the `else` arm, and the `JMP` operand the offset just past it.
 
+This is also the first test of the lexer's string escapes, which Task 2 could
+not exercise because nothing parsed yet. `stmt.probe`'s format strings end in
+`\n`, and an earlier draft of the lexer checked for a literal newline *after*
+interpreting escapes, so a `\n` escape rejected itself.
+
+Which means **the dump must re-escape format strings when printing them**, or
+an interned `"over %u\n"` emits a real newline into the middle of the
+`formats:` section and the baseline stops being line-oriented. Add to
+`probe_dump` in `probe.c`:
+
+```c
+/// Print a format string with escapes restored, so one line of dump stays one
+/// line however many newlines the string contains.
+static void dump_escaped(FILE *f, const char *s) {
+  for (; *s; ++s) {
+    switch (*s) {
+    case '\n': fputs("\\n", f); break;
+    case '\t': fputs("\\t", f); break;
+    case '"': fputs("\\\"", f); break;
+    case '\\': fputs("\\\\", f); break;
+    default: fputc(*s, f);
+    }
+  }
+}
+```
+
+and use it for the `formats:` entries. Then confirm the baseline shows
+`"over %u\n"` on one line, and that nothing was rejected.
+
 - [ ] **Step 5: Run the tests**
 
 ```
@@ -1877,7 +1909,7 @@ expect_bad_script "a truncated conversion" "ends inside a conversion" \
   'probe p() { printf("%") }'
 expect_bad_script "an unterminated block" "unterminated block" \
   'probe p() { inc'
-expect_bad_script "an unterminated string" "unterminated string" \
+expect_bad_script "a newline inside a string" "newline in string literal" \
   'probe p() { printf("x) }'
 expect_bad_script "assignment to an unknown name" "expected a statement" \
   'probe p() { nosuch = 1 }'
