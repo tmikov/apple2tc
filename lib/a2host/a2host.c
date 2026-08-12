@@ -258,6 +258,23 @@ static void drain_key_presses() {
   key_press_count_ = 0;
 }
 
+/// OP_KEY's other half: probe_vm.c has no access to key_presses_,
+/// next_key_press_, key_press_count_ or io_, so it calls out to here instead
+/// of delivering keys itself the way OP_STOP sets its flag locally. \p now is
+/// whatever coordinate the script passed to `key(...)` -- typically a
+/// counter -- compared directly against the `cycles` stamps drain_key_presses
+/// above compares against get_cycles(). The two draw from the same
+/// key_presses_ list and share next_key_press_ as their cursor, so whichever
+/// one advances it, the other still sees a consistent view; this function
+/// does not free the list on exhaustion because drain_key_presses already
+/// does, on whichever frame notices the cursor has reached the end.
+void probe_deliver_keys(uint32_t now) {
+  while (next_key_press_ != key_press_count_ && key_presses_[next_key_press_].cycles <= now) {
+    a2_io_push_key(&io_, key_presses_[next_key_press_].ch);
+    ++next_key_press_;
+  }
+}
+
 static void load_key_file(const char *path) {
   if (key_presses_) {
     fprintf(stderr, "Key file already loaded\n");
@@ -423,6 +440,10 @@ void a2host_shutdown(void) {
     fclose(hash_file_);
     hash_file_ = NULL;
   }
+  // Before probe_close_output(): once the report file is closed, hit counts
+  // are the only record left of what ran, and stderr (never the report file
+  // itself -- see probe_report_unfired's comment) is where they belong.
+  probe_report_unfired();
   probe_close_output();
   shutdown_emulated();
   a2_io_done(&io_);
@@ -587,7 +608,15 @@ void a2host_run_headless(void) {
 
   for (;;) {
     a2host_simulate_frame();
-    if (a2host_record_frame() || engine_stopped_)
+    // probe_stop_requested(): a probe's `stop` cannot unwind out of a
+    // mid-block engine call, so it sets a flag instead (probe_vm.c) and this
+    // is where the host notices it, next to the pre-existing frame-limit and
+    // engine_stopped_ checks. Ordering the three with `||` is safe even if
+    // more than one becomes true on the same frame -- a2host_record_frame()
+    // still runs exactly once per frame regardless of which reason ends the
+    // loop, and a2host_shutdown() below closes hash_file_ if record_frame()
+    // did not already (e.g. `stop` firing on a frame under the limit).
+    if (a2host_record_frame() || engine_stopped_ || probe_stop_requested())
       break;
   }
 

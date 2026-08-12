@@ -511,4 +511,30 @@ void probe_dispatch(uint16_t pc) {
   }
 }
 
-void probe_report_unfired(void) {}
+void probe_report_unfired(void) {
+  if (!s_script)
+    return;
+  unsigned quiet = 0;
+  for (unsigned i = 0; i != s_script->nprobes; ++i)
+    if (s_script->probes[i].hits == 0)
+      ++quiet;
+  // Silent, not just quiet, when everything fired: Task 7's acceptance script
+  // greps stderr for the literal substring "never fired" to detect a coverage
+  // gap between the two engines. A summary line printed unconditionally --
+  // "N declared, 0 never fired" -- would contain that exact substring on
+  // every clean run too, turning the grep into an unconditional failure. The
+  // only way to keep the phrase's presence tracking its meaning is to not
+  // print it at all when quiet == 0.
+  if (quiet == 0)
+    return;
+  // To stderr, never the report file: a diff of two reports must not be
+  // perturbed by diagnostics. Only the probes that never fired are listed --
+  // one line per *probe*, not per install site, so a script that installs one
+  // probe at thousands of addresses (Task 7's acceptance run) stays a single
+  // line when that probe fired anywhere, and nothing at all is spent on the
+  // probes that behaved.
+  fprintf(stderr, "probes: %u of %u never fired\n", quiet, s_script->nprobes);
+  for (unsigned i = 0; i != s_script->nprobes; ++i)
+    if (s_script->probes[i].hits == 0)
+      fprintf(stderr, "  %s never fired\n", s_script->probes[i].name);
+}

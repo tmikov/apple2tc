@@ -339,9 +339,25 @@ void probe_vm_set_pc(uint16_t pc);
 /// s_counters in probe_vm.c), so this is what gives a freshly loaded script
 /// a clean start rather than whatever a previous load left behind.
 void probe_vm_init_counters(const script_t *sc);
-//
-// probe_stop_requested and probe_deliver_keys are declared by Task 5, which
-// is also the task that defines them -- not here, ahead of time: a
-// declaration with no definition anywhere yet documents behaviour (Task 5's
-// own draft of this file said "True once a probe executed `stop`" while
-// OP_STOP did not exist) that this task does not implement.
+
+/// True once some probe has executed `stop`. Set directly by OP_STOP in
+/// probe_vm_run (probe_vm.c) -- unlike probe_deliver_keys below, stopping
+/// needs no host state, so there is no reason to route it through a2host.c
+/// the way key delivery has to be. a2host_run_headless's loop and
+/// a2host_gui.c's frame_cb both query this, right next to the existing
+/// frame-limit check: the VM cannot unwind out of a mid-block callback, so
+/// this is how it asks the host to stop driving frames once run_emulated()
+/// returns.
+bool probe_stop_requested(void);
+
+/// Deliver every pending key whose stamp is <= \p now. Defined in a2host.c,
+/// beside the key list it reads (key_presses_, next_key_press_,
+/// key_press_count_) and the IO state keys are pushed into -- all host state
+/// the VM has no access to, which is why OP_KEY calls out to here instead of
+/// this being handled locally the way OP_STOP is. \p now is read in whatever
+/// coordinate the script passes -- typically a counter. The KeyPress field is
+/// still named `cycles` because --trace-keys still records cycle stamps;
+/// re-recording in counter coordinates is deferred, and until it happens an
+/// existing .keys file replayed through `key` is being reinterpreted rather
+/// than replayed.
+void probe_deliver_keys(uint32_t now);

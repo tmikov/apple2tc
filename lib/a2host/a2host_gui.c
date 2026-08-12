@@ -28,6 +28,8 @@
 
 #include "apple2tc/sokol/blit.h"
 
+#include "probe_internal.h" // probe_stop_requested(), consulted in frame_cb below
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -195,7 +197,10 @@ static void frame_cb(void) {
   a2host_simulate_frame();
   lastRunTick_ = curFrameTick_;
 
-  if (a2host_record_frame() || a2host_engine_stopped())
+  // probe_stop_requested(): see the matching check in a2host_run_headless
+  // (a2host.c) for why a probe's `stop` shows up as a flag polled here rather
+  // than as an early return from a2host_simulate_frame() itself.
+  if (a2host_record_frame() || a2host_engine_stopped() || probe_stop_requested())
     sapp_request_quit();
 
   update_screen();

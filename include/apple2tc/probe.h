@@ -55,11 +55,13 @@ bool probe_installed(void);
 /// The overwhelmingly common case is no site at this address.
 void probe_dispatch(uint16_t pc);
 
-/// Report probes that never fired, to stderr. A probe bound to an address that
-/// does not exist in one of the two programs would otherwise pass quietly.
-///
-/// **Stub today**: the body is empty. Dispatch runs and counts hits now, but
-/// nothing reads them yet -- Task 5 implements this.
+/// Report probes that never fired, to stderr, one line per probe -- never to
+/// the report file, so a diff of two reports cannot be perturbed by this
+/// diagnostic. Prints nothing at all when every probe fired at least once
+/// (not even a summary line): a probe bound to an address that does not exist
+/// in one of the two engines would otherwise pass quietly, which is the
+/// hazard this exists to catch, but the fix must not make the phrase "never
+/// fired" appear on a clean run too -- see the definition in probe.c.
 void probe_report_unfired(void);
 
 #ifdef __cplusplus

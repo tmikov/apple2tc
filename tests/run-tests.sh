@@ -463,6 +463,35 @@ probe_run_test arith 2
 probe_run_test flow 2
 probe_run_test mem 2
 
+# `stop` and the never-fired report. --frames=20 is deliberately far more than
+# the run needs (see stopat.probe's comment: the whole 129-line report is
+# already produced within the first simulated frame) -- the point is that
+# `stop` is what ends the run before frame 20, not the frame limit, which a
+# --frames=2 run could not distinguish from a no-op `stop`.
+probe_run_test stopat 20
+
+# A probe that never fired must say so. This is the guard against the design's
+# main hazard: a probe on an address one engine does not dispatch on looks
+# exactly like agreement -- no output, no error -- unless something checks for
+# the silence itself. probe_report_unfired() writes to stderr, never the
+# report file (probe-tmp/unfired.txt below is /dev/null), so this check can
+# run independently of whatever the report itself contains.
+$a2run --frames=20 --probe=probe/stopat.probe --probe-out=/dev/null \
+  2>probe-tmp/unfired.txt >/dev/null
+if ! grep -q "never fired" probe-tmp/unfired.txt; then
+  echo "FAIL: no never-fired report for a probe that never ran" >&2
+  cat probe-tmp/unfired.txt >&2
+  exit 1
+fi
+# probe 's' fired (129 times); it must not be listed as never-fired, and
+# probe_report_unfired() must not print anything at all for probes that did
+# fire (only "never" -- installed at $0001 -- belongs in this file).
+if grep -q "^  s " probe-tmp/unfired.txt; then
+  echo "FAIL: a probe that did fire was reported as never firing" >&2
+  cat probe-tmp/unfired.txt >&2
+  exit 1
+fi
+
 rm -rf probe-tmp
 
 echo "Success!"

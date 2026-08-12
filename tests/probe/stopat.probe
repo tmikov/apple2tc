@@ -1,0 +1,54 @@
+# stop, and the never-fired report.
+#
+# $FA62, the reset entry, is *not* usable for the repeatedly-firing probe
+# below: it is reached exactly once per boot no matter how many frames run
+# (see flow.probe's comment), so a counter installed only there can never
+# reach 3 and `stop` would never fire -- an earlier draft of this test tried
+# exactly that and would have asserted nothing about `stop`.
+#
+# $FCA9 was measured instead, the way Task 3's comment insists: a bare
+#   counter n
+#   probe s() { inc n; printf("hit %u\n", n) }
+#   install s at $FCA9
+# with no `stop`, run headless with no keyboard input, produced 452 lines at
+# --frames=3, 1099 at 5, 2069 at 8, 2369 at 10, then *plateaued* at 2370 from
+# --frames=15 on -- $FCA9 sits inside WAIT's inner polling loop (rom.lst),
+# which the idle ROM revisits often at first (cursor blink) and then settles
+# into a different loop that touches it far less. $FCA9 also sits inside the
+# $FCA8-$FCB3 range add_default_nondebug() registers (engine6502.cpp's
+# init_emulated -> a2host.c's debug_asm), which blanks it for --trace output;
+# confirmed that does not touch probes -- the counts above were measured with
+# no --trace, and debugCB calls probe_dispatch() unconditionally whenever
+# g_probe_sites is set, entirely outside debug_asm()'s own filtering.
+#
+# Why the expected output below is 129 lines, not 3: OP_STOP cannot interrupt
+# mid-block -- it sets a flag that the host only notices once run_emulated()
+# returns, i.e. once the *whole current frame's* cycle budget is spent, per
+# probe_stop_requested's comment in probe_internal.h. $FA62/63/66 in
+# flow.probe dodge this because each fires exactly once, so there is nothing
+# left to hit even if execution keeps going -- but $FCA9 fires 129 times
+# within the single frame (the first one actually simulated; the very first
+# is skipped -- see a2host.c's firstFrame_) that pushes `n` past 3, and every
+# one of those 129 hits happens before `probe_stop_requested()` is next
+# checked. All 129 are in the expected output. What `stop` actually
+# demonstrates here is that frames *after* that one never run: this script
+# produces the same 129 lines whether --frames is 2, 20 (what the test below
+# uses) or 1000, while the no-`stop` script above keeps growing well past 129
+# for the same frame counts (2069 by frame 8 alone). Measured directly, not
+# assumed: both were run at --frames=20 during development, one stopping at
+# 129, the other reaching 2370.
+counter n
+
+probe s() {
+  inc n
+  printf("hit %u\n", n)
+  if (n == 3)
+    stop
+}
+
+probe never() {
+  printf("unreachable\n")
+}
+
+install s at $FCA9
+install never at $0001

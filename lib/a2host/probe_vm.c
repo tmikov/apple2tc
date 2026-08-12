@@ -13,9 +13,9 @@
 ///
 /// OP_END, OP_PUSH_LIT, OP_PRINTF (Task 1), the arithmetic, bitwise,
 /// comparison and unary opcodes (Task 2), counters, parameters, registers and
-/// control flow (Task 3), and now memory reads and hashing (Task 4) are
-/// implemented here. Still missing: stop and key (Task 5) -- those still hit
-/// the `default:` case in probe_vm_run() and report clearly.
+/// control flow (Task 3), memory reads and hashing (Task 4), and now stop and
+/// key delivery (Task 5) are implemented here -- every opcode probe_parse.c
+/// can emit.
 
 #include "probe_internal.h"
 
@@ -52,6 +52,13 @@ static uint16_t s_dispatch_pc;
 /// here sidesteps that question entirely by always starting fresh in
 /// probe_vm_init_counters.
 static uint32_t s_counters[PROBE_MAX_COUNTERS];
+
+/// Set by OP_STOP, read by probe_stop_requested(). Never cleared: once a run
+/// asks to stop, nothing in this process runs another frame -- both
+/// a2host_run_headless and a2host_gui.c's frame_cb exit (the latter via
+/// sapp_request_quit()) the moment they observe it, so there is no "next run"
+/// in the same process for a stale true to leak into.
+static bool s_stop_requested;
 
 static void vm_push(uint32_t v) {
   if (s_sp == PROBE_STACK_SIZE)
@@ -400,6 +407,21 @@ void probe_vm_run(const script_t *sc, uint32_t ip) {
       break;
     }
 
+    case OP_KEY:
+      // Host state (the key list, the IO queue) lives in a2host.c, not here
+      // -- see probe_deliver_keys's comment in probe_internal.h.
+      probe_deliver_keys(vm_pop());
+      break;
+
+    case OP_STOP:
+      // Cannot longjmp or return out of here: for the interpreter this call
+      // is nested inside Emu6502::runFor's instruction loop, and for a
+      // generated program it is nested inside a basic block's straight-line
+      // C, mid-CYCLES -- neither has anywhere to unwind to. Set the flag and
+      // let the host notice once run_emulated() returns control to it.
+      s_stop_requested = true;
+      break;
+
     default: {
       // opname() returns NULL only for a code[] cell that isn't one of the
       // opcode_t enumerators at all -- corrupt bytecode, distinct from an
@@ -421,4 +443,8 @@ void probe_vm_set_pc(uint16_t pc) {
 void probe_vm_init_counters(const script_t *sc) {
   for (unsigned i = 0; i != sc->ncounters; ++i)
     s_counters[i] = sc->counters[i].init;
+}
+
+bool probe_stop_requested(void) {
+  return s_stop_requested;
 }
