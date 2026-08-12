@@ -1615,10 +1615,16 @@ Recorded rather than rewritten, so the reasoning stays visible.
   escapes above. The lexer rejects a raw CR because an invisible byte "would
   vanish from a diff of the report"; that argument covers BEL, ESC, VT and FF
   identically.
-- **`sc->formats[]` is freed in the probe teardown** that `a2host_shutdown`
-  already calls. The module frees its source buffer and closes its output, so
-  leaving one allocation to process exit was inconsistent — and the sanitizer
-  build CLAUDE.md advertises would fail every probe test on it.
+- **`sc->formats[]` is freed**, along with the install-site hash table and any
+  still-pending site declarations, by `free_script_resources()` — but that is
+  registered with `atexit()`, not called from `a2host_shutdown`.
+  `a2host_shutdown` cannot be the hook: it also runs on the moment
+  `probe_set_output_path()` opens a *second* output file (too early, mid-run),
+  and `--probe-dump` — every compiler test's entry point — calls `exit(0)`
+  directly and never reaches `a2host_shutdown` at all. `atexit()` fires on
+  every `exit()` call, that one included, so it is the only hook that actually
+  covers the tests LeakSanitizer would otherwise flag. See the comment on
+  `free_script_resources()` in `probe.c` for the full argument.
 - **The printf width is capped,** since nothing otherwise stops
   `printf("%2000000000d", x)` from becoming a two-gigabyte write once the VM
   exists.

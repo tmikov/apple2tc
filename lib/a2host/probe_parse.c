@@ -31,25 +31,10 @@ typedef struct {
   bool reg_resolved[REG_PC + 1];
 } parser_t;
 
-/// Recursion limit for parse_expr/parse_primary. Far beyond anything a
-/// hand-written script needs, but phase 3 has apple2tc generating scripts,
-/// and an unbounded parenthesis run recurses this parser straight into a
-/// stack overflow instead of the diagnostic a malformed script deserves.
-enum { PROBE_MAX_EXPR_DEPTH = 250 };
-
-/// Recursion limit for parse_stmt (block nesting `{ { ... } }` and `if`
-/// nesting both go through it -- see parse_stmt's guard below). The same
-/// phase-3-generated-script risk as PROBE_MAX_EXPR_DEPTH above, but this path
-/// had no limit at all: `parse_stmt` -> `parse_block` -> `parse_stmt` and
-/// `parse_stmt` -> `parse_if` -> `parse_stmt` recurse once per nesting level
-/// with nothing to stop them. Measured under `ulimit -s 1024` (Windows's
-/// default 1 MB main-thread stack, a supported target): 16,000 nested blocks
-/// or 16,000 nested `if`s both segfault before any other limit -- the `if`
-/// case is bounded only by accident, since 16,000 `if`s emit 32,000 code
-/// cells, comfortably under PROBE_MAX_CODE's 65,536. 250 matches
-/// PROBE_MAX_EXPR_DEPTH: far beyond anything a hand-written script needs, and
-/// nowhere near the ~16,000-level floor measured above.
-enum { PROBE_MAX_STMT_DEPTH = 250 };
+// PROBE_MAX_EXPR_DEPTH and PROBE_MAX_STMT_DEPTH, the recursion limits for
+// parse_expr/parse_primary and parse_stmt respectively, are defined in
+// probe_internal.h alongside the compiled form's other limits (docs/probes.md
+// documents them all as living there).
 
 /* --- Emitting ------------------------------------------------------------- */
 
@@ -122,13 +107,14 @@ typedef struct {
 
 /// The one place an identifier is resolved to a parameter, a counter, or a
 /// register -- params, then counters, then registers, so a declared name
-/// shadows a register of the same name. parse_primary is the only caller
-/// today, but Task 4's assignment statement needs the exact same order (an
+/// shadows a register of the same name. Every caller that resolves a name --
+/// parse_primary (reads), and parse_stmt_inner's assignment and `inc` paths
+/// (writes) -- goes through here rather than re-deriving the order: an
 /// earlier version of this parser looked up registers first for reads only,
 /// which let `counter y` read fine while `y = y + 1` wrote the counter and
-/// read the Y register -- two different things sharing one spelling). Task 4
-/// must call this instead of re-deriving the order, or that bug is one
-/// keystroke away from coming back.
+/// read the Y register -- two different things sharing one spelling. Any new
+/// caller that needs to resolve a name must go through here too, or that bug
+/// is one keystroke away from coming back.
 static resolved_name_t resolve_name(parser_t *P, const char *name) {
   int idx = find_param(P->cur, name);
   if (idx >= 0)
@@ -345,7 +331,11 @@ static void parse_expr(parser_t *P, int min_prec) {
   for (;;) {
     tok_kind_t k = P->lx.tok.kind;
     int prec = binop_prec(k);
-    if (prec < min_prec || prec == 0)
+    // No separate `prec == 0` check: every caller passes min_prec >= 1 (1
+    // itself, 11 for a unary operand, or prec + 1 for a right operand, where
+    // prec was already >= min_prec >= 1), so a non-operator's prec of 0 is
+    // already caught by `prec < min_prec`.
+    if (prec < min_prec)
       break;
     probe_lex_next(&P->lx);
 
@@ -561,9 +551,10 @@ static void parse_stmt_inner(parser_t *P) {
   }
   if (is_kw(P, "else"))
     // Reached only when no enclosing parse_if consumed this "else": it is a
-    // reserved word (s_reserved above), so without this check it would fall
-    // all the way to the assignment path and report "unknown name 'else'",
-    // which is technically true but not what a reader needs to hear.
+    // reserved word (s_reserved, defined further below), so without this
+    // check it would fall all the way to the assignment path and report
+    // "unknown name 'else'", which is technically true but not what a reader
+    // needs to hear.
     probe_error(&P->lx, "'else' without a matching 'if'");
   if (is_kw(P, "printf")) {
     probe_lex_next(&P->lx);
@@ -913,8 +904,8 @@ static void parse_install(parser_t *P) {
 /// those are ordinary identifiers a declaration is allowed to shadow, per
 /// parse_primary's resolution order above. These are different: each is
 /// matched by strcmp before identifier lookup ever runs (peek8/peek16/hash
-/// in parse_primary, the rest in probe_parse_script and, from Task 4, the
-/// statement parser), so declaring one would create a name that silently
+/// in parse_primary, the rest in probe_parse_script and in parse_stmt_inner,
+/// the statement parser), so declaring one would create a name that silently
 /// means something else depending on where it is used, which shadowing
 /// cannot make coherent.
 static const char *const s_reserved[] = {

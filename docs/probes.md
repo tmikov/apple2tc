@@ -21,7 +21,7 @@ dump format — is real and tested (`tests/run-tests.sh`, `tests/probe/`).
 **`CYCLES` is emitted once per basic block, not once per instruction.** A
 probe installed at an address that is not a block head fires under `a2emu`
 and `a2run`, which single-step every instruction, but the same address
-[does not exist as a callable site](docs/plans/2026-08-11-probes-design.md#install-sites-and-why-file-is-the-one-that-matters)
+[does not exist as a callable site](plans/2026-08-11-probes-design.md#install-sites-and-why-file-is-the-one-that-matters)
 in a generated program — there is no C statement there to attach it to.
 
 That failure is silent. The probe still compiles, still installs, still
@@ -79,9 +79,15 @@ counter hex = $1F4
 A counter is script-global state, persisting across every probe invocation
 and every install site. Its initializer, if given, must be a plain literal —
 decimal or `$hex` — optionally negated; **not a general expression**. `counter
-n = frame` and `counter n = 1 + 1` are both rejected ("a counter initialiser
-must be a literal"), even though the second is a compile-time constant. Only
-the *parameter* initializers on `probe` are full expressions.
+n = frame` is rejected with "a counter initialiser must be a literal," even
+though `frame` and any other counter or parameter would be a well-defined
+value at load time. `counter n = 1 + 1`, despite being a compile-time
+constant, is *not* rejected with that message: the parser accepts the `= 1`
+and returns, leaving the `+` to be tripped over at top level, so the actual
+diagnostic is "expected 'counter', 'probe' or 'install'" — a wart, tracked in
+`docs/plans/2026-08-11-probes-plan-1-compiler.md`'s self-review as left for
+part 2 to fix. Only the *parameter* initializers on `probe` are full
+expressions.
 
 Dumped form (`--probe-dump`) shows the resolved value, not the source text —
 `neg = -1` above dumps as `neg = 4294967295` (unsigned 32-bit wraparound).
@@ -469,19 +475,53 @@ One cell per opcode, operands (if any) in the following cells. `opcode_t` in
 | | `PEEK8` | 0 | pops address |
 | | `PEEK16` | 0 | pops address |
 | | `HASH` | 0 | pops `hi` then `lo`; source order is `hash(lo, hi)` |
-| store | `STORE_PARAM` | 1 | parameter index |
-| | `STORE_COUNTER` | 1 | counter index |
-| arith | `ADD` `SUB` `MUL` `DIV` `MOD` | 0 | |
-| bitwise | `AND` `OR` `XOR` `SHL` `SHR` | 0 | |
-| compare | `EQ` `NE` `LT` `LE` `GT` `GE` | 0 | |
+| store | `STORE_PARAM` | 1 | parameter index; pops the value to store |
+| | `STORE_COUNTER` | 1 | counter index; pops the value to store |
+| arith | `ADD` `MUL` | 0 | commutative -- pop order is unobservable |
+| | `SUB` `DIV` `MOD` | 0 | pop the right (2nd-pushed) operand, then the left (1st); result is `left OP right` (`DIV`/`MOD`: left is the dividend) |
+| bitwise | `AND` `OR` `XOR` | 0 | commutative -- pop order is unobservable |
+| | `SHL` `SHR` | 0 | pop the right (2nd-pushed, the shift count), then the left (1st, the value); result is `left OP right` |
+| compare | `EQ` `NE` | 0 | commutative -- pop order is unobservable |
+| | `LT` `LE` `GT` `GE` | 0 | pop the right (2nd-pushed) operand, then the left (1st); result is `left OP right` |
 | unary | `NOT` `BITNOT` `NEG` | 0 | |
-| control | `JMP` | 1 | target cell offset |
-| | `JZ` | 1 | target; pops the tested value |
-| | `JNZ` | 1 | target; pops the tested value |
-| effect | `PRINTF` | 2 | format-table index, argument count; pops that many values |
+| control | `JMP` | 1 | target: an **absolute** cell index into the instruction stream, not an offset from the current position |
+| | `JZ` | 1 | target (absolute, as above); pops the tested value |
+| | `JNZ` | 1 | target (absolute, as above); pops the tested value |
+| effect | `PRINTF` | 2 | format-table index, argument count; pops that many values. Arguments are pushed in source order, so the *last* argument is on top and pops first -- a VM must reverse them to fill the format's conversions in source order |
 | | `KEY` | 0 | pops a stamp |
 | | `STOP` | 0 | |
 | | `END` | 0 | marks the end of a probe's instructions |
+
+For every non-commutative binary opcode above, both operands are pushed in
+source (left-to-right) order — the left/first operand ends up deepest on the
+stack, the right/second operand on top — and the opcode pops the top (right)
+operand first. `opcode_t` in `probe_internal.h` is the definitive listing,
+with the same pop order spelled out per opcode as a comment; if this table and
+that header ever disagree, the header is the source of truth. A VM that
+popped one of these backwards would still pass every test in
+`tests/run-tests.sh` today, since nothing there executes bytecode — see
+[Execution status](#execution-status).
+
+**Parameter frame.** A probe's `nparams` parameter initializers (running from
+`init` to `body` in the dump format above) each leave exactly one value on the
+stack, in declaration order, none of them popped again before falling through
+to the body. Those `nparams` values *are* the parameter frame — there is no
+separate copy into named storage. `OP_LOAD_PARAM i` / `OP_STORE_PARAM i`
+address stack position `frame_base + i`, where `frame_base` is the stack depth
+on entry to `init` — a fixed offset from the bottom of the frame, not from
+wherever the stack top happens to be mid-expression. See `probe_t::init_offset`
+in `probe_internal.h` for the full contract.
+
+**Stack depth.** No maximum simultaneous stack depth is computed or recorded
+anywhere in the compiled form — there is no constant for it, and nothing walks
+a probe's bytecode to size one. It is bounded in practice by a combination of
+`PROBE_MAX_EXPR_DEPTH`, the parameter frame (up to `PROBE_MAX_PARAMS` values
+live for a probe's whole run), and however many arguments accumulate before
+one `PRINTF`, but none of that is tracked as a single number. See the comment
+above `enum { PROBE_MAX_COUNTERS = ... }` in `probe_internal.h` for the
+detailed reasoning; a VM needs to either compute a per-probe maximum itself or
+provision generously (or grow dynamically) rather than assume the compiler
+already sized this.
 
 ## Limits
 
@@ -499,6 +539,7 @@ Every "too many" / "too long" diagnostic is a fixed compile-time constant in
 | bytecode cells (whole script) | 65536 | `PROBE_MAX_CODE` |
 | install-site bindings (whole script) | 8192 | `PROBE_MAX_SITE_DECLS` |
 | expression nesting depth | 250 | `PROBE_MAX_EXPR_DEPTH` |
+| statement nesting depth (blocks, `if`/`else`) | 250 | `PROBE_MAX_STMT_DEPTH` |
 
 ## Diagnostics
 

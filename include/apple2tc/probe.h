@@ -46,10 +46,18 @@ bool probe_installed(void);
 
 /// Run whatever is installed at \p pc, returning immediately if nothing is.
 /// The overwhelmingly common case is no site at this address.
+///
+/// **Stub today**: the body is `(void)pc;` and nothing calls it. No VM
+/// exists yet to interpret the bytecode a probe compiles to -- see
+/// `docs/probes.md`'s "Execution status" section.
 void probe_dispatch(uint16_t pc);
 
 /// Report probes that never fired, to stderr. A probe bound to an address that
 /// does not exist in one of the two programs would otherwise pass quietly.
+///
+/// **Stub today**: the body is empty, for the same reason probe_dispatch()
+/// above does nothing yet -- there is no run for a probe to have fired
+/// during.
 void probe_report_unfired(void);
 
 #ifdef __cplusplus

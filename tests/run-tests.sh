@@ -240,6 +240,10 @@ for i in $(seq 0 16); do
   if [ -n "$many_params_list" ]; then many_params_list+=", "; fi
   many_params_list+="p$i = 0"
 done
+# One more address than PROBE_MAX_SITE_DECLS (8192), for the site-list
+# overflow case below -- the file-reading counterpart of the in-script
+# "too many install sites" case above.
+many_site_addrs=$(for i in $(seq 0 8192); do printf '%04x\n' "$i"; done)
 
 # --- Lexer -------------------------------------------------------------
 
@@ -405,6 +409,17 @@ expect_site_reject "a 0x-prefixed address" "expected a 16-bit hex address" \
   '0x300'
 expect_site_reject "a leading sign on an address" "expected a 16-bit hex address" \
   '-300'
+
+# add_sites_from_file builds its own path:lineno-prefixed duplicate-install
+# and site-overflow diagnostics, distinct from add_site's (asserted above, in
+# the "a duplicate install" and "too many install sites" cases): both wrap
+# the same underlying message with "<site-list path>:<line>: " first. Neither
+# form was exercised until now -- only the in-script ones were.
+expect_site_reject "a duplicate install from a site list" "sites.txt:2: probe 'p' is already installed at \$0300" \
+  '0300
+0300'
+expect_site_reject "too many install sites from a site list" "sites.txt:8193: too many install sites" \
+  "$many_site_addrs"
 
 # --- Options ---------------------------------------------------------------
 

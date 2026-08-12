@@ -3,6 +3,7 @@ counter n
 
 probe s(v = peek8($1F00)) {
   inc frame
+  v = v + 1
   n = n + v
   if (frame > 100)
     printf("over %u\n", frame)

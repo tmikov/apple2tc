@@ -89,48 +89,83 @@ _Noreturn void probe_error(lexer_t *lx, const char *fmt, ...)
 
 /// One opcode per cell, operands in following cells. Variable length, so
 /// control flow and new operations can be added without changing the shape.
+///
+/// **Operand pop order for every binary opcode below**: both operands are
+/// pushed in source (left-to-right) order -- the left/first operand is
+/// pushed first and so sits deeper on the stack, the right/second operand is
+/// pushed second and so is on top. Each binary opcode pops the top (right)
+/// operand first, then the one beneath it (left), and computes
+/// `left <op> right`. ADD/MUL/AND/OR/XOR/EQ/NE are commutative, so the order
+/// is unobservable for them; SUB/DIV/MOD/SHL/SHR/LT/LE/GT/GE are not, and a
+/// VM that pops any of those backwards would still pass a test suite that
+/// only checks the compiler, since nothing here executes bytecode -- see
+/// each opcode below for its specific order. OP_HASH follows the same
+/// convention (`hash(start, end)`: start is pushed first, so end pops
+/// first), documented separately below because its two operands are not
+/// named "left"/"right" in the language.
 typedef enum {
   OP_END,
   OP_PUSH_LIT, // <value>
   OP_LOAD_PARAM, // <index>
   OP_LOAD_COUNTER, // <index>
-  OP_STORE_PARAM, // <index>
-  OP_STORE_COUNTER, // <index>
+  OP_STORE_PARAM, // <index>: pops the value to store
+  OP_STORE_COUNTER, // <index>: pops the value to store
   OP_LOAD_REG, // <reg_t>
   OP_PEEK8, // pops addr
   OP_PEEK16, // pops addr
   OP_HASH, // pops end, then start; source order is hash(start, end)
   OP_ADD,
-  OP_SUB,
+  OP_SUB, // pops right, then left; result is left - right
   OP_MUL,
-  OP_DIV,
-  OP_MOD,
+  OP_DIV, // pops right (divisor), then left (dividend); result is left / right
+  OP_MOD, // pops right, then left; result is left % right
   OP_AND,
   OP_OR,
   OP_XOR,
-  OP_SHL,
-  OP_SHR,
+  OP_SHL, // pops right (shift count), then left (value); result is left << right
+  OP_SHR, // pops right (shift count), then left (value); result is left >> right
   OP_EQ,
   OP_NE,
-  OP_LT,
-  OP_LE,
-  OP_GT,
-  OP_GE,
+  OP_LT, // pops right, then left; result is left < right
+  OP_LE, // pops right, then left; result is left <= right
+  OP_GT, // pops right, then left; result is left > right
+  OP_GE, // pops right, then left; result is left >= right
   OP_NOT,
   OP_BITNOT,
   OP_NEG,
-  OP_JMP, // <target>
-  OP_JZ, // <target>  pops
-  OP_JNZ, // <target>  pops
-  OP_PRINTF, // <fmt index> <argc>  pops argc
+  OP_JMP, // <target>: absolute cell index into script_t::code, not an offset
+  OP_JZ, // <target> (absolute, as above); pops the tested value
+  OP_JNZ, // <target> (absolute, as above); pops the tested value
+  // <fmt index> <argc>; pops argc values. Arguments are pushed in source
+  // order, so the first argument (matching the format's first conversion) is
+  // deepest on the stack and the last argument is on top -- popping them
+  // top-first therefore yields the *last* argument first. To fill the
+  // format's conversions in source order, a VM must either collect the argc
+  // popped values and consume them back-to-front, or pop into slots indexed
+  // from argc-1 down to 0.
+  OP_PRINTF,
   OP_KEY, // pops stamp
   OP_STOP,
 } opcode_t;
 
 typedef enum { REG_A, REG_X, REG_Y, REG_SP, REG_SR, REG_PC } reg_t;
 
-/// The opcode name table in probe.c must stay in step with opcode_t.
-#define PROBE_NUM_OPCODES ((int)OP_STOP + 1)
+/// No maximum simultaneous stack depth is computed or recorded anywhere in
+/// this compiled form -- there is no PROBE_MAX_STACK_DEPTH and nothing walks
+/// a probe's bytecode to size one. In practice it is bounded by a
+/// combination of limits that each exist for an unrelated reason:
+/// PROBE_MAX_EXPR_DEPTH (a naive push-then-combine codegen needs stack depth
+/// proportional to expression nesting, not width, since a binary opcode
+/// consumes both its operands the moment they are both pushed), the up-to
+/// PROBE_MAX_PARAMS values live in a probe's parameter frame for the
+/// duration of its initializers and body (see probe_t::init_offset below),
+/// and however many arguments accumulate on the stack before one OP_PRINTF
+/// (bounded only loosely, by PROBE_MAX_STRING's cap on how many `%`
+/// conversions a format string can contain). None of that is tracked as a
+/// single number anywhere. A VM should either compute a per-probe maximum by
+/// walking the bytecode before running it, or provision a stack generous
+/// enough for the worst case implied by those limits (or grow it
+/// dynamically) -- it must not assume the compiler already did this sizing.
 
 enum {
   PROBE_MAX_COUNTERS = 64,
@@ -138,6 +173,22 @@ enum {
   PROBE_MAX_PARAMS = 16,
   PROBE_MAX_FORMATS = 256,
   PROBE_MAX_CODE = 65536,
+  /// Recursion limit for parse_expr/parse_primary in probe_parse.c. Far
+  /// beyond anything a hand-written script needs, but phase 3 has apple2tc
+  /// generating scripts, and an unbounded parenthesis run recurses that
+  /// parser straight into a stack overflow instead of the diagnostic a
+  /// malformed script deserves.
+  PROBE_MAX_EXPR_DEPTH = 250,
+  /// Recursion limit for parse_stmt in probe_parse.c: block nesting
+  /// (`{ { ... } }`) and `if`/`else` nesting both recurse through it once per
+  /// level, with nothing else to stop them. Measured under `ulimit -s 1024`
+  /// (Windows's default 1 MB main-thread stack, a supported target): 16,000
+  /// nested blocks or 16,000 nested `if`s both segfault -- the `if` case is
+  /// bounded only by accident, since 16,000 `if`s emit 32,000 code cells,
+  /// comfortably under PROBE_MAX_CODE. 250 matches PROBE_MAX_EXPR_DEPTH
+  /// above: far beyond anything a hand-written script needs, and nowhere
+  /// near the ~16,000-level floor measured above.
+  PROBE_MAX_STMT_DEPTH = 250,
 };
 
 typedef struct {
@@ -149,10 +200,31 @@ typedef struct {
   char name[PROBE_MAX_IDENT];
   char params[PROBE_MAX_PARAMS][PROBE_MAX_IDENT];
   uint8_t nparams;
-  uint32_t init_offset; ///< initializer expressions; fall through to the body
-  uint32_t body_offset;
+  /// Where this probe's code starts: `nparams` parameter-initializer
+  /// expressions, one per declared parameter in declaration order, each
+  /// leaving exactly one value on the stack and none of them popped before
+  /// falling through to body_offset (see parse_probe in probe_parse.c). By
+  /// the time execution reaches body_offset, all `nparams` values pushed
+  /// since init_offset *are* the parameter frame -- there is no separate
+  /// copy into named storage. OP_LOAD_PARAM i / OP_STORE_PARAM i address slot
+  /// `i` of that frame, meaning the stack position `frame_base + i`, where
+  /// `frame_base` is the stack depth on entry to init_offset. That is a
+  /// fixed offset from the bottom of the frame, not from wherever the stack
+  /// top happens to be while a later initializer or a body statement is
+  /// mid-expression (execution always returns to depth `frame_base +
+  /// nparams` between statements, but can be deeper in between) -- a VM
+  /// needs a frame-pointer-style base for `frame_base`, not a
+  /// top-of-stack-relative index.
+  uint32_t init_offset;
+  uint32_t body_offset; ///< where init_offset falls through once all nparams
+                        ///< initializers have run and their values are on
+                        ///< the stack; equals init_offset for a
+                        ///< parameterless probe (nothing to fall through)
   uint32_t end_offset; ///< one past the trailing OP_END
-  uint32_t hits;
+  uint32_t hits; ///< reserved for the VM: intended as a per-probe fire
+                 ///< count, incremented once each time this probe's body
+                 ///< runs. Never written by the compiler -- every probe_t
+                 ///< here has hits == 0 -- and not read by anything today.
 } probe_t;
 
 /// A hash slot: an installed address, and the head of its chain. Chains live

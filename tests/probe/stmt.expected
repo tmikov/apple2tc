@@ -13,57 +13,61 @@ probes: 1
         5: PUSH_LIT 1
         7: ADD
         8: STORE_COUNTER 0
-       10: LOAD_COUNTER 1
-       12: LOAD_PARAM 0
+       10: LOAD_PARAM 0
+       12: PUSH_LIT 1
        14: ADD
-       15: STORE_COUNTER 1
-       17: LOAD_COUNTER 0
-       19: PUSH_LIT 100
-       21: GT
-       22: JZ 31
+       15: STORE_PARAM 0
+       17: LOAD_COUNTER 1
+       19: LOAD_PARAM 0
+       21: ADD
+       22: STORE_COUNTER 1
        24: LOAD_COUNTER 0
-       26: PRINTF fmt=0 argc=1
-       29: JMP 42
+       26: PUSH_LIT 100
+       28: GT
+       29: JZ 38
        31: LOAD_COUNTER 0
-       33: LOAD_PARAM 0
-       35: PRINTF fmt=1 argc=2
-       38: PUSH_LIT 0
-       40: STORE_COUNTER 1
-       42: LOAD_PARAM 0
-       44: PUSH_LIT 255
-       46: EQ
-       47: JZ 50
-       49: STOP
-       50: LOAD_COUNTER 0
-       52: PUSH_LIT 100
-       54: GT
-       55: JZ 68
+       33: PRINTF fmt=0 argc=1
+       36: JMP 49
+       38: LOAD_COUNTER 0
+       40: LOAD_PARAM 0
+       42: PRINTF fmt=1 argc=2
+       45: PUSH_LIT 0
+       47: STORE_COUNTER 1
+       49: LOAD_PARAM 0
+       51: PUSH_LIT 255
+       53: EQ
+       54: JZ 57
+       56: STOP
        57: LOAD_COUNTER 0
-       59: PUSH_LIT 200
-       61: LT
-       62: JZ 68
-       64: PUSH_LIT 1
-       66: JMP 70
-       68: PUSH_LIT 0
-       70: JZ 79
-       72: LOAD_COUNTER 1
-       74: PUSH_LIT 1
-       76: ADD
-       77: STORE_COUNTER 1
-       79: LOAD_COUNTER 0
-       81: PUSH_LIT 0
-       83: EQ
-       84: JZ 105
-       86: LOAD_PARAM 0
+       59: PUSH_LIT 100
+       61: GT
+       62: JZ 75
+       64: LOAD_COUNTER 0
+       66: PUSH_LIT 200
+       68: LT
+       69: JZ 75
+       71: PUSH_LIT 1
+       73: JMP 77
+       75: PUSH_LIT 0
+       77: JZ 86
+       79: LOAD_COUNTER 1
+       81: PUSH_LIT 1
+       83: ADD
+       84: STORE_COUNTER 1
+       86: LOAD_COUNTER 0
        88: PUSH_LIT 0
        90: EQ
-       91: JZ 98
-       93: PRINTF fmt=2 argc=0
-       96: JMP 105
-       98: LOAD_COUNTER 0
-      100: LOAD_PARAM 0
-      102: PRINTF fmt=1 argc=2
+       91: JZ 112
+       93: LOAD_PARAM 0
+       95: PUSH_LIT 0
+       97: EQ
+       98: JZ 105
+      100: PRINTF fmt=2 argc=0
+      103: JMP 112
       105: LOAD_COUNTER 0
-      107: KEY
-      108: END
+      107: LOAD_PARAM 0
+      109: PRINTF fmt=1 argc=2
+      112: LOAD_COUNTER 0
+      114: KEY
+      115: END
 sites: 0
