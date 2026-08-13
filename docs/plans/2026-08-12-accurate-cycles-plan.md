@@ -266,10 +266,36 @@ rm retpoint.b33
 Check these against `run-tests.sh` before running them — if that file has moved
 on, it is authoritative, not this snippet.
 
-**Then diff the old and new baselines and read the diff.** Every change must be
-an `AddCycles` constant and nothing else. A change to block structure means this
-task altered control flow, which it must not; stop and report rather than
-accepting it.
+**Then diff the old and new baselines and read the diff.**
+
+**Correction, from executing this task:** the instruction here originally read
+"every change must be an `AddCycles` constant and nothing else — a change to
+block structure means this task altered control flow." That is wrong, and
+following it literally would have forced an incorrect approximation.
+
+A branch target routinely has predecessors that arrive *without* owing the
+taken-branch penalty — by fall-through, or by an unconditional `Jmp`. `trees.ir`
+has exactly this: `%bb_032f` is reached from two taken branches **and** from
+`%bb_0321` by a plain `Jmp`. Folding the +1 into the target's own `AddCycles`
+would overcharge that third path. The penalty therefore has to live on the
+**edge**, which in the IR means a one-instruction trampoline block
+(`AddCycles 1; Jmp target`) interposed on the taken arm.
+
+So the four baselines with conditional branches — `trees`, `func`, `phapla`,
+`stackmerge` — legitimately gain small blocks. The other six contain no
+conditional branches and their diffs are constants only. What must *not* change
+is which real instructions live in which block; a trampoline carries no
+instructions and costs nothing at runtime, since it is reached by an
+unconditional jump rather than a test.
+
+In the C printer there are no separate blocks, so the +1 folds into the taken
+arm of the ternary that already tests the condition:
+
+```c
+/* $0311 BEQ */ s_pc = s_status & STATUS_Z ? (s_cycles++, s_remaining_cycles--, 0x032f) : 0x0313;
+```
+
+Both counters, because that is what `CYCLES` updates.
 
 - [ ] **Step 4: Hand-check one**
 
