@@ -1138,3 +1138,216 @@ per-block byte heuristic, not a defect in probes or in `apple2tc`'s
 control-flow recovery — and not touched here, since fixing either cycle model
 was out of scope for this task.
 
+## 2026-08-13 — Real cycle costs: the acceptance test passes, the seed agrees, frame 472 moves
+
+**Scope:** apple2tc · **Status:** the payoff task — measured, not engineered to pass
+
+**Decision:** with the shared per-opcode cycle table landed in both engines
+(Tasks 1-5 of `docs/plans/2026-08-12-accurate-cycles-plan.md`), re-run the
+probe acceptance test, the `$4E` RNG-seed check, and the frame-472
+reconstruction that the 2026-08-12 entry left open. All three are reported
+below exactly as measured, including the one that did not fully resolve.
+
+### `romc1.c` is still blocked
+
+`decoded/rom/decompile.sh`'s `--irc1` line still crashes apple2tc
+(`CPURegLiveness.h:89: Assertion 'it != funcData_.end()' failed`), reproduced
+again today, byte-identical to the 2026-08-12 report. It is pre-existing and
+out of scope here, so `romc1.c` remains uncommitted-stale and the acceptance
+test was switched to the other working back end instead, per the plan's
+documented workaround.
+
+`decoded/rom/rom.c` (the `--simple-c` back end, previously stale since a 2022
+regeneration) was regenerated and committed; its line in `decompile.sh` was
+uncommented. `decoded/rom/probe-acceptance.sh` now greps `blocks.txt` from
+`rom.c` and runs `a2run` against `rom-run` instead of `romc1-run`.
+
+### 1. The acceptance test
+
+`./decoded/rom/probe-acceptance.sh cmake-build-debug`, 120 frames of ROM boot,
+1,718 block-head sites:
+
+```
+PASS: 276255 probe hits match over 120 frames
+```
+
+Exit 0. Both sides' stderr show only the pre-existing "Unsupported IO location
+read $CFFF/$C107.../$C707" warnings (unrelated peripheral-detection reads);
+neither reports a probe that never fired, so this is not the coarser-report
+hazard the design exists to catch.
+
+Beyond the script itself, `--hash-frames` on both `a2run` and `rom-run` over
+the same 120 frames shows video-state hashes matching at **all 120 frame
+boundaries** (0 of 120 differ), and elapsed cycles are **exactly equal** at
+frame 119 — 2,028,950 on both sides, not merely close. Cycles differ by up to
+15 during frames 1-14 (the two engines yield at different granularities while
+memory is still initializing) and are bit-for-bit equal from frame ~15 through
+119. This is a materially tighter result than the 2026-08-12 entry's "3
+cycles apart out of ~2.03M" — here, over the same stretch, the gap closes to
+zero and stays there.
+
+### 2. The `$4E` seed
+
+A scratch probe (`probe seed(site = pc, lo = peek8($4E), hi = peek8($4F))`,
+installed at the same `blocks.txt` site list as the acceptance test, not
+committed) sampled the seed at every one of the 276,255 block-head hits over
+the same 120-frame boot, on both `a2run` and `rom-run`.
+
+**The two outputs are byte-for-byte identical** — not just at the end, at
+every single one of the 276,255 sampled instants. Final sample: PC=`$FD1B`,
+`$4E`=`$01`, `$4F`=`$EB`, identical on both sides.
+
+This is the strong form of the hypothesis in the 2026-08-12 design doc: the
+old flat-cost-vs-bytes-heuristic mismatch was not a measurement artefact, it
+was really incrementing the seed a different number of times on each side
+(155,925 vs 115,899 over the same budget), and with a shared cycle table that
+is gone — both engines now walk through RNG state in lockstep.
+
+### 3. Frame 472
+
+**Method, reconstructed from the 2026-08-08 entry.** That entry names its
+recipe precisely enough to reproduce: `a2run --preload` (so the interpreter
+starts from cycle zero with the program already in RAM, exactly as a
+decompiled build's `init_emulated()` does, and the same `play.keys` key file
+types `CALL 14160` for both sides), the cycle-debt-carrying adapter (landed
+as default behaviour, not a flag, so no extra step is needed), 1,300 frames,
+compared against "a generated build." The entry does not name the binary; it
+is identified here as `snake-bytec1-run`, `decompile.sh`'s own "reference
+build" — the only generated snake-byte binary that boots the ROM itself from
+cycle zero, which `--preload` requires as a counterpart. That identification
+is an inference, not something the log records, and is the one part of the
+method that could not be pinned down exactly.
+
+```
+a2run --preload decoded/snake-byte/snake-byte.b33 \
+      --key-file=decoded/snake-byte/play.keys --frames=1300 --headless \
+      --hash-frames=interp.frames
+decoded/snake-byte/snake-bytec1-run \
+      --key-file=decoded/snake-byte/play.keys --frames=1300 --headless \
+      --hash-frames=gen.frames
+```
+
+Both runs were confirmed deterministic (two runs of each binary byte-identical
+in their `--hash-frames` output) before comparing them to each other, as the
+2026-08-08 entry did.
+
+**Corroboration that this is the same kind of measurement.** The qualitative
+shape matches the entry's description closely: long exact-agreement runs (up
+to 97 and 85 frames here, the same order as the entry's "23, 20, 24, 25, twice
+100") punctuated by 1-3-frame disagreement bursts around screen transitions
+that then re-converge, and a bounded residual cycle gap of the same order as
+before (see the push-back answer below). That the shape survived a real
+change to both cycle models is itself evidence the method was reproduced
+correctly, not merely that a number was found that happened to match.
+
+**Frame 472 specifically:** it is now a single-frame burst, not a permanent
+split. Frames 467-471 match; frame 472 is one frame off (the interpreter
+reaches a screen-transition hash one frame before the generated build does);
+frame 473 re-converges and both sides stay in lockstep through frame 622. That
+is structurally identical to every other transient burst in this run (at
+frames 55, 71, 169-178, 264, 271-272, ..., 616) — nothing distinguishes 472
+from them anymore.
+
+**But a new permanent split appears at frame 623**, and holds through the end
+of the recorded 1,300 frames (677 of 1,300 frames, 72 distinct hashes on the
+interpreter side thereafter, 74 on the generated side — the same
+neither-side-hangs shape as the old entry's "106 and 149 distinct hashes,"
+just at a different address and a different frame). Frame 623 is roughly
+10.6M cycles in, about 2.6M cycles (151 frames) further into the run than
+frame 472 was.
+
+**So: it moved. It did not disappear.** The specific 8-million-cycle-in split
+reported on 2026-08-08 is gone — real, permanent 151 frames (2.6M cycles) of
+extra correct agreement were gained by fixing the cycle model, exactly as the
+RNG-seed hypothesis predicted a shared table would buy. But a new, equally
+permanent split exists a little further on, at frame 623. This does **not**
+mean "a two-year-old placeholder in the cycle accounting produced the one
+unexplained result in this project" — that would require the divergence to
+disappear outright, and it has not. What it does mean: the cycle-accounting
+fix was real and moved the goalposts substantially, and whatever causes a
+permanent split between these two implementations is not fully explained by
+cycle accounting alone. Root-causing frame 623 is future work, out of scope
+for this measurement task.
+
+### Push-back
+
+**Is `rom.c` an equivalent substitute for `romc1.c`?** Same in substance,
+narrower in coverage — not a free swap, but a legitimate one for what this
+test checks. Concretely:
+
+- Both back ends compute a block's base cost through the same shared helper
+  (`AsmBlock::baseCycles`, called from `GenIR.cpp:75` and
+  `PrintSimpleC.cpp:101`) and both add the taken-branch `+1` exactly on the
+  taken edge — `PrintSimpleC` folds it into the branch ternary's comma
+  operator (`s_status & STATUS_Z ? (s_cycles++, s_remaining_cycles--, 0x032f)
+  : ...`, visible throughout the `rom.c` diff), `GenIR` instead emits a
+  one-instruction trampoline block. So the thing actually under test here —
+  the shared `cpuInstCycles()` table plus the taken-branch-on-edge convention
+  — is identical between them; only how the `+1` is textually attached
+  differs.
+- The distinct block-head address **sets** are identical: the (still-stale)
+  committed `romc1.c` has 1,977 `CYCLES(` call sites at only 1,718 distinct
+  addresses (259 addresses appear twice, apparently from `-O3` code
+  duplication specific to the `--irc1` pipeline), `rom.c` has exactly 1,718
+  call sites at 1,718 distinct addresses, and the two address sets are the
+  same 1,718 (`comm -12`, verified). So switching the site-list source from
+  `romc1.c` to `rom.c` did not shrink or shift `blocks.txt` at all — same
+  install points, same test.
+- What differs structurally: `system-inc.h` (`rom.c`) keeps CPU status as one
+  packed byte; `system2-inc.h` (`romc1.c`) splits it into seven per-flag
+  booleans specifically so `CPURegLiveness` can DCE dead flag stores — the
+  very optimization pass that crashes on this input. Routing around the crash
+  by using `rom.c` therefore also routes around ever exercising that pass, or
+  `GenIR`'s trampoline-block mechanism (Task 3's "part most likely to be
+  subtly wrong"), against the interpreter. Those remain checked only by the
+  four `.ir` baselines with trampoline blocks — a same-tool unit test, never
+  cross-engine.
+
+So: this test now validates the shared cycle table and the taken-branch
+convention, over real ROM code including the keyboard-wait loop's branches,
+end to end, cross-engine — which is what it is for. It does not, and cannot
+yet, cross-check the `--irc1`-specific code shape against the interpreter,
+because that back end cannot build this program at all.
+
+**Is the 2026-08-08 comparison reconstructible?** Close to exactly, with one
+named inference (which binary is "a generated build" — see above). Everything
+else in the entry's own description of its method — `--preload`, the cycle-debt
+adapter, `play.keys`, 1,300 frames — is specific enough to reproduce
+mechanically, and the reproduction was cross-checked, not just trusted: two
+independent determinism checks, and a qualitative match (burst-then-reconverge
+shape, bounded residual gap) against a result produced under a completely
+different cycle model.
+
+**Equal-budget runs — is the residual gone?** No, and it was never expected
+to close: `Emu6502::runFor` can stop between any two instructions;
+`s_remaining_cycles` in a generated program can only go negative at a block
+boundary and gets carried to the next call, so the generated engine is always
+up to one block's worth of cycles ahead or behind at any given sampling
+instant. Measured on the 1,300-frame `play.keys` run: cycle delta ranges from
+**-61 to +4** across 22.1M cycles (interpreter 22,147,951, generated
+22,147,957 at the final frame) — the same order of magnitude as the
+2026-08-08 entry's pre-fix "[-64, +2]... granularity, not arithmetic."
+The shared table fixed *what* each instruction costs; it was never going to
+fix *when* either engine is allowed to stop counting, which is a scheduling
+property, not a cycle-cost one. The ROM-boot-only comparison above (no game,
+no key input) shows the same gap closing to exactly zero by frame ~15 and
+staying there — the residual is real but small and bounded, exactly as
+designed.
+
+### What this does and does not settle
+
+**Settled:** the shared cycle table works as intended. The interpreter and a
+generated build agree, hit for hit, on 276,255 samples of a real ROM boot,
+including its most repetition-sensitive loop; the RNG seed the two engines
+previously diverged on now walks in lockstep at every sampled instant; and a
+genuine 151-frame, 2.6M-cycle stretch of previously-wrong disagreement (frames
+472-622) is now correct agreement. `romc1.c` remains unregenerable pending a
+fix to the pre-existing `CPURegLiveness` crash, tracked separately.
+
+**Not settled:** a permanent divergence between the interpreter and the
+generated `snake-byte` build still exists, now at frame 623 instead of 472.
+It is reproducible (both sides deterministic) and therefore real, not noise.
+Whether it has the same root cause as the old frame-472 split, moved by the
+more accurate accounting, or a different cause entirely, is unknown and
+unexamined here — this task was scoped to measure, not to chase it.
+
