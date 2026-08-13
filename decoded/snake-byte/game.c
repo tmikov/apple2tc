@@ -72,12 +72,15 @@ void game_cout_hook(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  /*$664A*/ CYCLES(0x664a, 12);
+  /*$664A*/ CYCLES(0x664a, 9);
   const uint8_t ch = s_a; // PHA: the original char, high bit intact.
   const uint8_t glyph = (uint8_t)(ch & 0x7f);
 
   if (glyph >= 0x20) {
-    /*$6655*/ CYCLES(0x6655, 92);
+    // $664F BCS -- the branch itself, taken here (this is the taken arm;
+    // glyph < 0x20 skips the block below without paying the extra cycle).
+    /*$664F*/ CYCLES(0x664f, 1);
+    /*$6655*/ CYCLES(0x6655, 82);
 
     // The original's SBC/ADC pairs honour the D flag. COUT is never reached in
     // decimal mode -- the ROM clears D at reset and neither BASIC nor the game
@@ -107,7 +110,7 @@ void game_cout_hook(uint16_t ret_addr) {
     s_x = 0x00;
 
     for (unsigned row = 0; row < 8; ++row) {
-      /*$668B*/ CYCLES(0x668b, 35);
+      /*$668B*/ CYCLES(0x668b, 33);
       s_a = (uint8_t)row; // TXA
       s_y = (uint8_t)row; // TAY
       const uint8_t bits = peek((uint16_t)(ram_peek16al(0x0000) + row));
@@ -117,9 +120,15 @@ void game_cout_hook(uint16_t ret_addr) {
       s_a = (uint8_t)(ram_peek(0x0005) + 0x04);
       ram_poke(0x0005, s_a);
       s_x = (uint8_t)(row + 1);
+      // $669D BNE -- the branch itself, taken on every iteration but the
+      // last (the loop test is `INX; CPX #8; BNE $668B`; row==7 is the one
+      // iteration where it falls through instead of looping).
+      if (row != 7) {
+        /*$669D*/ CYCLES(0x669d, 1);
+      }
     }
 
-    /*$669F*/ CYCLES(0x669f, 12);
+    /*$669F*/ CYCLES(0x669f, 9);
     s_x = ram_peek(0x0002);
     s_y = ram_peek(0x0003);
   }
