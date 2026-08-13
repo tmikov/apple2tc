@@ -7,6 +7,8 @@
 
 #include "apple2tc/emu6502.h"
 
+#include "apple2tc/d6502.h"
+
 #include <cassert>
 #include <cstdarg>
 #include <cstdio>
@@ -108,14 +110,47 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
 #define OP16() peek16(pc_ + 1)
 #define BR_ABS(x) (pc_ = (x))
 #define BR_REL(x) (pc_ += (x))
+// A conditional branch: `taken` is the branch condition. The base (not-taken)
+// cost was already charged against the opcode above; the extra +1 belongs
+// only on the path that actually branches, so it is charged here, not at
+// decode time.
+#define BR_COND(taken)                        \
+  do {                                        \
+    bool taken_ = (taken);                    \
+    BR_REL(2 + (taken_ ? (int8_t)OP8() : 0)); \
+    if (taken_)                               \
+      cycles_ += 1;                           \
+  } while (0)
 
-  for (unsigned startCycles = cycles_; cycles_ - startCycles < runCycles; cycles_ += 3) {
+  for (unsigned startCycles = cycles_; cycles_ - startCycles < runCycles;) {
     if (debug_ & DebugASM) {
       if (debugStateCB_ && debugStateCB_(debugStateCBCtx_, this, pc_) == StopReason::StopRequesed)
         return StopReason::StopRequesed;
     }
 
-    switch (ram_[pc_]) {
+    // Capture the opcode -- and with it, its base cost -- before the switch
+    // runs. The switch mutates pc_ (every case advances it, taken branches
+    // and jumps most of all), so charging against ram_[pc_] *after* the body
+    // would bill each instruction at its successor's price. Charging here,
+    // against the byte we are about to dispatch on, is what keeps the charge
+    // attributed to the instruction that actually ran.
+    //
+    // The charge is the base (not-taken-branch) cost from the shared table;
+    // conditional branch cases add the +1 taken penalty themselves, on the
+    // path that actually branches. We deliberately do NOT add the +1 an
+    // indexed read/write pays when it crosses a page, even though it is
+    // exactly computable here (the effective address and the index register
+    // are both in hand at every peek_abs_x/peek_abs_y/peek_ind_y call). The
+    // design (docs/plans/2026-08-12-accurate-cycles-design.md) charges both
+    // engines the *same* base cost so they agree by construction; the
+    // decompiler cannot cheaply compute a runtime page-cross test without
+    // reintroducing per-instruction work at every indexed access, so making
+    // the interpreter "more correct" here would only reintroduce the
+    // engine-vs-engine divergence this cycle model exists to remove.
+    uint8_t opcode = ram_[pc_];
+    cycles_ += decodeOpcode(opcode).cycles;
+
+    switch (opcode) {
     case 0x69: { // ADC #imm
       uint8_t m = OP8();
       if (!(status_ & STATUS_D))
@@ -451,28 +486,28 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
     }
 
     case 0x90: // BCC
-      BR_REL(2 + (status_ & STATUS_C ? 0 : (int8_t)OP8()));
+      BR_COND(!(status_ & STATUS_C));
       break;
     case 0xB0: // BCS
-      BR_REL(2 + (status_ & STATUS_C ? (int8_t)OP8() : 0));
+      BR_COND(status_ & STATUS_C);
       break;
     case 0xF0: // BEQ
-      BR_REL(2 + (status_ & STATUS_Z ? (int8_t)OP8() : 0));
+      BR_COND(status_ & STATUS_Z);
       break;
     case 0x30: // BMI
-      BR_REL(2 + (status_ & STATUS_N ? (int8_t)OP8() : 0));
+      BR_COND(status_ & STATUS_N);
       break;
     case 0xD0: // BNE
-      BR_REL(2 + (status_ & STATUS_Z ? 0 : (int8_t)OP8()));
+      BR_COND(!(status_ & STATUS_Z));
       break;
     case 0x10: // BPL
-      BR_REL(2 + (status_ & STATUS_N ? 0 : (int8_t)OP8()));
+      BR_COND(!(status_ & STATUS_N));
       break;
     case 0x50: // BVC
-      BR_REL(2 + (status_ & STATUS_V ? 0 : (int8_t)OP8()));
+      BR_COND(!(status_ & STATUS_V));
       break;
     case 0x70: // BVS
-      BR_REL(2 + (status_ & STATUS_V ? (int8_t)OP8() : 0));
+      BR_COND(status_ & STATUS_V);
       break;
 
     case 0x24: { // BIT zpg
@@ -916,6 +951,7 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
 
   return StopReason::CyclesExpired;
 
+#undef BR_COND
 #undef BR_ABS
 #undef OP16
 #undef OP8
