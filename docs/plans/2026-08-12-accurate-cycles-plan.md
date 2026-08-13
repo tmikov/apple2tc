@@ -412,6 +412,64 @@ git add decoded/
 git commit -m "decoded: re-record cycle-stamped inputs"
 ```
 
+### As built — nothing was re-recorded, and why
+
+**The run data carries no cycle fields.** `snake-byte.json` and `decoded/rom/run.json`
+have exactly four top-level keys — `BaseStats`, `BranchTargets`, `Branches`,
+`generations` — and `tools/apple2tc/RuntimeData.cpp` reads only `pc`,
+`BranchTargets` and `Branches`. Nothing in it is denominated in cycles, which is
+also why `coverage.txt` came out byte-identical. Re-recording a 2022 artefact
+that cannot have been affected would be churn.
+
+**The `.keys` stamps were left alone, deliberately.** They are cycle-stamped, so
+the same numbers now fire at different program points, and the scenarios did
+shift: 1,259 of 1,300 frames differ in `play` and 1,260 in `play-hires`, final
+screen hashes included. Three reasons to leave them:
+
+1. `verify.sh` is self-consistent — the traces were re-recorded through the same
+   keys, and it is 4/4.
+2. **The `[hires]` scenario still does its job**, which was the real risk. Its
+   value is exercising `$664A` in the reference build against a hand-written
+   replacement in `ext`, and if the shifted keys had stopped reaching that code
+   the cross-check would have gone quietly hollow. Measured with a probe at
+   `$664A`: it fires under `play-hires` and never fires under `play`, exactly as
+   the scenario intends.
+3. There is no mechanical way to re-record them. The stamps encode a human
+   playing; converting old stamp → program point → new stamp is possible in
+   principle but elaborate, and the original stamps were recorded against a
+   cycle model that was itself a fiction.
+
+What is now true and was not before: the keys arrive at *different game moments*
+than the human who recorded them intended. That costs nothing for a
+two-implementations-must-agree test, and it would matter if anyone ever wanted
+these scenarios to reproduce specific gameplay.
+
+### Blocker discovered here, for Task 6
+
+`decoded/rom/decompile.sh` **crashes**:
+
+```
+apple2tc: CPURegLiveness.h:89: ... Assertion `it != funcData_.end()' failed.
+```
+
+so `decoded/rom/romc1.c` could not be regenerated and still carries the old
+`bytes × 1.7` constants. The crash is **pre-existing** — it reproduces
+identically at `6bec516` (before this plan) and at `5fdb6e2` (before the probe
+work), so it is an older apple2tc bug and out of scope here.
+
+It matters because Task 6's acceptance test compares `a2run` against
+`romc1-run`, which would now be comparing a new cycle model against a stale one.
+
+**The way through:** `decoded/rom/` also builds `rom.c` via `--simple-c`, a
+different code path, and that path **works** — exit 0, 1,718 `CYCLES()` calls,
+constants correctly moved (`0x0090`: 6 → 3). `rom-run` exists as a target and
+`rom.c` includes `system-inc.h`, which Task 6 of the probe plan wired for probe
+dispatch just as `system2-inc.h` was. Note its line in `decompile.sh` is
+commented out, which is why `rom.c` was equally stale.
+
+So Task 6 should regenerate `rom.c` and compare `a2run` against `rom-run`,
+recording that `romc1` remains blocked on the pre-existing crash.
+
 ---
 
 ## Task 6: The acceptance test, and frame 472
