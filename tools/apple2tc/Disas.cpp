@@ -32,6 +32,22 @@ void AsmBlock::splitInto(AsmBlock *nextBlock) {
   successors_.push_back(nextBlock);
 }
 
+unsigned AsmBlock::baseCycles(const Disas *disas) const {
+  unsigned total = 0;
+  for (const auto &addrInst : instructions(disas)) {
+    // A block may end in an invalid-instruction terminator (see the class
+    // comment above): the disassembler cut it off there because the bytes
+    // don't decode, and the code generated for it is an abort stub, not a
+    // real 6502 instruction. cpuInstCycles() asserts against exactly this
+    // case -- "there is no meaningful cost for an instruction that was never
+    // really executed" -- so it contributes nothing to the block's cost.
+    if (addrInst.second.kind == CPUInstKind::INVALID)
+      continue;
+    total += cpuInstCycles(addrInst.second.kind, addrInst.second.addrMode);
+  }
+  return total;
+}
+
 AsmBlock::InstIterator::InstIterator(const Disas *disas, uint32_t addr)
     : EndIterator(addr), disas_(disas) {
   inst_ = std::make_pair((uint16_t)addr, decodeInst(addr, disas->peek3(addr)));

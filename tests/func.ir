@@ -15,10 +15,10 @@ function func1
                 StoreR8       STATUS_D, 0x00
                 StoreR8       STATUS_I, 0x00
                 StoreR8       STATUS_C, 0x00
-/*$0300*/       AddCycles     9
+/*$0300*/       AddCycles     8
                 StoreR8       X, 0x0a
 /*$0302*/       Call          func_0320, 0xfffe
-/*$0305*/       AddCycles     21
+/*$0305*/       AddCycles     17
 /*$0307*/       Push8         0xff
 /*$0308*/ %15 = RamPeek8      (Add16 0xffe3 (ZExt8t16 0x00))
                 StoreR8       A, %15
@@ -28,18 +28,19 @@ function func1
           %_  = Pop8
           %_  = Pop8
                 JmpInd        (CPUAddr2BB (Add16 (Make16 %15 0x03) 0x0001))
-%bb_0320:  // [$0320] Pred(%bb_0320) Succ(%bb_0320, %bb_0326)
-/*$0320*/       AddCycles     11
+%bb2:  // [$0324] Pred(%bb2) Succ(%bb2, %bb_0326)
+/*$0324*/       AddCycles     1
+/*$0320*/       AddCycles     10
                 RamPoke8      0x1001, (Add8 (RamPeek8 0x1001) 0x01)
-/*$0323*/ %31 = Sub8          (LoadR8 X), 0x01
-                StoreR8       STATUS_NotZ, %31
-                StoreR8       STATUS_N, (And8 %31 0x80)
-                StoreR8       X, %31
-/*$0324*/       JTrue         %31, %bb_0320, %bb_0326
-%bb_0326:  // [$0326] Pred(%bb_0320) Succ()
-/*$0326*/       AddCycles     2
+/*$0323*/ %32 = Sub8          (LoadR8 X), 0x01
+                StoreR8       STATUS_NotZ, %32
+                StoreR8       STATUS_N, (And8 %32 0x80)
+                StoreR8       X, %32
+/*$0324*/       JTrue         %32, %bb2, %bb_0326
+%bb_0326:  // [$0326] Pred(%bb2) Succ()
+/*$0326*/       AddCycles     6
                 RTS           0x00
-%bb2:  // Pred() Succ()
+%bb3:  // Pred() Succ()
                 Exit
 end func1
 
@@ -49,18 +50,21 @@ end func1
 // LiveIn : X
 // LiveOut: X, STATUS_N, STATUS_NotZ
 function func_0320
-%bb_0320_1:  // [$0320] Pred(%bb_0320_1) Succ(%bb_0320_1, %bb_0326_1)
-/*$0320*/       AddCycles     11
+%bb_0320:  // [$0320] Pred(%bb4) Succ(%bb4, %bb_0326_1)
+/*$0320*/       AddCycles     10
                 RamPoke8      0x1001, (Add8 (RamPeek8 0x1001) 0x01)
-/*$0323*/ %45 = Sub8          (LoadR8 X), 0x01
-                StoreR8       STATUS_NotZ, %45
-                StoreR8       STATUS_N, (And8 %45 0x80)
-                StoreR8       X, %45
-/*$0324*/       JTrue         %45, %bb_0320_1, %bb_0326_1
-%bb_0326_1:  // [$0326] Pred(%bb_0320_1) Succ(%bb3)
-/*$0326*/       AddCycles     2
-                Return        %bb3
-%bb3:  // Pred(%bb_0326_1) Succ()
+/*$0323*/ %46 = Sub8          (LoadR8 X), 0x01
+                StoreR8       STATUS_NotZ, %46
+                StoreR8       STATUS_N, (And8 %46 0x80)
+                StoreR8       X, %46
+/*$0324*/       JTrue         %46, %bb4, %bb_0326_1
+%bb4:  // [$0324] Pred(%bb_0320) Succ(%bb_0320)
+                AddCycles     1
+                Jmp           %bb_0320
+%bb_0326_1:  // [$0326] Pred(%bb_0320) Succ(%bb5)
+/*$0326*/       AddCycles     6
+                Return        %bb5
+%bb5:  // Pred(%bb_0326_1) Succ()
                 Exit
 end func_0320
 

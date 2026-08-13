@@ -7,28 +7,34 @@
 // LiveIn :
 // LiveOut:
 function func1
-%bb1:  // Pred() Succ(%bb_032f, %bb_0313)
+%bb1:  // Pred() Succ(%bb2, %bb_0313)
                 StoreSP       0xff
-/*$0300*/       AddCycles     33
+/*$0300*/       AddCycles     28
 /*$0304*/       RamPoke8      0x1001, (RamPeek8 0x1000)
 /*$0307*/ %5  = RamPeek8      0x1002
 /*$030A*/       RamPoke8      0x1002, (Add8 (RamPeek8 0x1002) 0x01)
 /*$030E*/       RamPoke8      0x1003, %5
-/*$0311*/       JFalse        %5, %bb_032f, %bb_0313
-%bb_0313:  // [$0313] Pred(%bb1) Succ(%bb_032f, %bb_0321)
-/*$0313*/       AddCycles     24
-/*$0319*/       RamPoke8      0x2005, (Add8 (RamPeek8 0x2000) 0x01)
-/*$031F*/       JFalse        (RamPeek8 0x2006), %bb_032f, %bb_0321
-%bb_0321:  // [$0321] Pred(%bb_0313) Succ(%bb_032f)
-/*$0321*/       AddCycles     24
-          %18 = RamPeek8      0x3000
-/*$0328*/       RamPoke8      0x3000, 0x01
-/*$032C*/       RamPoke8      0x3005, (Add8 %18 0x01)
+/*$0311*/       JFalse        %5, %bb2, %bb_0313
+%bb2:  // [$0311] Pred(%bb1) Succ(%bb_032f)
+                AddCycles     1
                 Jmp           %bb_032f
-%bb_032f:  // [$032F] Pred(%bb1, %bb_0313, %bb_0321) Succ()
-/*$032F*/       AddCycles     2
+%bb_0313:  // [$0313] Pred(%bb1) Succ(%bb3, %bb_0321)
+/*$0313*/       AddCycles     20
+/*$0319*/       RamPoke8      0x2005, (Add8 (RamPeek8 0x2000) 0x01)
+/*$031F*/       JFalse        (RamPeek8 0x2006), %bb3, %bb_0321
+%bb3:  // [$031F] Pred(%bb_0313) Succ(%bb_032f)
+                AddCycles     1
+                Jmp           %bb_032f
+%bb_0321:  // [$0321] Pred(%bb_0313) Succ(%bb_032f)
+/*$0321*/       AddCycles     20
+          %22 = RamPeek8      0x3000
+/*$0328*/       RamPoke8      0x3000, 0x01
+/*$032C*/       RamPoke8      0x3005, (Add8 %22 0x01)
+                Jmp           %bb_032f
+%bb_032f:  // [$032F] Pred(%bb2, %bb3, %bb_0321) Succ()
+/*$032F*/       AddCycles     0
                 Abort         0x032f, 0x032f, 0x03
-%bb2:  // Pred() Succ()
+%bb4:  // Pred() Succ()
                 Exit
 end func1
 

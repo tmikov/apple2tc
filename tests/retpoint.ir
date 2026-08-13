@@ -18,18 +18,18 @@ function func1
                 Call          func_0330, 0xfffe
                 Jmp           %bb_0306
 %bb_0306:  // [$0306] Pred(%bb_0336, %bb_0303) Succ()
-/*$0306*/       AddCycles     4
+/*$0306*/       AddCycles     7
                 Call          func2, 0xfffe
 /*$0308*/       Abort         0x0306, 0x0308, 0x02
 %bb_0308:  // [$0308] Pred() Succ()
-                AddCycles     2
+                AddCycles     0
                 Abort         0x0308, 0x0308, 0x03
 %bb_0310:  // [$0310] Pred() Succ(%bb_0313_1)
 /*$0310*/       AddCycles     6
                 Call          func_0320, 0xfffe
                 Jmp           %bb_0313_1
 %bb_0313:  // [$0313] Pred() Succ(%bb_0303, %bb_0336)
-/*$0313*/       AddCycles     11
+/*$0313*/       AddCycles     12
                 StoreR8       STATUS_NotZ, 0x01
                 StoreR8       STATUS_N, 0x00
                 StoreR8       A, 0x01
@@ -39,7 +39,7 @@ function func1
 /*$0310*/       Call          func_0313, 0x0000
                 RTS           0x00, %bb_0303
 %bb_0320:  // [$0320] Pred() Succ(%bb_0313_1, %bb_0333)
-/*$0320*/       AddCycles     11
+/*$0320*/       AddCycles     12
                 StoreR8       STATUS_NotZ, 0x02
                 StoreR8       STATUS_N, 0x00
                 StoreR8       A, 0x02
@@ -54,10 +54,10 @@ function func1
                 Call          func_0313, 0xfffe
                 Jmp           %bb_0336
 %bb_0336:  // [$0336] Pred(%bb_0313, %bb_0333) Succ(%bb_0306)
-/*$0336*/       AddCycles     2
+/*$0336*/       AddCycles     6
                 RTS           0x00, %bb_0306
 %bb_ffff:  // [$FFFF] Pred() Succ()
-/*$FFFF*/       AddCycles     2
+/*$FFFF*/       AddCycles     0
                 Abort         0xffff, 0xffff, 0x03
 %bb2:  // Pred() Succ()
                 Exit
@@ -88,7 +88,7 @@ end func_0310
 // LiveOut: A, STATUS_N, STATUS_NotZ
 function func_0313
 %bb_0313_2:  // [$0313] Pred() Succ(%bb5)
-/*$0313*/       AddCycles     11
+/*$0313*/       AddCycles     12
                 StoreR8       STATUS_NotZ, 0x01
                 StoreR8       STATUS_N, 0x00
                 StoreR8       A, 0x01
@@ -105,7 +105,7 @@ end func_0313
 // LiveOut:
 function func_0320
 %bb_0320_1:  // [$0320] Pred() Succ(%bb6)
-/*$0320*/       AddCycles     11
+/*$0320*/       AddCycles     12
 /*$0322*/       RamPoke8      0x1001, 0x02
 /*$0325*/       Return        %bb6
 %bb6:  // Pred(%bb_0320_1) Succ()
@@ -123,7 +123,7 @@ function func_0330
                 Call          func_0320, 0xfffe
 /*$0333*/       AddCycles     6
                 Call          func_0313, 0xfffe
-/*$0336*/       AddCycles     2
+/*$0336*/       AddCycles     6
                 Return        %bb7
 %bb7:  // Pred(%bb_0330_1) Succ()
                 Exit

@@ -16,7 +16,7 @@ function func1
                 StoreR8       STATUS_D, 0x00
                 StoreR8       STATUS_I, 0x00
                 StoreR8       STATUS_C, 0x00
-/*$0300*/       AddCycles     12
+/*$0300*/       AddCycles     16
 /*$0302*/       Push8         0x03
 /*$0303*/       StoreR8       STATUS_NotZ, 0x1f
                 StoreR8       STATUS_N, 0x00

@@ -12,8 +12,6 @@
 
 #include "apple2tc/apple2iodefs.h"
 
-#include <cmath>
-
 void Disas::printSimpleCPrologue(FILE *f) {
   fprintf(f, "\n#include \"apple2tc/system-inc.h\"\n\n");
 
@@ -100,7 +98,7 @@ void Disas::printSimpleCRange(FILE *f, const AsmBlock &block, const AsmBlock * /
       block.addr(),
       block.endAddr() - 1,
       block.size());
-  printf("      CYCLES(0x%04x, %ld);\n", block.addr(), lround(block.size() * 1.7 + 0.5));
+  printf("      CYCLES(0x%04x, %u);\n", block.addr(), block.baseCycles(this));
 
   bool fall = false;
   for (const auto [addr, inst] : block.instructions(this))
@@ -164,50 +162,89 @@ bool Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
   case CPUInstKind::EOR:
     fprintf(f, "s_a = update_nz(s_a ^ %s);", simpleCRead(inst).c_str());
     break;
+  // cpuInstCycles() gives the base (not-taken) branch cost, already charged by
+  // the CYCLES() call at the top of this block. The extra +1 a taken branch
+  // costs belongs only on the taken path, so it is folded directly into the
+  // taken arm of the ternary that already decides s_pc -- a compile-time
+  // constant added where the branch outcome is already being tested, not a
+  // new runtime test. This mirrors BR_COND in lib/cpuemu/emu6502.cpp, which
+  // adds its +1 only when the branch actually takes.
   case CPUInstKind::BCC:
-    fprintf(f, "s_pc = !(s_status & STATUS_C) ? %s : 0x%04x;\n", simpleCAddr(inst).c_str(), pc + 2);
+    fprintf(
+        f,
+        "s_pc = !(s_status & STATUS_C) ? (s_cycles++, s_remaining_cycles--, %s) : 0x%04x;\n",
+        simpleCAddr(inst).c_str(),
+        pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
     fall = false;
     break;
   case CPUInstKind::BCS:
-    fprintf(f, "s_pc = s_status & STATUS_C ? %s : 0x%04x;\n", simpleCAddr(inst).c_str(), pc + 2);
+    fprintf(
+        f,
+        "s_pc = s_status & STATUS_C ? (s_cycles++, s_remaining_cycles--, %s) : 0x%04x;\n",
+        simpleCAddr(inst).c_str(),
+        pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
     fall = false;
     break;
   case CPUInstKind::BEQ:
-    fprintf(f, "s_pc = s_status & STATUS_Z ? %s : 0x%04x;\n", simpleCAddr(inst).c_str(), pc + 2);
+    fprintf(
+        f,
+        "s_pc = s_status & STATUS_Z ? (s_cycles++, s_remaining_cycles--, %s) : 0x%04x;\n",
+        simpleCAddr(inst).c_str(),
+        pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
     fall = false;
     break;
   case CPUInstKind::BNE:
-    fprintf(f, "s_pc = !(s_status & STATUS_Z) ? %s : 0x%04x;\n", simpleCAddr(inst).c_str(), pc + 2);
+    fprintf(
+        f,
+        "s_pc = !(s_status & STATUS_Z) ? (s_cycles++, s_remaining_cycles--, %s) : 0x%04x;\n",
+        simpleCAddr(inst).c_str(),
+        pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
     fall = false;
     break;
   case CPUInstKind::BMI:
-    fprintf(f, "s_pc = s_status & STATUS_N ? %s : 0x%04x;\n", simpleCAddr(inst).c_str(), pc + 2);
+    fprintf(
+        f,
+        "s_pc = s_status & STATUS_N ? (s_cycles++, s_remaining_cycles--, %s) : 0x%04x;\n",
+        simpleCAddr(inst).c_str(),
+        pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
     fall = false;
     break;
   case CPUInstKind::BPL:
-    fprintf(f, "s_pc = !(s_status & STATUS_N) ? %s : 0x%04x;\n", simpleCAddr(inst).c_str(), pc + 2);
+    fprintf(
+        f,
+        "s_pc = !(s_status & STATUS_N) ? (s_cycles++, s_remaining_cycles--, %s) : 0x%04x;\n",
+        simpleCAddr(inst).c_str(),
+        pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
     fall = false;
     break;
   case CPUInstKind::BVC:
-    fprintf(f, "s_pc = !(s_status & STATUS_V) ? %s : 0x%04x;\n", simpleCAddr(inst).c_str(), pc + 2);
+    fprintf(
+        f,
+        "s_pc = !(s_status & STATUS_V) ? (s_cycles++, s_remaining_cycles--, %s) : 0x%04x;\n",
+        simpleCAddr(inst).c_str(),
+        pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
     fall = false;
     break;
   case CPUInstKind::BVS:
-    fprintf(f, "s_pc = s_status & STATUS_V ? %s : 0x%04x;\n", simpleCAddr(inst).c_str(), pc + 2);
+    fprintf(
+        f,
+        "s_pc = s_status & STATUS_V ? (s_cycles++, s_remaining_cycles--, %s) : 0x%04x;\n",
+        simpleCAddr(inst).c_str(),
+        pc + 2);
     fprintf(f, "      branchTarget = true;\n");
     fprintf(f, "      break;");
     fall = false;

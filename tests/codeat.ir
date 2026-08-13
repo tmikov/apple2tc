@@ -18,7 +18,7 @@ function func1
                 StoreR8       STATUS_D, 0x00
                 StoreR8       STATUS_I, 0x00
                 StoreR8       STATUS_C, 0x00
-/*$0300*/       AddCycles     12
+/*$0300*/       AddCycles     16
 /*$0302*/       Push8         0x03
 /*$0303*/       StoreR8       STATUS_NotZ, 0x1f
                 StoreR8       STATUS_N, 0x00
@@ -26,9 +26,9 @@ function func1
 /*$0305*/       Push8         0x1f
 /*$0306*/       RTS           0x00, %bb_0320
 %bb_0320:  // [$0320] Pred(%bb1) Succ(%bb_0330)
-/*$0320*/       AddCycles     14
+/*$0320*/       AddCycles     9
 /*$0322*/       RamPoke8      0x1000, 0x11
-/*$0310*/       AddCycles     19
+/*$0310*/       AddCycles     15
 /*$0312*/       RamPoke8      0x0010, 0x30
 /*$0314*/       StoreR8       STATUS_NotZ, 0x03
                 StoreR8       STATUS_N, 0x00
@@ -36,15 +36,15 @@ function func1
 /*$0316*/       RamPoke8      0x0011, 0x03
 /*$0318*/       JmpInd        (CPUAddr2BB (RamPeek16al 0x0010)), %bb_0330
 %bb_0330:  // [$0330] Pred(%bb_0320) Succ()
-/*$0330*/       AddCycles     12
+/*$0330*/       AddCycles     13
 /*$0332*/       RamPoke8      0x1001, 0x22
 /*$0335*/       Call          func2, 0xfffe
 /*$0337*/       Abort         0x0335, 0x0337, 0x02
 %bb_0337:  // [$0337] Pred() Succ()
-                AddCycles     2
+                AddCycles     0
                 Abort         0x0337, 0x0337, 0x03
 %bb_ffff:  // [$FFFF] Pred() Succ()
-/*$FFFF*/       AddCycles     2
+/*$FFFF*/       AddCycles     0
                 Abort         0xffff, 0xffff, 0x03
 %bb2:  // Pred() Succ()
                 Exit

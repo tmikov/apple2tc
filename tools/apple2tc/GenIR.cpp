@@ -13,8 +13,6 @@
 #include "apple2tc/a2symbols.h"
 #include "apple2tc/apple2iodefs.h"
 
-#include <cmath>
-
 using namespace ir;
 
 GenIR::GenIR(const std::shared_ptr<Disas> &disas, IRContext *ctx)
@@ -74,7 +72,7 @@ Module *GenIR::run() {
 void GenIR::genAsmBlock(const AsmBlock &asmBlock) {
   builder_.setInsertionBlock(basicBlockFor(&asmBlock));
   builder_.setAddress(asmBlock.addr());
-  builder_.createAddCycles(builder_.getLiteralU32(lround(asmBlock.size() * 1.7 + 0.5)));
+  builder_.createAddCycles(builder_.getLiteralU32(asmBlock.baseCycles(dis_.get())));
 
   for (auto [addr, inst] : asmBlock.instructions(dis_.get())) {
     builder_.setAddress(addr);
@@ -627,10 +625,29 @@ void GenIR::emitJCond(bool jTrue, const CPUInst &inst, Value *cond, const AsmBlo
       fprintf(stderr, "Warning: $%04x JCond has %zu branch targets\n", pc_, targets->size());
     auto *target = resolveBranch(inst.operand);
     auto *fall = resolveFallBranch(asmBlock);
+    // `target`'s own AddCycles (from genAsmBlock) charges cpuInstCycles()'s
+    // base, not-taken cost -- the same total whichever edge reaches it. But
+    // `target` is frequently shared: a loop header, say, reached both by this
+    // taken branch and by plain fall-through from another block. Only the
+    // taken edge owes the +1, so it can't be folded into target's own
+    // constant without also overcharging predecessors that arrived some
+    // other way (see %bb_032f in tests/trees.ir, reached by two taken
+    // branches *and* an unconditional Jmp). Route the taken edge through a
+    // one-instruction block instead: it costs nothing at runtime (an
+    // unconditionally-taken jump, not a test) and keeps the +1 attributed to
+    // exactly this edge -- the static-CFG counterpart of BR_COND in
+    // lib/cpuemu/emu6502.cpp, which adds its +1 only when the branch actually
+    // takes.
+    BasicBlock *curBlock = builder_.getCurBasicBlock();
+    BasicBlock *takenEdge = createBB(pc_, false);
+    builder_.setInsertionBlock(takenEdge);
+    builder_.createAddCycles(builder_.getLiteralU32(1));
+    builder_.createJmp(target);
+    builder_.setInsertionBlock(curBlock);
     if (jTrue)
-      builder_.createJTrue(cond, target, fall);
+      builder_.createJTrue(cond, takenEdge, fall);
     else
-      builder_.createJFalse(cond, target, fall);
+      builder_.createJFalse(cond, takenEdge, fall);
     return;
   }
 
@@ -644,6 +661,10 @@ void GenIR::emitJCond(bool jTrue, const CPUInst &inst, Value *cond, const AsmBlo
     builder_.createJTrue(cond, resolveFallBranch(asmBlock), indBranchBlock);
 
   builder_.setInsertionBlock(indBranchBlock);
+  // indBranchBlock is only ever reached on the taken path (its sole
+  // predecessor is the JTrue/JFalse above), so -- unlike the shared-target
+  // case -- the taken-branch +1 can be charged directly here.
+  builder_.createAddCycles(builder_.getLiteralU32(1));
   // Instruction byte 1, sign extended to 16-bit.
   auto *brOffset =
       builder_.createSExt8t16(builder_.createRamPeek8(builder_.getLiteralU16(pc_ + 1)));

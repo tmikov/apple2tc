@@ -201,6 +201,16 @@ public:
     return makeIteratorRange(InstIterator(disas, addr_), EndIterator(addr_ + size_));
   }
 
+  /// Sum of cpuInstCycles() over every instruction in the block: the cost of
+  /// executing it once, straight through. If the block ends in a conditional
+  /// branch, this is specifically the *not-taken* cost -- cpuInstCycles()
+  /// already excludes the taken-branch +1, which the caller must attribute to
+  /// the taken edge itself, not to this total. GenIR.cpp and PrintSimpleC.cpp
+  /// both call this rather than each summing it themselves, so the IR and the
+  /// generated C cannot drift apart the way the old, unrelated `size() * 1.7`
+  /// estimates in each could.
+  [[nodiscard]] unsigned baseCycles(const Disas *disas) const;
+
 private:
   friend class ir::ValueListBase<AsmBlock, AsmBlock>;
 

@@ -9,7 +9,7 @@
 function func1
 %bb1:  // Pred() Succ()
                StoreSP       0xff
-/*$0300*/      AddCycles     18
+/*$0300*/      AddCycles     12
           %5 = RamPeek8      (Add16 0x1000 (ZExt8t16 0x00))
 /*$0303*/      RamPoke8      0x1001, 0x00
 /*$0306*/      RamPoke8      0x2000, %5
