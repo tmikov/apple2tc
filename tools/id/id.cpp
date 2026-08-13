@@ -343,6 +343,7 @@ static void printHelp() {
   printf("xref addr - Find candidate references to an address\n");
   printf("xref lo hi - Find candidate references into a range\n");
   printf("xref lo hi from to - ...searching only [from, to]\n");
+  printf("cycles - dump the per-opcode base cycle cost table\n");
   printf("db - print up to 64 bytes/words\n");
   printf("dw - print 8 words\n");
   printf("memcpy dest src len - copy memory\n");
@@ -474,6 +475,21 @@ int main() {
         printf("Error: start address is above end address.\n");
       else
         xref(*lo, *hi, *from, *to);
+    } else if (tokens[0] == "cycles" && tokens.size() == 1) {
+      // The human-readable form of the table both engines derive their cycle
+      // charges from, and the input to the test that pins all 256 entries.
+      for (unsigned i = 0; i != 256; ++i) {
+        CPUOpcode opc = decodeOpcode((uint8_t)i);
+        if (opc.kind == CPUInstKind::INVALID)
+          printf("$%02X - - 0\n", i);
+        else
+          printf(
+              "$%02X %s %s %u\n",
+              i,
+              cpuInstName(opc.kind),
+              cpuAddrModeName(opc.addrMode),
+              opc.cycles);
+      }
     } else if (tokens[0] == "labels" && tokens.size() == 2) {
       loadLabels(tokens[1].c_str());
     } else if (tokens[0] == "db" && tokens.size() == 1) {

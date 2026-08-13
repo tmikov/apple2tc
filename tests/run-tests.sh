@@ -126,6 +126,13 @@ $a6502 xref.s xref.b33 && printf 'loadb33 xref.b33\nxref $310 $31F $300 $321\n' 
 diff -q xref.expected xref-test.txt
 rm xref-test.txt xref.b33
 
+# The per-opcode cycle table, dumped in full. Both engines derive from this one
+# table -- if they ever diverge, today's flat-3-versus-bytes bug returns
+# silently -- so it is worth pinning all 256 entries, not a sample.
+printf 'cycles\n' | $id > cycles-test.txt 2>&1
+diff -q cycles.expected cycles-test.txt
+rm cycles-test.txt
+
 # The coverage report, with one region of each kind it classifies. The
 # overlap warning is checked separately below, since a declared range that the
 # disassembler also reached as code means one of the two claims is wrong.

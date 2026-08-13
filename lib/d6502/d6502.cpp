@@ -6,6 +6,7 @@
  */
 
 #include "apple2tc/d6502.h"
+#include "apple2tc/support.h"
 
 #include <cassert>
 #include <cstdio>
@@ -166,6 +167,166 @@ CPUOpcode decodeOpcodeSlow(uint8_t opcode) {
 
 CPUOpcode decodeOpcode(uint8_t opcode) {
   return s_opcodes[opcode];
+}
+
+unsigned cpuInstCycles(CPUInstKind kind, CPUAddrMode addrMode) {
+  switch (kind) {
+  // Control transfer with a fixed cost, independent of addressing mode --
+  // except JMP, which is cheaper through Abs than through the extra memory
+  // read Ind requires.
+  //
+  // BRK is 7 despite decoding with CPUAddrMode::Imm in this codebase (its
+  // second byte is a padding byte the hardware reads and discards, not a
+  // real immediate operand). Handling it as its own case, ahead of the
+  // generic read-instruction switch below, is what keeps that Imm from being
+  // priced like ADC #imm's.
+  case CPUInstKind::BRK:
+    return 7;
+  case CPUInstKind::JSR:
+    return 6;
+  case CPUInstKind::RTI:
+  case CPUInstKind::RTS:
+    return 6;
+  case CPUInstKind::JMP:
+    return addrMode == CPUAddrMode::Ind ? 5 : 3;
+
+  // Conditional branches. This is the not-taken cost; the taken +1 is added
+  // by the engines, where taken-ness is known (see design doc).
+  case CPUInstKind::BCC:
+  case CPUInstKind::BCS:
+  case CPUInstKind::BEQ:
+  case CPUInstKind::BMI:
+  case CPUInstKind::BNE:
+  case CPUInstKind::BPL:
+  case CPUInstKind::BVC:
+  case CPUInstKind::BVS:
+    return 2;
+
+  // Stack push/pull.
+  case CPUInstKind::PHA:
+  case CPUInstKind::PHP:
+    return 3;
+  case CPUInstKind::PLA:
+  case CPUInstKind::PLP:
+    return 4;
+
+  // Read-modify-write: one extra cycle over a same-mode load to write the
+  // result back, and Abs_X is unconditionally 7 -- there is no cheaper case
+  // to fall back to when the index does not cross a page, because the CPU
+  // always performs the dummy write-back cycle for RMW instructions.
+  case CPUInstKind::ASL:
+  case CPUInstKind::LSR:
+  case CPUInstKind::ROL:
+  case CPUInstKind::ROR:
+  case CPUInstKind::INC:
+  case CPUInstKind::DEC:
+    switch (addrMode) {
+    case CPUAddrMode::A:
+      return 2;
+    case CPUAddrMode::Zpg:
+      return 5;
+    case CPUAddrMode::Zpg_X:
+      return 6;
+    case CPUAddrMode::Abs:
+      return 6;
+    case CPUAddrMode::Abs_X:
+      return 7;
+    default:
+      PANIC_ASSERT_MSG(false, "cpuInstCycles: unexpected addr mode for a read-modify-write inst");
+      return 0;
+    }
+
+  // Stores. Unlike a load, an indexed store unconditionally pays the cycle a
+  // load pays only on a page cross: the CPU cannot know ahead of the write
+  // whether the uncorrected address it would otherwise use is safe to write
+  // through, so it always spends the extra cycle fixing up the high byte
+  // first.
+  case CPUInstKind::STA:
+  case CPUInstKind::STX:
+  case CPUInstKind::STY:
+    switch (addrMode) {
+    case CPUAddrMode::Zpg:
+      return 3;
+    case CPUAddrMode::Zpg_X:
+    case CPUAddrMode::Zpg_Y:
+      return 4;
+    case CPUAddrMode::Abs:
+      return 4;
+    case CPUAddrMode::Abs_X:
+    case CPUAddrMode::Abs_Y:
+      return 5;
+    case CPUAddrMode::X_Ind:
+    case CPUAddrMode::Ind_Y:
+      return 6;
+    default:
+      PANIC_ASSERT_MSG(false, "cpuInstCycles: unexpected addr mode for a store inst");
+      return 0;
+    }
+
+  // Implied/register-only: no memory access, fixed 2 cycles regardless of
+  // what the instruction does internally.
+  case CPUInstKind::CLC:
+  case CPUInstKind::CLD:
+  case CPUInstKind::CLI:
+  case CPUInstKind::CLV:
+  case CPUInstKind::DEX:
+  case CPUInstKind::DEY:
+  case CPUInstKind::INX:
+  case CPUInstKind::INY:
+  case CPUInstKind::NOP:
+  case CPUInstKind::SEC:
+  case CPUInstKind::SED:
+  case CPUInstKind::SEI:
+  case CPUInstKind::TAX:
+  case CPUInstKind::TAY:
+  case CPUInstKind::TSX:
+  case CPUInstKind::TXA:
+  case CPUInstKind::TXS:
+  case CPUInstKind::TYA:
+    return 2;
+
+  // Everything else reads memory (or an immediate) and does not write it
+  // back. Base cost only -- an indexed read pays +1 on a page crossing,
+  // which neither engine models (see design doc).
+  case CPUInstKind::ADC:
+  case CPUInstKind::AND:
+  case CPUInstKind::BIT:
+  case CPUInstKind::CMP:
+  case CPUInstKind::CPX:
+  case CPUInstKind::CPY:
+  case CPUInstKind::EOR:
+  case CPUInstKind::LDA:
+  case CPUInstKind::LDX:
+  case CPUInstKind::LDY:
+  case CPUInstKind::ORA:
+  case CPUInstKind::SBC:
+    switch (addrMode) {
+    case CPUAddrMode::Imm:
+      return 2;
+    case CPUAddrMode::Zpg:
+      return 3;
+    case CPUAddrMode::Zpg_X:
+    case CPUAddrMode::Zpg_Y:
+      return 4;
+    case CPUAddrMode::Abs:
+      return 4;
+    case CPUAddrMode::Abs_X:
+    case CPUAddrMode::Abs_Y:
+      return 4;
+    case CPUAddrMode::X_Ind:
+      return 6;
+    case CPUAddrMode::Ind_Y:
+      return 5;
+    default:
+      PANIC_ASSERT_MSG(false, "cpuInstCycles: unexpected addr mode for a read inst");
+      return 0;
+    }
+
+  case CPUInstKind::INVALID:
+  default:
+    PANIC_ASSERT_MSG(false, "cpuInstCycles: called with an invalid instruction kind");
+    return 0;
+  }
 }
 
 CPUInst decodeInst(uint16_t pc, ThreeBytes bytes) {

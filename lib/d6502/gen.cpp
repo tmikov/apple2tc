@@ -14,11 +14,17 @@ void genDisasmTable() {
   printf("static const CPUOpcode s_opcodes[256] = {\n");
   for (unsigned i = 0; i != 256; ++i) {
     CPUOpcode opc = decodeOpcode((uint8_t)i);
+    // INVALID opcodes have no addressing mode and thus no cost cpuInstCycles()
+    // can derive; cpuInstCycles() asserts rather than accepting one, so it is
+    // simply not called here, the same way the name/mode strings are not
+    // looked up from the (nonexistent) real instruction below.
+    unsigned cycles = opc.kind != CPUInstKind::INVALID ? cpuInstCycles(opc.kind, opc.addrMode) : 0;
     printf(
-        "  /* $%02X */ { CPUInstKind::%s, CPUAddrMode::%s },\n",
+        "  /* $%02X */ { CPUInstKind::%s, CPUAddrMode::%s, %u },\n",
         i,
         opc.kind != CPUInstKind::INVALID ? cpuInstName(opc.kind) : "INVALID",
-        opc.kind != CPUInstKind::INVALID ? cpuAddrModeName(opc.addrMode) : "_invalid");
+        opc.kind != CPUInstKind::INVALID ? cpuAddrModeName(opc.addrMode) : "_invalid",
+        cycles);
   }
   printf("};\n");
 }
@@ -41,10 +47,16 @@ void genAsmTable() {
   unsigned i;
   for (i = 0; i != 256 && opcodes[i].opcode.kind != CPUInstKind::INVALID; ++i) {
     auto opc = opcodes[i].opcode;
+    // The loop condition guarantees kind != INVALID here, so cpuInstCycles()
+    // (which rejects INVALID) is always safe to call. Filling in the real
+    // cost, rather than leaving it defaulted, is also what keeps every
+    // CPUOpcode aggregate in this file fully initialized -- a partial one
+    // triggers -Wmissing-field-initializers under -Wextra.
     printf(
-        "  { { CPUInstKind::%s, CPUAddrMode::%s }, 0x%02X },\n",
-        opc.kind != CPUInstKind::INVALID ? cpuInstName(opc.kind) : "INVALID",
-        opc.kind != CPUInstKind::INVALID ? cpuAddrModeName(opc.addrMode) : "_invalid",
+        "  { { CPUInstKind::%s, CPUAddrMode::%s, %u }, 0x%02X },\n",
+        cpuInstName(opc.kind),
+        cpuAddrModeName(opc.addrMode),
+        cpuInstCycles(opc.kind, opc.addrMode),
         opcodes[i].encoding);
   }
   printf("};\n");
