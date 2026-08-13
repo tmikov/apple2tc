@@ -446,6 +446,13 @@ these scenarios to reproduce specific gameplay.
 
 ### Blocker discovered here, for Task 6
 
+> **Corrected 2026-08-13 — the "pre-existing" call below is wrong.** The crash
+> was introduced by our own `ea29cdc`, and reproducing it at points "before this
+> plan" only ever answered whether *this plan* caused it. `romc1.c` was
+> committed at `d84b0e6`, which decompiles the ROM cleanly — that was the
+> bracket, and bisecting it lands on `ea29cdc`. Fixed; `romc1.c` is regenerated.
+> See the decision log, "The `romc1.c` blocker was ours".
+
 `decoded/rom/decompile.sh` **crashes**:
 
 ```

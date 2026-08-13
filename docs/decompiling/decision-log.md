@@ -1150,6 +1150,11 @@ below exactly as measured, including the one that did not fully resolve.
 
 ### `romc1.c` is still blocked
 
+> **Superseded the same day — see "The `romc1.c` blocker was ours" below.** The
+> "pre-existing and out of scope" call in this section is wrong: the crash was
+> introduced in `ea29cdc`, four days before this entry. It is fixed and
+> `romc1.c` is regenerated.
+
 `decoded/rom/decompile.sh`'s `--irc1` line still crashes apple2tc
 (`CPURegLiveness.h:89: Assertion 'it != funcData_.end()' failed`), reproduced
 again today, byte-identical to the 2026-08-12 report. It is pre-existing and
@@ -1351,3 +1356,95 @@ Whether it has the same root cause as the old frame-472 split, moved by the
 more accurate accounting, or a different cause entirely, is unknown and
 unexamined here — this task was scoped to measure, not to chase it.
 
+
+## 2026-08-13 — The `romc1.c` blocker was ours: a cyclic call graph in liveness
+
+**Scope:** apple2tc · **Status:** fixed, with a correction to two earlier entries
+
+**Decision:** stop treating the `CPURegLiveness` crash as pre-existing
+background and find out when it actually started. It was introduced by our own
+`ea29cdc`, four days earlier.
+
+### The correction first
+
+Both the 2026-08-12 and the 2026-08-13 entries above call this crash
+"pre-existing" and scope it out. That was wrong, and the way it went wrong is
+worth recording: the claim was checked by reproducing the crash at the fork
+point of the session doing the work, which answers *"did today's changes cause
+it?"* — not *"is it ours?"*. The bracket needed for the second question was in
+the tree the whole time: `romc1.c` was committed at `d84b0e6`, so some earlier
+tool could produce it. Building that commit (it configures fine; it needs four
+`-include` flags to compile against a current libstdc++) shows the ROM
+decompiling cleanly at `-O2`, `-O3`, `--ir` and `--irc1`.
+
+`git bisect` over the 86 commits between then and now, driven by hand because
+the failure has two shapes, lands on:
+
+```
+ea29cdc apple2tc: track 6502 stack depth per routine, not per basic block
+```
+
+Its parent `83e6584` is clean; `ea29cdc` fails. It changed one non-test file,
+`routines.cpp`, +67/-20.
+
+### Root cause
+
+`ea29cdc` made `identifySimpleRoutines` accept the PHA-at-entry/PLA-before-RTS
+idiom it had been rejecting, which is correct — but it also meant routines that
+had never been extracted before now were, and some of them call each other in
+cycles. The ROM's HGR line-drawing code is a tangle of shared entry points:
+
+```
+MVLFTRGT ($F465) -> MVUPDWN0 ($F4D3) -> HGLIN ($F53A) -> MVLFTRGT
+```
+
+`CPURegLiveness::calcGenKillMod()` walked functions in `calleeFirstOrder()` — a
+reverse post order of the inverse call graph, which orders callees before
+callers **only when that graph is acyclic** — and relied on the ordering twice:
+
+1. It created each function's `FuncData` as it went, so the edge closing a cycle
+   looked up a callee that had no entry yet and tripped the assert.
+2. It accumulated each function's `modified` set in the same pass, where a
+   not-yet-computed callee contributes an **empty kill set**.
+
+The second was the more dangerous one and was found only while fixing the
+first. `calcLiveness()` seeds `liveOut` from `modified` and thereafter only
+*intersects* it, so a `modified` that starts too small silently licenses `dce()`
+to delete stores that are still live. It produces no crash and no warning.
+
+### Fix
+
+Seed every `FuncData` before any `initBB()` runs, so the lookup no longer
+depends on order; the existing fixpoint loop already handled convergence. Then
+recompute `modified` after that fixpoint, when the kill sets are final.
+
+`tests/callcycle.s` covers both halves. `funcb` writes `X` and `Y`, which
+`funca` never touches, so computing `modified` too early drops the entry
+function's `X` and `Y` stores — which the baseline pins. Mutation-tested: the
+pre-fix binary aborts on it, and a seeding-only build produces output that
+differs from the baseline.
+
+### What regenerating showed
+
+`romc1.c` is regenerated and `decompile.sh`'s `--irc1` line is uncommented.
+Everything else is **byte-identical** — `robotronc1.c`, `snake-bytec1.c`,
+`snake-bytec1-ext.c`, `coverage.txt`, `rom.c`, `bolo.c` all regenerate
+unchanged, which is the expected shape: the fix only changes inputs whose call
+graph has a cycle, and only the ROM's does.
+
+The regenerated `romc1` is checked against the `--simple-c` build over 120
+frames of ROM boot: **all 120 screen hashes identical**, maximum cycle
+divergence 1. That residual is the known block-boundary granularity difference —
+`--irc1` runs `simplifyCFG` and so yields at coarser blocks — not a behavioural
+one. `probe-acceptance.sh` still passes (276,255 probe hits), `verify.sh` is
+4/4, and the decompiler suite is green.
+
+### Left open, deliberately
+
+- The acceptance test still probes `rom-run`. Probing `romc1-run` needs its own
+  site list grepped from `romc1.c` because `--irc1` blocks are coarser. It is a
+  genuine extra check — `romc1` is the only build exercising the
+  `system2-inc.h` trampoline engine — and is future work, not folded in here.
+- At `ea29cdc` itself the ROM **hangs** in `splitRoutines()` rather than
+  asserting. Later commits reworked that code and the hang is not reachable at
+  HEAD, but it was never root-caused, and "fixed" would overstate it.
