@@ -55,6 +55,12 @@ $a6502 stackmerge.s stackmerge.b33 && $apple2tc -O3 --ir stackmerge.b33 > stackm
 diff -q stackmerge.ir stackmerge-test.ir
 rm stackmerge-test.ir stackmerge.b33
 
+# Mutually recursive routines: the call graph has a cycle, so no callee-first
+# order exists for CPURegLiveness to rely on.
+$a6502 callcycle.s callcycle.b33 && $apple2tc -O3 --ir callcycle.b33 > callcycle-test.ir
+diff -q callcycle.ir callcycle-test.ir
+rm callcycle-test.ir callcycle.b33
+
 # --code-at: hand-asserted dynamic branch edges. Two baselines, so this pins
 # down what the option changes rather than merely that it runs -- without the
 # edges neither continuation in codeat.s is reachable at all.

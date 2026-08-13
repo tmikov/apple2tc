@@ -15,7 +15,9 @@
 #include <deque>
 
 /// Return reverse post order of the inverse call graph.
-/// Callees appear topologically sorted before callers.
+/// Callees appear topologically sorted before callers -- but only where the
+/// call graph is acyclic. Mutually recursive routines have no such order, so
+/// this is a useful visit order, not an invariant anything may rely on.
 static std::vector<Function *> calleeFirstOrder(Module *mod, const CallGraph &cg) {
   auto order = genPostOrder<Function>(
       VisitUnreachable::All, mod->functions(), nullptr, InverseCallGraphTraits(cg));
@@ -138,6 +140,11 @@ void CPURegLiveness::calcGenKillMod() {
       fprintf(stderr, "  %s\n", funcName(func).c_str());
   }
 
+  // Every function needs its FuncData before any initBB() runs, because a Call
+  // looks up its callee's sets. `order` puts callees first, but only a DAG can
+  // be topologically sorted, and the call graph need not be one: routines
+  // extracted from a tangle of shared ROM entry points call each other in
+  // cycles. Seeding up front makes the lookup independent of the order.
   for (auto *func : order) {
     FuncData &fdata = funcData_[func];
     if (func->isExternal()) {
@@ -146,13 +153,14 @@ void CPURegLiveness::calcGenKillMod() {
       fdata.sets.gen = LivenessSets::kAll;
       fdata.sets.kill = 0;
       fdata.modified = LivenessSets::kAll;
+    }
+  }
+
+  for (auto *func : order) {
+    if (func->isExternal())
       continue;
-    }
-    for (auto &rBB : func->basicBlocks()) {
-      auto *bb = &rBB;
-      initBB(bb);
-      fdata.modified |= bbSets_[bb].kill;
-    }
+    for (auto &rBB : func->basicBlocks())
+      initBB(&rBB);
     calcGenKill(func);
   }
 
@@ -173,6 +181,20 @@ void CPURegLiveness::calcGenKillMod() {
       changed |= calcGenKill(func);
     }
   } while (changed);
+
+  // Only now are the block kill sets final. Along a cycle the first pass sees a
+  // callee that has not been computed yet and contributes an empty kill, so
+  // accumulating `modified` there would under-approximate it -- and since
+  // calcLiveness() seeds liveOut from `modified` and then only ever intersects
+  // it, too small a value here silently drops registers that are still live.
+  for (auto *func : order) {
+    if (func->isExternal())
+      continue;
+    FuncData &fdata = funcData_[func];
+    fdata.modified = 0;
+    for (auto &rBB : func->basicBlocks())
+      fdata.modified |= bbSets_[&rBB].kill;
+  }
 
   if (mod_->getContext()->getVerbosity() >= 1)
     fprintf(stderr, "%u gen/kill functions recalced, %u iterations\n", funcCount, iter);
