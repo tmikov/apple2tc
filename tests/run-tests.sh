@@ -456,6 +456,8 @@ expect_probe_reject "two --probe= scripts" "only one probe script may be loaded"
   --probe=probe/empty.probe --probe=probe/empty.probe --probe-dump
 expect_probe_reject "an unwritable --probe-out=" "cannot open probe output" \
   --probe=probe/empty.probe --probe-out=probe-tmp/nodir/out.txt
+expect_probe_reject "--record-keys with no probe script" "--record-keys requires --probe=" \
+  --record-keys=probe-tmp/rec.txt
 
 # --- Probes: execution ------------------------------------------------------
 #
@@ -522,6 +524,27 @@ $a2emu --headless --frames=40 --probe=probe/hello.probe \
 if ! diff -q probe-tmp/fe-run.txt probe-tmp/fe-emu.txt > /dev/null; then
   echo "FAIL: a2emu and a2run disagree on a probe report" >&2
   diff probe-tmp/fe-run.txt probe-tmp/fe-emu.txt | head -5 >&2
+  exit 1
+fi
+
+# Recording: the same ROM boot, with keys arriving from --kbd-file and being
+# stamped on a probe counter rather than on cycles. Two runs must produce
+# byte-identical files -- a recording nobody has shown to be deterministic is
+# worse than none -- and every stamp must be a counter value, so far below any
+# plausible cycle count that a cycle-stamped file could not be mistaken for it.
+printf 'A' > probe-tmp/one.kbd
+$a2run --frames=10 --probe=probe/reckeys.probe --kbd-file=probe-tmp/one.kbd \
+  --record-keys=probe-tmp/rec-a.txt --probe-out=/dev/null > /dev/null
+$a2run --frames=10 --probe=probe/reckeys.probe --kbd-file=probe-tmp/one.kbd \
+  --record-keys=probe-tmp/rec-b.txt --probe-out=/dev/null > /dev/null
+if ! diff -q probe-tmp/rec-a.txt probe-tmp/rec-b.txt > /dev/null; then
+  echo "FAIL: --record-keys is not deterministic" >&2
+  diff probe-tmp/rec-a.txt probe-tmp/rec-b.txt >&2
+  exit 1
+fi
+if ! grep -qE '^[0-9]+ 65$' probe-tmp/rec-a.txt; then
+  echo "FAIL: --record-keys did not record the 'A' that was typed" >&2
+  cat probe-tmp/rec-a.txt >&2
   exit 1
 fi
 

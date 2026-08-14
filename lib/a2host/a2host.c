@@ -52,6 +52,21 @@ static const char *probe_out_path_ = NULL;
 static unsigned clock_freq_ = A2_CLOCK_FREQ;
 /// If true, dump key presses with cycle stamps.
 static bool trace_keys_ = false;
+/// If set, path from --probe=, the script whose coordinate --record-keys
+/// stamps recorded keys with. Recorded separately from probe_loaded_ because
+/// the header comment below needs the path itself, not just whether one was
+/// given.
+static const char *probe_script_path_ = NULL;
+/// If set, a file to write probe-stamped key presses to.
+static FILE *record_keys_file_ = NULL;
+/// Keys the host has taken but not yet handed to the machine. Non-empty only
+/// while recording: `record` is what releases them, so that the moment a key
+/// reaches the program is a program-defined point and not a cycle count.
+/// Sized to match a2io's own key queue -- a human cannot outrun one probe
+/// firing, and a full queue drops the key loudly rather than silently.
+enum { PENDING_KEYS_MAX = 16 };
+static uint8_t pending_keys_[PENDING_KEYS_MAX];
+static unsigned pending_keys_count_ = 0;
 /// If set, write a per-frame hash of video state to this file.
 static FILE *hash_file_ = NULL;
 /// If non-zero, quit after this many frames.
@@ -206,13 +221,27 @@ void error_handler(uint16_t pc) {
 }
 
 static void push_key(uint8_t ch) {
+  if (record_keys_file_) {
+    // Held until the next `record`, not pushed now: see probe_record_keys.
+    if (pending_keys_count_ == PENDING_KEYS_MAX) {
+      fprintf(
+          stderr,
+          "FATAL: more than %u keys pending at one probe site\n",
+          (unsigned)PENDING_KEYS_MAX);
+      exit(2);
+    }
+    pending_keys_[pending_keys_count_++] = ch;
+    return;
+  }
   a2_io_push_key(&io_, ch);
   if (trace_keys_)
     printf("%u %u\n", get_cycles(), ch);
 }
 
 static void push_key_if_empty(uint8_t ch) {
-  if (a2_io_keys_count(&io_) == 0)
+  // Pending keys count as present, or a burst typed between two probe firings
+  // would collapse to its first key while recording and not while replaying.
+  if (a2_io_keys_count(&io_) == 0 && pending_keys_count_ == 0)
     push_key(ch);
 }
 
@@ -276,10 +305,12 @@ void probe_deliver_keys(uint32_t now) {
 }
 
 void probe_record_keys(uint32_t now) {
-  // Body added when --record-keys exists; see the recording task in
-  // docs/plans/2026-08-14-probe-stamped-keys-plan.md. Until then `record` is
-  // a well-formed statement that records nothing.
-  (void)now;
+  for (unsigned i = 0; i != pending_keys_count_; ++i) {
+    a2_io_push_key(&io_, pending_keys_[i]);
+    if (record_keys_file_)
+      fprintf(record_keys_file_, "%u %u\n", now, pending_keys_[i]);
+  }
+  pending_keys_count_ = 0;
 }
 
 static void load_key_file(const char *path) {
@@ -301,8 +332,26 @@ static void load_key_file(const char *path) {
   key_press_count_ = 0;
   next_key_press_ = 0;
 
+  // `#` lines are skipped rather than fed to fscanf, so a file --record-keys
+  // wrote (one leading comment naming the recording's coordinate) can be read
+  // back as a --key-file=. A line that is neither blank-to-EOF nor a valid
+  // "<stamp> <key>" pair is still fatal: silently stopping short would replay
+  // a truncated key list without any indication that something was skipped.
   unsigned cycles, ch;
-  while ((res = fscanf(f, "%u %u\n", &cycles, &ch)) == 2) {
+  for (;;) {
+    int c = getc(f);
+    while (c == '#') {
+      while ((c = getc(f)) != EOF && c != '\n') {
+      }
+      c = getc(f);
+    }
+    if (c == EOF)
+      break;
+    ungetc(c, f);
+    if ((res = fscanf(f, "%u %u\n", &cycles, &ch)) != 2) {
+      fprintf(stderr, "Error parsing key file\n");
+      exit(2);
+    }
     if (key_press_count_ == capacity) {
       if (capacity > UINT_MAX / 2) {
         fprintf(stderr, "Too many keys\n");
@@ -316,10 +365,6 @@ static void load_key_file(const char *path) {
     key_presses_[key_press_count_].cycles = cycles;
     key_presses_[key_press_count_].ch = (uint8_t)ch;
     ++key_press_count_;
-  }
-  if (res != EOF) {
-    fprintf(stderr, "Error parsing key file\n");
-    exit(2);
   }
   fprintf(stderr, "Loaded %u keys\n", key_press_count_);
 
@@ -452,6 +497,10 @@ void a2host_shutdown(void) {
   // itself -- see probe_report_unfired's comment) is where they belong.
   probe_report_unfired();
   probe_close_output();
+  if (record_keys_file_) {
+    fclose(record_keys_file_);
+    record_keys_file_ = NULL;
+  }
   shutdown_emulated();
   a2_io_done(&io_);
 }
@@ -473,6 +522,7 @@ static void print_help(void) {
   printf(" --trace          Dump state at branch targets\n");
   printf(" --trace-mem      Dump all memory writes\n");
   printf(" --trace-keys     Dump key presses with cycle stamps\n");
+  printf(" --record-keys=p  Record keys pressed, stamped at a probe's `record`\n");
   printf(" --hash-frames=p  Write per-frame video state hashes to the given file\n");
   printf(" --frames=n       Quit after simulating n frames\n");
   printf(" --headless       Run with no window. Requires --frames\n");
@@ -518,6 +568,14 @@ void a2host_parse_args(int argc, char *argv[]) {
       trace_keys_ = true;
       continue;
     }
+    if (strncmp(arg, "--record-keys=", 14) == 0) {
+      const char *path = arg + 14;
+      if ((record_keys_file_ = fopen(path, "wt")) == NULL) {
+        perror(path);
+        exit(2);
+      }
+      continue;
+    }
     if (strcmp(arg, "--debug-bt") == 0) {
       g_debug |= DebugCountBB;
       continue;
@@ -559,6 +617,7 @@ void a2host_parse_args(int argc, char *argv[]) {
     if (strncmp(arg, "--probe=", 8) == 0) {
       probe_load_script(arg + 8);
       probe_loaded_ = true;
+      probe_script_path_ = arg + 8;
       continue;
     }
     if (strncmp(arg, "--probe-out=", 12) == 0) {
@@ -592,6 +651,19 @@ void a2host_parse_args(int argc, char *argv[]) {
     probe_fatal("--probe-dump requires --probe=<script>");
   if (probe_out_path_ && !probe_loaded_)
     probe_fatal("--probe-out requires --probe=<script>");
+  // Same reasoning: --record-keys may appear before --probe= on the command
+  // line, so this can't be checked in the --record-keys= handler above.
+  // Without it, recording would silently produce a file of zeros -- nothing
+  // ever calls `record`, so every pending key stays pending and no line is
+  // written, which looks exactly like "no keys were pressed."
+  if (record_keys_file_ && !probe_script_path_)
+    probe_fatal("--record-keys requires --probe= to define the coordinate");
+  if (record_keys_file_)
+    fprintf(
+        record_keys_file_,
+        "# probe-stamped keys; coordinate defined by %s\n",
+        probe_script_path_ ? probe_script_path_ : "(no probe script)");
+
   // Before opening --probe-out=: a dump exits immediately and never runs, so
   // it must not truncate an existing report on its way out.
   if (probe_dump_) {

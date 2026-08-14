@@ -1,0 +1,11 @@
+# The recording coordinate for the --record-keys test: one counter, advanced
+# at the ROM's keyboard-read loop, which is where the program asks for input.
+# $FD1B is a block head; see the acceptance test for why that matters.
+counter n
+
+probe kb() {
+  inc n
+  record n
+}
+
+install kb at $FD1B
