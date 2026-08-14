@@ -235,6 +235,16 @@ static void push_key(uint8_t ch) {
     return;
   }
   a2_io_push_key(&io_, ch);
+  // Every key source funnels through here -- live typing, --kbd-file, and
+  // (since drain_key_presses()/probe_deliver_keys() were routed through
+  // push_key() for the recording fix above) --key-file= as well -- so
+  // --trace-keys now dumps all of them, not just the first two. That is
+  // correct for what the flag promises ("dump key presses with cycle
+  // stamps"), but it has one hazard worth knowing: --trace-keys combined
+  // with --key-file= re-prints the very cycle stamps that file already
+  // holds, so its output is a replay of an existing recording, not a fresh
+  // capture -- useful for confirming a --key-file= plays back as expected,
+  // not for producing a new one.
   if (trace_keys_)
     printf("%u %u\n", get_cycles(), ch);
 }

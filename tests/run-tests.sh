@@ -592,6 +592,21 @@ if ! grep -qE '^[0-9]+ 65$' probe-tmp/rec-kf.txt || ! grep -qE '^[0-9]+ 66$' pro
   exit 1
 fi
 
+# --trace-keys must fire for every key source, --key-file= included, now that
+# push_key() is the single point all of them funnel through (see its
+# comment). No --probe= or --record-keys= here -- this pins --trace-keys on
+# its own. Pinning the exact count matters: --trace-keys printing nothing for
+# --key-file=-sourced keys is the pre-fix behaviour, and a test that only
+# checked "at least one line" would pass on either.
+printf '10 65\n20 66\n30 67\n' > probe-tmp/trace.keys
+$a2run --frames=3 --trace-keys --key-file=probe-tmp/trace.keys > probe-tmp/trace.out
+tracecount=$(grep -cE '^[0-9]+ (65|66|67)$' probe-tmp/trace.out || true)
+if [ "$tracecount" -ne 3 ]; then
+  echo "FAIL: --trace-keys printed $tracecount lines for a 3-key --key-file=, expected 3" >&2
+  cat probe-tmp/trace.out >&2
+  exit 1
+fi
+
 rm -rf probe-tmp
 
 echo "Success!"
