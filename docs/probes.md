@@ -1,20 +1,23 @@
 # Probe language reference
 
 A probe script is a small program, compiled by `a2host` (so every front end —
-`a2run`, `a2emu`, and any generated decompiled program, once phase 3 exists —
-gets the same feature) into bytecode that runs at chosen addresses in the
+`a2run`, `a2emu`, and every generated decompiled program — gets the same
+feature) into bytecode that runs at chosen addresses in the
 emulated 6502 program. The rationale — why probes exist, why they are programs
 rather than records, why initializers work the way they do — is in
 `docs/plans/2026-08-11-probes-design.md`. This document is the *what*: every
 construct in the language, checked against the compiler in `lib/a2host/`
 (`probe_lex.c`, `probe_parse.c`, `probe.c`, `probe_internal.h`).
 
-**Status.** Only the compiler exists. `--probe=path --probe-dump` compiles a
-script and prints its bytecode; that is the entire observable behavior today.
-`probe_dispatch()` is a stub, nothing calls it, and `key`/`stop`/`printf`
-execute nothing yet — see [Execution status](#execution-status) at the end.
-Everything else in this document — parsing, name resolution, diagnostics, the
-dump format — is real and tested (`tests/run-tests.sh`, `tests/probe/`).
+**Status.** The compiler and the VM both exist, in every front end. Scripts
+compile (`--probe=path --probe-dump` prints the bytecode), install, run, and
+write reports (`--probe-out=path`); `key`, `stop` and `printf` all execute.
+Everything in this document is real and tested (`tests/run-tests.sh`,
+`tests/probe/`, and `decoded/rom/probe-acceptance.sh` for the cross-engine
+claim). What does *not* exist yet is phase 3 — apple2tc emitting placeholder
+`PROBE_x(...)` sites into the generated C, so that a probe can read C
+variables rather than machine state. See
+[Execution status](#execution-status) at the end.
 
 ## The constraint that will bite
 
@@ -497,10 +500,10 @@ source (left-to-right) order — the left/first operand ends up deepest on the
 stack, the right/second operand on top — and the opcode pops the top (right)
 operand first. `opcode_t` in `probe_internal.h` is the definitive listing,
 with the same pop order spelled out per opcode as a comment; if this table and
-that header ever disagree, the header is the source of truth. A VM that
-popped one of these backwards would still pass every test in
-`tests/run-tests.sh` today, since nothing there executes bytecode — see
-[Execution status](#execution-status).
+that header ever disagree, the header is the source of truth. `probe/arith`
+executes every one of them with operands chosen so that a reversed pop is
+visibly wrong, and `probe/mem` does the same for `hash`; both diff against a
+baseline in `tests/run-tests.sh`.
 
 **Parameter frame.** A probe's `nparams` parameter initializers (running from
 `init` to `body` in the dump format above) each leave exactly one value on the
@@ -558,12 +561,25 @@ loaded`, and file-open failures (`cannot open probe script '<path>':
 
 ## Execution status
 
-`key` and `stop` only make sense once something is running the bytecode.
-Today: `key <expr>` will, once implemented, deliver every keystroke recorded
-with a stamp ≤ `<expr>` into the keyboard queue; `stop` will end the run
-cleanly, the same way on both the interpreter and a generated program.
-Neither executes anything today — `probe_dispatch()` is an empty stub, and
-nothing calls it. `--probe-out=` compiles and is accepted, but nothing is
-written to the path yet, because nothing runs. This document covers
-everything that exists to check against; `docs/plans/2026-08-11-probes-design.md`
-covers the execution model these opcodes are designed for.
+Everything in this document executes. `probe_dispatch()` is called from the
+interpreter's per-instruction debug callback (`lib/engine6502/engine6502.cpp`)
+and from the `CYCLES` macro in both generated-code headers; `key <expr>`
+delivers every keystroke recorded with a stamp ≤ `<expr>` into the keyboard
+queue; `stop` ends the run cleanly and identically on the interpreter and on a
+generated program; `--probe-out=` writes the report.
+
+Two things are still phase 2/3 of
+`docs/plans/2026-08-11-probes-design.md` rather than reality:
+
+- **Key stamps are still cycle-denominated.** `--trace-keys` writes cycle
+  stamps, so `key` compares against a coordinate the two engines only
+  approximately share. Counter-stamped recording is the fix.
+- **apple2tc does not emit probe sites.** A probe can only be installed at an
+  address, so it observes machine state. The `PROBE_x(...)` placeholders that
+  would let it observe the generated C's own variables do not exist yet.
+
+One property of the generated side is worth restating here, because it is not
+a limitation of the language: `CYCLES_EDGE` deliberately does *not* dispatch.
+It carries the address of a branch that the enclosing block already reported,
+so a probe there would fire twice per execution on the generated side and once
+in the interpreter — see `AddEdgeCycles` in `tools/apple2tc/ir/Values.def`.

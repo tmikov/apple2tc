@@ -4,12 +4,13 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
-**Last commit:** `4ffb88a`. 78 commits on `snake-byte`, nothing pushed, tree
-clean. The most recent 28 are two pieces of infrastructure that did not touch
-the game at all: the **host/engine split** (2026-08-11 log entry) and the
-**probe compiler** (2026-08-12). Both are summarised under "Host, engines and
-probes" below; read that before assuming anything about how verification runs,
-because it changed.
+**Last commit:** `bf40028`. 102 commits on `snake-byte`, nothing pushed, tree
+clean. The most recent 52 are infrastructure that did not touch the game at
+all: the **host/engine split** (2026-08-11 log entry), the **probe compiler and
+VM** (2026-08-12, 2026-08-13), **accurate cycle costs** in both engines
+(2026-08-13), and two apple2tc bug fixes (2026-08-13, 2026-08-14). All are
+summarised under "Host, engines and probes" below; read that before assuming
+anything about how verification runs, because it changed.
 
 ---
 
@@ -131,17 +132,23 @@ link-time subsystem property**. So:
    everything but the window, `a2emu --headless` must byte-match `a2run`.
 
 **Probes** (`lib/a2host/probe*.c`, `include/apple2tc/probe.h`) are a compiler
-only — nothing executes. A probe is a small program bound to install sites, so
-the two engines can be compared at points *the program* defines rather than at
-moments the host defines. Read `docs/probes.md` for the language and the
-2026-08-12 log entry for why. Options: `--probe=`, `--probe-out=`,
-`--probe-dump`.
+*and* a VM, running in every front end and in every generated program. A probe
+is a small program bound to install sites, so the two engines can be compared
+at points *the program* defines rather than at moments the host defines. Read
+`docs/probes.md` for the language and the 2026-08-12 log entry for why.
+Options: `--probe=`, `--probe-out=`, `--probe-dump`.
+
+`decoded/rom/probe-acceptance.sh <build-dir>` is the cross-engine gate: the
+interpreter against both generated back ends over 120 frames of ROM boot,
+276,255 probe hits each, byte-identical. Run it alongside `verify.sh`.
 
 **The hazard, stated once here because it is easy to lose:** `CYCLES` is emitted
 per basic block, not per instruction, so a probe installed at a non-block-head
 address fires under `a2emu`/`a2run` and *does not exist* in a generated program
 — and the report still reads as agreement. Cross-engine comparison must install
-from `@"file"`, using a block-head list.
+from `@"file"`, using a block-head list. The list is grepped out of the
+generated C, where `CYCLES(0x` names block heads and `CYCLES_EDGE(0x` names
+taken-branch edges, which deliberately do not dispatch.
 
 ### Tooling (`tools/id/`)
 
@@ -306,11 +313,15 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
    host/engine split design was never started; the option does not exist
    anywhere in the tree. Phase 1b is still blocked on it, and whoever picks it
    up is designing it from scratch, not using something already built.
-5. **The probe VM** — part 2 of the probe plan. `docs/plans/2026-08-11-probes-plan-1-compiler.md`
-   ends with a self-review naming exactly what part 2 inherits, including that
-   `probe_installed()` cannot serve as the inline test `CYCLES` needs. First
-   real use is the frame-472 attribution, which is a dead end today because
-   "frame 472" is a host-side count with no meaning inside either program.
+5. **Frame 623** — the permanent interpreter-vs-generated snake-byte
+   divergence. The probe VM is built and the cycle models now agree, so the old
+   frame-472 split is gone and this one is what is left. It has a working
+   instrument pointed at it for the first time; nobody has looked yet.
+
+   Probe phases 2 and 3 are also unbuilt: `--trace-keys` still writes
+   *cycle* stamps rather than counter stamps, and apple2tc does not yet emit
+   `PROBE_x(...)` placeholder sites, so a probe can observe machine state but
+   not the generated C's own variables.
 
 **No longer deferred:** the headless-vs-windowed trace comparison was deferred
 for want of a display. `a2run` removes the need for one, and the comparison is
@@ -342,6 +353,7 @@ Mistakes already made here. The log has the full accounts.
 | Comparing register traces across engines | `CPURegLiveness` and `dce` drop stores to dead registers by design, so the generated code does not maintain `Y` or the flags where nothing reads them. Traces diverge on line 2. `--compat` makes the format diffable, not the content. |
 | A rejection test that greps for `FATAL` | Twice during the probe work a test passed while covering nothing, because a *different* check fired first and satisfied the grep. Assert the specific message, and prove the test can fail by deleting the check it covers and watching the suite go red. |
 | A probe that produces no output | Says nothing about agreement. A probe on a non-block-head address fires in the interpreter and does not exist in the generated program; the report then reads as agreement while covering less than you think. |
+| Every `CYCLES`-shaped call site is a program location | It is not. The taken-branch penalty is charged on the *edge*, in a block carrying the branch's address that the program is never actually *at* — so it must not trace or dispatch probes, or one execution of that branch gets reported twice. Hence `AddEdgeCycles`/`CYCLES_EDGE`. 698 ROM addresses are edges and 121 of them are also real block heads, so the two are not distinguishable by address. |
 
 ---
 

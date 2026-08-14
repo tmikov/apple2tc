@@ -1445,6 +1445,107 @@ one. `probe-acceptance.sh` still passes (276,255 probe hits), `verify.sh` is
   site list grepped from `romc1.c` because `--irc1` blocks are coarser. It is a
   genuine extra check — `romc1` is the only build exercising the
   `system2-inc.h` trampoline engine — and is future work, not folded in here.
+
+  > **Done the next day — see "The acceptance test now covers `--irc1`" below.**
+  > "Because `--irc1` blocks are coarser" was wrong, incidentally: the two back
+  > ends emit block heads at exactly the same 1,718 addresses, which the
+  > 2026-08-12 entry above had already measured.
 - At `ea29cdc` itself the ROM **hangs** in `splitRoutines()` rather than
   asserting. Later commits reworked that code and the hang is not reachable at
   HEAD, but it was never root-caused, and "fixed" would overstate it.
+
+
+## 2026-08-14 — The acceptance test now covers `--irc1`, and found a probe firing on an edge
+
+**Scope:** apple2tc · **Status:** fixed
+
+**Decision:** close the last gap in Question 1's evidence by pointing the probe
+acceptance test at `romc1-run` as well as `rom-run`. Doing so exposed a real
+defect: the taken-branch trampoline was dispatching probes.
+
+### What the gap was
+
+`romc1` is the only build compiled against `system2-inc.h`, and `--irc1` is the
+only back end that emits the taken-branch `+1` as a real trampoline block
+rather than folding it into a dispatch ternary. Testing `rom.c` alone left both
+— the per-flag liveness DCE and `GenIR`'s trampoline mechanism — with no
+cross-engine coverage at all, only same-tool `.ir` baselines.
+
+### The defect
+
+Running `romc1-run` against the existing site list gave 276,256 hits against
+the interpreter's 276,255. One extra line, `FC56`.
+
+`$FC56` appears twice in `romc1.c`: once as a real block (`CYCLES(0xfc56, 2)`)
+and once as the trampoline charging the taken-branch penalty
+(`CYCLES(0xfc56, 1)`). Both spellings end in `probe_dispatch(pc)`, so a single
+execution of that branch was observed twice. The interpreter dispatches once
+per instruction and reports it once.
+
+This is latent at every branch that is also a branch target: **698 distinct
+trampoline addresses in the ROM, 121 of which are also genuine block heads**.
+Boot happens to reach one of the 121.
+
+The same bug was in the tracer, for the same reason and at the same sites.
+
+### The fix: an edge is not a location
+
+The trampoline block carries the branch's address but is not a place the
+program is ever *at* — the branch was already accounted for by the block that
+ends with it. That is a property of the IR, so the IR now says it:
+`AddEdgeCycles` alongside `AddCycles` (`ir/Values.def`), created by
+`GenIR::emitJCond` for both taken-edge charges, printed by `IRC1` as
+`CYCLES_EDGE`, which charges cycles and runs neither `debug_asm` nor
+`probe_dispatch`.
+
+A structural rule would have been wrong. `tests/func.ir` has a case where
+`simplifyCFG` merged the trampoline into its target, leaving `AddEdgeCycles` at
+the head of a block and that block's own `AddCycles` second — so "the first
+`AddCycles` in a block is the block head" does not hold, in either direction.
+
+`CYCLES_EDGE` is defined in both system headers, because `--irc1` output is
+compiled against either (`robotronc1.c` uses `system-inc.h`, `romc1.c` uses
+`system2-inc.h`). The `system2-inc.h` version keeps `s_pc` and the
+`cycles_expired()` yield: dropping the yield would move where the host regains
+control, and this macro is meant to remove the two observation facilities and
+nothing else.
+
+Hand-written decoded C had the same bug — 35 trampolines in
+`decoded/snake-byte/a2rom.c` and 2 in `game.c`, all converted.
+
+### Measurements
+
+- **`romc1-run` now matches the interpreter exactly**: 276,255 probe hits,
+  byte-identical, over 120 frames. `rom-run` is unchanged at the same number.
+- The regenerated `c1` diffs are **only** `CYCLES` → `CYCLES_EDGE` on cost-1
+  charges: 4,023 lines changed across four files, exactly the trampoline counts
+  (895 + 1,438 + 856 + 834). No other generated output moved.
+- The `.ir` baseline diff is 11 lines, every one of them an edge charge.
+- Gates: decompiler suite green · `verify.sh` 4/4 · both back ends pass
+  acceptance · full build clean. Cycle totals are unchanged, which is why
+  `verify.sh`'s frame hashes did not move.
+
+**The two back ends emit block heads at exactly the same 1,718 addresses** —
+`grep`'d independently from `rom.c` and `romc1.c`. The "`--irc1` blocks are
+coarser" claim in the entry above is wrong. The test still derives and keeps a
+list per back end rather than sharing one, so a future `simplifyCFG` change
+shows up as a different site count instead of a spurious failure.
+
+### Mutation tests
+
+- Reverting `CYCLES_EDGE` → `CYCLES` in `romc1.c` and rebuilding: the test
+  fails, exit 1. (It fails partly through the contaminated site list — 2,295
+  addresses instead of 1,718 — since the two spellings are what separates edges
+  from block heads. The pure double-fire is the 276,256-vs-276,255 measurement
+  above, taken before the fix.)
+- Perturbing `tracec1.probe`'s body: the drift check fails. The two probe
+  scripts must stay the same program apart from their site list, or each half
+  stays individually valid while quietly testing something different.
+
+### Left open
+
+- **Frame 623**, the permanent interpreter-vs-generated snake-byte divergence,
+  is still untouched and still unexplained.
+- Nothing now guards against a *new* back end reintroducing the same class of
+  bug by emitting an observation for an edge. The IR says which is which; only
+  this test would catch a back end ignoring it.
