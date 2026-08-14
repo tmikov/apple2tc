@@ -275,6 +275,13 @@ void probe_deliver_keys(uint32_t now) {
   }
 }
 
+void probe_record_keys(uint32_t now) {
+  // Body added when --record-keys exists; see the recording task in
+  // docs/plans/2026-08-14-probe-stamped-keys-plan.md. Until then `record` is
+  // a well-formed statement that records nothing.
+  (void)now;
+}
+
 static void load_key_file(const char *path) {
   if (key_presses_) {
     fprintf(stderr, "Key file already loaded\n");

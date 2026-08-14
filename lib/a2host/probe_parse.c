@@ -583,6 +583,12 @@ static void parse_stmt_inner(parser_t *P) {
     emit(P, OP_KEY);
     return;
   }
+  if (is_kw(P, "record")) {
+    probe_lex_next(&P->lx);
+    parse_expr(P, 1);
+    emit(P, OP_RECORD);
+    return;
+  }
   if (is_kw(P, "inc")) {
     probe_lex_next(&P->lx);
     if (P->lx.tok.kind != TOK_IDENT)
@@ -931,6 +937,7 @@ static const char *const s_reserved[] = {
     "printf",
     "inc",
     "key",
+    "record",
     "stop",
 };
 

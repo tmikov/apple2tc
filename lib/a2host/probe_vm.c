@@ -413,6 +413,11 @@ void probe_vm_run(const script_t *sc, uint32_t ip) {
       probe_deliver_keys(vm_pop());
       break;
 
+    case OP_RECORD:
+      // Host state again -- see probe_record_keys in probe_internal.h.
+      probe_record_keys(vm_pop());
+      break;
+
     case OP_STOP:
       // Cannot longjmp or return out of here: for the interpreter this call
       // is nested inside Emu6502::runFor's instruction loop, and for a

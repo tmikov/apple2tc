@@ -192,6 +192,7 @@ probe_dump_test empty
 probe_dump_test expr
 probe_dump_test stmt
 probe_dump_test install
+probe_dump_test record
 
 # Assert that a2run rejects something, with the specific diagnostic we expect.
 # Matching the exact message rather than just "FATAL" is deliberate: an earlier
@@ -324,6 +325,8 @@ expect_bad_script "a reserved name as a parameter" "'if' is a reserved name" \
   'probe p(if = 1) { }'
 expect_bad_script "a reserved name as a probe" "'stop' is a reserved name" \
   'probe stop() { }'
+expect_bad_script "a reserved name as a counter, 'record'" "'record' is a reserved name" \
+  'counter record'
 expect_bad_script "a counter declared after a probe resolved it as a register" \
   "counter 'x' is declared after a probe resolved 'x' as a register" \
   'probe p() { printf("%u\n", x) }

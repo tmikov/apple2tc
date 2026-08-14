@@ -147,6 +147,7 @@ typedef enum {
   // from argc-1 down to 0.
   OP_PRINTF,
   OP_KEY, // pops stamp
+  OP_RECORD, // pops stamp
   OP_STOP,
 } opcode_t;
 
@@ -361,3 +362,13 @@ bool probe_stop_requested(void);
 /// existing .keys file replayed through `key` is being reinterpreted rather
 /// than replayed.
 void probe_deliver_keys(uint32_t now);
+
+/// `record`'s half of the same split as probe_deliver_keys above: deliver
+/// every key the host has pending *now*, and write each one to the recording
+/// file stamped with \p now. Defined in a2host.c beside the queue it drains.
+///
+/// Delivery and recording are one operation on purpose. If the host pushed
+/// keys the moment they arrived and this only wrote the stamps, the recorded
+/// session would have used unquantised timing while its replay uses
+/// quantised, and the two would not be the same run.
+void probe_record_keys(uint32_t now);

@@ -1,0 +1,12 @@
+# `record` compiles and takes an arbitrary expression, like `key`. This is a
+# dump test: it asserts the bytecode, not any recording, because the host
+# side does not exist yet.
+counter n
+
+probe r() {
+  inc n
+  record n
+  record n + 1
+}
+
+install r at $FA62

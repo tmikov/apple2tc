@@ -345,6 +345,8 @@ const char *opname(opcode_t op) {
     return "PRINTF";
   case OP_KEY:
     return "KEY";
+  case OP_RECORD:
+    return "RECORD";
   case OP_STOP:
     return "STOP";
   }
@@ -395,6 +397,7 @@ static bool has_operand(opcode_t op) {
   case OP_NEG:
   case OP_PRINTF:
   case OP_KEY:
+  case OP_RECORD:
   case OP_STOP:
     return false;
   }

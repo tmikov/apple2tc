@@ -1,0 +1,18 @@
+counters: 1
+  0 n = 0
+formats: 0
+probes: 1
+  0 r() init=0 body=0
+        0: LOAD_COUNTER 0
+        2: PUSH_LIT 1
+        4: ADD
+        5: STORE_COUNTER 0
+        7: LOAD_COUNTER 0
+        9: RECORD
+       10: LOAD_COUNTER 0
+       12: PUSH_LIT 1
+       14: ADD
+       15: RECORD
+       16: END
+sites: 1
+  $FA62 r
