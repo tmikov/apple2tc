@@ -591,9 +591,20 @@ BasicBlock *IdentifySimpleRoutines::makeCallBlock(
 
   // Record that the new block belongs to all routines that owned the original
   // block.
+  //
+  // The owners are snapshotted first because the insertion below goes into the
+  // very map being walked. blocks_ is keyed by pointer, and inserting does not
+  // invalidate iterators -- which is what made walking it look safe -- but
+  // `range.second` is the node at upper_bound, and a callBlock that happens to
+  // sort between this key and that node is spliced *inside* the half-open
+  // range. The walk then reaches the node it just added, inserts another, and
+  // never terminates. Nothing constrains where the allocator puts callBlock, so
+  // this presented as a hang on some inputs and not others.
+  std::vector<Candidate *> owners{};
   auto range = blocks_.equal_range(ctxInst->getBasicBlock());
-  for (auto it = range.first; it != range.second; ++it) {
-    Candidate *bCand = it->second;
+  for (auto it = range.first; it != range.second; ++it)
+    owners.push_back(it->second);
+  for (Candidate *bCand : owners) {
     bCand->blocks.insert(callBlock);
     blocks_.emplace(callBlock, bCand);
   }
