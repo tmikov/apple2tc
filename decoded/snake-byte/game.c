@@ -79,7 +79,7 @@ void game_cout_hook(uint16_t ret_addr) {
   if (glyph >= 0x20) {
     // $664F BCS -- the branch itself, taken here (this is the taken arm;
     // glyph < 0x20 skips the block below without paying the extra cycle).
-    /*$664F*/ CYCLES(0x664f, 1);
+    /*$664F*/ CYCLES_EDGE(0x664f, 1);
     /*$6655*/ CYCLES(0x6655, 82);
 
     // The original's SBC/ADC pairs honour the D flag. COUT is never reached in
@@ -124,7 +124,7 @@ void game_cout_hook(uint16_t ret_addr) {
       // last (the loop test is `INX; CPX #8; BNE $668B`; row==7 is the one
       // iteration where it falls through instead of looping).
       if (row != 7) {
-        /*$669D*/ CYCLES(0x669d, 1);
+        /*$669D*/ CYCLES_EDGE(0x669d, 1);
       }
     }
 

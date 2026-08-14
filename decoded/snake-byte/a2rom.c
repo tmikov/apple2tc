@@ -115,7 +115,7 @@ bb_5:
 bb_6:
   // $F852 BCC -- the branch itself, taken here (not modelled by bb_1's own
   // cost, which is the not-taken total; see the design doc on edge costs).
-  /*$F852*/ CYCLES(0xf852, 1);
+  /*$F852*/ CYCLES_EDGE(0xf852, 1);
             goto bb_5;
 }
 
@@ -201,7 +201,7 @@ bb_5:
             if (ret_addr) pop16(); return;
 bb_6:
   // $F808 BCC -- the branch itself, taken here.
-  /*$F808*/ CYCLES(0xf808, 1);
+  /*$F808*/ CYCLES_EDGE(0xf808, 1);
             goto bb_5;
 }
 
@@ -268,15 +268,15 @@ bb_7:
             if (ret_addr) pop16(); return;
 bb_11:
   // $F81E BCS -- the branch itself, taken here.
-  /*$F81E*/ CYCLES(0xf81e, 1);
+  /*$F81E*/ CYCLES_EDGE(0xf81e, 1);
             goto bb_7;
 bb_12:
   // $F824 BCC -- the branch itself, taken here.
-  /*$F824*/ CYCLES(0xf824, 1);
+  /*$F824*/ CYCLES_EDGE(0xf824, 1);
             goto bb_1;
 bb_13:
   // $F82F BCC -- the branch itself, taken here.
-  /*$F82F*/ CYCLES(0xf82f, 1);
+  /*$F82F*/ CYCLES_EDGE(0xf82f, 1);
             goto bb_3;
 }
 
@@ -352,7 +352,7 @@ bb_2:
   /*$F881*/ if (ret_addr) pop16(); return;
 bb_3:
   // $F879 BCC -- the branch itself, taken here.
-  /*$F879*/ CYCLES(0xf879, 1);
+  /*$F879*/ CYCLES_EDGE(0xf879, 1);
             goto bb_2;
 }
 
@@ -379,7 +379,7 @@ bb_0:
             // the branch instruction still executes and still pays its own
             // cost every time. The decompiler doesn't do cross-instruction
             // flag proofs either, so it keeps charging this the same way.
-  /*$FC60*/ CYCLES(0xfc60, 1);
+  /*$FC60*/ CYCLES_EDGE(0xfc60, 1);
             goto bb_2;
 bb_1:
   /*$FC22*/ CYCLES(0xfc22, 3);
@@ -418,12 +418,12 @@ bb_6:
               goto bb_0;
 bb_7:
   // $FC54 BCC -- the branch itself, taken here.
-  /*$FC54*/ CYCLES(0xfc54, 1);
+  /*$FC54*/ CYCLES_EDGE(0xfc54, 1);
             goto bb_2;
 bb_8:
   // $FC56 BCS -- the branch itself, same address as bb_6's own anchor
   // because this is a singleton one-instruction block.
-  /*$FC56*/ CYCLES(0xfc56, 1);
+  /*$FC56*/ CYCLES_EDGE(0xfc56, 1);
             goto bb_1;
 }
 
@@ -522,7 +522,7 @@ bb_9:
             // $FC9A BCS -- taken here (falls into the trampoline charge
             // below before continuing into bb_12; the not-taken arm above
             // jumps straight to bb_11 without it).
-  /*$FC9A*/ CYCLES(0xfc9a, 1);
+  /*$FC9A*/ CYCLES_EDGE(0xfc9a, 1);
 bb_12:
   /*$FC22*/ CYCLES(0xfc22, 3);
             s_a = ram_peek(0x0025);
@@ -530,7 +530,7 @@ bb_12:
             if (ret_addr) pop16(); return;
 bb_10:
   // $FC6C BCC -- the branch itself, taken here.
-  /*$FC6C*/ CYCLES(0xfc6c, 1);
+  /*$FC6C*/ CYCLES_EDGE(0xfc6c, 1);
             FUNC_VTABZ(0x0000);
             branchTarget = true;
             if (ret_addr) pop16(); return;
@@ -540,15 +540,15 @@ bb_11:
             if (ret_addr) pop16(); return;
 bb_13:
   // $FC86 BCS -- the branch itself, taken here.
-  /*$FC86*/ CYCLES(0xfc86, 1);
+  /*$FC86*/ CYCLES_EDGE(0xfc86, 1);
             goto bb_9;
 bb_14:
   // $FC91 BPL -- the branch itself, taken here (loop back).
-  /*$FC91*/ CYCLES(0xfc91, 1);
+  /*$FC91*/ CYCLES_EDGE(0xfc91, 1);
             goto bb_7;
 bb_15:
   // $FC93 BNE -- the branch itself, taken here (outer loop back).
-  /*$FC93*/ CYCLES(0xfc93, 1);
+  /*$FC93*/ CYCLES_EDGE(0xfc93, 1);
             goto bb_2;
 }
 
@@ -638,7 +638,7 @@ bb_7:
             // $FBFF BCS -- taken here (falls into the trampoline charge
             // below before continuing into bb_8; the not-taken arm above
             // jumps straight to bb_10 without it).
-  /*$FBFF*/ CYCLES(0xfbff, 1);
+  /*$FBFF*/ CYCLES_EDGE(0xfbff, 1);
 bb_8:
   /*$FBF0*/ CYCLES(0xfbf0, 9);
             tmp1_U8 = ram_peek(0x0024);
@@ -770,48 +770,53 @@ bb_21:
 
   /* Taken-branch trampolines: each pays the +1 a taken branch costs beyond
      the not-taken base already charged above, then jumps on. See the design
-     doc; this mirrors what the decompiler does at every JCond. */
+     doc; this mirrors what the decompiler does at every JCond.
+
+     CYCLES_EDGE, not CYCLES: these carry the address of a branch that the
+     block ending in it already reported, so charging them through CYCLES
+     would trace and probe that branch twice on a single execution. Same
+     reasoning as AddEdgeCycles in tools/apple2tc/ir/Values.def. */
 bb_27:
-  /*$FB7A*/ CYCLES(0xfb7a, 1);
+  /*$FB7A*/ CYCLES_EDGE(0xfb7a, 1);
             goto bb_7;
 bb_28:
-  /*$FB7F*/ CYCLES(0xfb7f, 1);
+  /*$FB7F*/ CYCLES_EDGE(0xfb7f, 1);
             goto bb_7;
 bb_29:
-  /*$FB83*/ CYCLES(0xfb83, 1);
+  /*$FB83*/ CYCLES_EDGE(0xfb83, 1);
             goto bb_7;
 bb_30:
-  /*$FB8B*/ CYCLES(0xfb8b, 1);
+  /*$FB8B*/ CYCLES_EDGE(0xfb8b, 1);
             goto bb_4;
 bb_31:
-  /*$FB8F*/ CYCLES(0xfb8f, 1);
+  /*$FB8F*/ CYCLES_EDGE(0xfb8f, 1);
             goto bb_7;
 bb_33:
-  /*$FBFA*/ CYCLES(0xfbfa, 1);
+  /*$FBFA*/ CYCLES_EDGE(0xfbfa, 1);
             goto bb_20;
 bb_34:
-  /*$FC02*/ CYCLES(0xfc02, 1);
+  /*$FC02*/ CYCLES_EDGE(0xfc02, 1);
             goto bb_8;
 bb_35:
-  /*$FC06*/ CYCLES(0xfc06, 1);
+  /*$FC06*/ CYCLES_EDGE(0xfc06, 1);
             goto bb_20;
 bb_36:
-  /*$FC0A*/ CYCLES(0xfc0a, 1);
+  /*$FC0A*/ CYCLES_EDGE(0xfc0a, 1);
             goto bb_21;
 bb_37:
-  /*$FC0E*/ CYCLES(0xfc0e, 1);
+  /*$FC0E*/ CYCLES_EDGE(0xfc0e, 1);
             goto bb_22;
 bb_38:
-  /*$FC12*/ CYCLES(0xfc12, 1);
+  /*$FC12*/ CYCLES_EDGE(0xfc12, 1);
             goto bb_19;
 bb_39:
-  /*$FC1E*/ CYCLES(0xfc1e, 1);
+  /*$FC1E*/ CYCLES_EDGE(0xfc1e, 1);
             goto bb_18;
 bb_40:
-  /*$FBDB*/ CYCLES(0xfbdb, 1);
+  /*$FBDB*/ CYCLES_EDGE(0xfbdb, 1);
             goto bb_26;
 bb_41:
-  /*$FBED*/ CYCLES(0xfbed, 1);
+  /*$FBED*/ CYCLES_EDGE(0xfbed, 1);
             goto bb_25;
 }
 
@@ -922,7 +927,7 @@ bb_4:
             if (ret_addr) pop16(); return;
 bb_5:
   // $FDF2 BCS -- the branch itself, taken here.
-  /*$FDF2*/ CYCLES(0xfdf2, 1);
+  /*$FDF2*/ CYCLES_EDGE(0xfdf2, 1);
             goto bb_3;
 }
 
@@ -949,7 +954,7 @@ bb_0:
             // nonzero), same reasoning as $FC60 in rom_home: the decompiler
             // doesn't do cross-instruction flag proofs, so the branch still
             // executes and still pays its own cost every time.
-  /*$FE91*/ CYCLES(0xfe91, 1);
+  /*$FE91*/ CYCLES_EDGE(0xfe91, 1);
   /*$FE9B*/ CYCLES(0xfe9b, 7);
   /*$FE9D*/ tmp1_U8 = ram_peek(0x003e) & 0x0f;
             s_a = tmp1_U8;
@@ -962,7 +967,7 @@ bb_1:
   /*$FEA3*/ s_y = 0x00;
             branchTarget = true;
             // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
-  /*$FEA5*/ CYCLES(0xfea5, 1);
+  /*$FEA5*/ CYCLES_EDGE(0xfea5, 1);
             goto bb_3;
 bb_2:
   /*$FEA7*/ CYCLES(0xfea7, 2);
@@ -975,7 +980,7 @@ bb_3:
   /*$FEAD*/ if (ret_addr) pop16(); return;
 bb_4:
   // $FE9F BEQ -- the branch itself, taken here.
-  /*$FE9F*/ CYCLES(0xfe9f, 1);
+  /*$FE9F*/ CYCLES_EDGE(0xfe9f, 1);
             goto bb_2;
 }
 
@@ -1003,7 +1008,7 @@ bb_1:
   /*$FEA3*/ s_y = 0x00;
             branchTarget = true;
             // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
-  /*$FEA5*/ CYCLES(0xfea5, 1);
+  /*$FEA5*/ CYCLES_EDGE(0xfea5, 1);
             goto bb_3;
 bb_2:
   /*$FEA7*/ CYCLES(0xfea7, 2);
@@ -1016,6 +1021,6 @@ bb_3:
   /*$FEAD*/ if (ret_addr) pop16(); return;
 bb_4:
   // $FE9F BEQ -- the branch itself, taken here.
-  /*$FE9F*/ CYCLES(0xfe9f, 1);
+  /*$FE9F*/ CYCLES_EDGE(0xfe9f, 1);
             goto bb_2;
 }
