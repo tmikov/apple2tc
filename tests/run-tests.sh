@@ -548,6 +548,50 @@ if ! grep -qE '^[0-9]+ 65$' probe-tmp/rec-a.txt; then
   exit 1
 fi
 
+# A --kbd-file longer than the pending queue. push_key() diverts every key
+# into pending_keys_ while recording, so io_'s own hardware queue never
+# fills -- a reader that only asked *that* queue how much room was left would
+# keep reading past pending_keys_'s capacity and hit its overflow FATAL,
+# however far off the next `record` that drains it is. 40 keys, comfortably
+# past PENDING_KEYS_MAX (== A2_KBD_QUEUE_SIZE == 32), is the regression check.
+printf 'A%.0s' {1..40} > probe-tmp/forty.kbd
+if ! $a2run --frames=20 --probe=probe/reckeys.probe --kbd-file=probe-tmp/forty.kbd \
+     --record-keys=probe-tmp/rec-40.txt --probe-out=/dev/null > /dev/null; then
+  echo "FAIL: --record-keys aborted on a --kbd-file longer than the pending queue" >&2
+  exit 1
+fi
+count40=$(grep -cE '^[0-9]+ 65$' probe-tmp/rec-40.txt || true)
+if [ "$count40" -ne 40 ]; then
+  echo "FAIL: --record-keys recorded $count40 of 40 keys from a long --kbd-file" >&2
+  cat probe-tmp/rec-40.txt >&2
+  exit 1
+fi
+
+# --key-file= (cycle-stamped keys) combined with --record-keys=: this is the
+# conversion the next task's play.keys -> play.pkeys step depends on, and it
+# only works if drain_key_presses()/probe_deliver_keys() divert through
+# push_key() the same way live typing does -- calling a2_io_push_key()
+# directly, as they once did, bypasses the pending queue entirely and
+# --record-keys= silently writes nothing but its header line.
+printf '236 65\n236 66\n236 67\n' > probe-tmp/three.keys
+if ! $a2run --frames=10 --probe=probe/reckeys.probe --key-file=probe-tmp/three.keys \
+     --record-keys=probe-tmp/rec-kf.txt --probe-out=/dev/null > /dev/null; then
+  echo "FAIL: --record-keys with --key-file= failed to run" >&2
+  exit 1
+fi
+countkf=$(grep -cE '^[0-9]+ [0-9]+$' probe-tmp/rec-kf.txt || true)
+if [ "$countkf" -ne 3 ]; then
+  echo "FAIL: --record-keys with --key-file= recorded $countkf keys, expected 3" >&2
+  cat probe-tmp/rec-kf.txt >&2
+  exit 1
+fi
+if ! grep -qE '^[0-9]+ 65$' probe-tmp/rec-kf.txt || ! grep -qE '^[0-9]+ 66$' probe-tmp/rec-kf.txt ||
+   ! grep -qE '^[0-9]+ 67$' probe-tmp/rec-kf.txt; then
+  echo "FAIL: --record-keys with --key-file= did not record the keys it was given" >&2
+  cat probe-tmp/rec-kf.txt >&2
+  exit 1
+fi
+
 rm -rf probe-tmp
 
 echo "Success!"

@@ -62,9 +62,10 @@ static FILE *record_keys_file_ = NULL;
 /// Keys the host has taken but not yet handed to the machine. Non-empty only
 /// while recording: `record` is what releases them, so that the moment a key
 /// reaches the program is a program-defined point and not a cycle count.
-/// Sized to match a2io's own key queue -- a human cannot outrun one probe
-/// firing, and a full queue drops the key loudly rather than silently.
-enum { PENDING_KEYS_MAX = 16 };
+/// Sized to match a2io's own key queue (A2_KBD_QUEUE_SIZE), the same
+/// capacity a run would have without recording -- a full queue drops the key
+/// loudly rather than silently.
+enum { PENDING_KEYS_MAX = A2_KBD_QUEUE_SIZE };
 static uint8_t pending_keys_[PENDING_KEYS_MAX];
 static unsigned pending_keys_count_ = 0;
 /// If set, write a per-frame hash of video state to this file.
@@ -245,12 +246,22 @@ static void push_key_if_empty(uint8_t ch) {
     push_key(ch);
 }
 
+/// Room left for one more key to enter the machine, from whichever queue a
+/// key would actually land in. While recording, push_key() diverts every key
+/// into pending_keys_ instead of io_'s hardware queue, so io_'s own
+/// a2_io_keys_expect() never drops -- a reader that looped on that alone
+/// would read straight past pending_keys_'s capacity. Not recording, there is
+/// no diversion, so this is exactly a2_io_keys_expect().
+static unsigned key_room(void) {
+  return record_keys_file_ ? PENDING_KEYS_MAX - pending_keys_count_ : a2_io_keys_expect(&io_);
+}
+
 /// While the KBD file is open, read as many characters from it as possible.
 /// Close the file of EOF is reached.
 static void drain_kbd_file() {
   if (!kbd_file_)
     return;
-  while (a2_io_keys_expect(&io_)) {
+  while (key_room()) {
     int ch = getc(kbd_file_);
     if (ch == EOF) {
       fclose(kbd_file_);
@@ -273,8 +284,14 @@ static void drain_key_presses() {
   static unsigned last_cycles = 0;
   unsigned cycles = get_cycles();
 
+  // push_key(), not a2_io_push_key(): while recording, a cycle-stamped key
+  // from --key-file= must be diverted into pending_keys_ the same as one
+  // typed live, so that `record` re-stamps it on the probe's coordinate
+  // instead of it reaching the machine on the old cycle stamp. This is what
+  // lets --key-file=<cycle-stamped> --record-keys= convert a recording from
+  // one coordinate to the other.
   while (next_key_press_ != key_press_count_ && cycles >= key_presses_[next_key_press_].cycles) {
-    a2_io_push_key(&io_, key_presses_[next_key_press_].ch);
+    push_key(key_presses_[next_key_press_].ch);
     ++next_key_press_;
   }
 
@@ -298,8 +315,10 @@ static void drain_key_presses() {
 /// does not free the list on exhaustion because drain_key_presses already
 /// does, on whichever frame notices the cursor has reached the end.
 void probe_deliver_keys(uint32_t now) {
+  // push_key(), not a2_io_push_key() -- see drain_key_presses' comment; the
+  // two share key_presses_ and must divert identically while recording.
   while (next_key_press_ != key_press_count_ && key_presses_[next_key_press_].cycles <= now) {
-    a2_io_push_key(&io_, key_presses_[next_key_press_].ch);
+    push_key(key_presses_[next_key_press_].ch);
     ++next_key_press_;
   }
 }
