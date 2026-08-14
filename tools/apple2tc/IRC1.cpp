@@ -978,6 +978,17 @@ void IRC1::printAddCycles(Instruction *inst) {
       inst->getAddress().value_or(0xFFFF),
       formatOperand(inst->getOperand(0)).c_str());
 }
+void IRC1::printAddEdgeCycles(Instruction *inst) {
+  // CYCLES_EDGE, not CYCLES: see the opcode's comment in ir/Values.def. The
+  // distinct spelling is also what lets the acceptance test's site list be
+  // grepped straight out of the generated C -- "CYCLES(0x" matches block
+  // heads and nothing else.
+  bprintf(
+      obuf_,
+      "CYCLES_EDGE(0x%04x, %s)",
+      inst->getAddress().value_or(0xFFFF),
+      formatOperand(inst->getOperand(0)).c_str());
+}
 void IRC1::printCycles(Instruction *inst) {
   bprintf(obuf_, "s_cycles");
 }

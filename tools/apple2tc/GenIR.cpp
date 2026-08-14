@@ -638,10 +638,16 @@ void GenIR::emitJCond(bool jTrue, const CPUInst &inst, Value *cond, const AsmBlo
     // exactly this edge -- the static-CFG counterpart of BR_COND in
     // lib/cpuemu/emu6502.cpp, which adds its +1 only when the branch actually
     // takes.
+    //
+    // AddEdgeCycles, not AddCycles: the block carries the branch's address but
+    // is not a place the program is ever *at*. The branch itself was already
+    // accounted for by the block it ends, and a branch that is also a branch
+    // target -- 121 of them in the Apple II ROM -- would otherwise be observed
+    // twice on the taken path, once as a block head and once here.
     BasicBlock *curBlock = builder_.getCurBasicBlock();
     BasicBlock *takenEdge = createBB(pc_, false);
     builder_.setInsertionBlock(takenEdge);
-    builder_.createAddCycles(builder_.getLiteralU32(1));
+    builder_.createAddEdgeCycles(builder_.getLiteralU32(1));
     builder_.createJmp(target);
     builder_.setInsertionBlock(curBlock);
     if (jTrue)
@@ -663,8 +669,11 @@ void GenIR::emitJCond(bool jTrue, const CPUInst &inst, Value *cond, const AsmBlo
   builder_.setInsertionBlock(indBranchBlock);
   // indBranchBlock is only ever reached on the taken path (its sole
   // predecessor is the JTrue/JFalse above), so -- unlike the shared-target
-  // case -- the taken-branch +1 can be charged directly here.
-  builder_.createAddCycles(builder_.getLiteralU32(1));
+  // case -- the taken-branch +1 can be charged directly here. It is still an
+  // edge charge and not a location: this block exists to compute a
+  // self-modified target, and the branch it belongs to was accounted for by
+  // the block that ends with it.
+  builder_.createAddEdgeCycles(builder_.getLiteralU32(1));
   // Instruction byte 1, sign extended to 16-bit.
   auto *brOffset =
       builder_.createSExt8t16(builder_.createRamPeek8(builder_.getLiteralU16(pc_ + 1)));

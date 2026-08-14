@@ -29,7 +29,7 @@ function func1
           %_  = Pop8
                 JmpInd        (CPUAddr2BB (Add16 (Make16 %15 0x03) 0x0001))
 %bb2:  // [$0324] Pred(%bb2) Succ(%bb2, %bb_0326)
-/*$0324*/       AddCycles     1
+/*$0324*/       AddEdgeCycles    1
 /*$0320*/       AddCycles     10
                 RamPoke8      0x1001, (Add8 (RamPeek8 0x1001) 0x01)
 /*$0323*/ %32 = Sub8          (LoadR8 X), 0x01
@@ -59,7 +59,7 @@ function func_0320
                 StoreR8       X, %46
 /*$0324*/       JTrue         %46, %bb4, %bb_0326_1
 %bb4:  // [$0324] Pred(%bb_0320) Succ(%bb_0320)
-                AddCycles     1
+                AddEdgeCycles    1
                 Jmp           %bb_0320
 %bb_0326_1:  // [$0326] Pred(%bb_0320) Succ(%bb5)
 /*$0326*/       AddCycles     6

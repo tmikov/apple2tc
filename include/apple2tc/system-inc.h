@@ -45,6 +45,20 @@ uint8_t g_debug = 0;
       probe_dispatch(pc);                                                  \
   } while (0)
 
+/* The taken-branch penalty, charged on the CFG edge that owes it rather than
+   at a program location -- see AddEdgeCycles in tools/apple2tc/ir/Values.def.
+   Deliberately neither traces nor dispatches probes: pc here is the address of
+   a branch that the block ending in it already reported, so doing either would
+   observe a single execution of that branch twice. pc is still taken as an
+   argument, unused, so the address stays visible at the call site. Also used
+   by hand-written decoded C -- see decoded/snake-byte/a2rom.c. */
+#define CYCLES_EDGE(pc, cycles)     \
+  do {                              \
+    (void)(pc);                     \
+    s_cycles += (cycles);           \
+    s_remaining_cycles -= (cycles); \
+  } while (0)
+
 void reset_regs(void) {
   memset(s_ram, 0xFF, 0x10000);
   s_pc = 0;

@@ -158,7 +158,17 @@ IR_RANGE(Comparison, Cmp8eq, Cmp8bt)
 
 IR_INST1(Not16, U16, U16)
 
+/// The cycle cost of a program location: the block this heads, charged once
+/// per entry however the block was reached.
 IR_INST1(AddCycles, Void, U32)
+/// The cycle cost of a CFG *edge* rather than of a program location -- the
+/// taken-branch penalty, which only the taken edge owes (see
+/// GenIR::emitJCond). It carries the address of the branch instruction, but
+/// that instruction lives in, and is already accounted for by, the block it
+/// branches from. So this is not a place the program can be observed at:
+/// back ends must not emit a tracer or probe dispatch for it, or the branch
+/// gets reported twice on one execution.
+IR_INST1(AddEdgeCycles, Void, U32)
 IR_INST0(Cycles, U32)
 
 IR_INST1(Push8, Void, U8)

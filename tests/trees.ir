@@ -16,14 +16,14 @@ function func1
 /*$030E*/       RamPoke8      0x1003, %5
 /*$0311*/       JFalse        %5, %bb2, %bb_0313
 %bb2:  // [$0311] Pred(%bb1) Succ(%bb_032f)
-                AddCycles     1
+                AddEdgeCycles    1
                 Jmp           %bb_032f
 %bb_0313:  // [$0313] Pred(%bb1) Succ(%bb3, %bb_0321)
 /*$0313*/       AddCycles     20
 /*$0319*/       RamPoke8      0x2005, (Add8 (RamPeek8 0x2000) 0x01)
 /*$031F*/       JFalse        (RamPeek8 0x2006), %bb3, %bb_0321
 %bb3:  // [$031F] Pred(%bb_0313) Succ(%bb_032f)
-                AddCycles     1
+                AddEdgeCycles    1
                 Jmp           %bb_032f
 %bb_0321:  // [$0321] Pred(%bb_0313) Succ(%bb_032f)
 /*$0321*/       AddCycles     20

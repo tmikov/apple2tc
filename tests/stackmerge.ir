@@ -31,7 +31,7 @@ function func1
                 StoreR8       A, %17
 /*$0323*/       JFalse        %17, %bb2, %bb_0325
 %bb2:  // [$0323] Pred(%bb_0320) Succ(%bb_0326)
-                AddCycles     1
+                AddEdgeCycles    1
                 Jmp           %bb_0326
 %bb_0325:  // [$0325] Pred(%bb_0320) Succ(%bb_0326)
 /*$0325*/       AddCycles     3

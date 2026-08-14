@@ -266,6 +266,26 @@ static void cycles_expired() {
       probe_dispatch(pc);                                                  \
   } while (0)
 
+/* The taken-branch penalty, charged on the CFG edge that owes it rather than
+   at a program location -- see AddEdgeCycles in tools/apple2tc/ir/Values.def.
+   Deliberately neither traces nor dispatches probes: pc here is the address of
+   a branch that the block ending in it already reported, so doing either would
+   observe a single execution of that branch twice.
+
+   It does keep s_pc and the cycles_expired() yield, unlike the system-inc.h
+   version, which has neither to keep. Dropping the yield here would be a
+   behaviour change beyond the two observation facilities -- the host would
+   regain control one edge later -- and this macro exists to remove exactly
+   those two things and nothing else. */
+#define CYCLES_EDGE(pc, cycles)     \
+  do {                              \
+    s_pc = (pc);                    \
+    if (s_remaining_cycles <= 0)    \
+      cycles_expired();             \
+    s_cycles += (cycles);           \
+    s_remaining_cycles -= (cycles); \
+  } while (0)
+
 void run_emulated(unsigned run_cycles) {
   if (!s_initialized) {
     s_initialized = true;

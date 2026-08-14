@@ -27,7 +27,7 @@ function func1
                 StoreR8       A, %12
 /*$0323*/       JFalse        %12, %bb2, %bb_0325
 %bb2:  // [$0323] Pred(%bb_0320) Succ(%bb_0328)
-                AddCycles     1
+                AddEdgeCycles    1
                 Jmp           %bb_0328
 %bb_0325:  // [$0325] Pred(%bb_0320) Succ(%bb_0328)
 /*$0325*/       AddCycles     6
@@ -49,7 +49,7 @@ function func1
 /*$0349*/       RamPoke8      0x1005, %31
 /*$034C*/       JFalse        %31, %bb3, %bb_034e
 %bb3:  // [$034C] Pred(%bb_0340) Succ(%bb_0351)
-                AddCycles     1
+                AddEdgeCycles    1
                 Jmp           %bb_0351
 %bb_034e:  // [$034E] Pred(%bb_0340) Succ(%bb_0351)
 /*$034E*/       AddCycles     6
@@ -82,7 +82,7 @@ function func_0320
                 StoreR8       A, %58
 /*$0323*/       JFalse        %58, %bb6, %bb_0325_1
 %bb6:  // [$0323] Pred(%bb_0320_1) Succ(%bb_0328_1)
-                AddCycles     1
+                AddEdgeCycles    1
                 Jmp           %bb_0328_1
 %bb_0325_1:  // [$0325] Pred(%bb_0320_1) Succ(%bb_0328_1)
 /*$0325*/       AddCycles     6
@@ -114,7 +114,7 @@ function func_0340
 /*$0349*/       RamPoke8      0x1005, %78
 /*$034C*/       JFalse        %78, %bb8, %bb_034e_1
 %bb8:  // [$034C] Pred(%bb_0340_1) Succ(%bb_0351_1)
-                AddCycles     1
+                AddEdgeCycles    1
                 Jmp           %bb_0351_1
 %bb_034e_1:  // [$034E] Pred(%bb_0340_1) Succ(%bb_0351_1)
 /*$034E*/       AddCycles     6
