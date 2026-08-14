@@ -1,0 +1,12 @@
+# The acceptance test's probe for the --irc1 back end: one instance of
+# `trace`, printing the address dispatch reached, at every block head romc1.c
+# can probe. See probe-acceptance.sh for why the site list is grepped out of
+# the generated C rather than written here.
+#
+# trace.probe is the same program over rom.c's block heads. The two must stay
+# identical apart from the site list; probe-acceptance.sh checks that.
+probe trace(site = pc) {
+  printf("%04X\n", site)
+}
+
+install trace at @"blocksc1.txt"

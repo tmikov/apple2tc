@@ -1,7 +1,10 @@
-# The acceptance test's probe: one instance of `trace`, printing the address
-# dispatch reached, at every block head the generated ROM can probe. See
-# probe-acceptance.sh for why the site list comes from romc1.c rather than
-# being written here.
+# The acceptance test's probe for the --simple-c back end: one instance of
+# `trace`, printing the address dispatch reached, at every block head rom.c can
+# probe. See probe-acceptance.sh for why the site list is grepped out of the
+# generated C rather than written here.
+#
+# tracec1.probe is the same program over romc1.c's block heads. The two must
+# stay identical apart from the site list; probe-acceptance.sh checks that.
 probe trace(site = pc) {
   printf("%04X\n", site)
 }
