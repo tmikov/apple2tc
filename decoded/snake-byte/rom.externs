@@ -1,4 +1,16 @@
-# Apple II ROM entry points called by Snake Byte, replaced by a2rom.c.
+# Routines whose bodies are hand-written rather than generated. apple2tc emits
+# a declaration for each and rewrites every call site to it; the definitions
+# live in a2rom.c and game.c, stitched into one translation unit by
+# snake-byte-ext.c.
+#
+# The file is still called rom.externs for history's sake -- it began as ROM
+# entry points only. It now also carries game routines, which is the point of
+# the exercise: every line moved from the second list to a readable definition
+# is a piece of Snake Byte that no longer looks like a decompiler's output.
+#
+# apple2tc takes a single --extern-routines= path, so both lists share a file.
+
+# Apple II ROM entry points -- a2rom.c
 F800 rom_plot
 F819 rom_hline
 F864 rom_setcol
@@ -8,3 +20,8 @@ FC68 rom_fc68
 FDED rom_cout
 FE89 rom_setkbd
 FE93 rom_setvid
+
+# Snake Byte's own routines -- game.c
+6127 game_load_shape
+60E7 game_draw_cell
+60E4 game_plot_shape

@@ -140,3 +140,145 @@ void game_cout_hook(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $6127, $60E7, $60E4 -- the hi-res cell plotter.                            */
+/*                                                                            */
+/* The game treats hi-res page 1 as a grid of 48 cell rows, each four         */
+/* scanlines tall and one byte (seven pixels) wide. $6000 and $6030 hold the  */
+/* low and high bytes of each row's base address -- $2000, $3000, $2080,      */
+/* $3080, ... -- and successive scanlines within a cell are $400 apart, which */
+/* is why walking down a cell is just +4 on the high byte.                    */
+/*                                                                            */
+/* Arguments, in zero page:                                                   */
+/*   $00  shape index; picks four AND masks from the table at $6174           */
+/*   $01  ink: 0 erases, 1 draws                                              */
+/*   $02  column -- the byte offset within the cell row                       */
+/*   $03  cell row, 0-47                                                      */
+/* Scratch, also in zero page and so still written faithfully:                */
+/*   $04/$05  destination pointer, advanced one scanline per iteration        */
+/*   $06      index into the dot-pattern table at $6064                       */
+/*   $07      scanline counter, 0-3                                           */
+/*                                                                            */
+/* $6064 holds sixteen bytes: eight zeros, then four dot patterns repeated    */
+/* with their phase swapped. The index is                                     */
+/*                                                                            */
+/*     (($01 << 1 | scanline & 1) << 2) | ($02 & 3)                           */
+/*                                                                            */
+/* so ink 0 always lands in the zero half and erases, while ink 1 picks a     */
+/* pattern whose phase comes from the scanline parity and the low two bits of */
+/* the column -- a dither that keeps the shape's texture aligned to the       */
+/* hi-res byte grid. Whatever comes out is ANDed with that scanline's mask.   */
+/*                                                                            */
+/* Decoded by hand from snake-byte.lst and the tables read out of             */
+/* snake-byte.b33. The CYCLES constants and the block boundaries they sit on  */
+/* deliberately mirror what apple2tc generates for the same addresses, so the */
+/* block-head trace stays identical and probe-acceptance.sh can compare this  */
+/* against the interpreter instruction for instruction.                       */
+/* ========================================================================== */
+
+void game_load_shape(uint16_t ret_addr) {
+  // Read by CYCLES() when tracing is on; every generated function
+  // declares it too.
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  /*$6127*/ CYCLES(0x6127, 53);
+  // Four masks per shape, so the index is shape * 4. The original built that
+  // with two ASLs and then walked the table with INX, which is why X is left
+  // pointing at the last entry rather than one past it.
+  const uint8_t first = (uint8_t)(ram_peek(0x0000) << 2);
+  uint8_t mask = 0;
+  for (unsigned line = 0; line < 4; ++line) {
+    mask = ram_peek(0x6174 + (uint8_t)(first + line));
+    ram_poke(0x6060 + line, mask);
+  }
+  s_x = (uint8_t)(first + 3);
+  s_a = mask;
+  s_status_not_z = mask;
+  s_status_n = (mask & 0x80);
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_draw_cell(uint16_t ret_addr) {
+  // Read by CYCLES() when tracing is on; every generated function
+  // declares it too.
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  /*$60E7*/ CYCLES(0x60e7, 22);
+  const uint8_t row = ram_peek(0x0003);
+  s_x = 0x00;
+  ram_poke(0x0007, 0x00);
+  ram_poke(0x0004, ram_peek(0x6000 + row));
+  ram_poke(0x0005, ram_peek(0x6030 + row));
+
+  for (unsigned line = 0; line < 4; ++line) {
+    /*$60F7*/ CYCLES(0x60f7, 16);
+    // Built in place in $06, as the original did: ROL rotates the scanline
+    // parity in at the bottom, then two ASLs make room for the column phase.
+    // The intermediate value is written out because $06 is zero page and a
+    // probe may sample memory between these two blocks.
+    ram_poke(0x0006, (uint8_t)((ram_peek(0x0001) << 1) | (ram_peek(0x0007) & 0x01)));
+    /*$6100*/ CYCLES(0x6100, 62);
+    ram_poke(0x0006, (uint8_t)((ram_peek(0x0006) << 2) | (ram_peek(0x0002) & 0x03)));
+
+    const uint8_t col = ram_peek(0x0002);
+    s_y = col;
+    poke(
+        ram_peek16al(0x0004) + col,
+        ram_peek(0x6064 + ram_peek(0x0006)) & ram_peek(0x6060 + line));
+
+    s_x = (uint8_t)(line + 1);
+    ram_poke(0x0007, (uint8_t)(ram_peek(0x0007) + 0x01));
+
+    // $611D-$611F: CLC / ADC #4 -- down one scanline. Decimal mode would turn
+    // that into nonsense; the game never plots with D set, so say so loudly
+    // rather than carry a dead BCD path the way the generated code must.
+    if (s_status_d) {
+      fprintf(stderr, "game_draw_cell: entered with decimal mode set\n");
+      error_handler(0x60e7);
+      abort();
+    }
+    const uint8_t hi = ram_peek(0x0005);
+    const uint8_t next_hi = (uint8_t)(hi + 0x04);
+    s_status_c = 0x00;
+    s_status_v = ovf8(next_hi, hi, 0x04);
+    s_a = next_hi;
+    ram_poke(0x0005, next_hi);
+
+    // $6122 CPX #4. The carry and sign it leaves are what the caller sees.
+    s_status_not_z = (s_x != 0x04);
+    s_status_c = (s_x >= 0x04);
+    s_status_n = ((uint8_t)(s_x - 0x04) & 0x80);
+    if (line != 3) {
+      /*$6124*/ CYCLES_EDGE(0x6124, 1);
+    }
+  }
+
+  /*$6126*/ CYCLES(0x6126, 6);
+  if (ret_addr)
+    pop16();
+}
+
+void game_plot_shape(uint16_t ret_addr) {
+  // Read by CYCLES() when tracing is on; every generated function
+  // declares it too.
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  /*$60E4*/ CYCLES(0x60e4, 6);
+  game_load_shape(0x60e6);
+  game_draw_cell(0x0000);
+
+  if (ret_addr)
+    pop16();
+}
