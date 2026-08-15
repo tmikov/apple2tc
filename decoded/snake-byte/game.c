@@ -205,64 +205,32 @@ void game_load_shape(uint16_t ret_addr) {
 }
 
 void game_draw_cell(uint16_t ret_addr) {
-  // Read by CYCLES() when tracing is on; every generated function
-  // declares it too.
+  // Adapter for game_draw_cell_native(). Costs 3 trace sites; $60E7 survives.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  /*$60E7*/ CYCLES(0x60e7, 22);
-  const uint8_t row = ram_peek(0x0003);
-  s_x = 0x00;
-  ram_poke(0x0007, 0x00);
-  ram_poke(0x0004, ram_peek(0x6000 + row));
-  ram_poke(0x0005, ram_peek(0x6030 + row));
-
-  for (unsigned line = 0; line < 4; ++line) {
-    /*$60F7*/ CYCLES(0x60f7, 16);
-    // Built in place in $06, as the original did: ROL rotates the scanline
-    // parity in at the bottom, then two ASLs make room for the column phase.
-    // The intermediate value is written out because $06 is zero page and a
-    // probe may sample memory between these two blocks.
-    ram_poke(0x0006, (uint8_t)((ram_peek(0x0001) << 1) | (ram_peek(0x0007) & 0x01)));
-    /*$6100*/ CYCLES(0x6100, 62);
-    ram_poke(0x0006, (uint8_t)((ram_peek(0x0006) << 2) | (ram_peek(0x0002) & 0x03)));
-
-    const uint8_t col = ram_peek(0x0002);
-    s_y = col;
-    poke(
-        ram_peek16al(0x0004) + col,
-        ram_peek(0x6064 + ram_peek(0x0006)) & ram_peek(0x6060 + line));
-
-    s_x = (uint8_t)(line + 1);
-    ram_poke(0x0007, (uint8_t)(ram_peek(0x0007) + 0x01));
-
-    // $611D-$611F: CLC / ADC #4 -- down one scanline. Decimal mode would turn
-    // that into nonsense; the game never plots with D set, so say so loudly
-    // rather than carry a dead BCD path the way the generated code must.
-    if (s_status_d) {
-      fprintf(stderr, "game_draw_cell: entered with decimal mode set\n");
-      error_handler(0x60e7);
-      abort();
-    }
-    const uint8_t hi = ram_peek(0x0005);
-    const uint8_t next_hi = (uint8_t)(hi + 0x04);
-    s_status_c = 0x00;
-    s_status_v = ovf8(next_hi, hi, 0x04);
-    s_a = next_hi;
-    ram_poke(0x0005, next_hi);
-
-    // $6122 CPX #4. The carry and sign it leaves are what the caller sees.
-    s_status_not_z = (s_x != 0x04);
-    s_status_c = (s_x >= 0x04);
-    s_status_n = ((uint8_t)(s_x - 0x04) & 0x80);
-    if (line != 3) {
-      /*$6124*/ CYCLES_EDGE(0x6124, 1);
-    }
+  /*$60E7*/ CYCLES(0x60e7, 0);
+  if (s_status_d) {
+    fprintf(stderr, "game_draw_cell: entered with decimal mode set\n");
+    error_handler(0x60e7);
+    abort();
   }
 
-  /*$6126*/ CYCLES(0x6126, 6);
+  const Cell c = {.col = ram_peek(0x0002), .row = ram_peek(0x0003)};
+  game_draw_cell_native(ram_peek(0x0001), c);
+
+  // What the loop leaves: X counted to 4, Y is the column, A the last
+  // destination high byte, and the flags come from CPX #4.
+  s_x = 0x04;
+  s_y = c.col;
+  s_a = ram_peek(0x0005);
+  s_status_c = 0x01;
+  s_status_not_z = 0x00;
+  s_status_n = 0x00;
+  s_status_v = ovf8(s_a, (uint8_t)(s_a - 0x04), 0x04);
+
   if (ret_addr)
     pop16();
 }
@@ -682,43 +650,18 @@ void game_add_score(uint16_t ret_addr) {
 }
 
 void game_clear_hgr(uint16_t ret_addr) {
+  // Adapter for game_clear_hgr_native(). Costs 3 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // Zero hi-res page 1, $2000 through $3FFF, a page at a time through the
-  // $04/$05 pointer. The inner loop runs a full 256 bytes because Y wraps to
-  // zero, so the terminating test is on the page number, not on Y.
-  /*$702B*/ CYCLES(0x702b, 12);
-  ram_poke(0x0004, 0x00);
-  ram_poke(0x0005, 0x20);
-  s_y = 0x00;
+  /*$702B*/ CYCLES(0x702b, 0);
+  game_clear_hgr_native();
 
-  for (;;) {
-    uint8_t y;
-    do {
-      /*$7035*/ CYCLES(0x7035, 12);
-      y = s_y;
-      poke(ram_peek16al(0x0004) + y, 0x00);
-      y = (uint8_t)(y + 1);
-      s_y = y;
-      if (y) {
-        /*$703A*/ CYCLES_EDGE(0x703a, 1);
-      }
-    } while (y);
-
-    /*$703C*/ CYCLES(0x703c, 12);
-    const uint8_t page = (uint8_t)(ram_peek(0x0005) + 1);
-    ram_poke(0x0005, page);
-    s_status_c = (page >= 0x40);
-    s_status_n = ((uint8_t)(page - 0x40) & 0x80);
-    if (page == 0x40)
-      break;
-    /*$7042*/ CYCLES_EDGE(0x7042, 1);
-  }
-
-  /*$7044*/ CYCLES(0x7044, 6);
+  s_status_c = 0x01;
+  s_status_not_z = 0x00;
+  s_status_n = 0x00;
 
   if (ret_addr)
     pop16();
@@ -804,6 +747,7 @@ void game_rand_byte(uint16_t ret_addr) {
 /* ========================================================================== */
 
 void game_plot_shape_merge(uint16_t ret_addr) {
+  // Adapter for game_merge_cell_native(), plus the shape load it opens with.
   bool branchTarget = true;
 
   if (ret_addr)
@@ -812,59 +756,23 @@ void game_plot_shape_merge(uint16_t ret_addr) {
   /*$6B93*/ CYCLES(0x6b93, 6);
   game_load_shape(0x6b95);
 
-  /*$6B96*/ CYCLES(0x6b96, 22);
-  const uint8_t row = ram_peek(0x0003);
-  s_x = 0x00;
-  s_y = row;
-  ram_poke(0x0007, 0x00);
-  ram_poke(0x0004, ram_peek(0x6000 + row));
-  ram_poke(0x0005, ram_peek(0x6030 + row));
-
-  for (unsigned line = 0; line < 4; ++line) {
-    /*$6BA6*/ CYCLES(0x6ba6, 85);
-
-    // $6BAA-$6BB1: LDA $07 / ROR A / ROR $06 / ASL $06 / ASL $06. See the
-    // header -- the parity bit rotated into bit 7 is shifted back out.
-    const uint8_t parity = (uint8_t)(ram_peek(0x0007) & 0x01);
-    uint8_t idx = ram_peek(0x0001);
-    idx = (uint8_t)((parity << 7) | (idx >> 1));
-    idx = (uint8_t)(idx << 2);
-    idx = (uint8_t)(idx | (ram_peek(0x0002) & 0x03));
-    ram_poke(0x0006, idx);
-
-    const uint8_t col = ram_peek(0x0002);
-    s_y = col;
-    const uint16_t dst = (uint16_t)(ram_peek16al(0x0004) + col);
-    poke(
-        dst,
-        (uint8_t)(((ram_peek(0x6064 + idx) ^ 0x7f) & ram_peek(0x6060 + line)) | peek(dst)));
-
-    s_x = (uint8_t)(line + 1);
-    ram_poke(0x0007, (uint8_t)(ram_peek(0x0007) + 0x01));
-
-    if (s_status_d) {
-      fprintf(stderr, "game_plot_shape_merge: entered with decimal mode set\n");
-      error_handler(0x6b93);
-      abort();
-    }
-    // $6BCE-$6BD3: CLC / ADC #4 -- down one scanline. Only V outlives this;
-    // the CPX two instructions later rewrites C, Z and N.
-    const uint8_t hi = ram_peek(0x0005);
-    const uint8_t next_hi = (uint8_t)(hi + 0x04);
-    s_status_v = ovf8(next_hi, hi, 0x04);
-    s_a = next_hi;
-    ram_poke(0x0005, next_hi);
-
-    // $6BD5 CPX #4.
-    s_status_c = (s_x >= 0x04);
-    s_status_not_z = (s_x != 0x04);
-    s_status_n = ((uint8_t)(s_x - 0x04) & 0x80);
-    if (line != 3) {
-      /*$6BD7*/ CYCLES_EDGE(0x6bd7, 1);
-    }
+  if (s_status_d) {
+    fprintf(stderr, "game_plot_shape_merge: entered with decimal mode set\n");
+    error_handler(0x6b93);
+    abort();
   }
 
-  /*$6BD9*/ CYCLES(0x6bd9, 6);
+  const Cell c = {.col = ram_peek(0x0002), .row = ram_peek(0x0003)};
+  s_y = c.row; // LDY $03 at $6B98, before the loop overwrites it
+  game_merge_cell_native(ram_peek(0x0001), c);
+
+  s_x = 0x04;
+  s_y = c.col;
+  s_a = ram_peek(0x0005);
+  s_status_c = 0x01;
+  s_status_not_z = 0x00;
+  s_status_n = 0x00;
+  s_status_v = ovf8(s_a, (uint8_t)(s_a - 0x04), 0x04);
 
   if (ret_addr)
     pop16();

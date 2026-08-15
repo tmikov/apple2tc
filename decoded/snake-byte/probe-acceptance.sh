@@ -331,8 +331,8 @@ for other in trace-ext trace-easy; do
 done
 
 # The three expected counts. 1,694 for the reference build, which is pure
-# decompiler output and moves only if the decompiler does. 1,547 for the two
-# extern builds, which is 1,669 minus the 122 block heads given up so far to
+# decompiler output and moves only if the decompiler does. 1,538 for the two
+# extern builds, which is 1,669 minus the 131 block heads given up so far to
 # game_native.c -- see that file's header for what each conversion cost and
 # why.
 # Both scenarios verify.sh replays, now against the interpreter as well.
@@ -348,7 +348,7 @@ for keyfile in ${KEYS:-"$here/play.pkeys" "$here/play-hires.pkeys"}; do
 check_backend trace "$bin/decoded/snake-byte/snake-bytec1-run" "$here/trace.probe" \
   "$here/blocks.txt" 1694 "$here/snake-bytec1.c"
 check_backend trace-ext "$bin/decoded/snake-byte/snake-bytec1-ext-run" "$here/trace-ext.probe" \
-  "$here/blocks-ext.txt" 1547 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c"
+  "$here/blocks-ext.txt" 1538 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c"
 
 if diff -q "$here/blocks.txt" "$here/blocks-ext.txt" > /dev/null; then
   echo "the two back ends agree on the block-head set"
@@ -455,7 +455,7 @@ frames=${EASY_FRAMES:-3000}
 set_scenario "$here/play-hires.pkeys"
 echo "    (against snake-byte-easy.b33, $frames frames)"
 check_backend trace-easy "$bin/decoded/snake-byte/snake-byte-easyc1-ext-run" \
-  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1547 \
+  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1538 \
   "$here/snake-byte-easyc1-ext.c" "$here/a2rom.c" "$here/game.c"
 
 # The fixture's block heads are the same set as the stock extern build's, and

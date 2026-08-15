@@ -142,6 +142,15 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out);
 /// it, comparing BCD bytes most significant first.
 void game_promote_high_score(void);
 
+/// $60E7 -- draw the loaded shape into cell \p c in ink \p ink, replacing.
+void game_draw_cell_native(uint8_t ink, Cell c);
+
+/// $6B93 -- the same, merged into what is already there.
+void game_merge_cell_native(uint8_t ink, Cell c);
+
+/// $702B -- zero hi-res page 1.
+void game_clear_hgr_native(void);
+
 /// $7045 -- clear the screen, draw the border, and run the current level's
 /// display list from $8000.
 void game_draw_playfield_native(void);

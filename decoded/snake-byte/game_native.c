@@ -823,3 +823,124 @@ restart:
     GAME_CYCLES(0x71c4, 3);
   }
 }
+
+/* ========================================================================== */
+/* $60E7, $6B93, $702B -- the hi-res plotter                                  */
+/*                                                                            */
+/* Hi-res page 1 is a grid of 48 rows, four scanlines tall and one byte wide.  */
+/* $6000/$6030 hold each row's base address split into low and high halves,    */
+/* and successive scanlines are $400 apart -- which is why walking down a cell */
+/* is +4 on the high byte and nothing else.                                    */
+/*                                                                            */
+/* $04/$05 (the destination pointer), $06 (the pattern index) and $07 (the     */
+/* scanline counter) are locals, mirrored back at the end for ram.probe.       */
+/* ========================================================================== */
+
+/// The address of a cell row's first scanline, from the split table.
+static uint16_t cell_row_base(uint8_t row) {
+  return (uint16_t)(ram_peek(0x6000 + row) | (ram_peek(0x6030 + row) << 8));
+}
+
+/// Index into the 128-byte dot table at $6064: 16 inks of 8, four column
+/// phases in each of two scanline parities.
+static uint8_t dot_index(uint8_t ink, uint8_t scanline, uint8_t col) {
+  return (uint8_t)((uint8_t)(((ink << 1) | (scanline & 1)) << 2) | (col & 3));
+}
+
+/// $60E7 -- draw the loaded shape into one cell, replacing what was there.
+void game_draw_cell_native(uint8_t ink, Cell c) {
+  GAME_CYCLES(0x60e7, 22);
+  uint16_t dest = cell_row_base(c.row);
+  ram_poke(0x0007, 0x00);
+  ram_poke(0x0004, (uint8_t)dest);
+  ram_poke(0x0005, (uint8_t)(dest >> 8));
+
+  for (unsigned line = 0; line < 4; ++line) {
+    GAME_CYCLES(0x60f7, 16);
+    // Built in $06 in two steps, and written out between them because it is
+    // zero page and a probe may sample there.
+    ram_poke(0x0006, (uint8_t)((ink << 1) | (line & 1)));
+    GAME_CYCLES(0x6100, 62);
+    const uint8_t idx = dot_index(ink, (uint8_t)line, c.col);
+    ram_poke(0x0006, idx);
+
+    poke(dest + c.col, (uint8_t)(ram_peek(0x6064 + idx) & ram_peek(0x6060 + line)));
+
+    ram_poke(0x0007, (uint8_t)(line + 1));
+    dest += 0x0400; // one scanline down, i.e. +4 on the high byte
+    ram_poke(0x0005, (uint8_t)(dest >> 8));
+
+    if (line != 3)
+      GAME_CYCLES(0x6124, 1);
+  }
+
+  GAME_CYCLES(0x6126, 6);
+}
+
+/// $6B93 -- the same cell, merged instead of replaced: only bits are set, and
+/// the pattern is inverted first. $7F and not $FF because bit 7 is the byte's
+/// hi-res palette bit and flipping it would shift the whole byte's colour.
+///
+/// It also builds the index differently -- ROR where $60F7 has ROL, so the
+/// scanline parity lands in bit 7 and the two following ASLs shift it out.
+/// The index degenerates to (ink >> 1) * 4 + (col & 3). Changing it to match
+/// $60F7 fails the screen check, so whatever the author meant, it is load
+/// bearing.
+void game_merge_cell_native(uint8_t ink, Cell c) {
+  GAME_CYCLES(0x6b96, 22);
+  uint16_t dest = cell_row_base(c.row);
+  ram_poke(0x0007, 0x00);
+  ram_poke(0x0004, (uint8_t)dest);
+  ram_poke(0x0005, (uint8_t)(dest >> 8));
+
+  for (unsigned line = 0; line < 4; ++line) {
+    GAME_CYCLES(0x6ba6, 85);
+    const uint8_t parity = (uint8_t)(line & 1);
+    const uint8_t idx =
+        (uint8_t)((uint8_t)(((uint8_t)((parity << 7) | (ink >> 1))) << 2) | (c.col & 3));
+    ram_poke(0x0006, idx);
+
+    const uint16_t at = dest + c.col;
+    poke(at,
+         (uint8_t)(((ram_peek(0x6064 + idx) ^ 0x7f) & ram_peek(0x6060 + line)) | peek(at)));
+
+    ram_poke(0x0007, (uint8_t)(line + 1));
+    dest += 0x0400;
+    ram_poke(0x0005, (uint8_t)(dest >> 8));
+
+    if (line != 3)
+      GAME_CYCLES(0x6bd7, 1);
+  }
+
+  GAME_CYCLES(0x6bd9, 6);
+}
+
+/// $702B -- zero hi-res page 1, $2000 through $3FFF. The inner loop runs a
+/// full 256 bytes because Y wraps, so the terminating test is on the page.
+void game_clear_hgr_native(void) {
+  GAME_CYCLES(0x702b, 12);
+  ram_poke(0x0004, 0x00);
+  ram_poke(0x0005, 0x20);
+  s_y = 0x00;
+
+  for (uint8_t page = 0x20;;) {
+    uint8_t y = 0;
+    do {
+      GAME_CYCLES(0x7035, 12);
+      poke((uint16_t)(page << 8) + y, 0x00);
+      ++y;
+      s_y = y;
+      if (y)
+        GAME_CYCLES(0x703a, 1);
+    } while (y);
+
+    GAME_CYCLES(0x703c, 12);
+    ++page;
+    ram_poke(0x0005, page);
+    if (page == 0x40)
+      break;
+    GAME_CYCLES(0x7042, 1);
+  }
+
+  GAME_CYCLES(0x7044, 6);
+}
