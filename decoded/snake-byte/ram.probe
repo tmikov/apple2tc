@@ -1,0 +1,55 @@
+# Memory equivalence between the interpreter and a generated build, sampled at
+# program-defined instants.
+#
+# The block-head trace (trace.probe) proves the two engines take the same path.
+# This proves they compute the same values along it -- a wrong byte written to
+# memory need not change control flow within a 1300-frame run, so the two
+# checks are complementary rather than redundant.
+#
+# Sampled at $6217, the in-game keyboard ingest: reached 6,808 times and only
+# while the game is playing, so the samples land where memory is churning. The
+# obvious alternative -- sampling on the coordinate counter with `n % 512` --
+# is badly biased: $7890 (the wait-for-space loop) is about two thirds of that
+# counter's growth, so most samples would catch a static screen. Measured: 1079
+# counter-sampled points yielded 26 distinct memory states, 6808 ingest-sampled
+# points yielded 6808.
+#
+# WHY THE STACK PAGE IS EXCLUDED, and why that is not a hole:
+#
+# $0100-$01FF legitimately differs, in two ways, neither of them behavioural.
+#
+#   - Return-address slots. A generated program's RTS is a C `return`, not a
+#     pop of a real 6502 address, so each entry pushes a caller-supplied
+#     `ret_addr` -- $FFFE for an entry point (82 `push16(ret_addr)` sites in
+#     snake-bytec1.c; game.c calls rom_cout1(0xfffe)). Measured over these
+#     6,808 samples: 27,232 live stack bytes differ and every one of them holds
+#     $FE or $FF on the generated side. Zero hold anything else.
+#   - Bytes below SP. Dead residue; the two engines leave different fill there.
+#     13,700 differing bytes, all below the stack pointer.
+#
+# So excluding the page costs nothing this check could otherwise catch: the
+# stack pointer itself is compared (it agreed at all 6,808 samples), and any
+# live stack *value* the program actually reads back would have to change
+# control flow to matter, which trace.probe covers.
+#
+# $C000-$CFFF is IO and holds no state worth comparing. Above that is ROM.
+counter n
+
+probe kb() {
+  inc n
+  key n
+}
+
+probe mem(
+    s = sp,
+    zp = hash($0000, $00FF),
+    low = hash($0200, $03FF),
+    txt = hash($0400, $07FF),
+    aux = hash($0800, $1FFF),
+    hgr = hash($2000, $5FFF),
+    game = hash($6000, $BFFF)) {
+  printf("%02X %08X %08X %08X %08X %08X %08X\n", s, zp, low, txt, aux, hgr, game)
+}
+
+install kb at $FD1B, $741F, $7890, $6217
+install mem at $6217

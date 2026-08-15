@@ -184,3 +184,50 @@ else
   echo "note: the back ends emit different block-head sets ($(wc -l < "$here/blocks.txt")" \
        "vs $(wc -l < "$here/blocks-ext.txt")); each was checked against its own"
 fi
+
+# Memory equivalence. The checks above prove the engines take the same path;
+# this proves they compute the same values along it. A wrong byte written to
+# memory need not change control flow within 1300 frames, so neither check
+# subsumes the other. ram.probe documents why the stack page is excluded and
+# why that exclusion costs nothing (return-address slots are synthetic in a
+# generated build by construction; bytes below SP are dead).
+#
+# No site list: ram.probe installs at fixed addresses, so there is nothing to
+# derive or to go stale. The "Loaded N keys" assertion still applies -- without
+# input, memory would agree vacuously the same way the traces would.
+check_memory() {
+  local label=$1 prog=$2
+  local interp="/tmp/pkeys-ram-interp-$label.txt" gen="/tmp/pkeys-ram-$label.txt"
+
+  [ -x "$prog" ] || { echo "Error: not found: $prog" >&2; exit 1; }
+
+  "$a2run" --preload "$b33" --key-file="$keys" --probe="$here/ram.probe" \
+    --probe-out="$interp" --frames="$frames" \
+    > /dev/null 2>"/tmp/pkeys-ram-interp-$label.err"
+  "$prog" --key-file="$keys" --probe="$here/ram.probe" \
+    --probe-out="$gen" --frames="$frames" \
+    > /dev/null 2>"/tmp/pkeys-ram-$label.err"
+
+  local side
+  for side in "interp-$label" "$label"; do
+    if grep -q "never fired" "/tmp/pkeys-ram-$side.err"; then
+      echo "FAIL [ram/$side]: a probe never fired" >&2
+      exit 1
+    fi
+    if ! grep -qx "Loaded $expected_keys keys" "/tmp/pkeys-ram-$side.err"; then
+      echo "FAIL [ram/$side]: expected 'Loaded $expected_keys keys' on stderr" >&2
+      exit 1
+    fi
+  done
+
+  if ! diff -q "$interp" "$gen" > /dev/null; then
+    echo "FAIL [ram/$label]: the engines disagree on memory contents" >&2
+    diff "$interp" "$gen" | head -10 >&2
+    exit 1
+  fi
+
+  echo "[ram/$label] PASS: memory identical at $(wc -l < "$interp") in-game samples"
+}
+
+check_memory ref "$bin/decoded/snake-byte/snake-bytec1-run"
+check_memory ext "$bin/decoded/snake-byte/snake-bytec1-ext-run"

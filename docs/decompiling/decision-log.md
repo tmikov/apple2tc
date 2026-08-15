@@ -1727,3 +1727,104 @@ two engines' screen-write progress actually differs; that is future work.
 - **Probe phase 3 is still unbuilt.** apple2tc does not emit `PROBE_x(...)`
   placeholder sites, so a probe observes machine state, not the generated
   C's own variables.
+
+
+## 2026-08-15 — What was left of frame 623: synthetic return addresses and dead stack
+
+**Scope:** decoded/snake-byte · **Status:** measured; the residual is fully accounted for
+
+**Decision:** finish the frame-623 question rather than leave it at "strongly
+supported." Probe-stamped input removed the divergence itself; what remained was
+8 of 1,300 host frame hashes still differing, explained but not measured.
+
+### The method the previous entry could not use
+
+The block-head trace is byte-identical between the interpreter and both
+generated builds. That makes the probe *counter* a coordinate the two engines
+provably share, so state can be compared at program-defined instants instead of
+at the host's frame timer — which is the thing frame hashes were never able to
+do.
+
+Two sampling attempts were wrong before one was right, and both are worth
+recording because each looked fine:
+
+- **`$3752`, 2,048 hits.** A self-modifying copy loop. All 2,048 hits fall in
+  trace lines 389,941–392,002 of 2,744,938 — a startup window — yielding 8
+  distinct screen states. "Identical at 2,048 samples" meant almost nothing.
+- **`n % 512` on the coordinate counter.** Spread across the run, but biased:
+  `$7890` (the wait-for-space loop) is ~66% of the counter's growth, so most
+  samples caught a static screen. 1,079 samples, 26 distinct states.
+- **Every hit of `$6217`**, the in-game keyboard ingest: 6,808 samples, reached
+  only while playing, 6,808 distinct memory states.
+
+### What the engines actually share
+
+At all 6,808 in-game samples, interpreter vs `snake-bytec1` and vs
+`snake-bytec1-ext`:
+
+| region | result |
+|---|---|
+| `$0000-$00FF` zero page | identical |
+| `$0100-$01FF` stack | **differs** |
+| `$0200-$03FF` | identical |
+| `$0400-$07FF` text page | identical |
+| `$0800-$1FFF` | identical |
+| `$2000-$5FFF` both hi-res pages | identical |
+| `$6000-$BFFF` the game itself | identical |
+| stack pointer | identical |
+
+### The stack difference is entirely synthetic return addresses
+
+Decomposed byte by byte over the same 6,808 samples, across `$01F0-$01FF`
+(minimum SP observed was `$F1`, so the window covers every live byte):
+
+- **27,232 live stack bytes differ, and every one holds `$FE` or `$FF` on the
+  generated side. Zero hold anything else.**
+- 13,700 differing bytes are below SP — dead residue, different reset fill.
+
+The mechanism, confirmed at byte level rather than inferred: a generated
+program's `RTS` is a C `return`, not a pop of a real address, so each entry
+pushes a caller-supplied `ret_addr` — `$FFFE` for an entry point (82
+`push16(ret_addr)` sites in `snake-bytec1.c`; `game.c` calls
+`rom_cout1(0xfffe)`). At the first in-game sample, `$01FE/$01FF` holds `A8 FA`
+= `$FAA8` on the interpreter and `FE FF` = `$FFFE` on the generated build;
+`$01F3/$01F4` holds `8D 62` = `$628D`, the return address from the `JSR $6217`
+at `$628B`, against `FE FF` again. Every byte between them matches.
+
+### So the residual 8 frames
+
+Control flow is identical, all memory outside the stack page is identical, SP
+is identical, and the stack differs only where the decompilation puts a
+synthetic value by construction. Nothing in the machine differs. The 8 frame
+hashes differ because the host samples video on a fixed cycle interval and the
+two engines' cycle accounting differs slightly, so the sample lands at
+different points inside an in-progress screen write. Every one re-converges on
+the next frame.
+
+That is now measured rather than argued.
+
+### `ram.probe` and the gate
+
+`decoded/snake-byte/probe-acceptance.sh` gained a memory-equivalence check. It
+is not redundant with the trace check: a wrong byte written to memory need not
+change control flow within 1,300 frames.
+
+Mutation-tested, and the first attempt was ineffective in the way this project
+keeps rediscovering — a stray `ram_poke(0x1f00, 0x42)` inserted into the first
+function in the file changed nothing, because that function never runs. Moved
+to the `$6217` block, which the trace proves executes 6,808 times, it produces
+exactly the discriminating result: **`[trace] PASS` and `FAIL [ram/ref]`**. The
+memory check catches what the control-flow check cannot.
+
+The stack page is excluded from the hash, and that costs nothing: the stack
+pointer is compared, and any live stack value the program reads back would have
+to change control flow to matter, which the trace check covers.
+
+### Left open
+
+- `play-hires.keys` is still cycle-stamped. Converting it needs its own site
+  check — the hi-res scenario reaches `$664A`, which the four sites here were
+  never shown to cover.
+- Nothing compares the interpreter against a generated build for `robotron` or
+  `bolo`; the machinery is now generic, but no coordinate script exists for
+  either.
