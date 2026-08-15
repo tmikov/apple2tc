@@ -1,0 +1,25 @@
+# The acceptance test's probe for the snake-bytec1 back end: one instance of
+# `trace`, printing the address dispatch reached, at every block head
+# snake-bytec1.c can probe -- plus the same `kb` delivery play.probe uses, so
+# the replay lands on the probe-stamped coordinate instead of raw cycles.
+#
+# trace-ext.probe is the same program over snake-bytec1-ext.c's (plus
+# a2rom.c's and game.c's) block heads. The two must stay identical apart from
+# the site list; probe-acceptance.sh checks that.
+#
+# kb must install at exactly the sites play.probe uses -- see rec.probe for
+# why these four, including $6217. A mismatch here would replay a different
+# coordinate than the one play.pkeys was stamped on.
+counter n
+
+probe kb() {
+  inc n
+  key n
+}
+
+probe trace(site = pc) {
+  printf("%04X\n", site)
+}
+
+install kb at $FD1B, $741F, $7890, $6217
+install trace at @"blocks.txt"
