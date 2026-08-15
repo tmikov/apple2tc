@@ -34,3 +34,5 @@ FE93 rom_setvid
 7226 game_print_zero_if_blank
 7267 game_add_score
 702B game_clear_hgr
+6C4B game_rand_byte
+6B93 game_plot_shape_merge

@@ -316,9 +316,10 @@ done
 
 echo "--- coverage over all scenarios ---"
 coverage_report trace "$here/blocks.txt" 0
-# Baseline 21: $7021 in game.c (game_next_byte's page-crossing branch -- the
-# display lists the recorded sessions run never straddle a page) and twenty in
-# a2rom.c, mostly the ROM paths for arguments the game never passes. Each is a
-# block whose hand-decode nothing checks; the number is here to stop that set
-# growing quietly, not because 21 is acceptable.
-coverage_report trace-ext "$here/blocks-ext.txt" 21 "$here/a2rom.c" "$here/game.c"
+# Baseline 22: twenty in a2rom.c, mostly ROM paths for arguments the game never
+# passes, plus two of a kind in game.c -- $7021 and $6C4F, the high-byte carries
+# of the display-list and pseudo-random pointers. Neither pointer crosses a page
+# in either recording, so both branches are decoded from the binary and checked
+# by nothing. Each entry is a block whose hand-decode nothing verifies; the
+# number is here to stop that set growing quietly, not because 22 is acceptable.
+coverage_report trace-ext "$here/blocks-ext.txt" 22 "$here/a2rom.c" "$here/game.c"

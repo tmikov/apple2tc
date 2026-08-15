@@ -160,15 +160,18 @@ void game_cout_hook(uint16_t ret_addr) {
 /*   $06      index into the dot-pattern table at $6064                       */
 /*   $07      scanline counter, 0-3                                           */
 /*                                                                            */
-/* $6064 holds sixteen bytes: eight zeros, then four dot patterns repeated    */
-/* with their phase swapped. The index is                                     */
+/* $6064 is a 128-byte dot-pattern table, $6064-$60E3, immediately before the */
+/* plotter code. It is 16 inks of 8 bytes, and the index the original builds  */
 /*                                                                            */
 /*     (($01 << 1 | scanline & 1) << 2) | ($02 & 3)                           */
 /*                                                                            */
-/* so ink 0 always lands in the zero half and erases, while ink 1 picks a     */
-/* pattern whose phase comes from the scanline parity and the low two bits of */
-/* the column -- a dither that keeps the shape's texture aligned to the       */
-/* hi-res byte grid. Whatever comes out is ANDed with that scanline's mask.   */
+/* is just ink * 8 + parity * 4 + (column & 3): each ink carries four dot     */
+/* phases for the column's position within the hi-res byte, in two sets so    */
+/* that odd and even scanlines can differ. Ink 0 is all zeros and erases; ink */
+/* 15 is $7F throughout and fills solid; the rest are dithers, several of     */
+/* them the same pattern at opposite phase, which on a hi-res display is how  */
+/* you get the complementary colour. Whatever comes out is ANDed with that    */
+/* scanline's mask.                                                           */
 /*                                                                            */
 /* Decoded by hand from snake-byte.lst and the tables read out of             */
 /* snake-byte.b33. The CYCLES constants and the block boundaries they sit on  */
@@ -719,6 +722,152 @@ void game_clear_hgr(uint16_t ret_addr) {
   }
 
   /*$7044*/ CYCLES(0x7044, 6);
+
+  if (ret_addr)
+    pop16();
+}
+
+/* ========================================================================== */
+/* $6C4B -- the next pseudo-random byte.                                      */
+/*                                                                            */
+/* There is no generator here at all: the game walks a pointer ($0E/$0F)      */
+/* through its own memory and hands back whatever byte it lands on, skipping  */
+/* any with the high bit set and restarting the walk at $1800 when it finds   */
+/* one. Program text and data are the entropy. The result is therefore always */
+/* $00-$7F, which is what makes it usable directly as a coordinate.           */
+/*                                                                            */
+/* The restart does not advance the pointer -- it stores $1800 and jumps      */
+/* straight back to the load -- so a byte at $1800 with bit 7 set would hang  */
+/* the game. Nothing enforces that; the original simply relies on it.         */
+/* ========================================================================== */
+
+void game_rand_byte(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  /*$6C4B*/ CYCLES(0x6c4b, 7);
+  const uint8_t lo = (uint8_t)(ram_peek(0x000e) + 0x01);
+  ram_poke(0x000e, lo);
+  if (lo) {
+    /*$6C4D*/ CYCLES_EDGE(0x6c4d, 1);
+  } else {
+    /*$6C4F*/ CYCLES(0x6c4f, 5);
+    ram_poke(0x000f, (uint8_t)(ram_peek(0x000f) + 0x01));
+  }
+
+  for (;;) {
+    /*$6C51*/ CYCLES(0x6c51, 9);
+    s_y = 0x00;
+    const uint8_t b = peek(ram_peek16al(0x000e));
+    s_a = b;
+    s_status_not_z = b;
+    s_status_n = (b & 0x80);
+    if (!(b & 0x80)) {
+      /*$6C55*/ CYCLES_EDGE(0x6c55, 1);
+      /*$6C62*/ CYCLES(0x6c62, 6);
+      break;
+    }
+    /*$6C57*/ CYCLES(0x6c57, 13);
+    ram_poke(0x000e, 0x00);
+    ram_poke(0x000f, 0x18);
+  }
+
+  if (ret_addr)
+    pop16();
+}
+
+/* ========================================================================== */
+/* $6B93 -- the merging cell plotter.                                         */
+/*                                                                            */
+/* Same shape as $60E4: load the shape's masks, then walk the cell's four     */
+/* scanlines. Two things differ.                                              */
+/*                                                                            */
+/* It merges instead of replacing. $60E7 stores `pattern & mask`, wiping      */
+/* whatever else shared the byte; this one stores `(pattern ^ $7F) & mask |   */
+/* existing`, so it only ever sets bits. $7F and not $FF: bit 7 is the hi-res */
+/* palette bit for the byte, and inverting that would shift the whole byte's  */
+/* colour.                                                                    */
+/*                                                                            */
+/* And it builds the table index differently. $60F7 does ROL $06, giving      */
+/*                                                                            */
+/*     ink * 8 + parity * 4 + (column & 3)                                    */
+/*                                                                            */
+/* while $6BAD does ROR $06 on the same operands, giving                      */
+/*                                                                            */
+/*     (ink >> 1) * 4 + (column & 3)                                          */
+/*                                                                            */
+/* -- the parity bit lands in bit 7 and is shifted straight back out by the   */
+/* two ASLs that follow. Whether that was intended is not something the       */
+/* binary can tell us. What it means in practice is that the caller's ink 1   */
+/* selects row 0, all zeros, which the EOR then turns into a solid $7F: the   */
+/* routine fills the shape rather than dithering it. Reproduced exactly,      */
+/* including the lost bit, because the screen the game draws depends on it.   */
+/* ========================================================================== */
+
+void game_plot_shape_merge(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  /*$6B93*/ CYCLES(0x6b93, 6);
+  game_load_shape(0x6b95);
+
+  /*$6B96*/ CYCLES(0x6b96, 22);
+  const uint8_t row = ram_peek(0x0003);
+  s_x = 0x00;
+  s_y = row;
+  ram_poke(0x0007, 0x00);
+  ram_poke(0x0004, ram_peek(0x6000 + row));
+  ram_poke(0x0005, ram_peek(0x6030 + row));
+
+  for (unsigned line = 0; line < 4; ++line) {
+    /*$6BA6*/ CYCLES(0x6ba6, 85);
+
+    // $6BAA-$6BB1: LDA $07 / ROR A / ROR $06 / ASL $06 / ASL $06. See the
+    // header -- the parity bit rotated into bit 7 is shifted back out.
+    const uint8_t parity = (uint8_t)(ram_peek(0x0007) & 0x01);
+    uint8_t idx = ram_peek(0x0001);
+    idx = (uint8_t)((parity << 7) | (idx >> 1));
+    idx = (uint8_t)(idx << 2);
+    idx = (uint8_t)(idx | (ram_peek(0x0002) & 0x03));
+    ram_poke(0x0006, idx);
+
+    const uint8_t col = ram_peek(0x0002);
+    s_y = col;
+    const uint16_t dst = (uint16_t)(ram_peek16al(0x0004) + col);
+    poke(
+        dst,
+        (uint8_t)(((ram_peek(0x6064 + idx) ^ 0x7f) & ram_peek(0x6060 + line)) | peek(dst)));
+
+    s_x = (uint8_t)(line + 1);
+    ram_poke(0x0007, (uint8_t)(ram_peek(0x0007) + 0x01));
+
+    if (s_status_d) {
+      fprintf(stderr, "game_plot_shape_merge: entered with decimal mode set\n");
+      error_handler(0x6b93);
+      abort();
+    }
+    // $6BCE-$6BD3: CLC / ADC #4 -- down one scanline. Only V outlives this;
+    // the CPX two instructions later rewrites C, Z and N.
+    const uint8_t hi = ram_peek(0x0005);
+    const uint8_t next_hi = (uint8_t)(hi + 0x04);
+    s_status_v = ovf8(next_hi, hi, 0x04);
+    s_a = next_hi;
+    ram_poke(0x0005, next_hi);
+
+    // $6BD5 CPX #4.
+    s_status_c = (s_x >= 0x04);
+    s_status_not_z = (s_x != 0x04);
+    s_status_n = ((uint8_t)(s_x - 0x04) & 0x80);
+    if (line != 3) {
+      /*$6BD7*/ CYCLES_EDGE(0x6bd7, 1);
+    }
+  }
+
+  /*$6BD9*/ CYCLES(0x6bd9, 6);
 
   if (ret_addr)
     pop16();

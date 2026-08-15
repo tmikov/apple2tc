@@ -69,3 +69,13 @@ void game_add_score(uint16_t ret_addr);
 
 /// $702B -- zero hi-res page 1, $2000 through $3FFF.
 void game_clear_hgr(uint16_t ret_addr);
+
+/* --- $6B93/$6C4B --------------------------------------------------------- */
+
+/// $6C4B -- the next pseudo-random byte, $00-$7F, read out of the game's own
+/// memory through the $0E/$0F pointer.
+void game_rand_byte(uint16_t ret_addr);
+
+/// $6B93 -- load the shape for $00 and merge it into the cell at row $03,
+/// column $02, setting bits rather than replacing the byte.
+void game_plot_shape_merge(uint16_t ret_addr);
