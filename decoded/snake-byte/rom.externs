@@ -30,3 +30,7 @@ FE93 rom_setvid
 7019 game_next_byte
 7024 game_set_ink
 7000 game_lores_vline
+71F3 game_print_bcd
+7226 game_print_zero_if_blank
+7267 game_add_score
+702B game_clear_hgr

@@ -53,3 +53,19 @@ void game_set_ink(uint16_t ret_addr);
 /// $7000 -- plot a vertical run on the lo-res occupancy map, from row $03
 /// through row $08 inclusive at column $02, leaving $03 unchanged.
 void game_lores_vline(uint16_t ret_addr);
+
+/* --- $702B/$71F3/$7226/$7267: the score ---------------------------------- */
+
+/// $71F3 -- print one BCD byte as two digits, suppressing leading zeros via
+/// the $002C flag.
+void game_print_bcd(uint16_t ret_addr);
+
+/// $7226 -- print '0' if $002C shows no digit was printed. Called once at the
+/// end of a multi-byte number.
+void game_print_zero_if_blank(uint16_t ret_addr);
+
+/// $7267 -- add $71CC:$71CB to the four-byte BCD score at $7252.
+void game_add_score(uint16_t ret_addr);
+
+/// $702B -- zero hi-res page 1, $2000 through $3FFF.
+void game_clear_hgr(uint16_t ret_addr);

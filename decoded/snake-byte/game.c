@@ -496,3 +496,230 @@ void game_lores_vline(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $71F3, $7226, $7267, $702B -- the score.                                   */
+/*                                                                            */
+/* The score is BCD: four bytes at $7252-$7255, little-endian, eight digits.  */
+/* $7267 adds to it with the 6502's decimal mode, and $71F3 prints one byte   */
+/* of it as two digits by nibble, since in BCD a nibble is already a digit.   */
+/*                                                                            */
+/* $002C is the leading-zero flag, and it is the reason these two are a pair. */
+/* $71F3 prints a digit only once $2C is non-zero, and sets $2C from the      */
+/* first non-zero digit it sees, so leading zeros are suppressed across a     */
+/* whole multi-byte number rather than per byte. A caller clears $2C, prints  */
+/* the bytes most-significant first, then calls $7226 -- which prints a       */
+/* single '0' if $2C is still clear, so that a score of zero is not printed   */
+/* as nothing at all. $72E4 is the canonical example.                         */
+/*                                                                            */
+/* $2C is the ROM's H2, the right-hand endpoint of HLINE. The game uses the   */
+/* same byte for both ($7159 stores a column into it), which is safe only     */
+/* because drawing and score printing never interleave.                       */
+/*                                                                            */
+/* $B0 is '0' in Apple II ASCII (high bit set). Digits above 9 would print as */
+/* punctuation, which is another way of saying the arithmetic must be BCD.    */
+/* ========================================================================== */
+
+/// $7209 and $7220: CLC / ADC #$B0 / JSR COUT. The two are byte-identical
+/// apart from the return address the JSR pushes, so they share one body here.
+/// No CYCLES of its own -- both call sites are already inside a counted block.
+static void game_emit_digit(uint16_t cout_ret) {
+  // ADC honours the D flag. Digits are printed with D clear: $7267 is the
+  // only thing that sets it and it clears it again before returning. Say so
+  // loudly rather than carry a decimal path that cannot be reached.
+  if (s_status_d) {
+    fprintf(stderr, "game_emit_digit: entered with decimal mode set\n");
+    error_handler(0x71f3);
+    abort();
+  }
+
+  const uint8_t digit = s_a;
+  const uint16_t sum = (uint16_t)digit + 0x00b0 + s_status_c;
+  s_status_c = (uint8_t)(sum >> 8);
+  s_status_v = ovf8((uint8_t)sum, digit, 0xb0);
+  s_a = (uint8_t)sum;
+  s_status_not_z = s_a;
+  s_status_n = (s_a & 0x80);
+  rom_cout(cout_ret);
+}
+
+void game_print_bcd(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  /*$71F3*/ CYCLES(0x71f3, 15);
+  const uint8_t byte = s_a;
+  push8(byte);
+  uint8_t digit = (uint8_t)(byte >> 4);
+  s_a = digit;
+  // $71F8 CMP #$00. N is always clear here -- a nibble cannot reach $80 --
+  // but the compare still happens, so record what it leaves.
+  s_status_c = 0x01;
+  s_status_not_z = digit;
+  s_status_n = 0x00;
+
+  if (!digit) {
+    /*$71FA*/ CYCLES_EDGE(0x71fa, 1);
+  } else {
+    /*$71FC*/ CYCLES(0x71fc, 3);
+    ram_poke(0x002c, digit);
+  }
+
+  /*$71FE*/ CYCLES(0x71fe, 8);
+  push8(digit);
+  if (ram_peek(0x002c)) {
+    /*$7201*/ CYCLES_EDGE(0x7201, 1);
+    /*$7207*/ CYCLES(0x7207, 14);
+    s_a = pop8();
+    s_status_c = 0x00;
+    game_emit_digit(0x720d);
+  } else {
+    /*$7203*/ CYCLES(0x7203, 7);
+    pop8(); // The digit is dropped -- nothing significant has been printed.
+  }
+
+  /*$720E*/ CYCLES(0x720e, 10);
+  digit = (uint8_t)(pop8() & 0x0f);
+  s_a = digit;
+  // $7211 CMP #$00, as above.
+  s_status_c = 0x01;
+  s_status_not_z = digit;
+  s_status_n = 0x00;
+
+  if (!digit) {
+    /*$7213*/ CYCLES_EDGE(0x7213, 1);
+  } else {
+    /*$7215*/ CYCLES(0x7215, 3);
+    ram_poke(0x002c, digit);
+  }
+
+  /*$7217*/ CYCLES(0x7217, 8);
+  push8(digit);
+  if (ram_peek(0x002c)) {
+    /*$721A*/ CYCLES_EDGE(0x721a, 1);
+    /*$721E*/ CYCLES(0x721e, 14);
+    s_a = pop8();
+    s_status_c = 0x00;
+    game_emit_digit(0x7224);
+    /*$7225*/ CYCLES(0x7225, 6);
+  } else {
+    /*$721C*/ CYCLES(0x721c, 10);
+    pop8();
+  }
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_print_zero_if_blank(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  /*$7226*/ CYCLES(0x7226, 5);
+  const uint8_t seen = ram_peek(0x002c);
+  s_a = seen;
+  s_status_not_z = seen;
+  s_status_n = (seen & 0x80);
+
+  if (seen) {
+    /*$7228*/ CYCLES_EDGE(0x7228, 1);
+    /*$722F*/ CYCLES(0x722f, 6);
+  } else {
+    /*$722A*/ CYCLES(0x722a, 5);
+    s_a = 0xb0;
+    s_status_not_z = 0xb0;
+    s_status_n = 0x80;
+    rom_cout(0x0000); // JMP $FDED -- a tail call.
+  }
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_add_score(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // score += $71CC:$71CB, in BCD. adc_dec16 is the same decimal-mode adder
+  // the emulator and the generated code use, rather than a second
+  // hand-written one that could disagree with them about the undefined
+  // corners of BCD ADC. Its result is the sum in the low byte and the flags
+  // packed into the high byte.
+  /*$7267*/ CYCLES(0x7267, 56);
+  s_status_d = 0x01;
+
+  uint16_t r = adc_dec16(ram_peek(0x71cb), ram_peek(0x7252), 0x00);
+  s_status_c = ((uint8_t)(r >> 8) & 0x01);
+  ram_poke(0x7252, (uint8_t)r);
+
+  r = adc_dec16(ram_peek(0x71cc), ram_peek(0x7253), s_status_c);
+  s_status_c = ((uint8_t)(r >> 8) & 0x01);
+  ram_poke(0x7253, (uint8_t)r);
+
+  r = adc_dec16(ram_peek(0x7254), 0x00, s_status_c);
+  s_status_c = ((uint8_t)(r >> 8) & 0x01);
+  ram_poke(0x7254, (uint8_t)r);
+
+  r = adc_dec16(ram_peek(0x7255), 0x00, s_status_c);
+  s_a = (uint8_t)r;
+  const uint8_t flags = (uint8_t)(r >> 8);
+  s_status_c = (flags & 0x01);
+  s_status_not_z = (~flags & 2);
+  s_status_v = ((flags & 0x40) != 0);
+  s_status_n = (flags & 0x80);
+  ram_poke(0x7255, s_a);
+
+  s_status_d = 0x00;
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_clear_hgr(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // Zero hi-res page 1, $2000 through $3FFF, a page at a time through the
+  // $04/$05 pointer. The inner loop runs a full 256 bytes because Y wraps to
+  // zero, so the terminating test is on the page number, not on Y.
+  /*$702B*/ CYCLES(0x702b, 12);
+  ram_poke(0x0004, 0x00);
+  ram_poke(0x0005, 0x20);
+  s_y = 0x00;
+
+  for (;;) {
+    uint8_t y;
+    do {
+      /*$7035*/ CYCLES(0x7035, 12);
+      y = s_y;
+      poke(ram_peek16al(0x0004) + y, 0x00);
+      y = (uint8_t)(y + 1);
+      s_y = y;
+      if (y) {
+        /*$703A*/ CYCLES_EDGE(0x703a, 1);
+      }
+    } while (y);
+
+    /*$703C*/ CYCLES(0x703c, 12);
+    const uint8_t page = (uint8_t)(ram_peek(0x0005) + 1);
+    ram_poke(0x0005, page);
+    s_status_c = (page >= 0x40);
+    s_status_n = ((uint8_t)(page - 0x40) & 0x80);
+    if (page == 0x40)
+      break;
+    /*$7042*/ CYCLES_EDGE(0x7042, 1);
+  }
+
+  /*$7044*/ CYCLES(0x7044, 6);
+
+  if (ret_addr)
+    pop16();
+}
