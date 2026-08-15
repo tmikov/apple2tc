@@ -1,0 +1,40 @@
+# The oracle meant to outlive the others.
+#
+# As game.c converts to real C, the block-head trace goes first and the memory
+# hashes go when a variable's storage leaves emulated RAM. What is left is the
+# screen -- and the screen belongs to the machine no matter who computed it.
+#
+# Why not frame hashes. verify.sh hashes video state at every host frame
+# boundary, which is a wall-clock instant, and the two engines' cycle
+# accounting is a few cycles out of phase over a run (22,147,953 against
+# 22,147,957 -- measured, decision log 2026-08-15). Eight of 1,300 frames
+# therefore sample at slightly different points in the program and differ, with
+# nothing wrong in the machine. That makes an exact interpreter-vs-generated
+# frame comparison impossible.
+#
+# Sampling at a program-defined instant removes the phase entirely, the same
+# way probe-stamped keys removed it from input. $6217 is the in-game keyboard
+# ingest: reached thousands of times, only while playing, and both engines
+# reach it at exactly the same points because that is what the block-head trace
+# proves today and what this inherits.
+#
+# This is a strict subset of ram.probe, which already hashes these ranges among
+# others. It exists separately so that when the rest of memory stops matching,
+# the check that remains is already written, already committed, and already
+# known to pass.
+counter n
+
+probe kb() {
+  inc n
+  key n
+}
+
+probe screen(
+    txt = hash($0400, $07FF),
+    hgr1 = hash($2000, $3FFF),
+    hgr2 = hash($4000, $5FFF)) {
+  printf("%08X %08X %08X\n", txt, hgr1, hgr2)
+}
+
+install kb at $FD1B, $741F, $7890, $6217, $760F, $FB7C, $FD26
+install screen at $6217

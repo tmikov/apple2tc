@@ -74,7 +74,7 @@ keys="${KEYS:-$here/play.pkeys}"
 # the same drift hazard the trace.probe/trace-ext.probe check covers, so it is
 # checked the same way: asserted, not trusted.
 coord=$(grep -h '^install kb at ' "$here/rec.probe")
-for p in play.probe trace.probe trace-ext.probe ram.probe; do
+for p in play.probe trace.probe trace-ext.probe trace-easy.probe ram.probe screen.probe; do
   if [ "$(grep -h '^install kb at ' "$here/$p")" != "$coord" ]; then
     echo "FAIL: $p installs the coordinate differently from rec.probe" >&2
     echo "  rec.probe: $coord" >&2
@@ -402,8 +402,35 @@ check_memory() {
   echo "[ram/$label] PASS: memory identical at $(wc -l < "$interp") in-game samples"
 }
 
+# Screen equivalence at program-defined instants. See screen.probe: this is the
+# check designed to survive the conversion of game.c to real C, so it is run
+# now, while the stronger checks can still confirm it is not lying.
+check_screen() {
+  local label=$1 prog=$2
+  local tag="$label-$(basename "$keys" .pkeys)"
+  local interp="/tmp/pkeys-screen-interp-$tag.txt" gen="/tmp/pkeys-screen-$tag.txt"
+
+  "$a2run" --preload "$b33" --key-file="$keys" --probe="$here/screen.probe" \
+    --probe-out="$interp" --frames="$frames" > /dev/null 2>&1
+  "$prog" --key-file="$keys" --probe="$here/screen.probe" \
+    --probe-out="$gen" --frames="$frames" > /dev/null 2>&1
+
+  if [ ! -s "$interp" ]; then
+    echo "FAIL [screen/$label]: no samples" >&2
+    exit 1
+  fi
+  if ! diff -q "$interp" "$gen" > /dev/null; then
+    echo "FAIL [screen/$label]: the engines disagree on screen contents" >&2
+    diff "$interp" "$gen" | head -6 >&2
+    exit 1
+  fi
+  echo "[screen/$label] PASS: screen identical at $(wc -l < "$interp") in-game samples"
+}
+
 check_memory ref "$bin/decoded/snake-byte/snake-bytec1-run"
 check_memory ext "$bin/decoded/snake-byte/snake-bytec1-ext-run"
+check_screen ref "$bin/decoded/snake-byte/snake-bytec1-run"
+check_screen ext "$bin/decoded/snake-byte/snake-bytec1-ext-run"
 done
 
 # ---------------------------------------------------------------------------
@@ -435,6 +462,8 @@ check_backend trace-easy "$bin/decoded/snake-byte/snake-byte-easyc1-ext-run" \
 # the hand-written sources are literally the same files, so what this scenario
 # reaches counts toward that build's coverage. Folding it in here is what lets
 # the display-list blocks come off the unverified list.
+check_screen easy "$bin/decoded/snake-byte/snake-byte-easyc1-ext-run"
+
 cat "/tmp/pkeys-cover-trace-easy.txt" >> "/tmp/pkeys-cover-trace-ext.txt"
 
 echo "--- coverage over all scenarios ---"
