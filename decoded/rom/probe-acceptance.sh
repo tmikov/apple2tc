@@ -36,6 +36,12 @@
 # different site count, not as a spurious failure.
 
 set -e
+# Under `set -e` alone, the site-list pipeline's status is `sort`'s, not
+# `grep`'s: a `grep` that hard-fails on a missing/renamed source file (exit 2
+# plus a stderr warning) would still leave `sort` exiting 0, so the script
+# would sail on with a silently shrunken site list. pipefail makes the
+# pipeline's status the worst of its parts, so that failure aborts here.
+set -o pipefail
 
 if [ -z "$1" ]; then
   echo "Usage: $0 <build-dir>" >&2
@@ -52,9 +58,9 @@ frames=${FRAMES:-120}
 
 # Compare one generated build against the interpreter on that build's own
 # block heads. $1: label, $2: generated binary, $3: its C source, $4: where to
-# keep the site list.
+# keep the site list, $5: minimum acceptable site count.
 check_backend() {
-  local label=$1 prog=$2 src=$3 sites=$4
+  local label=$1 prog=$2 src=$3 sites=$4 floor=$5
   local interp="/tmp/probe-interp-$label.txt" gen="/tmp/probe-$label.txt"
 
   [ -x "$prog" ] || { echo "Error: not found: $prog" >&2; exit 1; }
@@ -64,7 +70,17 @@ check_backend() {
   # regenerating the C first, but it is still rebuilt here so it never goes
   # stale relative to the C actually being tested.
   grep -oE 'CYCLES\(0x[0-9a-f]+' "$src" | sed 's/CYCLES(0x//' | sort -u > "$sites"
-  echo "[$label] site list: $(wc -l < "$sites") block heads"
+  local nsites
+  nsites=$(wc -l < "$sites")
+  echo "[$label] site list: $nsites block heads"
+  # An empty list is already caught downstream (the probe compiler rejects
+  # it), but a partial one -- $src present yet truncated to (near-)empty --
+  # is not: sort still exits 0. $floor is a generous margin below the
+  # committed count (see the call sites below), just enough to catch that.
+  if [ "$nsites" -lt "$floor" ]; then
+    echo "FAIL [$label]: site list has only $nsites block heads, expected at least $floor" >&2
+    exit 1
+  fi
 
   "$a2run" --frames="$frames" --probe="$here/$label.probe" \
     --probe-out="$interp" > /dev/null 2>"/tmp/probe-interp-$label.err"
@@ -110,8 +126,11 @@ if ! diff -q <(strip_probe "$here/trace.probe") <(strip_probe "$here/tracec1.pro
   exit 1
 fi
 
-check_backend trace "$bin/decoded/rom/rom-run" "$here/rom.c" "$here/blocks.txt"
-check_backend tracec1 "$bin/decoded/rom/romc1-run" "$here/romc1.c" "$here/blocksc1.txt"
+# Floor: measured 1,718 block heads for both back ends as of this writing.
+# 1,650 leaves headroom for legitimate drift (a simplifyCFG change that merges
+# a few blocks) while still catching rom.c/romc1.c going missing or empty.
+check_backend trace "$bin/decoded/rom/rom-run" "$here/rom.c" "$here/blocks.txt" 1650
+check_backend tracec1 "$bin/decoded/rom/romc1-run" "$here/romc1.c" "$here/blocksc1.txt" 1650
 
 if diff -q "$here/blocks.txt" "$here/blocksc1.txt" > /dev/null; then
   echo "the two back ends agree on the block-head set"
