@@ -361,6 +361,34 @@ so it could be shown to catch a defect they caught -- a display-list operand
 swap, failing at sample 7,503 of 26,111. Added after they were gone, it would
 have been an assumption.
 
+**`[tool]` The decompiler already knows which registers an adapter must write
+back.** `apple2tc --ir` prints `LiveIn`/`LiveOut` above every function, computed
+over the whole call graph. Converting $6C72 raised the question directly: the
+original leaves the matched table slot in X, and whether the C has to keep doing
+so is not answerable by reading the caller -- the chain runs four routines deep.
+The dump answers it in one line (`func_6c72` LiveOut: `A, Y, STATUS_N,
+STATUS_D, STATUS_I` -- no X, but Y, so the joystick path does maintain Y), and
+answers it for $6594 the other way (`A, X, ...`, so the key dequeue's X write
+stays). Deleting the two X writes and rerunning every oracle agreed, which is
+corroboration; the dump is the reason.
+
+This sits against "match what the 6502 sets, not what DCE kept" further up, and
+the resolution is cost. A status flag is one line and always right, so write it.
+A register write inside real C costs the abstraction the conversion exists to
+buy, so it is worth checking whether anything reads it -- and the check is a
+command, re-runnable whenever the decompilation changes.
+
+**`[process]` A block that runs is not a behaviour that was tested.** Snake
+Byte's key table maps a *binding* to a *command* through two parallel arrays,
+and both blocks that do the mapping execute constantly -- play.pkeys presses
+I, J, K and M all round. But it presses the default bindings, where the two
+arrays are byte-identical, so reading the wrong one changes nothing.
+play-hires.pkeys does rebind, to W A D X Q E, and then stops: it never plays
+afterwards. Swapping the two arrays in the converted C passes verify.sh 4/4,
+all three block-head traces, memory and screen. Coverage counts the block and
+reports it green. What a routine *distinguishes* has to be exercised, not just
+entered, and no coverage number will say which recordings are missing.
+
 **`[process]` Read data tables out of the binary, and derive their extent.** The
 listing prints `--code-at` regions as `DFB` and does not delimit tables. A first
 pass at Snake Byte's dot-pattern table described it as "sixteen bytes"; it is
@@ -454,3 +482,6 @@ the whole point of it — see the step itself.
 | Converting one path of a shared block head | The other path keeps it in the site list; the engines then disagree and the count looks fine. |
 | A hand-written file outside the site-list grep | Fine for real C, fatal for a `CYCLES`. Lint that the two files use different spellings. |
 | Coverage reported as a list of addresses | Group by feature. "The joystick" is actionable; forty hex numbers are not. |
+| Guessing whether a register is live after a call | `apple2tc --ir` prints per-function `LiveIn`/`LiveOut`. Reading the caller by hand is four routines of tracing for a fact the tool already computed. |
+| A block covered by a recording that never varies its inputs | Coverage says entered, not tested. Two identical lookup tables make reading the wrong one free. |
+| A verification script that ignores its arguments | `./verify.sh <build-dir>` read `$BIN` only and silently tested a stale directory -- four false PASSes. Scripts that gate anything must reject arguments they do not understand. |

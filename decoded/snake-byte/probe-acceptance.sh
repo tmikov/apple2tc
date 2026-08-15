@@ -348,7 +348,7 @@ for keyfile in ${KEYS:-"$here/play.pkeys" "$here/play-hires.pkeys"}; do
 check_backend trace "$bin/decoded/snake-byte/snake-bytec1-run" "$here/trace.probe" \
   "$here/blocks.txt" 1694 "$here/snake-bytec1.c"
 check_backend trace-ext "$bin/decoded/snake-byte/snake-bytec1-ext-run" "$here/trace-ext.probe" \
-  "$here/blocks-ext.txt" 1519 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c"
+  "$here/blocks-ext.txt" 1488 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c"
 
 if diff -q "$here/blocks.txt" "$here/blocks-ext.txt" > /dev/null; then
   echo "the two back ends agree on the block-head set"
@@ -455,7 +455,7 @@ frames=${EASY_FRAMES:-3000}
 set_scenario "$here/play-hires.pkeys"
 echo "    (against snake-byte-easy.b33, $frames frames)"
 check_backend trace-easy "$bin/decoded/snake-byte/snake-byte-easyc1-ext-run" \
-  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1519 \
+  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1488 \
   "$here/snake-byte-easyc1-ext.c" "$here/a2rom.c" "$here/game.c"
 
 # The fixture's block heads are the same set as the stock extern build's, and
@@ -473,8 +473,13 @@ coverage_report trace "$here/blocks.txt" 0
 # executes, so its decode rests on the binary alone with no cross-engine check
 # behind it. They cluster into whole features, not scattered branches:
 #
-#   the joystick (15)   $6C72's entire $6CC2-$6CF1 tail plus the branches
-#       reaching it. Neither recording plugs one in.
+#   (was: the joystick (11), $6CC2-$6CF1, and attract mode (6), $6C7B-$6C8F --
+#   neither recording plugs a joystick in, and both answer the difficulty
+#   prompt, so $0302 is never set. All 17 left the site list when
+#   game_read_direction converted, the same way $64D2/$6572 and $6B35 did.
+#   Seventeen at once is the largest such drop so far and the clearest case
+#   for reading this number carefully: nothing about that code became better
+#   understood, it merely stopped being asked about.)
 #   the 'P' opcode (7)  $7192-$71B0. None of the 29 level scripts uses it.
 #   the ROM (20)        in a2rom.c, mostly paths for arguments the game never
 #       passes to PLOT, HLINE and SCRN.
@@ -498,4 +503,4 @@ coverage_report trace "$here/blocks.txt" 0
 # The number exists to stop that set growing quietly, and to be ratcheted down
 # whenever a scenario reaches one of them -- as happened at 22 -> 21 when the
 # `easy` fixture covered $6C4F. It is not a target to be satisfied.
-coverage_report trace-ext "$here/blocks-ext.txt" 47 "$here/a2rom.c" "$here/game.c"
+coverage_report trace-ext "$here/blocks-ext.txt" 30 "$here/a2rom.c" "$here/game.c"

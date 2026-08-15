@@ -1065,6 +1065,8 @@ static uint8_t dequeue_key(void) {
   GAME_CYCLES(0x6208, 24);
   ram_poke(0x623c + at, 0x00);
   ram_poke(0x624c, (uint8_t)((at + 1) & 0x0f));
+  // X *is* live out of $6594 -- `apple2tc --ir` says so -- unlike X out of
+  // $6C72, where the same check let the write go. So it is maintained.
   s_x = (uint8_t)(at + 1);
   return key;
 }
@@ -1091,4 +1093,205 @@ uint8_t game_step_bouncers_native(void) {
 
   step_bouncer_slot(1, 0x65d9, 38, 0x65f3, 0x65f4, 35);
   return dequeue_key();
+}
+
+/* ========================================================================== */
+/* $6C72 -- turn the next input into a direction                              */
+/* ========================================================================== */
+
+/// The six inputs the game understands. $6C63 holds the key that produces
+/// each one and $6C6A the code the game acts on; the two start out identical,
+/// which is why the substitution is invisible until the player rebinds a key
+/// from the title screen. Both tables are part of the loaded image, and the
+/// first is written at $757C, from the redefinition screen.
+///
+/// Nothing here is checked by any oracle, and coverage cannot say so. The two
+/// blocks that do the substitution both run -- play.pkeys presses I, J, K and
+/// M all through the round -- but it presses the *default* bindings, where the
+/// two tables are byte-identical and reading the wrong one is invisible.
+/// play-hires.pkeys does rebind, to W A D X Q E, and then the recording ends:
+/// it never plays afterwards. Measured, not assumed -- swapping input_code for
+/// input_key here passes verify.sh 4/4, all three traces, memory and screen.
+/// A recording that rebinds and then plays would close it.
+enum { kInputCount = 6 };
+
+static uint8_t input_key(int i) {
+  return ram_peek(0x6c63 + i);
+}
+
+static uint8_t input_code(int i) {
+  return ram_peek(0x6c6a + i);
+}
+
+/// The two codes that are settings rather than directions.
+enum { kCodeJoystickOn = 0x80, kCodeJoystickOff = 0x8b };
+
+/// The code every input collapses to in attract mode. Its caller stores $FF
+/// at $6253, which ends the game in progress.
+enum { kCodeStop = 0x92 };
+
+/// $6C71 -- set once the player has chosen the joystick.
+static bool joystick_selected(void) {
+  return ram_peek(0x6c71) != 0;
+}
+
+static void select_joystick(bool on) {
+  ram_poke(0x6c71, on ? 0x01 : 0x00);
+}
+
+/// $0302 -- attract mode: nobody answered the difficulty prompt before it
+/// timed out, so the game is playing itself. Any input at all ends it, which
+/// is why the whole key table is skipped below.
+static bool attract_mode(void) {
+  return ram_peek(0x0302) != 0;
+}
+
+/// A switch input. Every one of the game's three read sites -- here, the
+/// difficulty prompt at $7428, and the pause check at $788B -- takes bit 7
+/// *clear* to mean active, which is the opposite of a stock Apple II paddle
+/// button. Consistent enough to be the convention of whatever switch box the
+/// game was written for, so it is transcribed and not corrected.
+static bool switch_pressed(uint16_t sw) {
+  return !(io_peek(sw) & 0x80);
+}
+
+uint8_t game_read_direction_native(uint8_t key) {
+  GAME_CYCLES(0x6c75, 9);
+
+  if (attract_mode()) {
+    GAME_CYCLES(0x6c7b, 6);
+    if (joystick_selected()) {
+      GAME_CYCLES(0x6c80, 6);
+      if (switch_pressed(0xc061)) {
+        GAME_CYCLES(0x6c85, 12);
+        return kCodeStop;
+      }
+      GAME_CYCLES(0x6c83, 1);
+    } else {
+      GAME_CYCLES(0x6c7e, 1);
+    }
+
+    GAME_CYCLES(0x6c89, 6);
+    if (key & 0x80) {
+      GAME_CYCLES(0x6c8c, 8);
+      return kCodeStop;
+    }
+    GAME_CYCLES(0x6c8a, 1);
+    GAME_CYCLES(0x6c8f, 6);
+    // Not a keypress, so nothing happened -- $00 out of an empty ring.
+    return key;
+  }
+  GAME_CYCLES(0x6c79, 1);
+
+  // Search the bindings from the last slot down, so that if the player has
+  // bound the same key twice the higher slot wins.
+  GAME_CYCLES(0x6c90, 6);
+  uint8_t code = key;
+  int slot = kInputCount - 1;
+  for (;;) {
+    GAME_CYCLES(0x6c93, 6);
+    if (key == input_key(slot)) {
+      GAME_CYCLES(0x6c96, 1);
+      GAME_CYCLES(0x6c9e, 4);
+      code = input_code(slot);
+      break;
+    }
+
+    GAME_CYCLES(0x6c98, 4);
+    if (--slot < 0) {
+      GAME_CYCLES(0x6c9b, 3);
+      break;
+    }
+    GAME_CYCLES(0x6c99, 1);
+  }
+  // X is not written back. The original leaves it on the matching slot, or
+  // $FF, but nothing reads it: `apple2tc --ir` prints per-function register
+  // liveness, and func_6c72's LiveOut is A, Y and the flags. Y is in that set,
+  // so the joystick block below does maintain it.
+
+  GAME_CYCLES(0x6ca1, 4);
+  if (code == kCodeJoystickOn) {
+    GAME_CYCLES(0x6ca5, 12);
+    select_joystick(true);
+    return 0x01;
+  }
+  GAME_CYCLES(0x6ca3, 1);
+
+  GAME_CYCLES(0x6cab, 4);
+  if (code == kCodeJoystickOff) {
+    GAME_CYCLES(0x6caf, 12);
+    select_joystick(false);
+    return 0x00;
+  }
+  GAME_CYCLES(0x6cad, 1);
+
+  GAME_CYCLES(0x6cb5, 4);
+  if (code & 0x80) {
+    // A direction. Hand it straight back.
+    GAME_CYCLES(0x6cb9, 6);
+    return code;
+  }
+  GAME_CYCLES(0x6cb7, 1);
+
+  GAME_CYCLES(0x6cba, 6);
+  const uint8_t joystick = ram_peek(0x6c71);
+  if (!joystick) {
+    GAME_CYCLES(0x6cbf, 8);
+    return code;
+  }
+  GAME_CYCLES(0x6cbd, 1);
+
+  // The joystick is two switch inputs read twice, with annunciator 2
+  // selecting the pair -- four directions on two pins. Exactly one has to be
+  // active: none or several is ambiguous and rejected.
+  GAME_CYCLES(0x6cc2, 12);
+  int pressed = 0;
+  uint8_t chosen = 0; // only read when exactly one input turned out active
+  io_peek(0xc05b); // annunciator 2 on
+  if (switch_pressed(0xc062)) {
+    GAME_CYCLES(0x6ccc, 4);
+    chosen = 0;
+    ++pressed;
+  } else {
+    GAME_CYCLES(0x6cca, 1);
+  }
+
+  GAME_CYCLES(0x6ccf, 6);
+  if (switch_pressed(0xc063)) {
+    GAME_CYCLES(0x6cd4, 4);
+    chosen = 3;
+    ++pressed;
+  } else {
+    GAME_CYCLES(0x6cd2, 1);
+  }
+
+  GAME_CYCLES(0x6cd7, 10);
+  io_peek(0xc05a); // annunciator 2 off
+  if (switch_pressed(0xc062)) {
+    GAME_CYCLES(0x6cdf, 4);
+    chosen = 1;
+    ++pressed;
+  } else {
+    GAME_CYCLES(0x6cdd, 1);
+  }
+
+  GAME_CYCLES(0x6ce2, 6);
+  if (switch_pressed(0xc063)) {
+    GAME_CYCLES(0x6ce7, 4);
+    chosen = 2;
+    ++pressed;
+  } else {
+    GAME_CYCLES(0x6ce5, 1);
+  }
+  // Y, unlike X, is live out of here -- see above.
+  s_y = (uint8_t)pressed;
+
+  GAME_CYCLES(0x6cea, 4);
+  if (pressed != 1) {
+    GAME_CYCLES(0x6cee, 8);
+    return 0x00;
+  }
+  GAME_CYCLES(0x6cec, 1);
+  GAME_CYCLES(0x6cf1, 10);
+  return input_code(chosen);
 }

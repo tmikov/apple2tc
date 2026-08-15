@@ -2,8 +2,15 @@
 # Replay recorded key presses against the decompiled builds and compare
 # per-frame video state hashes.
 #
-#   ./verify.sh            check both builds against the recorded traces
-#   ./verify.sh --record   re-record both traces from the reference build
+#   ./verify.sh [build-dir]            check both builds against the traces
+#   ./verify.sh [build-dir] --record   re-record both from the reference build
+#
+# The build directory may also come from $BIN. It used to come *only* from
+# there, and this script ignored its arguments -- so `./verify.sh ../../cmake-
+# build-release`, which is exactly how the sibling probe-acceptance.sh is
+# invoked, silently tested whatever was in cmake-build-debug instead. That cost
+# a run of four false PASSes against a stale binary, so unrecognised arguments
+# are now an error rather than nothing.
 #
 # Two binaries are checked:
 #
@@ -35,8 +42,24 @@
 # genuinely different code for it and are compared frame for frame.
 set -e
 
-bin=${BIN:-../../cmake-build-debug}
+record=
+bin=$BIN
+while [ $# -gt 0 ]; do
+  case $1 in
+    --record) record=1 ;;
+    -*) echo "Usage: $0 [build-dir] [--record]" >&2; exit 1 ;;
+    *) bin=$1 ;;
+  esac
+  shift
+done
 here=$(cd "$(dirname "$0")" && pwd)
+# Resolved against the caller's directory while that is still where we are; the
+# default is relative to the script instead.
+if [ -n "$bin" ]; then
+  bin=$(cd "$bin" 2>/dev/null && pwd) || { echo "Error: no such build dir" >&2; exit 1; }
+else
+  bin=$here/../../cmake-build-debug
+fi
 cd "$here"
 
 # The console builds. Each decompiled program is built twice -- the plain name
@@ -58,7 +81,7 @@ run() {
   "$1" --key-file="$2" --frames="$3" --hash-frames="$4" >/dev/null
 }
 
-if [ "$1" = "--record" ]; then
+if [ -n "$record" ]; then
   # Record from the reference build only, and refuse to write unless two runs
   # agree -- a trace nobody has shown to be deterministic is worse than none.
   for s in "${scenarios[@]}"; do

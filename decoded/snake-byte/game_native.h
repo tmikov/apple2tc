@@ -169,3 +169,9 @@ void game_draw_playfield_native(void);
 /// $69C3 -- sweep columns outward from the snake for an apple, leaving the
 /// answer at $6B3B/$6B3C.
 void game_find_nearest_apple(void);
+
+/// $6C75 -- turn \p key, the byte just taken off the ring, into the code the
+/// game acts on: a direction, a joystick setting applied on the spot, or $00
+/// for nothing. Reads the joystick itself when one is selected and the key
+/// was not a direction.
+uint8_t game_read_direction_native(uint8_t key);
