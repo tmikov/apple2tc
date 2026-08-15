@@ -55,6 +55,25 @@
 /// and reached through accessors, so that when the storage does move, one
 /// file changes and not every use.
 
+/* --- Cycle accounting ----------------------------------------------------- */
+
+/// Charge the cycles the original spent in a block, without registering a
+/// probe site.
+///
+/// Timing cannot be dropped along with the block structure. A frame is a cycle
+/// budget, so a converted routine that runs at a different speed moves every
+/// later frame boundary and therefore every later frame hash -- the one oracle
+/// meant to survive to the end. What is given up is only the *observability*
+/// of the address: `CYCLES_EDGE` does not dispatch a probe, so the site leaves
+/// the block-head trace. That is the middle rung of the ladder in this file's
+/// header, and it is deliberate.
+///
+/// Spelled differently from `CYCLES` so the two cannot be confused, and so
+/// probe-acceptance.sh can reject a plain `CYCLES` in this file -- one written
+/// here would charge cycles and never be probed, which is a silent hole rather
+/// than a declared trade.
+#define GAME_CYCLES(addr, n) CYCLES_EDGE((addr), (n))
+
 /* --- The bouncers --------------------------------------------------------- */
 
 /// One of the two objects that ricochet around the playfield. The original
@@ -90,3 +109,7 @@ uint8_t game_load_shape_masks(uint8_t shape);
 /// $6641 -- point the ROM's character-output vector at the game's own hi-res
 /// handler, so every later COUT reaches game_cout_hook.
 void game_install_cout_vector(void);
+
+/// $64C8 -- step \p b one cell along its deltas and redraw it, reflecting off
+/// whatever it hits.
+void bouncer_step(Bouncer *b);

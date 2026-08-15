@@ -256,9 +256,14 @@ check_literal_sites "$here/a2rom.c" "$here/game.c"
 # non-literal address, arriving from the other direction. Block accounting
 # belongs in the adapter in game.c, which is what keeps a converted routine's
 # trace intact.
-if grep -qE 'CYCLES(_EDGE)?\([^)]' "$here/game_native.c"; then
-  echo "FAIL: game_native.c contains CYCLES; it is not in any site list" >&2
-  grep -nE 'CYCLES(_EDGE)?\([^)]' "$here/game_native.c" >&2
+# GAME_CYCLES (i.e. CYCLES_EDGE) is how converted code keeps its timing exact
+# without claiming a probe site, and is expected here. A plain CYCLES is not:
+# it would charge cycles and never be probed, since this file is deliberately
+# absent from the grep above -- the same silent hole as a non-literal address,
+# arriving from the other side.
+if grep -qE '(^|[^_A-Za-z])CYCLES\([^)]' "$here/game_native.c"; then
+  echo "FAIL: game_native.c uses CYCLES; converted code must use GAME_CYCLES" >&2
+  grep -nE '(^|[^_A-Za-z])CYCLES\([^)]' "$here/game_native.c" >&2
   exit 1
 fi
 
@@ -422,7 +427,7 @@ cat "/tmp/pkeys-cover-trace-easy.txt" >> "/tmp/pkeys-cover-trace-ext.txt"
 
 echo "--- coverage over all scenarios ---"
 coverage_report trace "$here/blocks.txt" 0
-# Baseline 60, and the number is a statement about the recordings rather than
+# Baseline 58, and the number is a statement about the recordings rather than
 # about the decode. Every entry is a hand-written block that no scenario
 # executes, so its decode rests on the binary alone with no cross-engine check
 # behind it. They cluster into whole features, not scattered branches:
@@ -437,7 +442,11 @@ coverage_report trace "$here/blocks.txt" 0
 #       cases. play-hires assigns W A D X Q E, all above $A1.
 #   difficulty 2 (3)    $65D9 $65F4 for the second bouncer and $70A5 for its
 #       wall gap. Both recordings play at difficulty 1.
-#   off the board (2)   $64D2 $6572, game_move_bouncer's "row is 0" tests.
+#   (was: off the board (2), $64D2 $6572 -- those two left the site list
+#   entirely when game_move_bouncer converted to real C, so they are no longer
+#   counted here. Unexercised code that stops being probed stops being
+#   measured, which is worth remembering: this number can fall for a good
+#   reason or a bad one.)
 #   dead end (1)        $6B35, when all four neighbours of the target cell are
 #       occupied. The snake is never boxed in that badly.
 #   level 30 (1)        $7132, the 'E' opcode that wraps back to level 1.
@@ -447,4 +456,4 @@ coverage_report trace "$here/blocks.txt" 0
 # The number exists to stop that set growing quietly, and to be ratcheted down
 # whenever a scenario reaches one of them -- as happened at 22 -> 21 when the
 # `easy` fixture covered $6C4F. It is not a target to be satisfied.
-coverage_report trace-ext "$here/blocks-ext.txt" 60 "$here/a2rom.c" "$here/game.c"
+coverage_report trace-ext "$here/blocks-ext.txt" 58 "$here/a2rom.c" "$here/game.c"

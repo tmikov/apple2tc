@@ -1954,149 +1954,47 @@ void game_move_ok(uint16_t ret_addr) {
 /* ========================================================================== */
 
 void game_move_bouncer(uint16_t ret_addr) {
+  // Adapter. The body is bouncer_step() in game_native.c.
+  //
+  // Cost: the trace gives up every block head in here except $64C8's, which
+  // stays below. The cycles do not move -- bouncer_step charges each block
+  // with GAME_CYCLES -- so the frame hashes and the memory samples are
+  // unaffected.
+  //
+  // $6633-$6636 is the original's parameter block, so the marshalling here is
+  // literally a load and a store of the struct its caller already copies in
+  // and out by hand.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
   /*$64C8*/ CYCLES(0x64c8, 12);
-  ram_poke(0x6c4a, 0x00);
-  const uint8_t row = ram_peek(0x6634);
-  s_a = row;
-  s_status_not_z = row;
-  s_status_n = (row & 0x80);
-  if (!row) {
-    /*$64D2*/ CYCLES(0x64d2, 6);
-    if (ret_addr)
-      pop16();
-    return;
-  }
-  /*$64D0*/ CYCLES_EDGE(0x64d0, 1);
-
-  /*$64D3*/ CYCLES(0x64d3, 36);
   if (s_status_d) {
     fprintf(stderr, "game_move_bouncer: entered with decimal mode set\n");
     error_handler(0x64c8);
     abort();
   }
-  s_status_c = 0x00;
-  s_a = (uint8_t)(s_a + ram_peek(0x6636));
-  ram_poke(0x6638, s_a);
 
-  const uint8_t col = ram_peek(0x6633);
-  const uint8_t dx = ram_peek(0x6635);
-  s_status_c = 0x00;
-  const uint8_t newcol = (uint8_t)(col + dx);
-  s_status_v = ovf8(newcol, col, dx);
-  s_a = newcol;
-  ram_poke(0x6637, newcol);
-  s_y = newcol;
-  s_a = ram_peek(0x6638);
-  rom_scrn(0x64ea);
+  Bouncer b = {
+      .col = ram_peek(0x6633),
+      .row = ram_peek(0x6634),
+      .dx = (int8_t)ram_peek(0x6635),
+      .dy = (int8_t)ram_peek(0x6636),
+  };
 
-  /*$64EB*/ CYCLES(0x64eb, 4);
-  s_status_c = 0x01;
-  if (s_a != 0x00) {
-    // Blocked on the diagonal. Work out which axis actually stopped it.
-    /*$64EF*/ CYCLES(0x64ef, 14);
-    s_y = ram_peek(0x6637);
-    s_a = ram_peek(0x6634);
-    rom_scrn(0x64f7);
+  // The state the original leaves behind: A holds the row it loaded first, and
+  // the flags come from that load.
+  s_a = b.row;
+  s_status_not_z = b.row;
+  s_status_n = (b.row & 0x80);
 
-    /*$64F8*/ CYCLES(0x64f8, 4);
-    if (s_a != 0x00) {
-      /*$64FC*/ CYCLES(0x64fc, 24);
-      ram_poke(0x6637, ram_peek(0x6633));
-      ram_poke(0x6635, (uint8_t)(ram_peek(0x6635) ^ 0xfe));
-      ram_poke(0x6c4a, (uint8_t)(ram_peek(0x6c4a) + 0x01));
-    } else {
-      /*$64FA*/ CYCLES_EDGE(0x64fa, 1);
-    }
+  bouncer_step(&b);
 
-    /*$650D*/ CYCLES(0x650d, 14);
-    s_a = ram_peek(0x6638);
-    s_y = ram_peek(0x6633);
-    rom_scrn(0x6515);
-
-    /*$6516*/ CYCLES(0x6516, 4);
-    s_status_c = 0x01;
-    if (s_a != 0x00) {
-      /*$651A*/ CYCLES(0x651a, 24);
-      ram_poke(0x6638, ram_peek(0x6634));
-      ram_poke(0x6636, (uint8_t)(ram_peek(0x6636) ^ 0xfe));
-      ram_poke(0x6c4a, (uint8_t)(ram_peek(0x6c4a) + 0x01));
-    } else {
-      /*$6518*/ CYCLES_EDGE(0x6518, 1);
-    }
-
-    /*$652B*/ CYCLES(0x652b, 6);
-    if (!ram_peek(0x6c4a)) {
-      // An inside corner: neither neighbour blocked, only the diagonal.
-      /*$6530*/ CYCLES(0x6530, 36);
-      ram_poke(0x6637, ram_peek(0x6633));
-      ram_poke(0x6638, ram_peek(0x6634));
-      ram_poke(0x6635, (uint8_t)(ram_peek(0x6635) ^ 0xfe));
-      ram_poke(0x6636, (uint8_t)(ram_peek(0x6636) ^ 0xfe));
-    } else {
-      /*$652E*/ CYCLES_EDGE(0x652e, 1);
-    }
-  } else {
-    /*$64ED*/ CYCLES_EDGE(0x64ed, 1);
-  }
-
-  // Erase where it was, on both the hi-res page and the occupancy map.
-  /*$654C*/ CYCLES(0x654c, 11);
-  s_a = 0x00;
-  ram_poke(0x0001, 0x00);
-  rom_setcol(0x6552);
-
-  /*$6553*/ CYCLES(0x6553, 20);
-  ram_poke(0x0002, ram_peek(0x6633));
-  ram_poke(0x0003, ram_peek(0x6634));
-  game_plot_shape(0x655f);
-
-  /*$6560*/ CYCLES(0x6560, 14);
-  s_a = ram_peek(0x6634);
-  s_y = ram_peek(0x6633);
-  rom_plot(0x6568);
-
-  /*$6569*/ CYCLES(0x6569, 11);
-  ram_poke(0x0000, 0x1a);
-  const uint8_t dest = ram_peek(0x6638);
-  s_a = dest;
-  s_status_not_z = dest;
-  s_status_n = (dest & 0x80);
-  if (!dest) {
-    // Row 0: it has left the board, and is not redrawn.
-    /*$6572*/ CYCLES(0x6572, 6);
-    if (ret_addr)
-      pop16();
-    return;
-  }
-  /*$6570*/ CYCLES_EDGE(0x6570, 1);
-
-  /*$6573*/ CYCLES(0x6573, 29);
-  ram_poke(0x0003, dest);
-  ram_poke(0x6634, dest);
-  const uint8_t destcol = ram_peek(0x6637);
-  ram_poke(0x0002, destcol);
-  ram_poke(0x6633, destcol);
-  s_a = 0x03;
-  ram_poke(0x0001, 0x03);
-  rom_setcol(0x6586);
-
-  /*$6587*/ CYCLES(0x6587, 6);
-  game_plot_shape(0x6589);
-
-  /*$658A*/ CYCLES(0x658a, 14);
-  s_a = ram_peek(0x6634);
-  const uint8_t c = ram_peek(0x6633);
-  s_status_not_z = c;
-  s_status_n = (c & 0x80);
-  s_y = c;
-  rom_plot(0x6592);
-
-  /*$6593*/ CYCLES(0x6593, 6);
+  ram_poke(0x6633, b.col);
+  ram_poke(0x6634, b.row);
+  ram_poke(0x6635, (uint8_t)b.dx);
+  ram_poke(0x6636, (uint8_t)b.dy);
 
   if (ret_addr)
     pop16();
