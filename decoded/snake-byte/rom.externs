@@ -27,3 +27,6 @@ FE93 rom_setvid
 60E4 game_plot_shape
 6148 game_plot_hline
 615A game_plot_vline
+7019 game_next_byte
+7024 game_set_ink
+7000 game_lores_vline

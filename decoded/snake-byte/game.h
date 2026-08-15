@@ -39,3 +39,17 @@ void game_plot_hline(uint16_t ret_addr);
 /// $615A -- plot a vertical run of cells, from row $03 through row $08
 /// inclusive, down column $02.
 void game_plot_vline(uint16_t ret_addr);
+
+/* --- $7000/$7019/$7024: the screen-script primitives ---------------------- */
+
+/// $7019 -- fetch the next byte of the display list into A and advance the
+/// $0A/$0B pointer.
+void game_next_byte(uint16_t ret_addr);
+
+/// $7024 -- set the lo-res colour from the ink flag in Z: black if zero,
+/// grey otherwise. Tail-calls the ROM's SETCOL.
+void game_set_ink(uint16_t ret_addr);
+
+/// $7000 -- plot a vertical run on the lo-res occupancy map, from row $03
+/// through row $08 inclusive at column $02, leaving $03 unchanged.
+void game_lores_vline(uint16_t ret_addr);

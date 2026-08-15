@@ -179,6 +179,46 @@ check_backend() {
   fi
 
   echo "[$label] PASS: $(wc -l < "$interp") probe hits match over $frames frames"
+
+  # Accumulate which addresses actually fired, for coverage_report below. The
+  # "never fired" check above is per *probe*, and trace is a single probe
+  # installed at every block head, so one address that never executes is
+  # invisible to it -- the report still diffs clean because both engines agree
+  # about running nothing. The trace prints upper-case hex; the site list is
+  # lower-case.
+  tr 'A-F' 'a-f' < "$interp" >> "/tmp/pkeys-cover-$label.txt"
+}
+
+# What fraction of the site list the two scenarios actually reach, and -- the
+# part that matters -- whether any hand-written routine contains a block that
+# never runs. A hand-decoded block nothing executes is not compared against
+# anything: the whole cross-engine argument for it is vacuous, and a mutation
+# test there passes every gate. $baseline is the number of such blocks known
+# and accepted at the time of writing; growing it is a regression.
+#
+# $1 label, $2 site list, $3 baseline, $4.. the hand-written sources.
+coverage_report() {
+  local label=$1 sites=$2 baseline=$3
+  shift 3
+  local hand=("$@")
+  local hit="/tmp/pkeys-cover-hit-$label.txt"
+  sort -u "/tmp/pkeys-cover-$label.txt" > "$hit"
+  echo "[$label] coverage: $(comm -12 "$sites" "$hit" | wc -l)/$(wc -l < "$sites")" \
+       "block heads run in at least one scenario"
+
+  [ ${#hand[@]} -gt 0 ] || return 0
+  local handsites="/tmp/pkeys-cover-hand-$label.txt"
+  grep -ohE 'CYCLES\(0x[0-9a-f]+' "${hand[@]}" | sed 's/CYCLES(0x//' | sort -u > "$handsites"
+  local dead ndead
+  dead=$(comm -23 "$handsites" "$hit")
+  ndead=$(printf '%s\n' "$dead" | grep -c . || true)
+  echo "[$label] hand-written: $(( $(wc -l < "$handsites") - ndead ))/$(wc -l < "$handsites") run"
+  if [ "$ndead" -gt "$baseline" ]; then
+    echo "FAIL [$label]: $ndead hand-written block heads never run, baseline is $baseline" >&2
+    echo "$dead" >&2
+    exit 1
+  fi
+  [ "$ndead" -eq 0 ] || echo "[$label] unverified: $(echo $dead)"
 }
 
 # trace.probe and trace-ext.probe name themselves after the backend they
@@ -201,7 +241,7 @@ fi
 # writing. 1,600 leaves headroom for legitimate drift (a simplifyCFG change
 # that merges a few blocks) while still catching the failure this guards
 # against -- a whole source file (a2rom.c alone contributes 75 sites, game.c
-# 5, and losing snake-bytec1-ext.c itself would collapse the -ext list to
+# 31, and losing snake-bytec1-ext.c itself would collapse the -ext list to
 # under 100) going missing or empty out of the grep.
 # Both scenarios verify.sh replays, now against the interpreter as well.
 # play-hires is not a duplicate of play: it reaches $664A (the game's own hi-res
@@ -209,6 +249,7 @@ fi
 # --code-at -- and in the -ext build $664A is hand-written C in game.c, so the
 # hires/ext pair is the only cross-engine check that hand-written replacement
 # gets. KEYS= overrides the list for a one-off run.
+rm -f /tmp/pkeys-cover-*.txt
 for keyfile in ${KEYS:-"$here/play.pkeys" "$here/play-hires.pkeys"}; do
   set_scenario "$keyfile"
 
@@ -272,3 +313,12 @@ check_memory() {
 check_memory ref "$bin/decoded/snake-byte/snake-bytec1-run"
 check_memory ext "$bin/decoded/snake-byte/snake-bytec1-ext-run"
 done
+
+echo "--- coverage over all scenarios ---"
+coverage_report trace "$here/blocks.txt" 0
+# Baseline 21: $7021 in game.c (game_next_byte's page-crossing branch -- the
+# display lists the recorded sessions run never straddle a page) and twenty in
+# a2rom.c, mostly the ROM paths for arguments the game never passes. Each is a
+# block whose hand-decode nothing checks; the number is here to stop that set
+# growing quietly, not because 21 is acceptable.
+coverage_report trace-ext "$here/blocks-ext.txt" 21 "$here/a2rom.c" "$here/game.c"

@@ -375,3 +375,124 @@ void game_plot_vline(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $7019, $7024, $7000 -- the screen-script primitives.                       */
+/*                                                                            */
+/* $7113 runs a little byte-coded display list: it fetches an opcode, then    */
+/* that opcode's operands, then draws. 'H' ($48) is a horizontal run, 'V'     */
+/* ($56) a vertical one, 'P' ($50) a single cell, 'T' ($54) sets $0304. The   */
+/* three routines here are what every one of those cases is built from, which */
+/* is why $7019 alone has fourteen call sites.                                */
+/*                                                                            */
+/* Why every draw happens twice                                               */
+/* ---------------------------                                                */
+/* The 'V' case is the clearest: $7185 calls $7000, then $7188 calls $615A.   */
+/* The first draws the run with the ROM's lo-res PLOT, the second draws the   */
+/* same run as hi-res cells. The hi-res page is what the player sees; the     */
+/* lo-res page is the game's own 40x48 occupancy map, and it reads it back    */
+/* with the ROM's SCRN. $62D7 is the payoff -- it adds the current direction  */
+/* deltas from $6232/$6237 to the snake's head, SCRNs the result, and finds   */
+/* out what it is about to run into. Collision detection for free, at the     */
+/* cost of drawing everything twice.                                          */
+/* ========================================================================== */
+
+void game_next_byte(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  /*$7019*/ CYCLES(0x7019, 14);
+  s_y = 0x00;
+  s_a = peek(ram_peek16al(0x000a));
+
+  const uint8_t lo = (uint8_t)(ram_peek(0x000a) + 0x01);
+  ram_poke(0x000a, lo);
+  s_status_not_z = lo;
+  s_status_n = (lo & 0x80);
+
+  if (lo) {
+    /*$701F*/ CYCLES_EDGE(0x701f, 1);
+  } else {
+    /*$7021*/ CYCLES(0x7021, 5);
+    const uint8_t hi = (uint8_t)(ram_peek(0x000b) + 0x01);
+    ram_poke(0x000b, hi);
+    s_status_not_z = hi;
+    s_status_n = (hi & 0x80);
+  }
+
+  /*$7023*/ CYCLES(0x7023, 6);
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_set_ink(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // The argument arrives in the Z flag, not in A: every caller does
+  // `LDA $01 / JSR $7024`, and $01 is the same ink byte the hi-res plotter
+  // takes. Zero erases, anything else draws -- so the lo-res map gets colour
+  // 0 or colour 5 and nothing in between. It is a two-state map, not a
+  // picture.
+  /*$7024*/ CYCLES(0x7024, 2);
+  if (!s_status_not_z) {
+    /*$7024*/ CYCLES_EDGE(0x7024, 1);
+  } else {
+    /*$7026*/ CYCLES(0x7026, 2);
+    s_a = 0x05;
+  }
+
+  /*$7028*/ CYCLES(0x7028, 3);
+  rom_setcol(0x0000); // JMP $F864 -- a tail call, so no return address.
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_lores_vline(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // Same shape as game_plot_vline: rows $03 through $08 inclusive, down
+  // column $02. Unlike that one it puts $03 back where it found it, because
+  // the caller draws the hi-res run over the same coordinates next.
+  /*$7000*/ CYCLES(0x7000, 6);
+  push8(ram_peek(0x0003));
+
+  for (;;) {
+    /*$7003*/ CYCLES(0x7003, 12);
+    s_a = ram_peek(0x0003);
+    s_y = ram_peek(0x0002);
+    rom_plot(0x7009);
+
+    /*$700A*/ CYCLES(0x700a, 8);
+    const uint8_t row = ram_peek(0x0003);
+    const uint8_t last = ram_peek(0x0008);
+    s_status_c = (row >= last);
+    s_status_not_z = (row != last);
+    s_status_n = ((uint8_t)(row - last) & 0x80);
+    if (row == last)
+      break;
+
+    /*$7010*/ CYCLES(0x7010, 8);
+    ram_poke(0x0003, (uint8_t)(row + 1));
+  }
+
+  /*$700E*/ CYCLES_EDGE(0x700e, 1);
+  /*$7015*/ CYCLES(0x7015, 13);
+  const uint8_t saved = pop8();
+  s_a = saved;
+  s_status_not_z = saved;
+  s_status_n = (saved & 0x80);
+  ram_poke(0x0003, saved);
+
+  if (ret_addr)
+    pop16();
+}
