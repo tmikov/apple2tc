@@ -553,6 +553,17 @@ void a2host_shutdown(void) {
   probe_report_unfired();
   probe_close_output();
   if (record_keys_file_) {
+    // Keys taken from the input source but never released by a `record`
+    // before the run ended: e.g. a script whose last `record` site is
+    // upstream of where the run's last keys arrived. They are silently gone
+    // -- pending_keys_ is never consulted again after this -- so say so
+    // rather than let a short-by-a-few-keys recording look complete.
+    if (pending_keys_count_) {
+      fprintf(
+          stderr,
+          "warning: %u key(s) still pending at exit, never reached `record`\n",
+          pending_keys_count_);
+    }
     fclose(record_keys_file_);
     record_keys_file_ = NULL;
   }
