@@ -724,11 +724,20 @@ void a2host_parse_args(int argc, char *argv[]) {
   // written, which looks exactly like "no keys were pressed."
   if (record_keys_file_ && !probe_script_path_)
     probe_fatal("--record-keys requires --probe= to define the coordinate");
+  // A script with --probe= but no `record` statement is the same failure one
+  // level deeper: push_key() still diverts every key into pending_keys_ (see
+  // its comment), but nothing ever calls probe_record_keys() to release it,
+  // so it is held forever with no diagnostic -- again indistinguishable from
+  // "no keys were pressed." rec.probe and play.probe are a near-identical
+  // pair differing only in `record` versus `key`, which makes loading the
+  // wrong one of the two an easy mistake this guard exists to catch.
+  if (record_keys_file_ && !probe_uses_record())
+    probe_fatal(
+        "--record-keys requires the probe script to call `record`, or every key would be "
+        "held and never delivered");
   if (record_keys_file_)
     fprintf(
-        record_keys_file_,
-        "# probe-stamped keys; coordinate defined by %s\n",
-        probe_script_path_ ? probe_script_path_ : "(no probe script)");
+        record_keys_file_, "# probe-stamped keys; coordinate defined by %s\n", probe_script_path_);
 
   // Before opening --probe-out=: a dump exits immediately and never runs, so
   // it must not truncate an existing report on its way out.

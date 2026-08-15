@@ -458,6 +458,14 @@ expect_probe_reject "an unwritable --probe-out=" "cannot open probe output" \
   --probe=probe/empty.probe --probe-out=probe-tmp/nodir/out.txt
 expect_probe_reject "--record-keys with no probe script" "--record-keys requires --probe=" \
   --record-keys=probe-tmp/rec.txt
+# hello.probe has neither `key` nor `record` -- indistinguishable from
+# rec.probe/play.probe with the wrong one of the pair loaded, which is the
+# realistic way to hit this: push_key() would divert every key into
+# pending_keys_ with nothing to ever call `record` and release it, holding
+# every key forever with no diagnostic.
+expect_probe_reject "--record-keys with a script that never calls record" \
+  "--record-keys requires the probe script to call \`record\`" \
+  --probe=probe/hello.probe --record-keys=probe-tmp/rec.txt
 
 # --- Probes: execution ------------------------------------------------------
 #
