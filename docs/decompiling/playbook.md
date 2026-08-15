@@ -258,6 +258,49 @@ relocator (a block copy) and one is a false positive from the inline-string
 idiom. Net: none in the steady-state game. Low self-modification makes promoting
 memory to real C variables much safer than it would otherwise be.
 
+### Hand-decompiling, once the boundary is cut
+
+**`[process]` Measure what the oracle covers, per site, or it will flatter you.**
+Snake Byte's cross-engine gate compares ~2.7 million block-head hits between the
+interpreter and the generated build and passes. It reaches **744 of 1,669 block
+heads — 45%**. Everything else is compared against nothing, and a mutation there
+passes every check. The "a probe never fired" guard does not catch this: it is
+per *probe*, and the trace is one probe installed at every address, so it fires
+constantly while individual sites stay dead. Derive coverage by intersecting the
+site list with the addresses the trace actually emitted, and assert a baseline
+for the hand-written subset specifically — those are the blocks where a decode
+error has no other net under it.
+
+**`[process]` Block coverage is not value coverage.** Every block of Snake Byte's
+`game_add_score` executes, and replacing its BCD addition with binary addition on
+the score's *second* byte fails nothing at all: the score never reaches 100 in
+either recording, so that byte never needs decimal correction. The low byte's
+equivalent mutation is caught, and only by one of the two scenarios. Full block
+coverage of an arithmetic routine says nothing about the values that flowed
+through it.
+
+**`[6502]` An instruction that looks like a typo is still load-bearing until you
+prove otherwise.** Snake Byte's two cell plotters build the same table index from
+the same operands, one with `ROL $06` and one with `ROR $06`; the `ROR` puts the
+scanline parity in bit 7 where the following two `ASL`s discard it. It reads
+exactly like a slip. "Correcting" it to `ROL` changes the screen and fails the
+frame oracle. Reproduce what the bytes say, note the oddity, and let a mutation
+test decide whether it matters.
+
+**`[apple2tc]` Set the flags the 6502 sets, not the ones the generated code
+keeps.** apple2tc's output is whole-program DCE'd, so a flag missing from a
+generated routine is a proof that *the current call graph* never reads it — not
+that the hardware does not set it. Dropping `$6148`'s carry to match passes all
+eight checks today. Re-deriving that proof on every change costs more than the
+assignment, and the assignment is never wrong.
+
+**`[process]` Read data tables out of the binary, and derive their extent.** The
+listing prints `--code-at` regions as `DFB` and does not delimit tables. A first
+pass at Snake Byte's dot-pattern table described it as "sixteen bytes"; it is
+128, sixteen inks of eight, and the error only surfaced when a caller passed ink
+9. Dump from the `.b33` (4-byte header, then load address) and find the table's
+end — usually the next code address — before writing down its shape.
+
 ---
 
 ## Procedure
@@ -333,3 +376,8 @@ the whole point of it — see the step itself.
 | Region of "data" sitting right after an inline string | The string's `RTS` continuation is a computed target. If the recording never ran that call site, real code reads as data. |
 | Asserting a code address without the branch it comes from | Half the edge. The target gets disassembled but never reaches the address-to-block map, so it stays unreachable at runtime. |
 | A hand-written replacement only one build can run | It is a regression test against itself, not an oracle. Arrange for the other build to run generated code for the same address and compare. |
+| "No probe never fired" read as coverage | Per-probe, not per-address. One probe at 1,669 sites fires constantly while most sites stay dead. Intersect the site list with the trace. |
+| An odd instruction assumed to be a typo | `ROR` where `ROL` was clearly meant still drove the display. Mutate the "fix" and watch it fail before believing the author slipped. |
+| A table's size stated rather than derived | The listing does not delimit tables. Find the next code address. A 16-byte table that is really 128 is invisible until a caller indexes past 16. |
+| Matching the generated code's flag set | That set is a DCE result for today's call graph, not what the CPU does. Set what the 6502 sets. |
+| Full block coverage of an arithmetic routine | Says nothing about the values. BCD-vs-binary on a byte the score never reaches fails no check. |

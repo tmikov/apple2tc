@@ -1989,3 +1989,96 @@ ran with.
   generic now — a coordinate script and a converted key file are all either
   needs — but `bolo`'s `--irc1` line is still commented out in its
   `decompile.sh`, so it has no `c1` build to compare against.
+
+---
+
+## 2026-08-15 — Hand-decompiling the game, and what it exposed about the gate
+
+Sixteen of Snake Byte's own routines now have hand-written bodies in `game.c`
+rather than generated ones, listed in `rom.externs` beside the ROM entry points.
+In order: the hi-res cell plotter (`$6127`/`$60E7`/`$60E4`), the cell-run
+plotters (`$6148`/`$615A`), the screen-script primitives (`$7019`/`$7024`/
+`$7000`), the score (`$71F3`/`$7226`/`$7267`/`$702B`), and the RNG and merging
+plotter (`$6C4B`/`$6B93`).
+
+### What the game turned out to be
+
+Hi-res page 1 is a grid of 48 cell rows, four scanlines tall and one byte wide.
+Every draw happens twice: once with the ROM's lo-res `PLOT` and once as hi-res
+cells. The hi-res page is the display; the lo-res page is a 40x48 occupancy map
+the game reads back with `SCRN`. `$62D7` adds the direction deltas from
+`$6232`/`$6237` to the snake's head, `SCRN`s the result, and learns what it is
+about to hit. Collision detection for free, at the cost of drawing everything
+twice.
+
+`$7113` runs a byte-coded display list — `'H'`, `'V'`, `'P'`, `'T'` — which is
+why `$7019`, its byte fetcher, has fourteen call sites. The score is four BCD
+bytes at `$7252`, printed nibble by nibble with `$002C` as a leading-zero flag;
+`$002C` is also the ROM's `H2`, reused because drawing and score printing never
+interleave. The pseudo-random source is not a generator: it walks a pointer
+through the game's own memory and returns the first byte with bit 7 clear.
+
+### The gate was weaker than it looked
+
+Mutating `game_next_byte`'s page-crossing branch passed all eight checks. `$7021`
+never executes — the display lists these recordings run never straddle a page —
+and the "a probe never fired" guard could not see it, because `trace` is one
+probe installed at 1,669 addresses and it fires constantly.
+
+So `probe-acceptance.sh` now reports per-site coverage, and the numbers are the
+finding:
+
+| | |
+|---|---|
+| block heads reached, either scenario | 744 of 1,669 — **45%** |
+| hand-written blocks reached | 112 of 134 |
+| hand-written blocks reached by nothing | 22, asserted as a baseline |
+
+Twenty of the 22 are in `a2rom.c`, ROM paths for arguments the game never
+passes. The other two — `$7021` and `$6C4F` — are the high-byte carries of the
+display-list and pseudo-random pointers. The baseline is asserted so the set
+cannot grow quietly; `$6C4F` was caught that way, by the gate failing rather
+than by anyone noticing.
+
+Mutation-tested by adding an unreachable `CYCLES` site to `game.c`: trace and
+memory both still passed, coverage failed.
+
+### And coverage is not the whole story either
+
+`game_add_score` has full block coverage. Replacing its BCD addition with binary
+addition on the score's **second** byte fails nothing — the score never reaches
+100 in either recording, so that byte never needs decimal correction. The low
+byte's equivalent mutation is caught, and only by `hires`. Block coverage is not
+value coverage, and the new report cannot see this class of gap.
+
+### Two smaller results worth keeping
+
+**A flag apple2tc drops is not a flag the CPU drops.** Forcing `$6148`'s carry to
+zero passes all eight checks: the generated code computes it, nothing observes
+it. That is whole-program DCE proving a fact about the current call graph. The
+hand-written routines set what the 6502 sets, because re-deriving that proof on
+every change costs more than the assignment.
+
+**An instruction that looks like a typo may still be load-bearing.** `$60F7` and
+`$6B93` build the same table index from the same operands, one with `ROL $06`
+and one with `ROR $06`. The `ROR` puts the scanline parity in bit 7, where the
+two following `ASL`s discard it, degenerating the index from
+`ink*8 + parity*4 + col&3` to `(ink>>1)*4 + col&3`. Changing it to `ROL` fails
+`[hires/ext]`. It is on screen, whatever the author meant.
+
+### Corrected
+
+The `$6064` comment from the plotter commit said the dot-pattern table was
+sixteen bytes. It is 128, `$6064`-`$60E3`, sixteen inks of eight — ink 0 all
+zeros (erase), ink 15 all `$7F` (solid), the rest dithers. The error surfaced
+only when `$7642` turned up passing ink 9.
+
+### Left open
+
+- The display-list interpreter itself (`$7113`-`$71C0`) is decodable and highly
+  structured, but almost every opcode case is dead in both recordings. Hand-
+  writing it would add a dozen blocks to the unverified baseline.
+- `$7642`, `$6AB8`, `$64C8` are the next covered routines by call count.
+- There is a stray empty `snake-bytec1-ext.c` at the repo root, committed by
+  accident in `396c05d` and referenced by nothing. It shadows reads of the real
+  file when a command runs from the repo root; worth deleting.
