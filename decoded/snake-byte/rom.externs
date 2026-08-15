@@ -50,3 +50,5 @@ FE93 rom_setvid
 6B3D game_draw_side_walls
 6AB8 game_move_ok
 64C8 game_move_bouncer
+728D game_update_high_score
+6BFB game_tick_sound

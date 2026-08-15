@@ -2108,3 +2108,168 @@ void game_move_bouncer(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $728D, $6BFB                                                               */
+/* ========================================================================== */
+
+/// One `LDA score / CMP best` pair of $728D. Returns false when the score
+/// byte is below the high-score byte. No CYCLES: all four call sites sit
+/// inside a counted block already.
+static bool game_hi_cmp(uint16_t score, uint16_t best) {
+  const uint8_t mine = ram_peek(score);
+  const uint8_t high = ram_peek(best);
+  s_a = mine;
+  s_status_not_z = (mine != high);
+  s_status_c = (mine >= high);
+  s_status_n = ((uint8_t)(mine - high) & 0x80);
+  return mine >= high;
+}
+
+void game_update_high_score(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // Compare the four BCD score bytes at $7252 against the high score at
+  // $7256, most significant first. Below at any byte and it returns; above
+  // and it copies; equal and it moves to the next byte. All four equal falls
+  // through into the copy, which is harmless.
+  //
+  // Written out rather than looped over a table of addresses, deliberately.
+  // probe-acceptance.sh builds its site list by grepping this file for
+  // literal hex CYCLES addresses, so a computed one compiles and runs but
+  // silently drops that block head out of the list -- the probe is never
+  // installed, and both engines then agree about nothing. A first draft of
+  // this routine looped over a table of addresses and cost eight sites.
+  // The gate now lints for it; see check_literal_sites.
+  bool copy = true;
+  do {
+    /*$728D*/ CYCLES(0x728d, 10);
+    if (!game_hi_cmp(0x7255, 0x7259)) { copy = false; /*$7293*/ CYCLES_EDGE(0x7293, 1); break; }
+    /*$7295*/ CYCLES(0x7295, 2);
+    if (s_status_not_z) { /*$7295*/ CYCLES_EDGE(0x7295, 1); break; }
+
+    /*$7297*/ CYCLES(0x7297, 10);
+    if (!game_hi_cmp(0x7254, 0x7258)) { copy = false; /*$729D*/ CYCLES_EDGE(0x729d, 1); break; }
+    /*$729F*/ CYCLES(0x729f, 2);
+    if (s_status_not_z) { /*$729F*/ CYCLES_EDGE(0x729f, 1); break; }
+
+    /*$72A1*/ CYCLES(0x72a1, 10);
+    if (!game_hi_cmp(0x7253, 0x7257)) { copy = false; /*$72A7*/ CYCLES_EDGE(0x72a7, 1); break; }
+    /*$72A9*/ CYCLES(0x72a9, 2);
+    if (s_status_not_z) { /*$72A9*/ CYCLES_EDGE(0x72a9, 1); break; }
+
+    /*$72AB*/ CYCLES(0x72ab, 10);
+    if (!game_hi_cmp(0x7252, 0x7256)) { copy = false; /*$72B1*/ CYCLES_EDGE(0x72b1, 1); break; }
+    /*$72B3*/ CYCLES(0x72b3, 2);
+    if (s_status_not_z) { /*$72B3*/ CYCLES_EDGE(0x72b3, 1); }
+  } while (0);
+
+  if (copy) {
+    /*$72B5*/ CYCLES(0x72b5, 32);
+    ram_poke(0x7256, ram_peek(0x7252));
+    ram_poke(0x7257, ram_peek(0x7253));
+    ram_poke(0x7258, ram_peek(0x7254));
+    const uint8_t top = ram_peek(0x7255);
+    s_a = top;
+    s_status_not_z = top;
+    s_status_n = (top & 0x80);
+    ram_poke(0x7259, top);
+  }
+
+  /*$72CD*/ CYCLES(0x72cd, 6);
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_tick_sound(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // Twenty passes of a falling tone. $6C46 is the period and $6C47 the
+  // countdown to the next click; each click lengthens the period by two, so
+  // the pitch drops, and the period wraps back to zero once it passes $80.
+  // $6C46 is raised to 1 by game_mark_head and cleared by game_draw_playfield,
+  // so the tone plays while the head is moving and stops when it is not.
+  /*$6BFB*/ CYCLES(0x6bfb, 6);
+  ram_poke(0x6c48, 0x14);
+
+  for (;;) {
+    /*$6C00*/ CYCLES(0x6c00, 6);
+    const uint8_t period = ram_peek(0x6c46);
+    s_a = period;
+    if (period) {
+      /*$6C05*/ CYCLES(0x6c05, 4);
+      if (period < 0x80) {
+        /*$6C09*/ CYCLES(0x6c09, 8);
+        const uint8_t left = (uint8_t)(ram_peek(0x6c47) - 0x01);
+        ram_poke(0x6c47, left);
+        if (!left) {
+          /*$6C0E*/ CYCLES(0x6c0e, 28);
+          const uint8_t port = ram_peek(0x6c49);
+          s_y = port;
+          peek((uint16_t)(0xc000 + port)); // the click
+          ram_poke(0x6c46, (uint8_t)(ram_peek(0x6c46) + 0x01));
+          ram_poke(0x6c46, (uint8_t)(ram_peek(0x6c46) + 0x01));
+          ram_poke(0x6c47, ram_peek(0x6c46));
+        } else {
+          /*$6C0C*/ CYCLES_EDGE(0x6c0c, 1);
+        }
+      } else {
+        /*$6C07*/ CYCLES_EDGE(0x6c07, 1);
+      }
+    } else {
+      /*$6C03*/ CYCLES_EDGE(0x6c03, 1);
+    }
+
+    /*$6C20*/ CYCLES(0x6c20, 8);
+    s_status_c = (ram_peek(0x6c46) >= 0x80);
+    if (s_status_c) {
+      /*$6C27*/ CYCLES(0x6c27, 6);
+      ram_poke(0x6c46, 0x00);
+    } else {
+      /*$6C25*/ CYCLES_EDGE(0x6c25, 1);
+    }
+
+    // Route the click: cassette by default, speaker only when both $0302 and
+    // $69C2 are clear. See the $7642 header for why this is done with an
+    // address rather than a branch.
+    /*$6C2C*/ CYCLES(0x6c2c, 12);
+    ram_poke(0x6c49, 0x20);
+    const uint8_t muted = ram_peek(0x0302);
+    s_a = muted;
+    if (!muted) {
+      /*$6C36*/ CYCLES(0x6c36, 6);
+      const uint8_t busy = ram_peek(0x69c2);
+      s_a = busy;
+      if (!busy) {
+        /*$6C3B*/ CYCLES(0x6c3b, 6);
+        s_a = 0x30;
+        ram_poke(0x6c49, 0x30);
+      } else {
+        /*$6C39*/ CYCLES_EDGE(0x6c39, 1);
+      }
+    } else {
+      /*$6C34*/ CYCLES_EDGE(0x6c34, 1);
+    }
+
+    /*$6C40*/ CYCLES(0x6c40, 8);
+    const uint8_t n = (uint8_t)(ram_peek(0x6c48) - 0x01);
+    s_status_not_z = n;
+    s_status_n = (n & 0x80);
+    ram_poke(0x6c48, n);
+    if (!n)
+      break;
+    /*$6C43*/ CYCLES_EDGE(0x6c43, 1);
+  }
+
+  /*$6C45*/ CYCLES(0x6c45, 6);
+
+  if (ret_addr)
+    pop16();
+}

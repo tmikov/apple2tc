@@ -129,3 +129,10 @@ void game_move_ok(uint16_t ret_addr);
 /// $64C8 -- step the bouncer at $6633/$6634 by its deltas, reflecting off
 /// whatever it hits.
 void game_move_bouncer(uint16_t ret_addr);
+
+/// $728D -- copy the score at $7252 over the high score at $7256 if it beats
+/// it, comparing BCD bytes most significant first.
+void game_update_high_score(uint16_t ret_addr);
+
+/// $6BFB -- twenty passes of a falling tone, driven by the period at $6C46.
+void game_tick_sound(uint16_t ret_addr);

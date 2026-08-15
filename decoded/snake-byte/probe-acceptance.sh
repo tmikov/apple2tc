@@ -224,6 +224,30 @@ coverage_report() {
   [ "$ndead" -eq 0 ] || echo "[$label] unverified: $(echo $dead)"
 }
 
+# Every CYCLES in a hand-written source must carry a literal hex address.
+#
+# The site lists are built by grepping the C for `CYCLES(0x...`, so an address
+# that is any other expression -- a table lookup, a variable, a macro -- still
+# compiles, still counts cycles, and still runs, but never reaches the list.
+# The probe is then not installed there, neither engine reports it, and the
+# diff is clean because both sides say nothing. It is the block-head hazard
+# again, arriving through the hand-written side instead of the generated one.
+#
+# Measured, not hypothetical: a draft of game_update_high_score looped over a
+# table of addresses and quietly took eight sites out of the gate, and nothing
+# else here noticed -- the floor below is far too coarse to see 1669 become
+# 1661.
+check_literal_sites() {
+  local bad
+  bad=$(grep -nE 'CYCLES(_EDGE)?\([^)]' "$@" | grep -vE 'CYCLES(_EDGE)?\(0x[0-9a-f]+' || true)
+  if [ -n "$bad" ]; then
+    echo "FAIL: a CYCLES site has a non-literal address, so it cannot be probed" >&2
+    echo "$bad" >&2
+    exit 1
+  fi
+}
+check_literal_sites "$here/a2rom.c" "$here/game.c"
+
 # trace.probe and trace-ext.probe name themselves after the backend they
 # install over, so the two runs cannot silently share one. They must otherwise
 # be the same program -- checked here rather than trusted, since an edit to
