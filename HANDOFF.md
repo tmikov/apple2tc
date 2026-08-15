@@ -141,6 +141,9 @@ Options: `--probe=`, `--probe-out=`, `--probe-dump`, `--record-keys=`.
 `decoded/rom/probe-acceptance.sh <build-dir>` is the cross-engine gate: the
 interpreter against both generated back ends over 120 frames of ROM boot,
 276,255 probe hits each, byte-identical. Run it alongside `verify.sh`.
+`decoded/snake-byte/probe-acceptance.sh <build-dir>` is its Snake Byte
+counterpart, replaying `play.pkeys` (probe-stamped, not cycle-stamped —
+item 5 under "Next" below) instead of booting with no input.
 
 **The hazard, stated once here because it is easy to lose:** `CYCLES` is emitted
 per basic block, not per instruction, so a probe installed at a non-block-head

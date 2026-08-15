@@ -1717,8 +1717,13 @@ two engines' screen-write progress actually differs; that is future work.
 - **`play-hires.keys` is not converted.** It should follow the same recipe
   once needed, but needs its own site check — the hi-res scenario reaches
   `$664A`, a site not in `rec.probe`/`play.probe`.
-- **`--trace-keys` still writes cycle stamps**, unchanged, deliberately: it
-  remains the recording path for a session that has no probe script at all.
+- **`--trace-keys` still writes cycle stamps**, kept deliberately as the
+  recording path for a session that has no probe script at all — but it is
+  not otherwise unchanged: routing every key source through `push_key()`
+  (the fix that lets `--record-keys=` convert a `--key-file=` recording,
+  above) means `--trace-keys` now also dumps `--key-file=`-sourced keys, not
+  just `--kbd-file=`/live typing. See `push_key()`'s comment in
+  `lib/a2host/a2host.c` and `docs/probes.md`'s Execution status section.
 - **Probe phase 3 is still unbuilt.** apple2tc does not emit `PROBE_x(...)`
   placeholder sites, so a probe observes machine state, not the generated
   C's own variables.

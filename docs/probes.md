@@ -233,8 +233,8 @@ stamp.
   stamp is ≤ `<expr>` into the machine, reading from `--key-file=`.
 - `record <expr>` **records**: with `--record-keys=<path>` given, every key
   the host has taken from the input source (`--kbd-file=`, interactive
-  typing) but not yet handed to the machine is released into the machine
-  *and* written to `<path>` as a `<stamp> <key>` line, stamped with
+  typing, `--key-file=`) but not yet handed to the machine is released into
+  the machine *and* written to `<path>` as a `<stamp> <key>` line, stamped with
   `<expr>`'s value. `--record-keys=` is also the switch that makes
   `push_key()` divert incoming keys into that pending queue in the first
   place; without it, every key goes straight to the machine at arrival time
@@ -531,6 +531,7 @@ One cell per opcode, operands (if any) in the following cells. `opcode_t` in
 | | `JNZ` | 1 | target (absolute, as above); pops the tested value |
 | effect | `PRINTF` | 2 | format-table index, argument count; pops that many values. Arguments are pushed in source order, so the *last* argument is on top and pops first -- a VM must reverse them to fill the format's conversions in source order |
 | | `KEY` | 0 | pops a stamp |
+| | `RECORD` | 0 | pops a stamp |
 | | `STOP` | 0 | |
 | | `END` | 0 | marks the end of a probe's instructions |
 
@@ -613,9 +614,16 @@ report.
 `docs/plans/2026-08-11-probes-design.md`; it is built, per the
 2026-08-14 `record`/`--record-keys=` work
 (`docs/plans/2026-08-14-probe-stamped-keys-plan.md`, and the decision log
-entry of the same date). `--trace-keys` still writes cycle stamps — that path
-is unchanged and is documented as the recording mechanism for a session that
-has no probe script at all — but a script that has one can stamp `record`'s
+entry of the same date). `--trace-keys` still writes cycle stamps — kept,
+deliberately, as the recording mechanism for a session that has no probe
+script at all — but it is not otherwise unchanged: routing `--key-file=`
+through `push_key()` (the same fix that lets `--record-keys=` convert a
+`--key-file=` recording, below) means `--trace-keys` now dumps
+`--key-file=`-sourced keys too, not just `--kbd-file=`/live typing — see
+`push_key()`'s comment in `lib/a2host/a2host.c`. Combined with `--key-file=`
+it therefore reprints stamps the file already holds rather than capturing new
+ones, which is diagnostic (confirming a `--key-file=` replays as expected),
+not a recording method. Meanwhile a script that has one can stamp `record`'s
 argument with anything it computes, including a counter advanced only at the
 program's own input-reading sites, so a recording and its replay agree on
 *when* a key arrives regardless of which engine produced or consumes the
