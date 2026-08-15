@@ -136,7 +136,7 @@ link-time subsystem property**. So:
 is a small program bound to install sites, so the two engines can be compared
 at points *the program* defines rather than at moments the host defines. Read
 `docs/probes.md` for the language and the 2026-08-12 log entry for why.
-Options: `--probe=`, `--probe-out=`, `--probe-dump`.
+Options: `--probe=`, `--probe-out=`, `--probe-dump`, `--record-keys=`.
 
 `decoded/rom/probe-acceptance.sh <build-dir>` is the cross-engine gate: the
 interpreter against both generated back ends over 120 frames of ROM boot,
@@ -313,15 +313,36 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
    host/engine split design was never started; the option does not exist
    anywhere in the tree. Phase 1b is still blocked on it, and whoever picks it
    up is designing it from scratch, not using something already built.
-5. **Frame 623** — the permanent interpreter-vs-generated snake-byte
-   divergence. The probe VM is built and the cycle models now agree, so the old
-   frame-472 split is gone and this one is what is left. It has a working
-   instrument pointed at it for the first time; nobody has looked yet.
+5. **Frame 623 is resolved; a narrower divergence remains, not yet
+   root-caused.** Frame 623 was the old cycle-stamped-input artefact: `play.keys`
+   was recorded from the generated build, so its stamps were that engine's own
+   cycle coordinate, replayed against the interpreter's different one (see the
+   2026-08-14 "Probe-stamped key recording" decision-log entry). Probe phase 2
+   closes that gap — `record <expr>` (the recording counterpart of `key
+   <expr>`) and `--record-keys=` let a script stamp keys on a coordinate the
+   *program* defines, not the host's cycle counter (`docs/probes.md`).
+   `decoded/snake-byte/play.keys` was converted to `play.pkeys` on that
+   coordinate, and `decoded/snake-byte/probe-acceptance.sh` is the resulting
+   cross-engine gate: replaying `play.pkeys` against the interpreter and both
+   generated builds produces a byte-identical 2,744,938-hit block-head trace
+   over all 1,300 frames, and frame 623 itself now matches.
 
-   Probe phases 2 and 3 are also unbuilt: `--trace-keys` still writes
-   *cycle* stamps rather than counter stamps, and apple2tc does not yet emit
-   `PROBE_x(...)` placeholder sites, so a probe can observe machine state but
-   not the generated C's own variables.
+   What is left: 8 of 1,300 frame hashes still differ (frames 172, 173, 271,
+   596, 761, 823, 871, 933 — 172/173 is one two-frame event, so 7 distinct
+   events) even though the block-head trace proves the two engines took an
+   identical control-flow path for the entire run. Every differing frame
+   re-converges on the very next frame, and for 6 of the 7 events neither
+   engine's hash matches its own neighboring frames — both are mid-write at
+   slightly different points, not one engine lagging the other. That pattern
+   is consistent with the fixed-interval video-hash sample landing on
+   different sides of an in-progress screen write depending on the two
+   engines' (by-design) differing cycle counts, rather than with a real
+   behavioural difference — but that explanation is not proven, and
+   root-causing the 8 frames is unstarted work.
+
+   Probe phase 3 is still unbuilt: apple2tc does not yet emit `PROBE_x(...)`
+   placeholder sites, so a probe can observe machine state but not the
+   generated C's own variables.
 
 **No longer deferred:** the headless-vs-windowed trace comparison was deferred
 for want of a display. `a2run` removes the need for one, and the comparison is
@@ -354,6 +375,8 @@ Mistakes already made here. The log has the full accounts.
 | A rejection test that greps for `FATAL` | Twice during the probe work a test passed while covering nothing, because a *different* check fired first and satisfied the grep. Assert the specific message, and prove the test can fail by deleting the check it covers and watching the suite go red. |
 | A probe that produces no output | Says nothing about agreement. A probe on a non-block-head address fires in the interpreter and does not exist in the generated program; the report then reads as agreement while covering less than you think. |
 | Every `CYCLES`-shaped call site is a program location | It is not. The taken-branch penalty is charged on the *edge*, in a block carrying the branch's address that the program is never actually *at* — so it must not trace or dispatch probes, or one execution of that branch gets reported twice. Hence `AddEdgeCycles`/`CYCLES_EDGE`. 698 ROM addresses are edges and 121 of them are also real block heads, so the two are not distinguishable by address. |
+| A plan's list of keyboard-read sites is complete because it was grepped once | Snake Byte's coordinate plan named three sites (`$FD1B`, `$741F`, `$7890`); a fourth, `$6217` — the in-game ingest that clears the strobe and fills the ring buffer at `$623C` — was missing. Recording with only the three captured 11 of 23 keys, not 11 cycle-quantised ones: once a script delivers via `key` at all, the host's per-frame drain stands down entirely (`probe_uses_key()`), so an uncovered site's keys are never delivered, not merely mis-timed. Found by recording and counting, not by reading the disassembly harder. |
+| A test that fails proves the check it names | Task 3's own drain-guard regression test specified `--frames=10`. At that frame count the buggy (unguarded) and the fixed (guarded) build produce byte-identical output — the installed keyboard site isn't even reached until roughly frame 8.3, and the one key that would distinguish the two builds is stamped for a point roughly 59 frames further out — so the test failed identically before and after the fix and proved nothing either way. Needed `--frames=100`. A red result is only evidence once you have also seen it turn green for the right reason. |
 
 ---
 

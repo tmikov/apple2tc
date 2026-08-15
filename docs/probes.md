@@ -11,13 +11,14 @@ construct in the language, checked against the compiler in `lib/a2host/`
 
 **Status.** The compiler and the VM both exist, in every front end. Scripts
 compile (`--probe=path --probe-dump` prints the bytecode), install, run, and
-write reports (`--probe-out=path`); `key`, `stop` and `printf` all execute.
-Everything in this document is real and tested (`tests/run-tests.sh`,
-`tests/probe/`, and `decoded/rom/probe-acceptance.sh` for the cross-engine
-claim). What does *not* exist yet is phase 3 — apple2tc emitting placeholder
-`PROBE_x(...)` sites into the generated C, so that a probe can read C
-variables rather than machine state. See
-[Execution status](#execution-status) at the end.
+write reports (`--probe-out=path`); `key`, `record`, `stop` and `printf` all
+execute. Everything in this document is real and tested
+(`tests/run-tests.sh`, `tests/probe/`, `decoded/rom/probe-acceptance.sh` for
+the cross-engine claim on the ROM, and `decoded/snake-byte/probe-acceptance.sh`
+for the same claim with `key`-delivered, probe-stamped input). What does
+*not* exist yet is phase 3 — apple2tc emitting placeholder `PROBE_x(...)`
+sites into the generated C, so that a probe can read C variables rather than
+machine state. See [Execution status](#execution-status) at the end.
 
 ## The constraint that will bite
 
@@ -187,8 +188,9 @@ Valid inside a probe body only.
 | assignment | `<counter> = <expr>` or `<param> = <expr>` | not to registers — see below |
 | increment | `inc <counter>` | sugar for `<counter> = <counter> + 1`; counters only |
 | formatted output | `printf("<fmt>", <expr>, ...)` | see [printf](#printf) |
-| key delivery | `key <expr>` | deliver every pending key stamped ≤ `<expr>`; not executable yet |
-| stop | `stop` | end the run cleanly; not executable yet |
+| key delivery | `key <expr>` | deliver every pending key stamped ≤ `<expr>` |
+| key recording | `record <expr>` | release every key the host is holding, stamped with `<expr>`, into the machine *and* (if `--record-keys=` was given) into the recording file |
+| stop | `stop` | end the run cleanly |
 
 ```
 counter frame
@@ -219,6 +221,39 @@ to unshadowed registers; if a counter or parameter is named `a`, assigning to
 `inc` only accepts a counter, not a parameter or a bare expression:
 `inc a` (an unshadowed register) is "'inc' needs a counter, but 'a' is not
 one"; `inc nosuch` is "unknown name 'nosuch'".
+
+### `key` and `record`
+
+`record <expr>` is the recording counterpart of `key <expr>`. Both are the
+host's half of key delivery, dispatched through `probe_record_keys()` /
+`probe_deliver_keys()` in `lib/a2host/a2host.c`; the script only supplies the
+stamp.
+
+- `key <expr>` **replays**: it delivers every pending key whose recorded
+  stamp is ≤ `<expr>` into the machine, reading from `--key-file=`.
+- `record <expr>` **records**: with `--record-keys=<path>` given, every key
+  the host has taken from the input source (`--kbd-file=`, interactive
+  typing) but not yet handed to the machine is released into the machine
+  *and* written to `<path>` as a `<stamp> <key>` line, stamped with
+  `<expr>`'s value. Without `--record-keys=`, `record` still releases pending
+  keys into the machine — it is not a no-op — it just writes nothing.
+
+The point of `record` is what it is not: a passive tap on keys that arrive on
+their own schedule. `push_key()` diverts every incoming key into a pending
+queue instead of handing it to the machine immediately, so the moment a key
+reaches the program is `record`'s call site, a point the *script* defines —
+not a raw timestamp of when the host received it. A file recorded this way
+and later replayed with `key` reproduces the same program-relative delivery
+order regardless of which engine (interpreter or generated build) produced
+or consumes it — see [Execution status](#execution-status).
+
+**What the language does not enforce**: that a recording script's `record`
+sites and a replay script's `key` sites name the same coordinate — same
+install addresses, same counter, same counting rule. Nothing checks this at
+compile time or at load time; a replay against a mismatched script simply
+delivers keys at the wrong points, or not at all, with no diagnostic.
+`decoded/snake-byte/rec.probe` and `play.probe` carry this warning as a
+comment for exactly that reason.
 
 ## Expressions
 
@@ -339,7 +374,7 @@ declaring a counter, parameter, or probe with one of these names is an error
 ```
 peek8  peek16  hash
 counter  probe  install
-if  else  printf  inc  key  stop
+if  else  printf  inc  key  record  stop
 ```
 
 Registers (`a x y sp sr pc`) are *not* on this list — they are ordinary
@@ -378,18 +413,19 @@ format](#dump-format) below.
 
 ## Command-line options
 
-All three are `a2host` options, so every front end that links it (`a2run`,
+All four are `a2host` options, so every front end that links it (`a2run`,
 `a2emu`) has them.
 
 | option | effect |
 |---|---|
 | `--probe=<path>` | Load and compile a probe script. At most one per run — a second `--probe=` is "only one probe script may be loaded." |
-| `--probe-out=<path>` | Where a probe's `printf` output will go, once the VM exists. Requires `--probe=`. |
+| `--probe-out=<path>` | Where a probe's `printf` output goes. Requires `--probe=`. |
 | `--probe-dump` | Compile the loaded script, print its bytecode to stdout, and exit — no simulation runs. Requires `--probe=`. |
+| `--record-keys=<path>` | Open `<path>` for writing; every `record <expr>` in the loaded script appends a `<stamp> <key>` line there, preceded by one `#` header line naming the probe script that defines the coordinate. Requires `--probe=` — "--record-keys requires --probe= to define the coordinate" otherwise, because with no probe there is nothing for `record` to be called from and the file would silently end up empty. |
 
 `--probe-dump` and `--probe-out=` without a preceding `--probe=` are both
 rejected regardless of argument order (checked once, after the whole command
-line is parsed).
+line is parsed); so is `--record-keys=`.
 
 ## Dump format
 
@@ -565,15 +601,28 @@ Everything in this document executes. `probe_dispatch()` is called from the
 interpreter's per-instruction debug callback (`lib/engine6502/engine6502.cpp`)
 and from the `CYCLES` macro in both generated-code headers; `key <expr>`
 delivers every keystroke recorded with a stamp ≤ `<expr>` into the keyboard
-queue; `stop` ends the run cleanly and identically on the interpreter and on a
-generated program; `--probe-out=` writes the report.
+queue; `record <expr>` releases pending keys and, with `--record-keys=`,
+writes them stamped with `<expr>`; `stop` ends the run cleanly and identically
+on the interpreter and on a generated program; `--probe-out=` writes the
+report.
 
-Two things are still phase 2/3 of
-`docs/plans/2026-08-11-probes-design.md` rather than reality:
+**Key stamps no longer have to be cycle-denominated.** That was phase 2 of
+`docs/plans/2026-08-11-probes-design.md`; it is built, per the
+2026-08-14 `record`/`--record-keys=` work
+(`docs/plans/2026-08-14-probe-stamped-keys-plan.md`, and the decision log
+entry of the same date). `--trace-keys` still writes cycle stamps — that path
+is unchanged and is documented as the recording mechanism for a session that
+has no probe script at all — but a script that has one can stamp `record`'s
+argument with anything it computes, including a counter advanced only at the
+program's own input-reading sites, so a recording and its replay agree on
+*when* a key arrives regardless of which engine produced or consumes the
+recording. `decoded/snake-byte/rec.probe` and `play.probe` are a worked
+example, and `decoded/snake-byte/probe-acceptance.sh` is the cross-engine
+gate built on it.
 
-- **Key stamps are still cycle-denominated.** `--trace-keys` writes cycle
-  stamps, so `key` compares against a coordinate the two engines only
-  approximately share. Counter-stamped recording is the fix.
+One thing is still phase 3 of `docs/plans/2026-08-11-probes-design.md` rather
+than reality:
+
 - **apple2tc does not emit probe sites.** A probe can only be installed at an
   address, so it observes machine state. The `PROBE_x(...)` placeholders that
   would let it observe the generated C's own variables do not exist yet.

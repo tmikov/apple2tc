@@ -1549,3 +1549,176 @@ shows up as a different site count instead of a spurious failure.
 - Nothing now guards against a *new* back end reintroducing the same class of
   bug by emitting an observation for an edge. The IR says which is which; only
   this test would catch a back end ignoring it.
+
+
+## 2026-08-14 — Probe-stamped key recording: `record`, and what frame 623 was
+
+**Scope:** apple2tc (`lib/a2host`), snake-byte · **Status:** built
+(`docs/plans/2026-08-14-probe-stamped-keys-plan.md`, all 7 tasks)
+
+**Decision:** replay recorded keyboard input on a coordinate the *program*
+defines instead of one the host's cycle counter defines, so the interpreter
+and a generated build receive identical input at identical program points.
+Add `record <expr>`, the recording counterpart of `key <expr>`; convert
+`play.keys` to a probe-stamped `play.pkeys`; use the result as the oracle
+Question 1 (frame 623) needed.
+
+### Why cycle stamps could not work
+
+`drain_key_presses()` compares each key's stamp against `get_cycles()` —
+*each engine's own counter*. The 2026-08-13 "Real cycle costs" entry above
+already measured how far those counters drift apart on this exact 1,300-frame
+`play.keys` run: **-61 to +4 cycles** over 22.1M cycles, a scheduling artifact
+(the generated engine can only go negative on `s_remaining_cycles` at a block
+boundary; the interpreter can stop between any two instructions), not
+something a more accurate cycle table could ever close.
+
+Snake Byte polls the keyboard inside a spin loop at `$741C`, so the iteration
+at which a key lands is a function of that drifting counter, and the two
+engines can land on different iterations. Measured directly: with `play.keys`
+truncated to its first 16 keys, the two engines agree on all 1,300 frames;
+adding key 17 splits them permanently from frame 623 onward. Key 17's stamp is
+`10,622,152`, which is *exactly* the generated engine's frame-623 boundary —
+unsurprising once stated plainly: `play.keys` was recorded from the generated
+build, so every stamp is that engine's own coordinate, replayed against a
+different one. Frame 623 was never a decompiler bug; it was the recording
+disagreeing with itself about whose clock it was reading.
+
+### What the coordinate change buys
+
+`record <expr>` compiles to `OP_RECORD` (`123ac63`), the mirror image of
+`key <expr>`'s `OP_KEY`. With `--record-keys=<path>` given (`d8c0c8b`), the
+host stops handing incoming keys straight to the machine and instead holds
+them in a small pending queue; `record`'s call site is what releases them —
+into the machine and, stamped with `<expr>`'s value, into `<path>`. That
+split is deliberate: if the host pushed keys the moment they arrived and
+`record` only wrote the stamp, the recorded session would have used
+unquantised timing while its replay uses quantised, and the two would not be
+the same run.
+
+The host's per-frame cycle drain (`drain_key_presses()`) would otherwise race
+this: counter stamps are small integers, so against `get_cycles()` every one
+is already "due," and the drain would deliver the whole key file during the
+first simulated frame, leaving the script's `key` nothing to do. `f1eb6e2`
+adds `probe_uses_key()` — true when the loaded script contains at least one
+`OP_KEY` — and the drain stands down whenever it does.
+
+Two review-round fixes were needed before recording actually worked
+(`4f843b1`): `push_key()`'s diversion into the pending queue meant `io_`'s own
+hardware queue never filled, so the code that decided how far ahead to read
+from `--kbd-file=` kept using the hardware queue's occupancy and read straight
+past the pending queue's capacity; and `drain_key_presses()` /
+`probe_deliver_keys()` were calling `a2_io_push_key()` directly, bypassing the
+one place the recording diversion happens, so `--key-file=` combined with
+`--record-keys=` — the exact operation `play.keys` → `play.pkeys` depends on
+— recorded zero keys every time.
+
+The payoff: once input rides a coordinate both engines compute identically,
+any surviving cross-engine divergence is a real difference between the two
+engines, not a sampling artifact of when each one happened to notice a key.
+That is what neither frame hashes nor cycle stamps could give this project
+before now.
+
+### The conversion method
+
+`decoded/snake-byte/rec.probe` and `play.probe` (`c5cf552`) share one counter,
+incremented and either `record`ed or `key`ed at every site that reads the
+keyboard. The plan that specified this task named three sites — `$FD1B` (the
+ROM's KEYIN wait loop, BASIC-prompt keys), `$741F` and `$7890` (the game's own
+setup-screen polls). **That list was wrong, and the gap was found only by
+running the recording, not by reading the disassembly harder:** recording
+`play.keys` (23 keystrokes) against those three sites captured 11 of 23 keys.
+The missing 12 are the in-game `I`/`J`/`K`/`M` movement keys, consumed at
+`$6217` — `LDA $C000` followed by `STA $C010` (clear the strobe) and
+`STA $623C,X` (push into a 16-entry ring buffer) — the real-time ingest that
+feeds the game's movement dispatch, not a one-shot setup read. Adding `$6217`
+as a fourth site captured all 23. Per-site hit counts over the full 1,300-frame
+run: `$FD1B` 181,193 hits / 11 keys, `$741F` 325 hits / 0 keys, `$7890`
+364,211 hits / 0 keys, `$6217` 6,808 hits / 12 keys.
+
+This was not a cosmetic gap. Because `probe_uses_key()` makes the frame drain
+stand down entirely once a script delivers via `key`, a keyboard read at an
+uncovered site does not fall back to cycle-quantised delivery — it gets
+nothing, ever. Twelve of twenty-three keys would have gone permanently
+undelivered on replay, the kind of failure that looks like a hung or
+badly-broken decompiled game rather than a timing artifact.
+
+`play.pkeys` (`0af108b`) was generated by running `snake-bytec1-run
+--key-file=play.keys --probe=rec.probe --record-keys=play.pkeys` over 1,300
+frames, then verified two ways: 24 lines (one header, 23 keys — the line
+count that would have caught the missing-site gap on its own, had it not
+already been caught by the recorded-key count above), and a replay
+(`--key-file=play.pkeys --probe=play.probe`) reproducing the conversion run's
+frame hashes exactly. `play.keys` itself was never touched.
+
+### The plan's own test defect
+
+Task 3 (the drain-stand-down guard) shipped a regression test specifying
+`--frames=10`. That count cannot discriminate a fixed build from a broken
+one: the installed keyboard site (`$FD1B`) is not reached at all until
+roughly frame 8.3, and the second of the two test keys — the one that
+actually distinguishes "delivered by the drain" from "delivered by `key`" —
+is stamped almost 59 frames further out. At `--frames=10` the guarded and the
+unguarded build produce byte-identical output, so the test failed the same
+way whether the fix was present or absent, and very nearly shipped in that
+state. Diagnosed by tracing every `$C000`/`$C010` access with its cycle count
+across a `--frames=100` run and confirming the divergence is real and stable
+there (3/3 runs); the test was raised to `--frames=100`, with headroom over
+the measured ~59-frame threshold, and red-without-fix evidence was captured
+at the new count before committing. A test that fails is not evidence unless
+it has also been seen to fail *for the reason it claims to check* — the same
+lesson the probe work has hit before with `grep FATAL` rejection tests.
+
+### Task 6's result
+
+With input on the shared coordinate, `decoded/snake-byte/probe-acceptance.sh`
+(`2a76b62`) replays `play.pkeys` against the interpreter and both generated
+back ends — `snake-bytec1-run` and `snake-bytec1-ext-run` — over the full
+1,300 frames and compares two things.
+
+**The block-head control-flow trace is byte-identical.** 2,744,938 probe hits
+against every `CYCLES(` block head, matching exactly between the interpreter
+and *both* generated builds (site lists of 1,694 and 1,669 block heads
+respectively — the two builds' block-head sets differ because the `-ext`
+build replaces some ROM/game routines with hand-written C, not because of
+anything to do with input). Every basic block dispatched, in order, for the
+entire run, is the same sequence on all three. Control flow is therefore
+provably identical for this run, not merely "probably" — a much stronger
+statement than a frame hash can make on its own.
+
+**Frame 623 now matches.** It was the input coordinate, as the analysis above
+predicted, and is not treated as resolved on inference alone: this is a direct
+measurement, over the actual replay, with the actual generated builds.
+
+**8 of 1,300 frame hashes still differ**, and this residual is **not
+root-caused**: frames 172, 173, 271, 596, 761, 823, 871, 933 (172 and 173 are
+one two-frame transient, so 7 distinct events, not 8), identically for both
+generated back ends. Every differing frame re-converges on the very next
+frame. For 6 of the 7 events, both engines' hashes at the differing frame
+match *neither* the preceding nor the following stable value — both are
+mid-write at slightly different points, not one engine lagging the other by a
+frame. (Frame 871 is the one clean "interpreter is a frame behind" case.)
+
+Why this is not a control-flow difference: the block-head trace is
+byte-identical over the whole 1,300-frame run, so control flow is provably
+identical throughout; what differs is only *where* a fixed-interval
+video-hash sample lands relative to an in-progress screen write. That framing
+is strongly supported — by the byte-identical trace and by the immediate
+re-convergence on every one of the 7 events — but it is not proven. No attempt
+was made to trace a specific differing frame down to the instruction where the
+two engines' screen-write progress actually differs; that is future work.
+
+### Left open
+
+- **The 8 residual frames are not root-caused.** The sampling-artifact
+  explanation above is well supported but unverified at the instruction
+  level; nobody has traced a single one of the 7 events to the actual write
+  in progress.
+- **`play-hires.keys` is not converted.** It should follow the same recipe
+  once needed, but needs its own site check — the hi-res scenario reaches
+  `$664A`, a site not in `rec.probe`/`play.probe`.
+- **`--trace-keys` still writes cycle stamps**, unchanged, deliberately: it
+  remains the recording path for a session that has no probe script at all.
+- **Probe phase 3 is still unbuilt.** apple2tc does not emit `PROBE_x(...)`
+  placeholder sites, so a probe observes machine state, not the generated
+  C's own variables.
