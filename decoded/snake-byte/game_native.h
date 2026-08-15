@@ -142,6 +142,17 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out);
 /// it, comparing BCD bytes most significant first.
 void game_promote_high_score(void);
 
+/// $6148 / $615A -- runs of hi-res cells along a row or down a column.
+void game_plot_hline_native(void);
+void game_plot_vline_native(void);
+
+/// $7000 -- the lo-res half of a vertical run, restoring $03.
+void game_lores_vline_native(void);
+
+/// $6594 -- step the bouncers the difficulty calls for, then return the next
+/// queued key.
+uint8_t game_step_bouncers_native(void);
+
 /// $60E7 -- draw the loaded shape into cell \p c in ink \p ink, replacing.
 void game_draw_cell_native(uint8_t ink, Cell c);
 

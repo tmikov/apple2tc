@@ -944,3 +944,151 @@ void game_clear_hgr_native(void) {
 
   GAME_CYCLES(0x7044, 6);
 }
+
+/* ========================================================================== */
+/* $6148, $615A, $7000 -- runs of cells                                       */
+/*                                                                            */
+/* Each loads the shape once and repeats a draw along one axis until the       */
+/* moving coordinate reaches $08. The end is tested after drawing, so it is    */
+/* inclusive and a degenerate run still plots one cell. A start past the end   */
+/* wraps through 255; nothing guards against it and nothing needs to.          */
+/* ========================================================================== */
+
+/// $6148 -- a horizontal run of hi-res cells, columns $02 through $08 on row
+/// $03. The coordinate stays in zero page because game_draw_cell's adapter
+/// reads it from there.
+void game_plot_hline_native(void) {
+  for (;;) {
+    GAME_CYCLES(0x614b, 6);
+    game_draw_cell(0x614d);
+
+    GAME_CYCLES(0x614e, 8);
+    const uint8_t col = ram_peek(0x0002);
+    if (col == ram_peek(0x0008))
+      break;
+
+    GAME_CYCLES(0x6154, 8);
+    ram_poke(0x0002, (uint8_t)(col + 1));
+  }
+  GAME_CYCLES(0x6152, 1);
+  GAME_CYCLES(0x6159, 6);
+}
+
+/// $615A -- the same down a column: rows $03 through $08 in column $02.
+void game_plot_vline_native(void) {
+  for (;;) {
+    GAME_CYCLES(0x615d, 6);
+    game_draw_cell(0x615f);
+
+    GAME_CYCLES(0x6160, 8);
+    const uint8_t row = ram_peek(0x0003);
+    if (row == ram_peek(0x0008))
+      break;
+
+    GAME_CYCLES(0x6166, 8);
+    ram_poke(0x0003, (uint8_t)(row + 1));
+  }
+  GAME_CYCLES(0x6164, 1);
+  GAME_CYCLES(0x6159, 6);
+}
+
+/// $7000 -- the lo-res half of a vertical run. Unlike the hi-res one it puts
+/// $03 back where it found it, because the caller draws the hi-res run over
+/// the same coordinates next.
+void game_lores_vline_native(void) {
+  const uint8_t first_row = ram_peek(0x0003);
+  push8(first_row);
+
+  for (;;) {
+    GAME_CYCLES(0x7003, 12);
+    lores_plot(ram_peek(0x0003), ram_peek(0x0002), 0x7009);
+
+    GAME_CYCLES(0x700a, 8);
+    const uint8_t row = ram_peek(0x0003);
+    if (row == ram_peek(0x0008))
+      break;
+
+    GAME_CYCLES(0x7010, 8);
+    ram_poke(0x0003, (uint8_t)(row + 1));
+  }
+  GAME_CYCLES(0x700e, 1);
+  GAME_CYCLES(0x7015, 13);
+  ram_poke(0x0003, pop8());
+}
+
+/* ========================================================================== */
+/* $6594 -- step the bouncers, then take a key                                */
+/* ========================================================================== */
+
+/// Move one bouncer through the $6633-$6636 parameter block that $64C8's
+/// adapter still reads. The load and store either side are the original's own
+/// eight ram_pokes, which is what a struct copy looks like without structs.
+static void step_bouncer_slot(int slot, uint16_t block, uint16_t cycles, uint16_t ret,
+                              uint16_t back_block, uint16_t back_cycles) {
+  GAME_CYCLES(block, cycles);
+  const Bouncer in = bouncer_load(slot);
+  ram_poke(0x6633, in.col);
+  ram_poke(0x6634, in.row);
+  ram_poke(0x6635, (uint8_t)in.dx);
+  ram_poke(0x6636, (uint8_t)in.dy);
+  game_move_bouncer(ret);
+
+  GAME_CYCLES(back_block, back_cycles);
+  const Bouncer out = {
+      .col = ram_peek(0x6633),
+      .row = ram_peek(0x6634),
+      .dx = (int8_t)ram_peek(0x6635),
+      .dy = (int8_t)ram_peek(0x6636),
+  };
+  bouncer_store(slot, out);
+}
+
+/// $6200 -- take the next key out of the ring buffer game_read_key fills.
+/// Only a byte with bit 7 set counts; the slot is cleared and the read index
+/// advances. Returns what the original leaves in A.
+///
+/// $6216, the RTS all paths share, is charged by the adapter and not here.
+/// game_read_key also ends there and is not converted, so $6216 is still a
+/// probe site -- and converting one of a shared block's two paths, while the
+/// other still reports, is exactly how the two engines stop agreeing. The
+/// trace caught it; the pinned site count could not, because the count was
+/// right.
+static uint8_t dequeue_key(void) {
+  GAME_CYCLES(0x6200, 10);
+  const uint8_t at = ram_peek(0x624c);
+  const uint8_t key = ram_peek(0x623c + at);
+  if (!(key & 0x80)) {
+    GAME_CYCLES(0x6206, 1);
+    return key;
+  }
+
+  GAME_CYCLES(0x6208, 24);
+  ram_poke(0x623c + at, 0x00);
+  ram_poke(0x624c, (uint8_t)((at + 1) & 0x0f));
+  s_x = (uint8_t)(at + 1);
+  return key;
+}
+
+/// $6594 -- step as many bouncers as the difficulty calls for, then fall into
+/// the key dequeue whose byte is the return value.
+uint8_t game_step_bouncers_native(void) {
+  GAME_CYCLES(0x6594, 6);
+  const uint8_t difficulty = ram_peek(0x0301);
+
+  if (!difficulty) {
+    GAME_CYCLES(0x6599, 3);
+    return dequeue_key();
+  }
+  GAME_CYCLES(0x6597, 1);
+
+  step_bouncer_slot(0, 0x659c, 38, 0x65b6, 0x65b7, 40);
+
+  if (ram_peek(0x0301) == 0x01) {
+    GAME_CYCLES(0x65d6, 3);
+    return dequeue_key();
+  }
+  GAME_CYCLES(0x65d4, 1);
+
+  step_bouncer_slot(1, 0x65d9, 38, 0x65f3, 0x65f4, 35);
+  return dequeue_key();
+}

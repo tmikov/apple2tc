@@ -277,6 +277,8 @@ void game_plot_shape(uint16_t ret_addr) {
 /* ========================================================================== */
 
 void game_plot_hline(uint16_t ret_addr) {
+  // Adapter for game_plot_hline_native(). The shape load stays here: it is the
+  // routine's own first block and keeps its probe site.
   bool branchTarget = true;
 
   if (ret_addr)
@@ -284,33 +286,22 @@ void game_plot_hline(uint16_t ret_addr) {
 
   /*$6148*/ CYCLES(0x6148, 6);
   game_load_shape(0x614a);
+  game_plot_hline_native();
 
-  for (;;) {
-    /*$614B*/ CYCLES(0x614b, 6);
-    game_draw_cell(0x614d);
-
-    /*$614E*/ CYCLES(0x614e, 8);
-    const uint8_t col = ram_peek(0x0002);
-    const uint8_t last = ram_peek(0x0008);
-    s_a = col;
-    s_status_c = (col >= last);
-    s_status_not_z = (col != last);
-    s_status_n = ((uint8_t)(col - last) & 0x80);
-    if (col == last)
-      break;
-
-    /*$6154*/ CYCLES(0x6154, 8);
-    ram_poke(0x0002, (uint8_t)(col + 1));
-  }
-
-  /*$6152*/ CYCLES_EDGE(0x6152, 1);
-  /*$6159*/ CYCLES(0x6159, 6);
+  // The CMP that ended the loop, and the coordinate it compared.
+  const uint8_t at = ram_peek(0x0002);
+  s_a = at;
+  s_status_c = 0x01;
+  s_status_not_z = 0x00;
+  s_status_n = 0x00;
 
   if (ret_addr)
     pop16();
 }
 
 void game_plot_vline(uint16_t ret_addr) {
+  // Adapter for game_plot_vline_native(). The shape load stays here: it is the
+  // routine's own first block and keeps its probe site.
   bool branchTarget = true;
 
   if (ret_addr)
@@ -318,27 +309,14 @@ void game_plot_vline(uint16_t ret_addr) {
 
   /*$615A*/ CYCLES(0x615a, 6);
   game_load_shape(0x615c);
+  game_plot_vline_native();
 
-  for (;;) {
-    /*$615D*/ CYCLES(0x615d, 6);
-    game_draw_cell(0x615f);
-
-    /*$6160*/ CYCLES(0x6160, 8);
-    const uint8_t row = ram_peek(0x0003);
-    const uint8_t last = ram_peek(0x0008);
-    s_a = row;
-    s_status_c = (row >= last);
-    s_status_not_z = (row != last);
-    s_status_n = ((uint8_t)(row - last) & 0x80);
-    if (row == last)
-      break;
-
-    /*$6166*/ CYCLES(0x6166, 8);
-    ram_poke(0x0003, (uint8_t)(row + 1));
-  }
-
-  /*$6164*/ CYCLES_EDGE(0x6164, 1);
-  /*$6159*/ CYCLES(0x6159, 6);
+  // The CMP that ended the loop, and the coordinate it compared.
+  const uint8_t at = ram_peek(0x0003);
+  s_a = at;
+  s_status_c = 0x01;
+  s_status_not_z = 0x00;
+  s_status_n = 0x00;
 
   if (ret_addr)
     pop16();
@@ -423,43 +401,19 @@ void game_set_ink(uint16_t ret_addr) {
 }
 
 void game_lores_vline(uint16_t ret_addr) {
+  // Adapter for game_lores_vline_native(). Costs 4 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // Same shape as game_plot_vline: rows $03 through $08 inclusive, down
-  // column $02. Unlike that one it puts $03 back where it found it, because
-  // the caller draws the hi-res run over the same coordinates next.
   /*$7000*/ CYCLES(0x7000, 6);
-  push8(ram_peek(0x0003));
+  game_lores_vline_native();
 
-  for (;;) {
-    /*$7003*/ CYCLES(0x7003, 12);
-    s_a = ram_peek(0x0003);
-    s_y = ram_peek(0x0002);
-    rom_plot(0x7009);
-
-    /*$700A*/ CYCLES(0x700a, 8);
-    const uint8_t row = ram_peek(0x0003);
-    const uint8_t last = ram_peek(0x0008);
-    s_status_c = (row >= last);
-    s_status_not_z = (row != last);
-    s_status_n = ((uint8_t)(row - last) & 0x80);
-    if (row == last)
-      break;
-
-    /*$7010*/ CYCLES(0x7010, 8);
-    ram_poke(0x0003, (uint8_t)(row + 1));
-  }
-
-  /*$700E*/ CYCLES_EDGE(0x700e, 1);
-  /*$7015*/ CYCLES(0x7015, 13);
-  const uint8_t saved = pop8();
-  s_a = saved;
-  s_status_not_z = saved;
-  s_status_n = (saved & 0x80);
-  ram_poke(0x0003, saved);
+  const uint8_t restored = ram_peek(0x0003);
+  s_a = restored;
+  s_status_not_z = restored;
+  s_status_n = (restored & 0x80);
 
   if (ret_addr)
     pop16();
@@ -1606,80 +1560,20 @@ void game_tick_sound(uint16_t ret_addr) {
 /* ========================================================================== */
 
 void game_step_bouncers(uint16_t ret_addr) {
+  // Adapter for game_step_bouncers_native(). Costs 9 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // Difficulty ($0301) decides how many bouncers exist: none at 0, one at 1,
-  // two above. That is the same count as the wall gaps game_draw_playfield
-  // opens, one per bouncer.
-  //
-  // Each bouncer's state is swapped into the working locations $6633-$6636
-  // that game_move_bouncer operates on, and swapped back out afterwards.
-  // Bouncer 1 lives at $6639/$663A/$663D/$663E, bouncer 2 at
-  // $663B/$663C/$663F/$6640.
-  //
-  // Every path then falls into the key dequeue at $6200, whose byte is this
-  // routine's return value in A.
-  /*$6594*/ CYCLES(0x6594, 6);
-  if (ram_peek(0x0301)) {
-    /*$6597*/ CYCLES_EDGE(0x6597, 1);
-    /*$659C*/ CYCLES(0x659c, 38);
-    ram_poke(0x6633, ram_peek(0x6639));
-    ram_poke(0x6634, ram_peek(0x663a));
-    ram_poke(0x6635, ram_peek(0x663d));
-    ram_poke(0x6636, ram_peek(0x663e));
-    game_move_bouncer(0x65b6);
-
-    /*$65B7*/ CYCLES(0x65b7, 40);
-    ram_poke(0x6639, ram_peek(0x6633));
-    ram_poke(0x663a, ram_peek(0x6634));
-    ram_poke(0x663d, ram_peek(0x6635));
-    ram_poke(0x663e, ram_peek(0x6636));
-    const uint8_t diff = ram_peek(0x0301);
-    s_status_c = (diff >= 0x01);
-    if (diff != 0x01) {
-      /*$65D4*/ CYCLES_EDGE(0x65d4, 1);
-      /*$65D9*/ CYCLES(0x65d9, 38);
-      ram_poke(0x6633, ram_peek(0x663b));
-      ram_poke(0x6634, ram_peek(0x663c));
-      ram_poke(0x6635, ram_peek(0x663f));
-      ram_poke(0x6636, ram_peek(0x6640));
-      game_move_bouncer(0x65f3);
-
-      /*$65F4*/ CYCLES(0x65f4, 35);
-      ram_poke(0x663b, ram_peek(0x6633));
-      ram_poke(0x663c, ram_peek(0x6634));
-      ram_poke(0x663f, ram_peek(0x6635));
-      ram_poke(0x6640, ram_peek(0x6636));
-    } else {
-      /*$65D6*/ CYCLES(0x65d6, 3);
-    }
-  } else {
-    /*$6599*/ CYCLES(0x6599, 3);
-  }
-
-  // $6200: take the next key out of the ring buffer game_read_key fills.
-  // Only a byte with bit 7 set counts as a key; the slot is cleared and the
-  // read index advances. Shares the RTS at $6216 with game_read_key.
-  /*$6200*/ CYCLES(0x6200, 10);
-  const uint8_t r = ram_peek(0x624c);
-  s_x = r;
-  const uint8_t key = ram_peek(0x623c + r);
-  s_a = key;
-  if (key & 0x80) {
-    /*$6208*/ CYCLES(0x6208, 24);
-    push8(key);
-    ram_poke(0x623c + r, 0x00);
-    s_x = (uint8_t)(r + 0x01);
-    ram_poke(0x624c, (uint8_t)(s_x & 0x0f));
-    s_a = pop8();
-  } else {
-    /*$6206*/ CYCLES_EDGE(0x6206, 1);
-  }
-
+  /*$6594*/ CYCLES(0x6594, 0);
+  const uint8_t key = game_step_bouncers_native();
+  // $6216 is shared with game_read_key, which is not converted, so it is
+  // still a probe site and has to stay one on this path too.
   /*$6216*/ CYCLES(0x6216, 6);
+  s_a = key;
+  s_status_not_z = key;
+  s_status_n = (key & 0x80);
 
   if (ret_addr)
     pop16();
