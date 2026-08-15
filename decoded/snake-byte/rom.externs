@@ -25,3 +25,5 @@ FE93 rom_setvid
 6127 game_load_shape
 60E7 game_draw_cell
 60E4 game_plot_shape
+6148 game_plot_hline
+615A game_plot_vline

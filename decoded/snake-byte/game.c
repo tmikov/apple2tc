@@ -282,3 +282,96 @@ void game_plot_shape(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $6148, $615A -- runs of cells.                                             */
+/*                                                                            */
+/* Both load the shape once and then repeat game_draw_cell along one axis:    */
+/* $6148 walks the column ($02), $615A walks the row ($03). The run ends when */
+/* the moving coordinate reaches $08, tested after the cell is drawn, so the  */
+/* endpoint is inclusive and a degenerate run still plots one cell. A start   */
+/* past the end wraps through 255 rather than drawing nothing -- faithfully   */
+/* reproduced below, since nothing in the original guards against it.         */
+/*                                                                            */
+/* Arguments are game_draw_cell's, plus:                                      */
+/*   $08  last column ($6148) or last row ($615A), inclusive                  */
+/*                                                                            */
+/* $70D4 shows what they are for: with $08 = $27 it draws the four borders of */
+/* the 40x40 cell playfield -- top and bottom with $6148, left and right with */
+/* $615A -- which is where the grid's dimensions come from.                   */
+/*                                                                            */
+/* The register and flag assignments are not decoration. Callers are still    */
+/* generated code that reads this machine state, so a hand-written routine    */
+/* has to leave behind what the 6502 would. Where apple2tc's own output drops */
+/* some of it, that is its whole-program DCE proving a particular flag dead;  */
+/* setting it anyway is always safe, and cheaper than re-deriving the proof   */
+/* every time a caller changes.                                               */
+/* ========================================================================== */
+
+void game_plot_hline(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  /*$6148*/ CYCLES(0x6148, 6);
+  game_load_shape(0x614a);
+
+  for (;;) {
+    /*$614B*/ CYCLES(0x614b, 6);
+    game_draw_cell(0x614d);
+
+    /*$614E*/ CYCLES(0x614e, 8);
+    const uint8_t col = ram_peek(0x0002);
+    const uint8_t last = ram_peek(0x0008);
+    s_a = col;
+    s_status_c = (col >= last);
+    s_status_not_z = (col != last);
+    s_status_n = ((uint8_t)(col - last) & 0x80);
+    if (col == last)
+      break;
+
+    /*$6154*/ CYCLES(0x6154, 8);
+    ram_poke(0x0002, (uint8_t)(col + 1));
+  }
+
+  /*$6152*/ CYCLES_EDGE(0x6152, 1);
+  /*$6159*/ CYCLES(0x6159, 6);
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_plot_vline(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  /*$615A*/ CYCLES(0x615a, 6);
+  game_load_shape(0x615c);
+
+  for (;;) {
+    /*$615D*/ CYCLES(0x615d, 6);
+    game_draw_cell(0x615f);
+
+    /*$6160*/ CYCLES(0x6160, 8);
+    const uint8_t row = ram_peek(0x0003);
+    const uint8_t last = ram_peek(0x0008);
+    s_a = row;
+    s_status_c = (row >= last);
+    s_status_not_z = (row != last);
+    s_status_n = ((uint8_t)(row - last) & 0x80);
+    if (row == last)
+      break;
+
+    /*$6166*/ CYCLES(0x6166, 8);
+    ram_poke(0x0003, (uint8_t)(row + 1));
+  }
+
+  /*$6164*/ CYCLES_EDGE(0x6164, 1);
+  /*$6159*/ CYCLES(0x6159, 6);
+
+  if (ret_addr)
+    pop16();
+}

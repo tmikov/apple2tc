@@ -31,3 +31,11 @@ void game_draw_cell(uint16_t ret_addr);
 /// $60E4 -- load the shape for $00, then draw it. The form nearly every
 /// caller uses.
 void game_plot_shape(uint16_t ret_addr);
+
+/// $6148 -- plot a horizontal run of cells, from column $02 through column
+/// $08 inclusive, along row $03.
+void game_plot_hline(uint16_t ret_addr);
+
+/// $615A -- plot a vertical run of cells, from row $03 through row $08
+/// inclusive, down column $02.
+void game_plot_vline(uint16_t ret_addr);
