@@ -315,12 +315,6 @@ void game_promote_high_score(void) {
 /* of locals here, mirrored back at the end because ram.probe still hashes it. */
 /* ========================================================================== */
 
-/// A cell on the 40x48 grid.
-typedef struct {
-  uint8_t col;
-  uint8_t row;
-} Cell;
-
 /// The lo-res occupancy map's value at \p c. $0F is an apple.
 static uint8_t cell_at(Cell c, uint16_t ret) {
   s_a = c.row;
@@ -395,4 +389,100 @@ void game_find_nearest_apple(void) {
   ram_poke(0x6b3a, c.row);
   ram_poke(0x6b3b, c.col);
   ram_poke(0x6b3c, c.row);
+}
+
+/* ========================================================================== */
+/* $6AB8 -- is a move safe?                                                   */
+/*                                                                            */
+/* The four neighbour probes are the same shape four times over, so they are  */
+/* a table here. In the original they are 60 bytes of straight-line code with */
+/* the offsets and the block addresses interleaved.                           */
+/*                                                                            */
+/* The verdict comes back as an enum and the adapter turns it into A and the  */
+/* flags, which is the one thing that cannot move into this file while        */
+/* generated callers still branch on them.                                    */
+/* ========================================================================== */
+
+/// Where each neighbour is, and the four block addresses the original spends
+/// on it: the SCRN block, the CMP after it, the not-taken edge, and the
+/// increment.
+static const struct {
+  int8_t dcol, drow;
+  uint16_t scrn_block, scrn_cycles, scrn_ret;
+  uint16_t cmp_block, edge, inc_block;
+} kNeighbour[4] = {
+    {+1, 0, 0x6ae8, 12, 0x6aee, 0x6aef, 0x6af1, 0x6af3},
+    {-1, 0, 0x6af6, 16, 0x6aff, 0x6b00, 0x6b02, 0x6b04},
+    {0, +1, 0x6b07, 18, 0x6b12, 0x6b13, 0x6b15, 0x6b17},
+    {0, -1, 0x6b1a, 18, 0x6b25, 0x6b26, 0x6b28, 0x6b2a},
+};
+
+MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
+  GAME_CYCLES(0x6ab8, 42);
+
+  // The head plus this direction's deltas.
+  const Cell target = {
+      .col = (uint8_t)(ram_peek(0x6232 + dir) + ram_peek(0x624f)),
+      .row = (uint8_t)(ram_peek(0x6237 + dir) + ram_peek(0x6250)),
+  };
+  s_status_v = ovf8(target.row, ram_peek(0x6237 + dir), ram_peek(0x6250));
+  ram_poke(0x6637, target.col);
+  ram_poke(0x6638, target.row);
+
+  const uint8_t cell = cell_at(target, 0x6ad4);
+  *cell_out = cell;
+
+  // Empty or an apple, and nothing else, may be stepped into.
+  GAME_CYCLES(0x6ad5, 4);
+  if (cell != 0x00)
+    GAME_CYCLES(0x6ad9, 2);
+  else
+    GAME_CYCLES(0x6ad7, 1);
+  GAME_CYCLES(0x6adb, 2);
+  if (cell != 0x00 && cell != 0x0f) {
+    GAME_CYCLES(0x6add, 6);
+    return MOVE_TARGET_TAKEN;
+  }
+  GAME_CYCLES(0x6adb, 1);
+
+  GAME_CYCLES(0x6ade, 12);
+  ram_poke(0x6c4a, 0x00);
+  if (target.row == 0) {
+    // Row 0 is the top border; there is nothing above it to look at.
+    GAME_CYCLES(0x6ae6, 1);
+    GAME_CYCLES(0x6add, 6);
+    return MOVE_ROW_ZERO;
+  }
+
+  // A target whose four neighbours are all occupied is a dead end: legal to
+  // enter, fatal on the move after, so it is refused a step early.
+  unsigned free_neighbours = 0;
+  for (unsigned i = 0; i < 4; ++i) {
+    GAME_CYCLES(kNeighbour[i].scrn_block, kNeighbour[i].scrn_cycles);
+    const Cell n = {
+        .col = (uint8_t)(target.col + kNeighbour[i].dcol),
+        .row = (uint8_t)(target.row + kNeighbour[i].drow),
+    };
+    if (kNeighbour[i].drow)
+      s_status_v = ovf8(n.row, target.row, kNeighbour[i].drow > 0 ? 0x01 : 0xfe);
+
+    const uint8_t v = cell_at(n, kNeighbour[i].scrn_ret);
+    GAME_CYCLES(kNeighbour[i].cmp_block, 4);
+    if (v == 0x00) {
+      GAME_CYCLES(kNeighbour[i].inc_block, 6);
+      ++free_neighbours;
+      ram_poke(0x6c4a, (uint8_t)free_neighbours);
+    } else {
+      GAME_CYCLES(kNeighbour[i].edge, 1);
+    }
+  }
+
+  GAME_CYCLES(0x6b2d, 6);
+  if (free_neighbours) {
+    GAME_CYCLES(0x6b32, 8);
+    return MOVE_OK;
+  }
+  GAME_CYCLES(0x6b30, 1);
+  GAME_CYCLES(0x6b35, 8);
+  return MOVE_DEAD_END;
 }

@@ -55,6 +55,12 @@
 /// and reached through accessors, so that when the storage does move, one
 /// file changes and not every use.
 
+/// A cell on the 40x48 playfield grid.
+typedef struct {
+  uint8_t col;
+  uint8_t row;
+} Cell;
+
 /* --- Cycle accounting ----------------------------------------------------- */
 
 /// Charge the cycles the original spent in a block, without registering a
@@ -113,6 +119,24 @@ void game_install_cout_vector(void);
 /// $64C8 -- step \p b one cell along its deltas and redraw it, reflecting off
 /// whatever it hits.
 void bouncer_step(Bouncer *b);
+
+/// What $6AB8 decided about a candidate move. The original says all of this
+/// in A and the Z flag; the adapter puts it back.
+typedef enum {
+  /// The target cell holds something other than empty or an apple.
+  MOVE_TARGET_TAKEN,
+  /// The target row is 0, the top border. Accepted, oddly -- but the border
+  /// is occupied, so the check above normally rejects it first.
+  MOVE_ROW_ZERO,
+  /// Safe: at least one of the target's four neighbours is free.
+  MOVE_OK,
+  /// All four neighbours are occupied -- legal to enter, fatal next move.
+  MOVE_DEAD_END,
+} MoveVerdict;
+
+/// $6AB8 -- judge a step in direction \p dir. \p cell_out receives what the
+/// occupancy map held at the target, which the original leaves in A.
+MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out);
 
 /// $728D -- copy the score at $7252 over the high score at $7256 if it beats
 /// it, comparing BCD bytes most significant first.

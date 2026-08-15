@@ -439,7 +439,7 @@ cat "/tmp/pkeys-cover-trace-easy.txt" >> "/tmp/pkeys-cover-trace-ext.txt"
 
 echo "--- coverage over all scenarios ---"
 coverage_report trace "$here/blocks.txt" 0
-# Baseline 58, and the number is a statement about the recordings rather than
+# Baseline 57, and the number is a statement about the recordings rather than
 # about the decode. Every entry is a hand-written block that no scenario
 # executes, so its decode rests on the binary alone with no cross-engine check
 # behind it. They cluster into whole features, not scattered branches:
@@ -459,8 +459,9 @@ coverage_report trace "$here/blocks.txt" 0
 #   counted here. Unexercised code that stops being probed stops being
 #   measured, which is worth remembering: this number can fall for a good
 #   reason or a bad one.)
-#   dead end (1)        $6B35, when all four neighbours of the target cell are
-#       occupied. The snake is never boxed in that badly.
+#   (was: dead end (1), $6B35 -- gone from the list with game_move_ok's
+#   conversion, like $64D2/$6572 before it. Converting unexercised code stops
+#   it being counted rather than makes it verified.)
 #   level 30 (1)        $7132, the 'E' opcode that wraps back to level 1.
 #   unrecognised (1)    $71C4. Every byte in every script is a valid opcode.
 #   page crossing (1)   $7021, game_next_byte's carry into the high byte.
@@ -468,4 +469,4 @@ coverage_report trace "$here/blocks.txt" 0
 # The number exists to stop that set growing quietly, and to be ratcheted down
 # whenever a scenario reaches one of them -- as happened at 22 -> 21 when the
 # `easy` fixture covered $6C4F. It is not a target to be satisfied.
-coverage_report trace-ext "$here/blocks-ext.txt" 58 "$here/a2rom.c" "$here/game.c"
+coverage_report trace-ext "$here/blocks-ext.txt" 57 "$here/a2rom.c" "$here/game.c"
