@@ -348,7 +348,20 @@ void probe_deliver_keys(uint32_t now) {
 
 void probe_record_keys(uint32_t now) {
   for (unsigned i = 0; i != pending_keys_count_; ++i) {
-    a2_io_push_key(&io_, pending_keys_[i]);
+    // a2_io_push_key() can refuse: releasing up to PENDING_KEYS_MAX keys at
+    // once can outrun however much io_'s hardware queue has drained since the
+    // last `record`, unlike push_key()'s own pending-queue guard above, which
+    // bounds arrival but not release. Checked and made fatal rather than
+    // ignored, to honor the same "a full queue drops the key loudly" promise
+    // pending_keys_'s own comment makes -- and so a key that fails to land
+    // is never written to the recording file as though it had.
+    if (!a2_io_push_key(&io_, pending_keys_[i])) {
+      fprintf(
+          stderr,
+          "FATAL: key queue full at `record`; %u key(s) did not fit\n",
+          pending_keys_count_ - i);
+      exit(2);
+    }
     if (record_keys_file_)
       fprintf(record_keys_file_, "%u %u\n", now, pending_keys_[i]);
   }
