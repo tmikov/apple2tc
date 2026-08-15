@@ -121,3 +121,7 @@ void game_show_key(uint16_t ret_addr);
 
 /// $6B3D -- draw both side walls in two inks, with a randomly placed seam.
 void game_draw_side_walls(uint16_t ret_addr);
+
+/// $6AB8 -- can the snake step in direction $6B38? Returns A = 0 / Z set for
+/// yes, and refuses dead ends one move early.
+void game_move_ok(uint16_t ret_addr);

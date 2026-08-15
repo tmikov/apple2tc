@@ -1764,3 +1764,176 @@ void game_draw_side_walls(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $6AB8 -- is the next cell in direction $6B38 worth moving into?            */
+/*                                                                            */
+/* The move validator behind the direction-choosing chain at $6A40, which     */
+/* calls it once per candidate direction and branches on the answer. Two      */
+/* separate rejections:                                                       */
+/*                                                                            */
+/*   the target cell itself must be empty or an apple ($0F). Anything else is */
+/*   wall or snake, and it returns immediately.                               */
+/*                                                                            */
+/*   at least one of the target's four orthogonal neighbours must be empty.   */
+/*   $6C4A counts them, and a target with none is a dead end -- legal to      */
+/*   enter and fatal on the next move, so it is refused a step early.         */
+/*                                                                            */
+/* Returns A = 0 with Z set when the move is good, A = 1 when it is a dead    */
+/* end, and simply Z clear on the early rejection. apple2tc drops the A       */
+/* entirely -- its whole-program DCE can see that every caller branches on Z  */
+/* alone -- but the 6502 sets it, so it is set here.                          */
+/*                                                                            */
+/* $6637/$6638 hold the target column and row: $6232[dir] + $624F and         */
+/* $6237[dir] + $6250, the direction deltas added to the snake's head.        */
+/* ========================================================================== */
+
+void game_move_ok(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  /*$6AB8*/ CYCLES(0x6ab8, 42);
+  // Four ADCs and an SBC below, all of which honour D. The snake never moves
+  // in decimal mode; say so loudly rather than carry the BCD paths.
+  if (s_status_d) {
+    fprintf(stderr, "game_move_ok: entered with decimal mode set\n");
+    error_handler(0x6ab8);
+    abort();
+  }
+
+  const uint8_t dir = ram_peek(0x6b38);
+  s_x = dir;
+  s_status_c = 0x00;
+  s_a = (uint8_t)(ram_peek(0x6232 + dir) + ram_peek(0x624f));
+  ram_poke(0x6637, s_a);
+
+  const uint8_t dy = ram_peek(0x6237 + s_x);
+  const uint8_t head_row = ram_peek(0x6250);
+  s_status_c = 0x00;
+  const uint8_t row = (uint8_t)(dy + head_row);
+  s_status_v = ovf8(row, dy, head_row);
+  s_a = row;
+  ram_poke(0x6638, row);
+
+  s_y = ram_peek(0x6637);
+  rom_scrn(0x6ad4);
+
+  // $6AD5 CMP #$00, then $6AD9 CMP #$0F only if it was non-zero. Empty or
+  // apple both leave Z set and fall through; anything else returns.
+  /*$6AD5*/ CYCLES(0x6ad5, 4);
+  const uint8_t cell = s_a;
+  s_status_not_z = (cell != 0x00);
+  s_status_c = 0x01;
+  s_status_n = (cell & 0x80);
+  if (cell) {
+    /*$6AD9*/ CYCLES(0x6ad9, 2);
+    s_status_not_z = (cell != 0x0f);
+    s_status_c = (cell >= 0x0f);
+    s_status_n = ((uint8_t)(cell - 0x0f) & 0x80);
+  } else {
+    /*$6AD7*/ CYCLES_EDGE(0x6ad7, 1);
+  }
+
+  /*$6ADB*/ CYCLES(0x6adb, 2);
+  if (s_status_not_z) {
+    /*$6ADD*/ CYCLES(0x6add, 6);
+    if (ret_addr)
+      pop16();
+    return;
+  }
+  /*$6ADB*/ CYCLES_EDGE(0x6adb, 1);
+
+  /*$6ADE*/ CYCLES(0x6ade, 12);
+  ram_poke(0x6c4a, 0x00);
+  const uint8_t target_row = ram_peek(0x6638);
+  s_status_not_z = target_row;
+  s_status_n = (target_row & 0x80);
+  s_a = target_row;
+  if (!target_row) {
+    // Row 0 is the top border; nothing above it to look at.
+    /*$6AE6*/ CYCLES_EDGE(0x6ae6, 1);
+    /*$6ADD*/ CYCLES(0x6add, 6);
+    if (ret_addr)
+      pop16();
+    return;
+  }
+
+  // The four neighbours, each counted into $6C4A when it is empty.
+  /*$6AE8*/ CYCLES(0x6ae8, 12);
+  s_y = (uint8_t)(ram_peek(0x6637) + 0x01);
+  rom_scrn(0x6aee);
+  /*$6AEF*/ CYCLES(0x6aef, 4);
+  if (!s_a) {
+    /*$6AF3*/ CYCLES(0x6af3, 6);
+    ram_poke(0x6c4a, (uint8_t)(ram_peek(0x6c4a) + 0x01));
+  } else {
+    /*$6AF1*/ CYCLES_EDGE(0x6af1, 1);
+  }
+
+  /*$6AF6*/ CYCLES(0x6af6, 16);
+  s_a = ram_peek(0x6638);
+  s_y = (uint8_t)(ram_peek(0x6637) - 0x01);
+  rom_scrn(0x6aff);
+  /*$6B00*/ CYCLES(0x6b00, 4);
+  if (!s_a) {
+    /*$6B04*/ CYCLES(0x6b04, 6);
+    ram_poke(0x6c4a, (uint8_t)(ram_peek(0x6c4a) + 0x01));
+  } else {
+    /*$6B02*/ CYCLES_EDGE(0x6b02, 1);
+  }
+
+  /*$6B07*/ CYCLES(0x6b07, 18);
+  {
+    const uint8_t r = ram_peek(0x6638);
+    s_status_c = 0x00;
+    const uint8_t below = (uint8_t)(r + 0x01);
+    s_status_v = ovf8(below, r, 0x01);
+    s_a = below;
+  }
+  s_y = ram_peek(0x6637);
+  rom_scrn(0x6b12);
+  /*$6B13*/ CYCLES(0x6b13, 4);
+  if (!s_a) {
+    /*$6B17*/ CYCLES(0x6b17, 6);
+    ram_poke(0x6c4a, (uint8_t)(ram_peek(0x6c4a) + 0x01));
+  } else {
+    /*$6B15*/ CYCLES_EDGE(0x6b15, 1);
+  }
+
+  /*$6B1A*/ CYCLES(0x6b1a, 18);
+  {
+    const uint8_t r = ram_peek(0x6638);
+    s_status_c = 0x01; // SEC
+    const uint8_t above = (uint8_t)(r - 0x01);
+    s_status_v = ovf8(above, r, 0xfe);
+    s_a = above;
+  }
+  s_y = ram_peek(0x6637);
+  rom_scrn(0x6b25);
+  /*$6B26*/ CYCLES(0x6b26, 4);
+  if (!s_a) {
+    /*$6B2A*/ CYCLES(0x6b2a, 6);
+    ram_poke(0x6c4a, (uint8_t)(ram_peek(0x6c4a) + 0x01));
+  } else {
+    /*$6B28*/ CYCLES_EDGE(0x6b28, 1);
+  }
+
+  /*$6B2D*/ CYCLES(0x6b2d, 6);
+  if (ram_peek(0x6c4a)) {
+    /*$6B32*/ CYCLES(0x6b32, 8);
+    s_a = 0x00;
+    s_status_not_z = 0x00;
+    s_status_n = 0x00;
+  } else {
+    /*$6B30*/ CYCLES_EDGE(0x6b30, 1);
+    /*$6B35*/ CYCLES(0x6b35, 8);
+    s_a = 0x01;
+    s_status_not_z = 0x01;
+    s_status_n = 0x00;
+  }
+
+  if (ret_addr)
+    pop16();
+}

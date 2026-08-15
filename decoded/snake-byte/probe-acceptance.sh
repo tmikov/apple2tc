@@ -363,6 +363,9 @@ coverage_report trace "$here/blocks.txt" 0
 #   $71C4   the unrecognised-opcode fallthrough. Every byte in every script is
 #       a valid opcode, so nothing reaches it.
 #   $70A5   the right-hand wall gap, drawn only when $0301 is neither 0 nor 1.
+#   $6B35   game_move_ok's dead-end return, taken when all four neighbours of
+#       the target cell are occupied. The snake is never boxed in that badly
+#       in either recording -- a fact about the play, not about the decode.
 #   $7021   game_next_byte's page-crossing branch, which needs a display list
 #       that straddles a page.
 #
@@ -370,4 +373,4 @@ coverage_report trace "$here/blocks.txt" 0
 # scenario reached $6C4F. Each entry is a block whose hand-decode nothing
 # verifies; the number is here to stop that set growing quietly, and to be
 # ratcheted down whenever a scenario reaches one of them.
-coverage_report trace-ext "$here/blocks-ext.txt" 31 "$here/a2rom.c" "$here/game.c"
+coverage_report trace-ext "$here/blocks-ext.txt" 32 "$here/a2rom.c" "$here/game.c"
