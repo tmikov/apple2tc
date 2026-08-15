@@ -14,8 +14,29 @@ apple2tc=$bin/tools/apple2tc/apple2tc
 # The coverage accounting is regenerated alongside the C, so it cannot go stale.
 # known-data.txt declares the identified non-code regions; the report flags any
 # of them that the disassembler also reached as code.
+# --ret-addr, on every --irc1 line below, is a VERIFICATION setting and not
+# something a shipped decompilation should carry.
+#
+# Without it every JSR pushes the sentinel $FFFE instead of a return address,
+# because a generated RTS is a C `return` and has no use for the real one. That
+# is cheap and almost always harmless -- but "almost" is doing work: the
+# inline-data-after-JSR idiom (see HANDOFF.md's traps table; Snake Byte uses it
+# for the "VALUE: " string) finds its data by *reading* the pushed address, and
+# under $FFFE it would read from the wrong place. With --ret-addr the emulated
+# stack holds what the 6502 would have pushed, so that class of code is right
+# rather than accidentally-unexercised.
+#
+# It also makes the stack comparable across engines, which is what turned the
+# last unexplained residue in the interpreter-vs-generated comparison into a
+# measured zero (decision log, 2026-08-15): live stack identical at all 6,808
+# in-game samples, against 27,232 differing bytes before.
+#
+# What a final artifact wants instead is ret_addr == 0 -- no emulated stack
+# maintenance at all, since native C does not need it. That is a separate
+# setting from this one, and this comment exists so the distinction is not lost
+# the next time someone regenerates.
 $apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt \
-  --known-data=known-data.txt -O3 --irc1 --coverage=coverage.txt > /dev/null
+  --known-data=known-data.txt -O3 --irc1 --ret-addr --coverage=coverage.txt > /dev/null
 
 # Two variants are generated, and both are built.
 #
@@ -23,11 +44,11 @@ $apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt \
 # the game, so it compiles and links on its own. It is the reference build --
 # play.frames was recorded from it, and it is the control that the extern
 # variant is checked against.
-$apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --irc1 -v1 \
+$apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --irc1 --ret-addr -v1 \
   > snake-bytec1.c
 
 # snake-bytec1-ext.c emits the ROM entry points listed in rom.externs as
 # declarations only; the bodies are hand-written in a2rom.c. It does NOT link on
 # its own -- snake-byte-ext.c is what actually gets compiled.
-$apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --irc1 -v1 \
+$apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --irc1 --ret-addr -v1 \
   --extern-routines=rom.externs > snake-bytec1-ext.c
