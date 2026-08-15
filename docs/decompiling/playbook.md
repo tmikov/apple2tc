@@ -319,6 +319,48 @@ at an in-game address that does not fire there. Neither is redundant, and
 neither is a superset -- pick sample points that cover the phases you care
 about, or accept that whole screens are checked by only one of the two.
 
+### Converting emulator-shaped C into real C
+
+**`[process]` The oracles decide the conversion order, not taste.** Three checks
+watch Snake Byte, and they do not survive equally. Frame and screen hashes
+survive to the end -- they look at video memory, which is the machine's no
+matter who wrote it. Memory hashes survive until a variable's *storage* leaves
+emulated RAM, because until then an adapter can write everything back before
+returning. The block-head trace dies first, per routine, the moment a branch
+moves into real C. So a single-block routine converts for free and a 62-block
+one costs 61 sites; sort by payoff per site and the order writes itself.
+
+**`[6502]` Timing is not part of what you are allowed to drop.** A frame is a
+cycle budget, so converted code that runs at a different speed moves every later
+frame boundary and every later frame hash. Charge the original's cycles with a
+primitive that does *not* register a probe site (`CYCLES_EDGE`), and give up
+observability rather than fidelity. Measured: folding three `CMP` blocks into a
+helper lost 4 cycles three times and diverged every oracle at once.
+
+**`[apple2tc]` An adapter keeps its entry probe site for nothing.** `CYCLES(addr,
+0)` still sets the PC and dispatches; charge the block's real cycles inside the
+converted function. Every conversion then costs one site fewer than its block
+count.
+
+**`[apple2tc]` A block head shared by two paths must convert in one move.**
+Snake Byte's `$6216` is the `RTS` both the key dequeue and the keyboard poll end
+on. Converting only the dequeue left the address in the site list -- the
+unconverted routine still emits it -- while the generated build stopped firing
+it there. The site count was still correct; only the trace comparison caught it.
+
+**`[process]` A coverage number that can fall for two opposite reasons needs
+saying so.** Snake Byte's unverified-block baseline dropped 60 -> 47 without a
+single one becoming verified: they left the site list when their routines
+converted. Unexercised code that stops being probed stops being counted. Pin the
+site count exactly alongside it — that number only moves deliberately, so it is
+the honest measure of progress.
+
+**`[process]` Build the last oracle while the first ones can still check it.**
+The screen-state check was added while the trace and memory checks were intact,
+so it could be shown to catch a defect they caught -- a display-list operand
+swap, failing at sample 7,503 of 26,111. Added after they were gone, it would
+have been an assumption.
+
 **`[process]` Read data tables out of the binary, and derive their extent.** The
 listing prints `--code-at` regions as `DFB` and does not delimit tables. A first
 pass at Snake Byte's dot-pattern table described it as "sixteen bytes"; it is
@@ -408,4 +450,7 @@ the whole point of it — see the step itself.
 | Full block coverage of an arithmetic routine | Says nothing about the values. BCD-vs-binary on a byte the score never reaches fails no check. |
 | A `CYCLES` address that is not a hex literal | It vanishes from the site list. Compiles, runs, counts, and is never probed. Lint for it. |
 | A mute or config byte read in a hot path | Hardcoding its recorded value passes every check. Whole features hide behind one byte nothing varies. |
+| Dropping `CYCLES` when code moves to real C | Frames are a cycle budget. Charge without probing (`CYCLES_EDGE`) or every later frame hash moves. |
+| Converting one path of a shared block head | The other path keeps it in the site list; the engines then disagree and the count looks fine. |
+| A hand-written file outside the site-list grep | Fine for real C, fatal for a `CYCLES`. Lint that the two files use different spellings. |
 | Coverage reported as a list of addresses | Group by feature. "The joystick" is actionable; forty hex numbers are not. |
