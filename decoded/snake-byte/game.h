@@ -79,3 +79,7 @@ void game_rand_byte(uint16_t ret_addr);
 /// $6B93 -- load the shape for $00 and merge it into the cell at row $03,
 /// column $02, setting bits rather than replacing the byte.
 void game_plot_shape_merge(uint16_t ret_addr);
+
+/// $7045 -- clear the screen, draw the border, then interpret the current
+/// level's display list at $8000. See game.c for the opcodes.
+void game_draw_playfield(uint16_t ret_addr);

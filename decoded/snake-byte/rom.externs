@@ -36,3 +36,4 @@ FE93 rom_setvid
 702B game_clear_hgr
 6C4B game_rand_byte
 6B93 game_plot_shape_merge
+7045 game_draw_playfield

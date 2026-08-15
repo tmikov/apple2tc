@@ -872,3 +872,398 @@ void game_plot_shape_merge(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $7045 -- draw the playfield, and run the level's display list.             */
+/*                                                                            */
+/* One routine, but two halves. The first draws what every level has: the     */
+/* border, in both representations (see the $7019 header for why everything   */
+/* is drawn twice). The second, from $7113, interprets the level's own script */
+/* for whatever else it needs.                                                */
+/*                                                                            */
+/* The script                                                                 */
+/* ----------                                                                 */
+/* $8000 holds 29 of them, one per level, each ending in '*'. $7113 sets the  */
+/* pointer to $8000 and skips $0303 - 1 whole scripts to find the current     */
+/* level's. The opcodes, all operands fetched with game_next_byte:            */
+/*                                                                            */
+/*   'H' $48  ink, column, last column, row  -- horizontal run                */
+/*   'V' $56  ink, row, last row, column     -- vertical run                  */
+/*   'P' $50  ink, column, row               -- one cell                      */
+/*   'T' $54  value                          -- store to $0304                */
+/*   'E' $45  (none)  -- reset $0303 to 1 and start over, i.e. wrap to level 1 */
+/*   '*' $2A  end of this level's script                                      */
+/*                                                                            */
+/* Anything else falls through $71C4 back to the dispatch and is ignored.     */
+/* Decoded from the data: 'H' appears in 26 of the 29 scripts and 'V' in 26,  */
+/* 'T' only in level 1's (which is otherwise empty -- the border is all there */
+/* is), 'E' only in level 30's, and 'P' in none of them at all.               */
+/*                                                                            */
+/* Verification                                                               */
+/* ------------                                                               */
+/* Neither committed recording finishes level 1, so none of this ran in the   */
+/* gate until snake-byte-easy.b33 (make-easy.sh) lowered the apple quota and  */
+/* let play-hires reach level 3. 'H', 'V' and the skip loop are covered by    */
+/* that scenario. 'E', 'P' and the $71C4 fallthrough are not, and cannot be   */
+/* by replay: 'E' needs level 30, and no script in the game uses 'P'.         */
+/*                                                                            */
+/* On flags: as elsewhere in this file the routine leaves what the 6502 would */
+/* leave, since generated callers can observe it. The exception is a load     */
+/* immediately before a call that overwrites the flags anyway -- LDA/LDY into */
+/* the ROM's HLINE and PLOT -- where only the register is set, matching what  */
+/* game_cout_hook already does at $669F.                                      */
+/* ========================================================================== */
+
+void game_draw_playfield(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  /*$7045*/ CYCLES(0x7045, 6);
+  game_clear_hgr(0x7047);
+
+  /*$7048*/ CYCLES(0x7048, 32);
+  ram_poke(0x6c46, 0x00);
+  // Graphics, hi-res, page 2, full screen. The reads are the writes: these are
+  // soft switches, and A is overwritten two instructions later regardless.
+  io_peek(0xc050);
+  io_peek(0xc057);
+  io_peek(0xc055);
+  io_peek(0xc052);
+  ram_poke(0x0002, 0x04);
+  ram_poke(0x0003, 0x00);
+
+  // $7061: a plain three-deep delay loop -- Y, then $03, then $02. Y is
+  // whatever the caller left in it; the original does not initialise it.
+  for (;;) {
+    /*$7061*/ CYCLES(0x7061, 4);
+    const uint8_t y = (uint8_t)(s_y - 0x01);
+    s_y = y;
+    s_status_not_z = y;
+    s_status_n = (y & 0x80);
+    if (y) {
+      /*$7062*/ CYCLES_EDGE(0x7062, 1);
+      continue;
+    }
+
+    /*$7064*/ CYCLES(0x7064, 7);
+    const uint8_t mid = (uint8_t)(ram_peek(0x0003) - 0x01);
+    ram_poke(0x0003, mid);
+    s_status_not_z = mid;
+    s_status_n = (mid & 0x80);
+    if (mid) {
+      /*$7066*/ CYCLES_EDGE(0x7066, 1);
+      continue;
+    }
+
+    /*$7068*/ CYCLES(0x7068, 7);
+    const uint8_t outer = (uint8_t)(ram_peek(0x0002) - 0x01);
+    ram_poke(0x0002, outer);
+    s_status_not_z = outer;
+    s_status_n = (outer & 0x80);
+    if (!outer)
+      break;
+    /*$706A*/ CYCLES_EDGE(0x706a, 1);
+  }
+
+  // $706C: wipe the lo-res occupancy map, one full-width HLINE per row, from
+  // row $27 down to 0. Ink 0 is black, so this clears rather than draws.
+  /*$706C*/ CYCLES(0x706c, 13);
+  ram_poke(0x0003, 0x27);
+  s_a = 0x00;
+  s_status_not_z = 0x00;
+  s_status_n = 0x00;
+  game_set_ink(0x7074);
+
+  for (;;) {
+    /*$7075*/ CYCLES(0x7075, 16);
+    ram_poke(0x002c, 0x27);
+    s_y = 0x00;
+    s_a = ram_peek(0x0003);
+    rom_hline(0x707f);
+
+    /*$7080*/ CYCLES(0x7080, 7);
+    const uint8_t row = (uint8_t)(ram_peek(0x0003) - 0x01);
+    ram_poke(0x0003, row);
+    s_status_not_z = row;
+    s_status_n = (row & 0x80);
+    // $7082 BPL: keep going until the row count goes negative, so row 0 is
+    // drawn and the loop ends one step later.
+    if (row & 0x80)
+      break;
+    /*$7082*/ CYCLES_EDGE(0x7082, 1);
+  }
+
+  /*$7084*/ CYCLES(0x7084, 21);
+  ram_poke(0x0022, 0x14); // text window top
+  ram_poke(0x0000, 0x15); // shape
+  s_a = 0x0d;
+  s_status_not_z = 0x0d;
+  s_status_n = 0x00;
+  ram_poke(0x0001, 0x0d); // ink
+  game_set_ink(0x7090 + 2);
+
+  // $7093: two optional gaps in the side walls, driven by $0301. Zero draws
+  // neither, one draws only the left, anything else draws both.
+  /*$7093*/ CYCLES(0x7093, 6);
+  const uint8_t gaps = ram_peek(0x0301);
+  if (gaps) {
+    /*$7098*/ CYCLES(0x7098, 10);
+    s_a = 0x01;
+    s_y = 0x01;
+    rom_plot(0x709d);
+
+    /*$709E*/ CYCLES(0x709e, 8);
+    const uint8_t g = ram_peek(0x0301);
+    s_status_c = (g >= 0x01);
+    s_status_not_z = (g != 0x01);
+    s_status_n = ((uint8_t)(g - 0x01) & 0x80);
+    if (g != 0x01) {
+      /*$70A5*/ CYCLES(0x70a5, 10);
+      s_a = 0x01;
+      s_y = 0x26;
+      rom_plot(0x70ab);
+    } else {
+      /*$70A3*/ CYCLES_EDGE(0x70a3, 1);
+    }
+  } else {
+    /*$7096*/ CYCLES_EDGE(0x7096, 1);
+  }
+
+  // $70AC: the border. Top and bottom in lo-res (HLINE still has $2C = $27
+  // from the wipe above), then the four sides in both representations.
+  /*$70AC*/ CYCLES(0x70ac, 10);
+  s_y = 0x00;
+  s_a = 0x00;
+  rom_hline(0x70b2);
+
+  /*$70B3*/ CYCLES(0x70b3, 10);
+  s_y = 0x00;
+  s_a = 0x27;
+  rom_hline(0x70b9);
+
+  /*$70BA*/ CYCLES(0x70ba, 21);
+  ram_poke(0x0002, 0x00);
+  ram_poke(0x0003, 0x00);
+  ram_poke(0x0008, 0x27);
+  game_lores_vline(0x70c8);
+
+  /*$70C9*/ CYCLES(0x70c9, 16);
+  ram_poke(0x0003, 0x00);
+  ram_poke(0x0002, 0x27);
+  game_lores_vline(0x70d3);
+
+  /*$70D4*/ CYCLES(0x70d4, 19);
+  ram_poke(0x0002, 0x00);
+  ram_poke(0x0003, 0x00);
+  ram_poke(0x0008, 0x27);
+  game_plot_hline(0x70e0);
+
+  /*$70E1*/ CYCLES(0x70e1, 16);
+  ram_poke(0x0002, 0x00);
+  ram_poke(0x0003, 0x27);
+  game_plot_hline(0x70eb);
+
+  /*$70EC*/ CYCLES(0x70ec, 14);
+  ram_poke(0x0002, 0x00);
+  ram_poke(0x0003, 0x00);
+  game_plot_vline(0x70f4);
+
+  /*$70F5*/ CYCLES(0x70f5, 16);
+  ram_poke(0x0003, 0x00);
+  ram_poke(0x0002, 0x27);
+  game_plot_vline(0x70ff);
+
+  // $7100: ink 3 over columns $12-$16 of the bottom row -- the gap the snake
+  // leaves through, drawn on top of the border that was just laid down.
+  /*$7100*/ CYCLES(0x7100, 26);
+  ram_poke(0x0001, 0x03);
+  ram_poke(0x0003, 0x27);
+  ram_poke(0x0002, 0x12);
+  ram_poke(0x0008, 0x16);
+  game_plot_hline(0x7112);
+
+restart:
+  /*$7113*/ CYCLES(0x7113, 14);
+  s_x = ram_peek(0x0303);
+  ram_poke(0x000a, 0x00);
+  s_a = 0x80;
+  ram_poke(0x000b, 0x80);
+
+  // $711E: skip one whole script per level below this one. DEX first, so
+  // level 1 skips nothing and starts reading at $8000.
+  for (;;) {
+    /*$711E*/ CYCLES(0x711e, 4);
+    s_x = (uint8_t)(s_x - 0x01);
+    s_status_not_z = s_x;
+    s_status_n = (s_x & 0x80);
+    if (!s_x) {
+      /*$711F*/ CYCLES_EDGE(0x711f, 1);
+      break;
+    }
+
+    for (;;) {
+      /*$7121*/ CYCLES(0x7121, 6);
+      game_next_byte(0x7123);
+
+      /*$7124*/ CYCLES(0x7124, 4);
+      const uint8_t b = s_a;
+      s_status_c = (b >= 0x2a);
+      s_status_not_z = (b != 0x2a);
+      s_status_n = ((uint8_t)(b - 0x2a) & 0x80);
+      if (b == 0x2a) {
+        /*$7126*/ CYCLES_EDGE(0x7126, 1);
+        break;
+      }
+      /*$7128*/ CYCLES(0x7128, 3);
+    }
+  }
+
+  // $712B: fetch an opcode and dispatch. The compares are a chain, not a
+  // table, so each miss costs its branch.
+  for (;;) {
+    /*$712B*/ CYCLES(0x712b, 6);
+    game_next_byte(0x712d);
+
+    /*$712E*/ CYCLES(0x712e, 4);
+    const uint8_t op = s_a;
+    s_status_c = (op >= 0x45);
+    s_status_not_z = (op != 0x45);
+    s_status_n = ((uint8_t)(op - 0x45) & 0x80);
+    if (op == 0x45) { // 'E' -- wrap back to level 1 and redraw
+      /*$7132*/ CYCLES(0x7132, 9);
+      ram_poke(0x0303, 0x01);
+      goto restart;
+    }
+    /*$7130*/ CYCLES_EDGE(0x7130, 1);
+
+    /*$713A*/ CYCLES(0x713a, 4);
+    s_status_c = (op >= 0x48);
+    s_status_not_z = (op != 0x48);
+    s_status_n = ((uint8_t)(op - 0x48) & 0x80);
+    if (op == 0x48) { // 'H' -- horizontal run
+      /*$713E*/ CYCLES(0x713e, 6);
+      game_next_byte(0x7140);
+      /*$7141*/ CYCLES(0x7141, 9);
+      ram_poke(0x0001, s_a);
+      game_next_byte(0x7145);
+      /*$7146*/ CYCLES(0x7146, 9);
+      ram_poke(0x0002, s_a);
+      game_next_byte(0x714a);
+      /*$714B*/ CYCLES(0x714b, 9);
+      ram_poke(0x0008, s_a);
+      game_next_byte(0x714f);
+      /*$7150*/ CYCLES(0x7150, 12);
+      ram_poke(0x0003, s_a);
+      s_a = ram_peek(0x0001);
+      s_status_not_z = s_a;
+      s_status_n = (s_a & 0x80);
+      game_set_ink(0x7156);
+
+      /*$7157*/ CYCLES(0x7157, 18);
+      ram_poke(0x002c, ram_peek(0x0008));
+      s_a = ram_peek(0x0003);
+      s_y = ram_peek(0x0002);
+      rom_hline(0x7161);
+
+      /*$7162*/ CYCLES(0x7162, 6);
+      game_plot_hline(0x7164);
+      /*$7165*/ CYCLES(0x7165, 3);
+      continue;
+    }
+    /*$713C*/ CYCLES_EDGE(0x713c, 1);
+
+    /*$7168*/ CYCLES(0x7168, 4);
+    s_status_c = (op >= 0x56);
+    s_status_not_z = (op != 0x56);
+    s_status_n = ((uint8_t)(op - 0x56) & 0x80);
+    if (op == 0x56) { // 'V' -- vertical run
+      /*$716C*/ CYCLES(0x716c, 6);
+      game_next_byte(0x716e);
+      /*$716F*/ CYCLES(0x716f, 9);
+      ram_poke(0x0001, s_a);
+      game_next_byte(0x7173);
+      /*$7174*/ CYCLES(0x7174, 9);
+      ram_poke(0x0003, s_a);
+      game_next_byte(0x7178);
+      /*$7179*/ CYCLES(0x7179, 9);
+      ram_poke(0x0008, s_a);
+      game_next_byte(0x717d);
+      /*$717E*/ CYCLES(0x717e, 12);
+      ram_poke(0x0002, s_a);
+      s_a = ram_peek(0x0001);
+      s_status_not_z = s_a;
+      s_status_n = (s_a & 0x80);
+      game_set_ink(0x7184);
+
+      /*$7185*/ CYCLES(0x7185, 6);
+      game_lores_vline(0x7187);
+      /*$7188*/ CYCLES(0x7188, 6);
+      game_plot_vline(0x718a);
+      /*$718B*/ CYCLES(0x718b, 3);
+      continue;
+    }
+    /*$716A*/ CYCLES_EDGE(0x716a, 1);
+
+    /*$718E*/ CYCLES(0x718e, 4);
+    s_status_c = (op >= 0x50);
+    s_status_not_z = (op != 0x50);
+    s_status_n = ((uint8_t)(op - 0x50) & 0x80);
+    if (op == 0x50) { // 'P' -- a single cell. No level script uses this.
+      /*$7192*/ CYCLES(0x7192, 6);
+      game_next_byte(0x7194);
+      /*$7195*/ CYCLES(0x7195, 9);
+      ram_poke(0x0001, s_a);
+      game_next_byte(0x7199);
+      /*$719A*/ CYCLES(0x719a, 9);
+      ram_poke(0x0002, s_a);
+      game_next_byte(0x719e);
+      /*$719F*/ CYCLES(0x719f, 12);
+      ram_poke(0x0003, s_a);
+      s_a = ram_peek(0x0001);
+      s_status_not_z = s_a;
+      s_status_n = (s_a & 0x80);
+      game_set_ink(0x71a5);
+
+      /*$71A6*/ CYCLES(0x71a6, 12);
+      s_a = ram_peek(0x0003);
+      s_y = ram_peek(0x0002);
+      rom_plot(0x71ac);
+
+      /*$71AD*/ CYCLES(0x71ad, 6);
+      game_plot_shape(0x71af);
+      /*$71B0*/ CYCLES(0x71b0, 3);
+      continue;
+    }
+    /*$7190*/ CYCLES_EDGE(0x7190, 1);
+
+    /*$71B3*/ CYCLES(0x71b3, 4);
+    s_status_c = (op >= 0x54);
+    s_status_not_z = (op != 0x54);
+    s_status_n = ((uint8_t)(op - 0x54) & 0x80);
+    if (op == 0x54) { // 'T' -- store one byte to $0304
+      /*$71B7*/ CYCLES(0x71b7, 6);
+      game_next_byte(0x71b9);
+      /*$71BA*/ CYCLES(0x71ba, 7);
+      ram_poke(0x0304, s_a);
+      continue;
+    }
+    /*$71B5*/ CYCLES_EDGE(0x71b5, 1);
+
+    /*$71C0*/ CYCLES(0x71c0, 4);
+    s_status_c = (op >= 0x2a);
+    s_status_not_z = (op != 0x2a);
+    s_status_n = ((uint8_t)(op - 0x2a) & 0x80);
+    if (op == 0x2a) { // '*' -- end of this level's script
+      /*$71C2*/ CYCLES_EDGE(0x71c2, 1);
+      /*$71C7*/ CYCLES(0x71c7, 6);
+      break;
+    }
+    // $71C4: an unrecognised byte is simply skipped.
+    /*$71C4*/ CYCLES(0x71c4, 3);
+  }
+
+  if (ret_addr)
+    pop16();
+}

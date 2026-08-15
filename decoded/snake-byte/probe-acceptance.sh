@@ -352,11 +352,22 @@ cat "/tmp/pkeys-cover-trace-easy.txt" >> "/tmp/pkeys-cover-trace-ext.txt"
 
 echo "--- coverage over all scenarios ---"
 coverage_report trace "$here/blocks.txt" 0
-# Baseline 21: twenty in a2rom.c, mostly ROM paths for arguments the game never
-# passes, plus $7021 in game.c -- game_next_byte's page-crossing branch, which
-# needs a display list that straddles a page. It was 22 until the `easy`
-# scenario covered $6C4F, the same kind of gap in the pseudo-random pointer:
-# 3000 frames walk it far enough to carry. Each remaining entry is a block whose
-# hand-decode nothing verifies; the number is here to stop that set growing
-# quietly, and to be ratcheted down whenever a scenario reaches one of them.
-coverage_report trace-ext "$here/blocks-ext.txt" 21 "$here/a2rom.c" "$here/game.c"
+# Baseline 31. Twenty are in a2rom.c, mostly ROM paths for arguments the game
+# never passes. The other eleven are in game.c, and each one is dark for a
+# reason that no recording can fix:
+#
+#   $7192 $7195 $719A $719F $71A6 $71AD $71B0   the display list's 'P' case.
+#       None of the 29 level scripts at $8000 contains a 'P'. Seven blocks of
+#       decoded-but-unexercised code, the largest single hole in this file.
+#   $7132   'E', which only level 30's script uses.
+#   $71C4   the unrecognised-opcode fallthrough. Every byte in every script is
+#       a valid opcode, so nothing reaches it.
+#   $70A5   the right-hand wall gap, drawn only when $0301 is neither 0 nor 1.
+#   $7021   game_next_byte's page-crossing branch, which needs a display list
+#       that straddles a page.
+#
+# It was 22 before $7045 was hand-written, and 22 -> 21 when the `easy`
+# scenario reached $6C4F. Each entry is a block whose hand-decode nothing
+# verifies; the number is here to stop that set growing quietly, and to be
+# ratcheted down whenever a scenario reaches one of them.
+coverage_report trace-ext "$here/blocks-ext.txt" 31 "$here/a2rom.c" "$here/game.c"
