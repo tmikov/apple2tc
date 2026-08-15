@@ -52,3 +52,22 @@ $apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --
 # its own -- snake-byte-ext.c is what actually gets compiled.
 $apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --irc1 --ret-addr -v1 \
   --extern-routines=rom.externs > snake-bytec1-ext.c
+
+# The `easy` fixture. snake-byte-easy.b33 is snake-byte.b33 with the per-level
+# apple quota lowered from 16 to 2 (see make-easy.sh for the two bytes and why
+# there are two). It exists so the display-list interpreter at $7113 -- and the
+# 'H' and 'V' cases that draw every level's interior walls -- can be compared
+# across engines at all: both committed recordings stop on level 1, where the
+# script is just `T $64`, so the rest of that subsystem was verified by nothing.
+#
+# Only the extern variant is generated. probe-acceptance.sh compares it against
+# the *interpreter*, which is ground truth and a stricter control than the
+# reference build; a second generated pair would cost another ~900KB of
+# committed C to prove something weaker.
+#
+# The run-data is snake-byte.json, unchanged: the patch alters one immediate
+# operand and one data byte, so every code address is where the recording says
+# it is. The generated C differs from the stock build in exactly the three
+# places those two bytes appear.
+$apple2tc snake-byte-easy.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --irc1 --ret-addr -v1 \
+  --extern-routines=rom.externs > snake-byte-easyc1-ext.c

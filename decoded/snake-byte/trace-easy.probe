@@ -1,0 +1,20 @@
+# The acceptance test's probe for the `easy` fixture build: the same program as
+# trace.probe and trace-ext.probe, over snake-byte-easyc1-ext.c's block-head
+# set. That set is byte-identical to blocks-ext.txt today -- the fixture patches
+# two bytes, neither of which changes block structure -- but it is derived
+# separately rather than shared, because nothing requires it to stay that way.
+# probe-acceptance.sh checks this stays the same program as the other two.
+
+counter n
+
+probe kb() {
+  inc n
+  key n
+}
+
+probe trace(site = pc) {
+  printf("%04X\n", site)
+}
+
+install kb at $FD1B, $741F, $7890, $6217, $760F, $FB7C, $FD26
+install trace at @"blocks-easy.txt"

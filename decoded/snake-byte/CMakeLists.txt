@@ -30,3 +30,16 @@ add_a2_program(snake-bytec1-ext
   )
 set_source_files_properties(snake-bytec1-ext.c a2rom.c game.c
   PROPERTIES HEADER_FILE_ONLY TRUE)
+
+# The `easy` test fixture: the same extern build, but decompiled from
+# snake-byte-easy.b33 (apple quota 16 -> 2, see make-easy.sh). It exists only so
+# probe-acceptance.sh's `easy` scenario can reach level 2 and compare the
+# display-list interpreter against the interpreter engine. It is not a variant
+# of the game and nothing ships from it.
+add_a2_program(snake-byte-easyc1-ext
+  snake-byte-easy-ext.c
+  snake-byte-easyc1-ext.c a2rom.c a2rom.h game.c game.h
+  ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
+  )
+set_source_files_properties(snake-byte-easyc1-ext.c
+  PROPERTIES HEADER_FILE_ONLY TRUE)

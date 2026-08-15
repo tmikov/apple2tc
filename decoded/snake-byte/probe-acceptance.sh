@@ -63,6 +63,9 @@ frames=${FRAMES:-1300}
 b33="$here/snake-byte.b33"
 keys="${KEYS:-$here/play.pkeys}"
 
+# $b33 and $frames are per-scenario: the `easy` scenario at the bottom replays
+# a patched image for longer. check_backend and check_memory read both.
+
 # Every script that delivers keys carries its own copy of the coordinate --
 # the probe language has no include, so the `install kb at ...` line is
 # duplicated five ways. They must all name the same sites in the same order or
@@ -230,12 +233,14 @@ strip_probe() {
   # Drop comments, blank lines and the install lines, leaving the program.
   grep -vE '^\s*(#|install\b|$)' "$1"
 }
-if ! diff -q <(strip_probe "$here/trace.probe") <(strip_probe "$here/trace-ext.probe") \
-     > /dev/null; then
-  echo "FAIL: trace.probe and trace-ext.probe are not the same program" >&2
-  diff <(strip_probe "$here/trace.probe") <(strip_probe "$here/trace-ext.probe") >&2
-  exit 1
-fi
+for other in trace-ext trace-easy; do
+  if ! diff -q <(strip_probe "$here/trace.probe") <(strip_probe "$here/$other.probe") \
+       > /dev/null; then
+    echo "FAIL: trace.probe and $other.probe are not the same program" >&2
+    diff <(strip_probe "$here/trace.probe") <(strip_probe "$here/$other.probe") >&2
+    exit 1
+  fi
+done
 
 # Floors: measured 1,694 (trace) and 1,669 (trace-ext) block heads as of this
 # writing. 1,600 leaves headroom for legitimate drift (a simplifyCFG change
@@ -314,12 +319,44 @@ check_memory ref "$bin/decoded/snake-byte/snake-bytec1-run"
 check_memory ext "$bin/decoded/snake-byte/snake-bytec1-ext-run"
 done
 
+# ---------------------------------------------------------------------------
+# The `easy` scenario.
+#
+# Both recordings above stop on level 1, whose display list is just `T $64`, so
+# $7113's interpreter and the 'H' and 'V' cases that draw every later level's
+# interior walls never run -- 26 of the 29 level scripts use each. This replays
+# the *existing* play-hires keys against snake-byte-easy.b33, the same game with
+# its per-level apple quota lowered from 16 to 2 (make-easy.sh). No new play was
+# recorded: the snake keeps moving after the input runs out, which is enough to
+# clear two levels.
+#
+# Only the extern build is compared, and against the interpreter rather than a
+# reference build -- the interpreter is ground truth, which is the stronger
+# control, and a second generated pair would cost ~900KB of committed C to prove
+# something weaker. There is no memory check: ram.probe's hashes cover $6000-
+# $BFFF, which includes the two patched bytes, so it would compare the fixture
+# against itself and add nothing the trace does not already give.
+b33="$here/snake-byte-easy.b33"
+frames=${EASY_FRAMES:-3000}
+set_scenario "$here/play-hires.pkeys"
+echo "    (against snake-byte-easy.b33, $frames frames)"
+check_backend trace-easy "$bin/decoded/snake-byte/snake-byte-easyc1-ext-run" \
+  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1600 \
+  "$here/snake-byte-easyc1-ext.c" "$here/a2rom.c" "$here/game.c"
+
+# The fixture's block heads are the same set as the stock extern build's, and
+# the hand-written sources are literally the same files, so what this scenario
+# reaches counts toward that build's coverage. Folding it in here is what lets
+# the display-list blocks come off the unverified list.
+cat "/tmp/pkeys-cover-trace-easy.txt" >> "/tmp/pkeys-cover-trace-ext.txt"
+
 echo "--- coverage over all scenarios ---"
 coverage_report trace "$here/blocks.txt" 0
-# Baseline 22: twenty in a2rom.c, mostly ROM paths for arguments the game never
-# passes, plus two of a kind in game.c -- $7021 and $6C4F, the high-byte carries
-# of the display-list and pseudo-random pointers. Neither pointer crosses a page
-# in either recording, so both branches are decoded from the binary and checked
-# by nothing. Each entry is a block whose hand-decode nothing verifies; the
-# number is here to stop that set growing quietly, not because 22 is acceptable.
-coverage_report trace-ext "$here/blocks-ext.txt" 22 "$here/a2rom.c" "$here/game.c"
+# Baseline 21: twenty in a2rom.c, mostly ROM paths for arguments the game never
+# passes, plus $7021 in game.c -- game_next_byte's page-crossing branch, which
+# needs a display list that straddles a page. It was 22 until the `easy`
+# scenario covered $6C4F, the same kind of gap in the pseudo-random pointer:
+# 3000 frames walk it far enough to carry. Each remaining entry is a block whose
+# hand-decode nothing verifies; the number is here to stop that set growing
+# quietly, and to be ratcheted down whenever a scenario reaches one of them.
+coverage_report trace-ext "$here/blocks-ext.txt" 21 "$here/a2rom.c" "$here/game.c"
