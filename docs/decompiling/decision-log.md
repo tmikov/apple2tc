@@ -2082,3 +2082,84 @@ only when `$7642` turned up passing ink 9.
 - There is a stray empty `snake-bytec1-ext.c` at the repo root, committed by
   accident in `396c05d` and referenced by nothing. It shadows reads of the real
   file when a command runs from the repo root; worth deleting.
+
+---
+
+## 2026-08-15 (later) — Every game routine is hand-written now
+
+Twenty-eight of Snake Byte's own routines have hand-written bodies in `game.c`,
+2,837 lines. What is left in the generated file is `func_t001`, the
+switch-dispatch thunk, and the blocks it dispatches to.
+
+### The game, as it now reads
+
+Hi-res page 1 is a 40x48 grid of cells; the lo-res page is the occupancy map
+the game reads back with `SCRN`, so everything is drawn twice. `$0301` is the
+difficulty, 0-2, and it is a count: it indexes `$71C8` = {$10,$15,$20} to set
+the per-apple score, decides how many bouncers `$6594` steps, and opens exactly
+that many wall gaps in `$7045` -- one per bouncer, which is how they get in.
+The score is four BCD bytes; an apple is worth base[difficulty] * level.
+
+Two pieces of 6502 craft worth keeping. `$6C49` is the mute: every sound
+routine clicks with `LDA $C000,Y` and that byte is `$30` (speaker) or `$20`
+(cassette out), so muting routes the identical click somewhere nobody listens
+and cannot change the timing. And a bouncer reflects with `EOR #$FE`, which
+swaps `$01` and `$FF` -- a wall bounce with no compare.
+
+### The gate got one thing badly wrong, and it was mine
+
+I wrote `$728D`'s four BCD compares as a loop over a table of addresses:
+`CYCLES(kCmp[i], 10)`. It compiled, ran, and passed everything, while dropping
+eight block heads out of the site list -- 1,669 to 1,661. The probes were never
+installed there, so neither engine reported those addresses and the traces
+agreed about nothing.
+
+Nothing in the gate caught it. The site-count floor is 1,600, far too coarse
+to see eight disappear, and coverage is measured *relative to* the site list,
+so a missing site is invisible there by construction. I noticed because the
+number is printed and I happened to read it.
+
+`check_literal_sites` now runs first and fails on any `CYCLES` in a
+hand-written source whose address is not a hex literal. Mutation-tested.
+
+### What 60 unverified blocks actually means
+
+The baseline grew 21 -> 60 across this pass. Grouped, it is a description of
+what the recordings do not do:
+
+| group | blocks |
+|---|---|
+| the joystick | 15 |
+| ROM paths for arguments never passed | 20 |
+| the `'P'` display-list opcode | 7 |
+| pause and mute (ESC, Ctrl-S) | 6 |
+| arrow keys on the redefinition screen | 3 |
+| difficulty 2: second bouncer, second gap | 3 |
+| bouncer off the board | 2 |
+| dead end, level 30, bad opcode, page carry | 4 |
+
+Two thirds of the growth is the joystick and one unused opcode. Both are
+decoded from the binary alone. A 9,000-frame run of the `easy` fixture was
+measured and adds nothing to any of them.
+
+### Three more oracle asymmetries
+
+- A byte written at snake reset and never read again (`$663B`) moves no frame
+  hash. Only `[ram/ext]` catches it.
+- A wrong glyph on the key-redefinition screen passes the whole cross-engine
+  gate. `ram.probe` samples at `$6217`, which does not fire outside play, so
+  that screen is frame-hash territory only. The two checks are complementary in
+  *both* directions.
+- A sound loop running half its iterations moves no frame hash either, but
+  moves the block-head count immediately.
+
+And a third class the coverage report cannot see at all: **value gaps**.
+Hardcoding `$6C49` to the speaker, widening the key ring's `$0F` mask, or
+switching the score's second BCD byte to binary all pass every check, with full
+block coverage, because no recording varies the value that would expose them.
+
+### Left open
+
+- `func_t001` and the switch dispatch are the remaining generated code.
+- A joystick recording and a difficulty-2 recording would together retire ~18
+  of the 60.

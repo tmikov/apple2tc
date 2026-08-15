@@ -294,6 +294,31 @@ that the hardware does not set it. Dropping `$6148`'s carry to match passes all
 eight checks today. Re-deriving that proof on every change costs more than the
 assignment, and the assignment is never wrong.
 
+**`[apple2tc]` A hand-written CYCLES site must carry a literal address.** The
+site lists are built by grepping the C for `CYCLES(0x`, so an address that is
+any other expression -- a table lookup, a variable -- still compiles, still
+counts cycles, still runs, and never reaches the list. The probe is not
+installed, neither engine reports it, and the diff is clean because both sides
+say nothing. Measured: one routine written as a loop over a table of addresses
+took eight sites out of Snake Byte's gate silently, and the site-count floor was
+far too coarse to notice 1,669 become 1,661. Lint for it.
+
+**`[process]` Coverage clusters by feature, so report it that way.** Snake
+Byte's 60 unverified hand-written blocks are not 60 scattered branches; they are
+the joystick (15), one unused display-list opcode (7), ROM paths for arguments
+the game never passes (20), pause and mute (6), and five smaller groups. Grouped
+like that the list is a description of what the recordings do not do, which is
+actionable -- record a joystick session, play at another difficulty. Listed as
+addresses it is noise nobody reads.
+
+**`[process]` The frame oracle and the memory probe each catch what the other
+misses, in both directions.** Snake Byte's memory check caught a byte written at
+reset and never read, which moved no frame hash. The frame oracle caught a wrong
+glyph on a menu screen, which the memory check could not see because it samples
+at an in-game address that does not fire there. Neither is redundant, and
+neither is a superset -- pick sample points that cover the phases you care
+about, or accept that whole screens are checked by only one of the two.
+
 **`[process]` Read data tables out of the binary, and derive their extent.** The
 listing prints `--code-at` regions as `DFB` and does not delimit tables. A first
 pass at Snake Byte's dot-pattern table described it as "sixteen bytes"; it is
@@ -381,3 +406,6 @@ the whole point of it — see the step itself.
 | A table's size stated rather than derived | The listing does not delimit tables. Find the next code address. A 16-byte table that is really 128 is invisible until a caller indexes past 16. |
 | Matching the generated code's flag set | That set is a DCE result for today's call graph, not what the CPU does. Set what the 6502 sets. |
 | Full block coverage of an arithmetic routine | Says nothing about the values. BCD-vs-binary on a byte the score never reaches fails no check. |
+| A `CYCLES` address that is not a hex literal | It vanishes from the site list. Compiles, runs, counts, and is never probed. Lint for it. |
+| A mute or config byte read in a hot path | Hardcoding its recorded value passes every check. Whole features hide behind one byte nothing varies. |
+| Coverage reported as a list of addresses | Group by feature. "The joystick" is actionable; forty hex numbers are not. |
