@@ -54,3 +54,6 @@ FE93 rom_setvid
 6BFB game_tick_sound
 6594 game_step_bouncers
 69C3 game_find_apple
+69A9 game_pause_or_toggle_sound
+75D1 game_edit_key
+6C72 game_read_direction

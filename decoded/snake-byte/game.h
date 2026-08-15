@@ -144,3 +144,13 @@ void game_step_bouncers(uint16_t ret_addr);
 /// $69C3 -- find an apple by sweeping columns outward from the snake, leaving
 /// the result at $6B3B/$6B3C.
 void game_find_apple(uint16_t ret_addr);
+
+/// $69A9 -- ESC pauses until a key; Ctrl-S toggles the sound flag at $69C2.
+void game_pause_or_toggle_sound(uint16_t ret_addr);
+
+/// $75D1 -- blink slot X of the key-redefinition screen and wait for a
+/// replacement key.
+void game_edit_key(uint16_t ret_addr);
+
+/// $6C72 -- turn the next key, or the joystick, into a direction.
+void game_read_direction(uint16_t ret_addr);

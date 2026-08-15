@@ -2459,3 +2459,379 @@ void game_find_apple(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $69A9, $75D1, $6C72 -- the rest of the input path.                         */
+/*                                                                            */
+/* These three carry most of what neither recording exercises: ESC and        */
+/* Ctrl-S, the arrow keys on the redefinition screen, and the whole joystick  */
+/* branch. See probe-acceptance.sh's baseline list -- the decodes here are    */
+/* from the binary alone, with no cross-engine check behind them.             */
+/* ========================================================================== */
+
+void game_pause_or_toggle_sound(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // ESC pauses by spinning on the keyboard until anything is pressed; that
+  // key then falls through to the Ctrl-S test, so ESC followed by Ctrl-S both
+  // unpauses and toggles the sound. $69C2 is the flag $6C2C reads when
+  // deciding whether to point the click at the speaker.
+  /*$69A9*/ CYCLES(0x69a9, 4);
+  if (s_a == 0x9b) { // ESC
+    for (;;) {
+      /*$69AD*/ CYCLES(0x69ad, 6);
+      s_a = io_peek(0xc000);
+      if (s_a & 0x80)
+        break;
+      /*$69B0*/ CYCLES_EDGE(0x69b0, 1);
+    }
+    /*$69B2*/ CYCLES(0x69b2, 4);
+    io_poke(0xc010, s_a);
+  } else {
+    /*$69AB*/ CYCLES_EDGE(0x69ab, 1);
+  }
+
+  /*$69B5*/ CYCLES(0x69b5, 4);
+  const uint8_t k = s_a;
+  s_status_not_z = (k != 0x93);
+  s_status_c = (k >= 0x93);
+  s_status_n = ((uint8_t)(k - 0x93) & 0x80);
+  if (k == 0x93) { // Ctrl-S
+    /*$69B9*/ CYCLES(0x69b9, 10);
+    const uint8_t f = (uint8_t)(ram_peek(0x69c2) ^ 0x01);
+    s_status_not_z = f;
+    s_status_n = (f & 0x80);
+    ram_poke(0x69c2, f);
+  } else {
+    /*$69B7*/ CYCLES_EDGE(0x69b7, 1);
+  }
+
+  /*$69C1*/ CYCLES(0x69c1, 6);
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_edit_key(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // Blink slot X of the key-redefinition screen and wait for a replacement.
+  // The blink is two halves: print a space, spin, print the current key from
+  // $75CB, spin again while polling the keyboard. Only the second half reads
+  // input, so a key pressed during the first half waits for the second.
+  //
+  // Accepted: anything from $A1 up, plus the two arrow keys. $75BF/$75C5 are
+  // the cursor position tables, indexed by slot.
+  for (;;) {
+    /*$75D1*/ CYCLES(0x75d1, 23);
+    const uint8_t slot = s_x;
+    ram_poke(0x0002, slot);
+    ram_poke(0x0024, ram_peek(0x75bf + slot));
+    ram_poke(0x0025, ram_peek(0x75c5 + slot));
+    rom_fc68(0x75df);
+
+    /*$75E0*/ CYCLES(0x75e0, 11);
+    s_x = ram_peek(0x0002);
+    s_a = 0xa0; // space
+    s_status_not_z = 0xa0;
+    s_status_n = 0x80;
+    rom_cout(0x75e6);
+
+    /*$75E7*/ CYCLES(0x75e7, 2);
+    s_y = 0x00;
+
+    for (;;) { // blank half: X inner, Y outer, no polling
+      /*$75E9*/ CYCLES(0x75e9, 4);
+      s_x = (uint8_t)(s_x - 0x01);
+      if (s_x) {
+        /*$75EA*/ CYCLES_EDGE(0x75ea, 1);
+        continue;
+      }
+      /*$75EC*/ CYCLES(0x75ec, 4);
+      /*$75F0*/ CYCLES(0x75f0, 4);
+      s_y = (uint8_t)(s_y - 0x01);
+      if (!s_y)
+        break;
+      /*$75F1*/ CYCLES_EDGE(0x75f1, 1);
+    }
+
+    /*$75F3*/ CYCLES(0x75f3, 23);
+    const uint8_t s2 = ram_peek(0x0002);
+    s_x = s2;
+    ram_poke(0x0024, ram_peek(0x75bf + s2));
+    ram_poke(0x0025, ram_peek(0x75c5 + s2));
+    rom_fc68(0x7601);
+
+    /*$7602*/ CYCLES(0x7602, 13);
+    const uint8_t s3 = ram_peek(0x0002);
+    s_x = s3;
+    s_a = ram_peek(0x75cb + s3);
+    s_status_not_z = s_a;
+    s_status_n = (s_a & 0x80);
+    rom_cout(0x7609);
+
+    /*$760A*/ CYCLES(0x760a, 2);
+    s_y = 0x00;
+
+    bool accepted = false, restart = false;
+    for (;;) { // visible half, polling as it goes
+      /*$760C*/ CYCLES(0x760c, 4);
+      s_x = (uint8_t)(s_x - 0x01);
+      if (s_x) {
+        /*$760D*/ CYCLES_EDGE(0x760d, 1);
+        continue;
+      }
+
+      /*$760F*/ CYCLES(0x760f, 6);
+      s_a = io_peek(0xc000);
+      if (s_a & 0x80) {
+        /*$7612*/ CYCLES_EDGE(0x7612, 1);
+        /*$761C*/ CYCLES(0x761c, 8);
+        const uint8_t key = s_a;
+        io_poke(0xc010, key);
+        s_status_c = (key >= 0xa1);
+        if (key >= 0xa1) {
+          /*$7621*/ CYCLES_EDGE(0x7621, 1);
+          accepted = true;
+          break;
+        }
+        /*$7623*/ CYCLES(0x7623, 4);
+        s_status_c = (key >= 0x88);
+        if (key == 0x88) { // left arrow
+          /*$7625*/ CYCLES_EDGE(0x7625, 1);
+          accepted = true;
+          break;
+        }
+        /*$7627*/ CYCLES(0x7627, 4);
+        s_status_c = (key >= 0x95);
+        if (key == 0x95) { // right arrow
+          /*$7629*/ CYCLES_EDGE(0x7629, 1);
+          accepted = true;
+          break;
+        }
+        /*$762B*/ CYCLES(0x762b, 6);
+        s_x = ram_peek(0x0002);
+        restart = true;
+        break;
+      }
+
+      /*$7614*/ CYCLES(0x7614, 4);
+      s_y = (uint8_t)(s_y - 0x01);
+      if (s_y) {
+        /*$7615*/ CYCLES_EDGE(0x7615, 1);
+        continue;
+      }
+      /*$7617*/ CYCLES(0x7617, 6);
+      s_x = ram_peek(0x0002);
+      restart = true;
+      break;
+    }
+
+    if (accepted)
+      break;
+    (void)restart;
+  }
+
+  /*$7630*/ CYCLES(0x7630, 9);
+  const uint8_t slot = ram_peek(0x0002);
+  s_status_not_z = slot;
+  s_status_n = (slot & 0x80);
+  s_x = slot;
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_read_direction(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // Turn the next input into a direction. $6C63 holds the six redefinable key
+  // codes and $6C6A the direction each maps to. $6C71 selects the joystick,
+  // and $0302 the alternate mode in which only the button matters.
+  /*$6C72*/ CYCLES(0x6c72, 6);
+  game_step_bouncers(0x6c74);
+
+  /*$6C75*/ CYCLES(0x6c75, 9);
+  push8(s_a);
+  if (ram_peek(0x0302)) {
+    /*$6C7B*/ CYCLES(0x6c7b, 6);
+    if (ram_peek(0x6c71)) {
+      /*$6C80*/ CYCLES(0x6c80, 6);
+      if (!(io_peek(0xc061) & 0x80)) {
+        /*$6C85*/ CYCLES(0x6c85, 12);
+        pop8();
+        s_a = 0x92;
+        s_status_not_z = 0x92;
+        s_status_n = 0x80;
+        if (ret_addr)
+          pop16();
+        return;
+      }
+      /*$6C83*/ CYCLES_EDGE(0x6c83, 1);
+    } else {
+      /*$6C7E*/ CYCLES_EDGE(0x6c7e, 1);
+    }
+
+    /*$6C89*/ CYCLES(0x6c89, 6);
+    const uint8_t k = pop8();
+    s_a = k;
+    s_status_not_z = k;
+    s_status_n = (k & 0x80);
+    if (k & 0x80) {
+      /*$6C8C*/ CYCLES(0x6c8c, 8);
+      s_a = 0x92;
+      s_status_not_z = 0x92;
+      s_status_n = 0x80;
+    } else {
+      /*$6C8A*/ CYCLES_EDGE(0x6c8a, 1);
+      /*$6C8F*/ CYCLES(0x6c8f, 6);
+    }
+    if (ret_addr)
+      pop16();
+    return;
+  }
+  /*$6C79*/ CYCLES_EDGE(0x6c79, 1);
+
+  /*$6C90*/ CYCLES(0x6c90, 6);
+  s_a = pop8();
+  s_x = 0x05;
+
+  // Walk the six key codes downward; a match substitutes its direction.
+  for (;;) {
+    /*$6C93*/ CYCLES(0x6c93, 6);
+    if (s_a == ram_peek(0x6c63 + s_x)) {
+      /*$6C96*/ CYCLES_EDGE(0x6c96, 1);
+      /*$6C9E*/ CYCLES(0x6c9e, 4);
+      s_a = ram_peek(0x6c6a + s_x);
+      break;
+    }
+    /*$6C98*/ CYCLES(0x6c98, 4);
+    s_x = (uint8_t)(s_x - 0x01);
+    if (s_x & 0x80) {
+      /*$6C9B*/ CYCLES(0x6c9b, 3);
+      break;
+    }
+    /*$6C99*/ CYCLES_EDGE(0x6c99, 1);
+  }
+
+  /*$6CA1*/ CYCLES(0x6ca1, 4);
+  if (s_a == 0x80) {
+    /*$6CA5*/ CYCLES(0x6ca5, 12);
+    s_a = 0x01;
+    s_status_not_z = 0x01;
+    s_status_n = 0x00;
+    ram_poke(0x6c71, 0x01); // joystick on
+    if (ret_addr)
+      pop16();
+    return;
+  }
+  /*$6CA3*/ CYCLES_EDGE(0x6ca3, 1);
+
+  /*$6CAB*/ CYCLES(0x6cab, 4);
+  if (s_a == 0x8b) {
+    /*$6CAF*/ CYCLES(0x6caf, 12);
+    s_a = 0x00;
+    s_status_not_z = 0x00;
+    s_status_n = 0x00;
+    ram_poke(0x6c71, 0x00); // joystick off
+    if (ret_addr)
+      pop16();
+    return;
+  }
+  /*$6CAD*/ CYCLES_EDGE(0x6cad, 1);
+
+  /*$6CB5*/ CYCLES(0x6cb5, 4);
+  {
+    const uint8_t a = s_a;
+    s_status_not_z = (a != 0x00);
+    s_status_n = (a & 0x80);
+    if (a & 0x80) {
+      // A real key: hand it straight back.
+      /*$6CB9*/ CYCLES(0x6cb9, 6);
+      if (ret_addr)
+        pop16();
+      return;
+    }
+  }
+  /*$6CB7*/ CYCLES_EDGE(0x6cb7, 1);
+
+  /*$6CBA*/ CYCLES(0x6cba, 6);
+  s_x = ram_peek(0x6c71);
+  if (!s_x) {
+    /*$6CBF*/ CYCLES(0x6cbf, 8);
+    s_status_not_z = (s_a != 0x00);
+    s_status_n = (s_a & 0x80);
+    if (ret_addr)
+      pop16();
+    return;
+  }
+  /*$6CBD*/ CYCLES_EDGE(0x6cbd, 1);
+
+  // The joystick. Two annunciator settings times two button inputs give four
+  // directions; Y counts how many are active, and anything but exactly one is
+  // rejected as ambiguous.
+  /*$6CC2*/ CYCLES(0x6cc2, 12);
+  s_y = 0x00;
+  io_peek(0xc05b);
+  if (!(io_peek(0xc062) & 0x80)) {
+    /*$6CCC*/ CYCLES(0x6ccc, 4);
+    s_x = 0x00;
+    s_y = (uint8_t)(s_y + 0x01);
+  } else {
+    /*$6CCA*/ CYCLES_EDGE(0x6cca, 1);
+  }
+
+  /*$6CCF*/ CYCLES(0x6ccf, 6);
+  if (!(io_peek(0xc063) & 0x80)) {
+    /*$6CD4*/ CYCLES(0x6cd4, 4);
+    s_x = 0x03;
+    s_y = (uint8_t)(s_y + 0x01);
+  } else {
+    /*$6CD2*/ CYCLES_EDGE(0x6cd2, 1);
+  }
+
+  /*$6CD7*/ CYCLES(0x6cd7, 10);
+  io_peek(0xc05a);
+  if (!(io_peek(0xc062) & 0x80)) {
+    /*$6CDF*/ CYCLES(0x6cdf, 4);
+    s_x = 0x01;
+    s_y = (uint8_t)(s_y + 0x01);
+  } else {
+    /*$6CDD*/ CYCLES_EDGE(0x6cdd, 1);
+  }
+
+  /*$6CE2*/ CYCLES(0x6ce2, 6);
+  if (!(io_peek(0xc063) & 0x80)) {
+    /*$6CE7*/ CYCLES(0x6ce7, 4);
+    s_x = 0x02;
+    s_y = (uint8_t)(s_y + 0x01);
+  } else {
+    /*$6CE5*/ CYCLES_EDGE(0x6ce5, 1);
+  }
+
+  /*$6CEA*/ CYCLES(0x6cea, 4);
+  if (s_y == 0x01) {
+    /*$6CEC*/ CYCLES_EDGE(0x6cec, 1);
+    /*$6CF1*/ CYCLES(0x6cf1, 10);
+    s_a = ram_peek(0x6c6a + s_x);
+    s_status_not_z = s_a;
+    s_status_n = (s_a & 0x80);
+  } else {
+    /*$6CEE*/ CYCLES(0x6cee, 8);
+    s_a = 0x00;
+    s_status_not_z = 0x00;
+    s_status_n = 0x00;
+  }
+
+  if (ret_addr)
+    pop16();
+}

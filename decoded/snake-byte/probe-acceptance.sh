@@ -376,30 +376,29 @@ cat "/tmp/pkeys-cover-trace-easy.txt" >> "/tmp/pkeys-cover-trace-ext.txt"
 
 echo "--- coverage over all scenarios ---"
 coverage_report trace "$here/blocks.txt" 0
-# Baseline 31. Twenty are in a2rom.c, mostly ROM paths for arguments the game
-# never passes. The other eleven are in game.c, and each one is dark for a
-# reason that no recording can fix:
+# Baseline 60, and the number is a statement about the recordings rather than
+# about the decode. Every entry is a hand-written block that no scenario
+# executes, so its decode rests on the binary alone with no cross-engine check
+# behind it. They cluster into whole features, not scattered branches:
 #
-#   $7192 $7195 $719A $719F $71A6 $71AD $71B0   the display list's 'P' case.
-#       None of the 29 level scripts at $8000 contains a 'P'. Seven blocks of
-#       decoded-but-unexercised code, the largest single hole in this file.
-#   $7132   'E', which only level 30's script uses.
-#   $71C4   the unrecognised-opcode fallthrough. Every byte in every script is
-#       a valid opcode, so nothing reaches it.
-#   $70A5   the right-hand wall gap, drawn only when $0301 is neither 0 nor 1.
-#   $6B35   game_move_ok's dead-end return, taken when all four neighbours of
-#       the target cell are occupied. The snake is never boxed in that badly
-#       in either recording -- a fact about the play, not about the decode.
-#   $64D2 $6572   game_move_bouncer's two "row is 0" exits, entry and exit.
-#       The bouncer is on the board throughout both recordings.
-#   $65D9 $65F4   the second bouncer in game_step_bouncers, which exists only
-#       at difficulty 2. Both recordings play at difficulty 1. The same $0301
-#       also gates $70A5 above, so those three are one gap, not two.
-#   $7021   game_next_byte's page-crossing branch, which needs a display list
-#       that straddles a page.
+#   the joystick (15)   $6C72's entire $6CC2-$6CF1 tail plus the branches
+#       reaching it. Neither recording plugs one in.
+#   the 'P' opcode (7)  $7192-$71B0. None of the 29 level scripts uses it.
+#   the ROM (20)        in a2rom.c, mostly paths for arguments the game never
+#       passes to PLOT, HLINE and SCRN.
+#   pause and mute (6)  all of $69A9. Neither recording presses ESC or Ctrl-S.
+#   arrow keys (3)      $7623 $7627 $762B, the redefinition screen's arrow
+#       cases. play-hires assigns W A D X Q E, all above $A1.
+#   difficulty 2 (3)    $65D9 $65F4 for the second bouncer and $70A5 for its
+#       wall gap. Both recordings play at difficulty 1.
+#   off the board (2)   $64D2 $6572, game_move_bouncer's "row is 0" tests.
+#   dead end (1)        $6B35, when all four neighbours of the target cell are
+#       occupied. The snake is never boxed in that badly.
+#   level 30 (1)        $7132, the 'E' opcode that wraps back to level 1.
+#   unrecognised (1)    $71C4. Every byte in every script is a valid opcode.
+#   page crossing (1)   $7021, game_next_byte's carry into the high byte.
 #
-# It was 22 before $7045 was hand-written, and 22 -> 21 when the `easy`
-# scenario reached $6C4F. Each entry is a block whose hand-decode nothing
-# verifies; the number is here to stop that set growing quietly, and to be
-# ratcheted down whenever a scenario reaches one of them.
-coverage_report trace-ext "$here/blocks-ext.txt" 36 "$here/a2rom.c" "$here/game.c"
+# The number exists to stop that set growing quietly, and to be ratcheted down
+# whenever a scenario reaches one of them -- as happened at 22 -> 21 when the
+# `easy` fixture covered $6C4F. It is not a target to be satisfied.
+coverage_report trace-ext "$here/blocks-ext.txt" 60 "$here/a2rom.c" "$here/game.c"
