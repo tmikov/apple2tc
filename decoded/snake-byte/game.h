@@ -125,3 +125,7 @@ void game_draw_side_walls(uint16_t ret_addr);
 /// $6AB8 -- can the snake step in direction $6B38? Returns A = 0 / Z set for
 /// yes, and refuses dead ends one move early.
 void game_move_ok(uint16_t ret_addr);
+
+/// $64C8 -- step the bouncer at $6633/$6634 by its deltas, reflecting off
+/// whatever it hits.
+void game_move_bouncer(uint16_t ret_addr);

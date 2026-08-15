@@ -1937,3 +1937,174 @@ void game_move_ok(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $64C8 -- move the bouncer one step.                                        */
+/*                                                                            */
+/* $6633/$6634 are its column and row, $6635/$6636 its per-axis deltas, and   */
+/* $6637/$6638 the candidate cell it is trying to move to. A row of 0 means   */
+/* it is not on the board, and both the entry test and the exit test use      */
+/* that.                                                                      */
+/*                                                                            */
+/* The bounce is the neat part. A delta is +1 or -1, and `EOR #$FE` swaps     */
+/* them: $01 ^ $FE = $FF, $FF ^ $FE = $01. So reflecting off a wall is one    */
+/* instruction with no compare.                                               */
+/*                                                                            */
+/* Three cases when the diagonal target is occupied, distinguished by SCRNing */
+/* the two cells either side of it:                                           */
+/*                                                                            */
+/*   the horizontal neighbour is blocked -- keep the column, flip $6635       */
+/*   the vertical neighbour is blocked   -- keep the row, flip $6636          */
+/*   neither is blocked, yet the diagonal is -- an inside corner. $6C4A is    */
+/*   still zero, so $6530 undoes both axes and flips both deltas, sending it  */
+/*   back the way it came.                                                    */
+/* ========================================================================== */
+
+void game_move_bouncer(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  /*$64C8*/ CYCLES(0x64c8, 12);
+  ram_poke(0x6c4a, 0x00);
+  const uint8_t row = ram_peek(0x6634);
+  s_a = row;
+  s_status_not_z = row;
+  s_status_n = (row & 0x80);
+  if (!row) {
+    /*$64D2*/ CYCLES(0x64d2, 6);
+    if (ret_addr)
+      pop16();
+    return;
+  }
+  /*$64D0*/ CYCLES_EDGE(0x64d0, 1);
+
+  /*$64D3*/ CYCLES(0x64d3, 36);
+  if (s_status_d) {
+    fprintf(stderr, "game_move_bouncer: entered with decimal mode set\n");
+    error_handler(0x64c8);
+    abort();
+  }
+  s_status_c = 0x00;
+  s_a = (uint8_t)(s_a + ram_peek(0x6636));
+  ram_poke(0x6638, s_a);
+
+  const uint8_t col = ram_peek(0x6633);
+  const uint8_t dx = ram_peek(0x6635);
+  s_status_c = 0x00;
+  const uint8_t newcol = (uint8_t)(col + dx);
+  s_status_v = ovf8(newcol, col, dx);
+  s_a = newcol;
+  ram_poke(0x6637, newcol);
+  s_y = newcol;
+  s_a = ram_peek(0x6638);
+  rom_scrn(0x64ea);
+
+  /*$64EB*/ CYCLES(0x64eb, 4);
+  s_status_c = 0x01;
+  if (s_a != 0x00) {
+    // Blocked on the diagonal. Work out which axis actually stopped it.
+    /*$64EF*/ CYCLES(0x64ef, 14);
+    s_y = ram_peek(0x6637);
+    s_a = ram_peek(0x6634);
+    rom_scrn(0x64f7);
+
+    /*$64F8*/ CYCLES(0x64f8, 4);
+    if (s_a != 0x00) {
+      /*$64FC*/ CYCLES(0x64fc, 24);
+      ram_poke(0x6637, ram_peek(0x6633));
+      ram_poke(0x6635, (uint8_t)(ram_peek(0x6635) ^ 0xfe));
+      ram_poke(0x6c4a, (uint8_t)(ram_peek(0x6c4a) + 0x01));
+    } else {
+      /*$64FA*/ CYCLES_EDGE(0x64fa, 1);
+    }
+
+    /*$650D*/ CYCLES(0x650d, 14);
+    s_a = ram_peek(0x6638);
+    s_y = ram_peek(0x6633);
+    rom_scrn(0x6515);
+
+    /*$6516*/ CYCLES(0x6516, 4);
+    s_status_c = 0x01;
+    if (s_a != 0x00) {
+      /*$651A*/ CYCLES(0x651a, 24);
+      ram_poke(0x6638, ram_peek(0x6634));
+      ram_poke(0x6636, (uint8_t)(ram_peek(0x6636) ^ 0xfe));
+      ram_poke(0x6c4a, (uint8_t)(ram_peek(0x6c4a) + 0x01));
+    } else {
+      /*$6518*/ CYCLES_EDGE(0x6518, 1);
+    }
+
+    /*$652B*/ CYCLES(0x652b, 6);
+    if (!ram_peek(0x6c4a)) {
+      // An inside corner: neither neighbour blocked, only the diagonal.
+      /*$6530*/ CYCLES(0x6530, 36);
+      ram_poke(0x6637, ram_peek(0x6633));
+      ram_poke(0x6638, ram_peek(0x6634));
+      ram_poke(0x6635, (uint8_t)(ram_peek(0x6635) ^ 0xfe));
+      ram_poke(0x6636, (uint8_t)(ram_peek(0x6636) ^ 0xfe));
+    } else {
+      /*$652E*/ CYCLES_EDGE(0x652e, 1);
+    }
+  } else {
+    /*$64ED*/ CYCLES_EDGE(0x64ed, 1);
+  }
+
+  // Erase where it was, on both the hi-res page and the occupancy map.
+  /*$654C*/ CYCLES(0x654c, 11);
+  s_a = 0x00;
+  ram_poke(0x0001, 0x00);
+  rom_setcol(0x6552);
+
+  /*$6553*/ CYCLES(0x6553, 20);
+  ram_poke(0x0002, ram_peek(0x6633));
+  ram_poke(0x0003, ram_peek(0x6634));
+  game_plot_shape(0x655f);
+
+  /*$6560*/ CYCLES(0x6560, 14);
+  s_a = ram_peek(0x6634);
+  s_y = ram_peek(0x6633);
+  rom_plot(0x6568);
+
+  /*$6569*/ CYCLES(0x6569, 11);
+  ram_poke(0x0000, 0x1a);
+  const uint8_t dest = ram_peek(0x6638);
+  s_a = dest;
+  s_status_not_z = dest;
+  s_status_n = (dest & 0x80);
+  if (!dest) {
+    // Row 0: it has left the board, and is not redrawn.
+    /*$6572*/ CYCLES(0x6572, 6);
+    if (ret_addr)
+      pop16();
+    return;
+  }
+  /*$6570*/ CYCLES_EDGE(0x6570, 1);
+
+  /*$6573*/ CYCLES(0x6573, 29);
+  ram_poke(0x0003, dest);
+  ram_poke(0x6634, dest);
+  const uint8_t destcol = ram_peek(0x6637);
+  ram_poke(0x0002, destcol);
+  ram_poke(0x6633, destcol);
+  s_a = 0x03;
+  ram_poke(0x0001, 0x03);
+  rom_setcol(0x6586);
+
+  /*$6587*/ CYCLES(0x6587, 6);
+  game_plot_shape(0x6589);
+
+  /*$658A*/ CYCLES(0x658a, 14);
+  s_a = ram_peek(0x6634);
+  const uint8_t c = ram_peek(0x6633);
+  s_status_not_z = c;
+  s_status_n = (c & 0x80);
+  s_y = c;
+  rom_plot(0x6592);
+
+  /*$6593*/ CYCLES(0x6593, 6);
+
+  if (ret_addr)
+    pop16();
+}
