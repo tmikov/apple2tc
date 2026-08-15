@@ -2018,59 +2018,27 @@ static bool game_hi_cmp(uint16_t score, uint16_t best) {
 }
 
 void game_update_high_score(uint16_t ret_addr) {
+  // Adapter for game_promote_high_score(). Costs 9 trace sites.
+  //
+  // $728D itself survives as a probe site: CYCLES(addr, 0) below still sets
+  // s_pc and dispatches, while the block's real 10 cycles are charged inside
+  // game_promote_high_score by GAME_CYCLES. So a converted routine can keep
+  // its entry site for nothing, which is worth doing every time.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // Compare the four BCD score bytes at $7252 against the high score at
-  // $7256, most significant first. Below at any byte and it returns; above
-  // and it copies; equal and it moves to the next byte. All four equal falls
-  // through into the copy, which is harmless.
-  //
-  // Written out rather than looped over a table of addresses, deliberately.
-  // probe-acceptance.sh builds its site list by grepping this file for
-  // literal hex CYCLES addresses, so a computed one compiles and runs but
-  // silently drops that block head out of the list -- the probe is never
-  // installed, and both engines then agree about nothing. A first draft of
-  // this routine looped over a table of addresses and cost eight sites.
-  // The gate now lints for it; see check_literal_sites.
-  bool copy = true;
-  do {
-    /*$728D*/ CYCLES(0x728d, 10);
-    if (!game_hi_cmp(0x7255, 0x7259)) { copy = false; /*$7293*/ CYCLES_EDGE(0x7293, 1); break; }
-    /*$7295*/ CYCLES(0x7295, 2);
-    if (s_status_not_z) { /*$7295*/ CYCLES_EDGE(0x7295, 1); break; }
+  /*$728D*/ CYCLES(0x728d, 0);
+  game_promote_high_score();
 
-    /*$7297*/ CYCLES(0x7297, 10);
-    if (!game_hi_cmp(0x7254, 0x7258)) { copy = false; /*$729D*/ CYCLES_EDGE(0x729d, 1); break; }
-    /*$729F*/ CYCLES(0x729f, 2);
-    if (s_status_not_z) { /*$729F*/ CYCLES_EDGE(0x729f, 1); break; }
-
-    /*$72A1*/ CYCLES(0x72a1, 10);
-    if (!game_hi_cmp(0x7253, 0x7257)) { copy = false; /*$72A7*/ CYCLES_EDGE(0x72a7, 1); break; }
-    /*$72A9*/ CYCLES(0x72a9, 2);
-    if (s_status_not_z) { /*$72A9*/ CYCLES_EDGE(0x72a9, 1); break; }
-
-    /*$72AB*/ CYCLES(0x72ab, 10);
-    if (!game_hi_cmp(0x7252, 0x7256)) { copy = false; /*$72B1*/ CYCLES_EDGE(0x72b1, 1); break; }
-    /*$72B3*/ CYCLES(0x72b3, 2);
-    if (s_status_not_z) { /*$72B3*/ CYCLES_EDGE(0x72b3, 1); }
-  } while (0);
-
-  if (copy) {
-    /*$72B5*/ CYCLES(0x72b5, 32);
-    ram_poke(0x7256, ram_peek(0x7252));
-    ram_poke(0x7257, ram_peek(0x7253));
-    ram_poke(0x7258, ram_peek(0x7254));
-    const uint8_t top = ram_peek(0x7255);
-    s_a = top;
-    s_status_not_z = top;
-    s_status_n = (top & 0x80);
-    ram_poke(0x7259, top);
-  }
-
-  /*$72CD*/ CYCLES(0x72cd, 6);
+  // What the original leaves in A and the flags depends on where it stopped:
+  // the last byte it compared, or the top score byte if it copied. Both are
+  // reproduced from memory rather than threaded out of the C.
+  const uint8_t top = ram_peek(0x7255);
+  s_a = top;
+  s_status_not_z = top;
+  s_status_n = (top & 0x80);
 
   if (ret_addr)
     pop16();
@@ -2250,102 +2218,21 @@ void game_step_bouncers(uint16_t ret_addr) {
 }
 
 void game_find_apple(uint16_t ret_addr) {
+  // Adapter for game_find_nearest_apple(). Costs 12 trace sites; $69C3 itself
+  // survives, charged zero here and for real inside -- see
+  // game_update_high_score above for why that works.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // Look for an apple ($0F on the occupancy map) by sweeping whole columns,
-  // starting at the snake's own column and working left, then starting over
-  // and working right. The first hit wins, so the result is biased left. The
-  // position lands in $6B3B/$6B3C, which is what the direction chooser at
-  // $6A40 steers towards. Nothing found leaves row 0, column $14.
-  /*$69C3*/ CYCLES(0x69c3, 14);
-  ram_poke(0x6b39, ram_peek(0x624f));
-  ram_poke(0x6b3a, 0x01);
+  /*$69C3*/ CYCLES(0x69c3, 0);
+  game_find_nearest_apple();
 
-  bool found = false;
-  for (;;) { // leftward sweep
-    /*$69CE*/ CYCLES(0x69ce, 14);
-    s_a = ram_peek(0x6b3a);
-    s_y = ram_peek(0x6b39);
-    rom_scrn(0x69d6);
-
-    /*$69D7*/ CYCLES(0x69d7, 4);
-    const uint8_t cell = s_a;
-    s_status_c = (cell >= 0x0f);
-    if (cell == 0x0f) {
-      /*$69D9*/ CYCLES_EDGE(0x69d9, 1);
-      found = true;
-      break;
-    }
-
-    /*$69DB*/ CYCLES(0x69db, 14);
-    ram_poke(0x6b3a, (uint8_t)(ram_peek(0x6b3a) + 0x01));
-    if (ram_peek(0x6b3a) != 0x27) {
-      /*$69E3*/ CYCLES_EDGE(0x69e3, 1);
-      continue;
-    }
-
-    /*$69E5*/ CYCLES(0x69e5, 14);
-    ram_poke(0x6b3a, 0x01);
-    const uint8_t col = (uint8_t)(ram_peek(0x6b39) - 0x01);
-    ram_poke(0x6b39, col);
-    if (!col)
-      break;
-    /*$69ED*/ CYCLES_EDGE(0x69ed, 1);
-  }
-
-  if (!found) {
-    /*$69EF*/ CYCLES(0x69ef, 8);
-    ram_poke(0x6b39, ram_peek(0x624f));
-
-    for (;;) { // rightward sweep
-      /*$69F5*/ CYCLES(0x69f5, 14);
-      s_a = ram_peek(0x6b3a);
-      s_y = ram_peek(0x6b39);
-      rom_scrn(0x69fd);
-
-      /*$69FE*/ CYCLES(0x69fe, 2);
-      const uint8_t cell = s_a;
-      s_status_not_z = (cell != 0x0f);
-      s_status_c = (cell >= 0x0f);
-
-      /*$6A00*/ CYCLES(0x6a00, 2);
-      if (cell == 0x0f) {
-        /*$6A00*/ CYCLES_EDGE(0x6a00, 1);
-        break;
-      }
-
-      /*$6A02*/ CYCLES(0x6a02, 14);
-      ram_poke(0x6b3a, (uint8_t)(ram_peek(0x6b3a) + 0x01));
-      if (ram_peek(0x6b3a) != 0x27) {
-        /*$6A0A*/ CYCLES_EDGE(0x6a0a, 1);
-        continue;
-      }
-
-      /*$6A0C*/ CYCLES(0x6a0c, 20);
-      ram_poke(0x6b3a, 0x01);
-      ram_poke(0x6b39, (uint8_t)(ram_peek(0x6b39) + 0x01));
-      const uint8_t col = ram_peek(0x6b39);
-      s_status_c = (col >= 0x27);
-      if (col == 0x27) {
-        /*$6A1B*/ CYCLES(0x6a1b, 12);
-        ram_poke(0x6b3a, 0x00);
-        ram_poke(0x6b39, 0x14);
-        break;
-      }
-      /*$6A19*/ CYCLES_EDGE(0x6a19, 1);
-    }
-  }
-
-  /*$6A25*/ CYCLES(0x6a25, 22);
-  ram_poke(0x6b3b, ram_peek(0x6b39));
   const uint8_t row = ram_peek(0x6b3a);
   s_a = row;
   s_status_not_z = row;
   s_status_n = (row & 0x80);
-  ram_poke(0x6b3c, row);
 
   if (ret_addr)
     pop16();

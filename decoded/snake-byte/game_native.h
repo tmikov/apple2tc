@@ -113,3 +113,11 @@ void game_install_cout_vector(void);
 /// $64C8 -- step \p b one cell along its deltas and redraw it, reflecting off
 /// whatever it hits.
 void bouncer_step(Bouncer *b);
+
+/// $728D -- copy the score at $7252 over the high score at $7256 if it beats
+/// it, comparing BCD bytes most significant first.
+void game_promote_high_score(void);
+
+/// $69C3 -- sweep columns outward from the snake for an apple, leaving the
+/// answer at $6B3B/$6B3C.
+void game_find_nearest_apple(void);

@@ -253,3 +253,146 @@ void bouncer_step(Bouncer *b) {
   ram_poke(0x6638, want_row);
   ram_poke(0x6c4a, (uint8_t)blocked);
 }
+
+/* ========================================================================== */
+/* $728D -- the high score                                                    */
+/*                                                                            */
+/* Four BCD bytes at $7252 against four at $7256, most significant first.      */
+/* Below at any byte and it stops; above and it copies; equal and it moves on. */
+/*                                                                            */
+/* The four compares are a loop here, over a table of addresses. In game.c     */
+/* that would be a bug -- the site list is built by grepping for literal       */
+/* CYCLES addresses, and a computed one silently leaves the trace. This file   */
+/* is deliberately outside that grep, so the constraint does not apply and     */
+/* the code can be shaped by what it means instead.                            */
+/* ========================================================================== */
+
+/// Most significant first.
+static const uint16_t kScoreByte[4] = {0x7255, 0x7254, 0x7253, 0x7252};
+static const uint16_t kBestByte[4] = {0x7259, 0x7258, 0x7257, 0x7256};
+static const uint16_t kCmpBlock[4] = {0x728d, 0x7297, 0x72a1, 0x72ab};
+static const uint16_t kBelowEdge[4] = {0x7293, 0x729d, 0x72a7, 0x72b1};
+static const uint16_t kEqualBlock[4] = {0x7295, 0x729f, 0x72a9, 0x72b3};
+
+void game_promote_high_score(void) {
+  bool beats_it = true;
+
+  for (unsigned i = 0; i < 4; ++i) {
+    GAME_CYCLES(kCmpBlock[i], 10);
+    const uint8_t mine = ram_peek(kScoreByte[i]);
+    const uint8_t best = ram_peek(kBestByte[i]);
+    if (mine < best) {
+      GAME_CYCLES(kBelowEdge[i], 1);
+      beats_it = false;
+      break;
+    }
+    GAME_CYCLES(kEqualBlock[i], 2);
+    if (mine != best) {
+      GAME_CYCLES(kEqualBlock[i], 1);
+      break;
+    }
+    // Equal: fall through to the next byte. All four equal reaches the copy
+    // below, which is a harmless self-assignment.
+  }
+
+  if (beats_it) {
+    GAME_CYCLES(0x72b5, 32);
+    for (unsigned i = 0; i < 4; ++i)
+      ram_poke(kBestByte[i], ram_peek(kScoreByte[i]));
+  }
+
+  GAME_CYCLES(0x72cd, 6);
+}
+
+/* ========================================================================== */
+/* $69C3 -- find an apple                                                     */
+/*                                                                            */
+/* Sweep whole columns looking for $0F on the occupancy map: from the snake's  */
+/* own column leftwards, then from it again rightwards. First hit wins, so the */
+/* result leans left. Nothing found parks the answer at row 0, column $14.     */
+/*                                                                            */
+/* $6B39/$6B3A are the cursor and $6B3B/$6B3C the answer. The cursor is a pair */
+/* of locals here, mirrored back at the end because ram.probe still hashes it. */
+/* ========================================================================== */
+
+/// A cell on the 40x48 grid.
+typedef struct {
+  uint8_t col;
+  uint8_t row;
+} Cell;
+
+/// The lo-res occupancy map's value at \p c. $0F is an apple.
+static uint8_t cell_at(Cell c, uint16_t ret) {
+  s_a = c.row;
+  s_y = c.col;
+  rom_scrn(ret);
+  return s_a;
+}
+
+void game_find_nearest_apple(void) {
+  static const uint8_t kApple = 0x0f;
+  static const uint8_t kLastRow = 0x27;
+
+  Cell c = {.col = ram_peek(0x624f), .row = 1};
+  bool found = false;
+
+  GAME_CYCLES(0x69c3, 14);
+  for (;;) { // leftwards
+    GAME_CYCLES(0x69ce, 14);
+    const uint8_t v = cell_at(c, 0x69d6);
+    GAME_CYCLES(0x69d7, 4);
+    if (v == kApple) {
+      GAME_CYCLES(0x69d9, 1);
+      found = true;
+      break;
+    }
+    GAME_CYCLES(0x69db, 14);
+    if (++c.row != kLastRow) {
+      GAME_CYCLES(0x69e3, 1);
+      continue;
+    }
+    GAME_CYCLES(0x69e5, 14);
+    c.row = 1;
+    if (--c.col == 0)
+      break;
+    GAME_CYCLES(0x69ed, 1);
+  }
+
+  if (!found) {
+    GAME_CYCLES(0x69ef, 8);
+    c.col = ram_peek(0x624f);
+
+    for (;;) { // rightwards
+      GAME_CYCLES(0x69f5, 14);
+      const uint8_t v = cell_at(c, 0x69fd);
+      GAME_CYCLES(0x69fe, 2);
+      GAME_CYCLES(0x6a00, 2);
+      if (v == kApple) {
+        GAME_CYCLES(0x6a00, 1);
+        break;
+      }
+      GAME_CYCLES(0x6a02, 14);
+      if (++c.row != kLastRow) {
+        GAME_CYCLES(0x6a0a, 1);
+        continue;
+      }
+      GAME_CYCLES(0x6a0c, 20);
+      c.row = 1;
+      if (++c.col == kLastRow) {
+        GAME_CYCLES(0x6a1b, 12);
+        c.row = 0;
+        c.col = 0x14;
+        break;
+      }
+      GAME_CYCLES(0x6a19, 1);
+    }
+  }
+
+  GAME_CYCLES(0x6a25, 22);
+  // The cursor is scratch, but ram.probe hashes $6000-$BFFF, so what the
+  // original left there is still compared.
+  ram_poke(0x6b39, c.col);
+  ram_poke(0x6b3a, c.row);
+  ram_poke(0x6b3b, c.col);
+  ram_poke(0x6b3c, c.row);
+}

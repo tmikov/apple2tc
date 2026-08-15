@@ -237,9 +237,21 @@ coverage_report() {
 # table of addresses and quietly took eight sites out of the gate, and nothing
 # else here noticed -- the floor below is far too coarse to see 1669 become
 # 1661.
+# Strip comments before looking for code. Prose about CYCLES is not a CYCLES
+# site, and two false positives from this file's own explanatory comments is
+# enough to make the check see what the compiler sees.
+strip_comments() {
+  sed -e 's|//.*||' -e 's|/\*[^*]*\*/||g' -e 's|^[[:space:]]*\*.*||' \
+      -e 's|^[[:space:]]*/\*.*||' "$1"
+}
+
 check_literal_sites() {
-  local bad
-  bad=$(grep -nE 'CYCLES(_EDGE)?\([^)]' "$@" | grep -vE 'CYCLES(_EDGE)?\(0x[0-9a-f]+' || true)
+  local bad f
+  bad=""
+  for f in "$@"; do
+    bad="$bad$(strip_comments "$f" | grep -nE 'CYCLES(_EDGE)?\([^)]' \
+      | grep -vE 'CYCLES(_EDGE)?\(0x[0-9a-f]+' | sed "s|^|$f:|" || true)"
+  done
   if [ -n "$bad" ]; then
     echo "FAIL: a CYCLES site has a non-literal address, so it cannot be probed" >&2
     echo "$bad" >&2
@@ -261,9 +273,9 @@ check_literal_sites "$here/a2rom.c" "$here/game.c"
 # it would charge cycles and never be probed, since this file is deliberately
 # absent from the grep above -- the same silent hole as a non-literal address,
 # arriving from the other side.
-if grep -qE '(^|[^_A-Za-z])CYCLES\([^)]' "$here/game_native.c"; then
+if strip_comments "$here/game_native.c" | grep -qE '(^|[^_A-Za-z])CYCLES\([^)]'; then
   echo "FAIL: game_native.c uses CYCLES; converted code must use GAME_CYCLES" >&2
-  grep -nE '(^|[^_A-Za-z])CYCLES\([^)]' "$here/game_native.c" >&2
+  strip_comments "$here/game_native.c" | grep -nE '(^|[^_A-Za-z])CYCLES\([^)]' >&2
   exit 1
 fi
 
