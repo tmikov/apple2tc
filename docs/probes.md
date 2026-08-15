@@ -235,8 +235,11 @@ stamp.
   the host has taken from the input source (`--kbd-file=`, interactive
   typing) but not yet handed to the machine is released into the machine
   *and* written to `<path>` as a `<stamp> <key>` line, stamped with
-  `<expr>`'s value. Without `--record-keys=`, `record` still releases pending
-  keys into the machine — it is not a no-op — it just writes nothing.
+  `<expr>`'s value. `--record-keys=` is also the switch that makes
+  `push_key()` divert incoming keys into that pending queue in the first
+  place; without it, every key goes straight to the machine at arrival time
+  and none is ever pending, so `record` finds nothing to release and is a
+  no-op.
 
 The point of `record` is what it is not: a passive tap on keys that arrive on
 their own schedule. `push_key()` diverts every incoming key into a pending
