@@ -44,6 +44,26 @@ void debug_asm(uint16_t pc);
 /// unimplemented vector target. Reports and does not return.
 void error_handler(uint16_t pc);
 
+/// Queue `keys` to be typed into the machine, exactly as `--kbd-file` would
+/// feed a file: fed a few at a time as the keyboard queue drains, `\n`
+/// translated to Return, `\r` ignored.
+///
+/// For a program that cannot be used without typing something first. A
+/// decompilation traced from the reset vector reproduces the whole boot, so
+/// it comes up at whatever prompt the original did, and the recorded session's
+/// first keystrokes were the command that started the program. Registering
+/// those here makes the built artifact start on its own.
+///
+/// Call it from `init_emulated()`; `a2host_init_emulation()` looks for queued
+/// keys immediately afterwards.
+///
+/// `--key-file` and `--kbd-file` both take precedence, so replaying a
+/// recording is unaffected — the recording already contains those keystrokes,
+/// and typing them twice would desynchronise it.
+///
+/// The string is not copied. Pass a literal or something that outlives the run.
+void a2host_buffer_keys(const char *keys);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

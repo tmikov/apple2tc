@@ -39,6 +39,11 @@ typedef struct KeyPress {
 static bool sound_enabled_ = true;
 /// If set, a file to read keyboard input from.
 static FILE *kbd_file_ = NULL;
+/// Keystrokes a program queued through a2host_buffer_keys(). Not owned.
+static const char *buffered_keys_ = NULL;
+/// Whether --key-file or --kbd-file was given. Not the same question as
+/// "is one still active": see a2host_buffer_keys().
+static bool cmdline_key_source_ = false;
 /// If set, a probe script was loaded via --probe=. Validated after the
 /// argument loop: --probe-dump and --probe-out= both require it, and that
 /// has to hold regardless of the order the options were given in.
@@ -286,6 +291,39 @@ static void drain_kbd_file() {
   }
 }
 
+void a2host_buffer_keys(const char *keys) {
+  // --key-file and --kbd-file win, and the test has to be "was one given",
+  // not "is one still live". A cycle-stamped replay frees key_presses_ the
+  // moment its last key is delivered, so a drain chain that falls through on
+  // a null pointer starts typing the program's own startup keys into the
+  // middle of a run. Measured: it desynchronised verify.sh's hires scenario
+  // while leaving play untouched, because the two recordings run out at
+  // different points.
+  if (cmdline_key_source_)
+    return;
+  buffered_keys_ = keys;
+}
+
+/// The a2host_buffer_keys() counterpart of drain_kbd_file(), and deliberately
+/// the same translation: a program that queues "call 14160\n" should behave
+/// exactly as if that text had been passed with --kbd-file.
+static void drain_buffered_keys(void) {
+  if (!buffered_keys_)
+    return;
+  while (key_room()) {
+    char ch = *buffered_keys_++;
+    if (!ch) {
+      buffered_keys_ = NULL;
+      break;
+    }
+    if (ch == '\r')
+      continue;
+    if (ch == '\n')
+      ch = '\r';
+    push_key((uint8_t)ch);
+  }
+}
+
 /// Return true if there are more keypresses to process.
 static void drain_key_presses() {
   if (!key_presses_)
@@ -448,14 +486,20 @@ void a2host_init_emulation(void) {
 
   init_emulated();
 
-  if (kbd_file_ || key_presses_) {
+  // init_emulated() is where a program registers buffered keys, so this is the
+  // first chance to see them.
+  if (kbd_file_ || key_presses_ || buffered_keys_) {
     // The first key pressed before initialization is lost, so just add a dummy
     // keypress.
     a2_io_push_key(&io_, '\r');
+    // Both command-line sources outrank buffered keys: a recording already
+    // contains whatever the program would have typed for itself.
     if (key_presses_)
       drain_key_presses();
-    else
+    else if (kbd_file_)
       drain_kbd_file();
+    else
+      drain_buffered_keys();
   }
 }
 
@@ -463,10 +507,14 @@ void a2host_simulate_frame(void) {
   if (firstFrame_) {
     firstFrame_ = false;
   } else {
+    // Both command-line sources outrank buffered keys: a recording already
+    // contains whatever the program would have typed for itself.
     if (key_presses_)
       drain_key_presses();
     else if (kbd_file_)
       drain_kbd_file();
+    else
+      drain_buffered_keys();
 
     unsigned runCycles;
     // A run that must be reproducible -- replay, hashing, tracing -- always
@@ -652,11 +700,13 @@ void a2host_parse_args(int argc, char *argv[]) {
         perror(path);
         exit(2);
       }
+      cmdline_key_source_ = true;
       continue;
     }
     if (strncmp(arg, "--key-file=", 11) == 0) {
       const char *path = arg + 11;
       load_key_file(path);
+      cmdline_key_source_ = true;
       continue;
     }
     if (strcmp(arg, "--fast") == 0) {

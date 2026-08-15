@@ -46,6 +46,40 @@
 /// defines the statics and helper functions that `a2rom.c` depends on. Swapping
 /// the two lines produces a wall of undefined identifiers.
 
+/* Renamed so this file can wrap it -- see init_emulated() at the bottom. */
+#define init_emulated snake_byte_generated_init_emulated
 #include "snake-byte-easyc1-ext.c"
+#undef init_emulated
 #include "a2rom.c"
 #include "game.c" /* after a2rom.c: uses its static rom_cout1() */
+
+/// Why init_emulated() is wrapped
+/// ------------------------------
+/// The decompilation traces from the reset vector, so it reproduces the whole
+/// boot and comes up at the Applesoft prompt -- exactly as the machine did.
+/// The recorded session started the game from there by typing `CALL 14160`
+/// ($3750, the load address), which is why play.keys opens with those
+/// keystrokes and why play.kbd exists. Run the built program with no input and
+/// you get the prompt and nothing else.
+///
+/// So the program types it for itself. a2host_buffer_keys() queues keystrokes
+/// the same way --kbd-file feeds a file, and a2host_init_emulation() drains
+/// them right after calling init_emulated() -- which is the only startup hook
+/// a program gets, since apple2tc generates that function rather than the host
+/// or this file defining it. Hence the rename on the #include above: the
+/// generated body runs first, then the keys go in.
+///
+/// Both --key-file and --kbd-file take precedence inside a2host, so every
+/// replay -- verify.sh, probe-acceptance.sh -- is untouched. Those recordings
+/// already contain the CALL.
+///
+/// The real fix is to retarget the entry point to $3750 and skip the boot
+/// entirely (step 4b in docs/decompiling/playbook.md). That needs an
+/// entry-state snapshot, because a cold start skips the frames every golden
+/// trace opens with, and no --snapshot-at exists yet. This is the stopgap.
+void init_emulated(void);
+
+void init_emulated(void) {
+  snake_byte_generated_init_emulated();
+  a2host_buffer_keys("call 14160\n");
+}

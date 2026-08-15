@@ -248,6 +248,38 @@ check_literal_sites() {
 }
 check_literal_sites "$here/a2rom.c" "$here/game.c"
 
+# The built program must start on its own, with no key file at all.
+#
+# The decompilation boots to the Applesoft prompt, exactly as the machine did,
+# and snake-byte-ext.c wraps init_emulated() to queue `call 14160` through
+# a2host_buffer_keys(). If that wiring breaks the binary still runs, still
+# passes every check below -- they all supply --key-file -- and simply sits at
+# a prompt forever. So it is asserted here rather than noticed by a person.
+#
+# $6217 is the in-game keyboard ingest: it fires only once the game is running,
+# which is the thing being claimed.
+check_autostarts() {
+  local prog=$1 out="/tmp/pkeys-autostart-$(basename "$prog").txt"
+  local probe="/tmp/pkeys-autostart.probe"
+  cat > "$probe" <<'PROBE'
+counter n
+probe hit() { inc n
+  printf("%d\n", n) }
+install hit at $6217
+PROBE
+  "$prog" --probe="$probe" --probe-out="$out" --frames=1300 > /dev/null 2>&1
+  local hits
+  hits=$(tail -1 "$out" 2>/dev/null || true)
+  if [ -z "$hits" ] || [ "$hits" -lt 1000 ]; then
+    echo "FAIL [autostart]: $(basename "$prog") did not reach the game unaided" >&2
+    echo "  in-game keyboard polls over 1300 frames: ${hits:-0}, expected >= 1000" >&2
+    exit 1
+  fi
+  echo "[autostart] $(basename "$prog"): ${hits} in-game polls, no key file"
+}
+check_autostarts "$bin/decoded/snake-byte/snake-bytec1-ext-run"
+check_autostarts "$bin/decoded/snake-byte/snake-byte-easyc1-ext-run"
+
 # trace.probe and trace-ext.probe name themselves after the backend they
 # install over, so the two runs cannot silently share one. They must otherwise
 # be the same program -- checked here rather than trusted, since an edit to
