@@ -1267,3 +1267,164 @@ restart:
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $6641, $660F, $6BEF, $6BDA, $71CD -- snake state and scoring setup.        */
+/*                                                                            */
+/* $624F/$6250 are the snake's head column and row; $6251/$6252 are the tail. */
+/* $62D7 walks the head forward by adding the current direction's deltas from */
+/* $6232/$6237 and SCRNs the result off the lo-res map (see the $7019 header).*/
+/*                                                                            */
+/* $0301 is the difficulty, 0-2, and $71CD is what gives it away: it indexes  */
+/* the three-byte table at $71C8 -- $10, $15, $20 -- with $0301 and adds that */
+/* entry to $71CB/$71CC once per level, in BCD. So an apple is worth          */
+/* base[difficulty] * level, which is why $71CB read $15 throughout the       */
+/* recordings: difficulty 1, level 1. It is also what decides the two         */
+/* optional wall gaps in game_draw_playfield.                                 */
+/* ========================================================================== */
+
+void game_install_cout_hook(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // Point CSWL/CSWH at $664A, so every later COUT lands in game_cout_hook.
+  /*$6641*/ CYCLES(0x6641, 16);
+  ram_poke(0x0036, 0x4a); // the LDA #$4A flags are overwritten two loads later
+  s_a = 0x66;
+  s_status_not_z = 0x66;
+  s_status_n = 0x00;
+  ram_poke(0x0037, 0x66);
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_reset_snake(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // Head column arrives in A; $6256 passes $14, the middle of the field, and
+  // stores the $14 this leaves in A into the tail column right afterwards.
+  /*$660F*/ CYCLES(0x660f, 50);
+  ram_poke(0x624f, s_a);
+  ram_poke(0x6639, 0x01);
+  ram_poke(0x663a, 0x01);
+  ram_poke(0x663d, 0x01);
+  ram_poke(0x663e, 0x01);
+  ram_poke(0x6640, 0x01);
+  ram_poke(0x663c, 0x01);
+  ram_poke(0x663b, 0x26);
+  ram_poke(0x663f, 0xff);
+  s_a = 0x14;
+  s_status_not_z = 0x14;
+  s_status_n = 0x00;
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_mark_head(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // PLOT with the row and column the caller loaded, marking the head on the
+  // lo-res occupancy map, then raise the two flags that say it is there.
+  /*$6BEF*/ CYCLES(0x6bef, 6);
+  rom_plot(0x6bf1);
+
+  /*$6BF2*/ CYCLES(0x6bf2, 16);
+  s_a = 0x01;
+  s_status_not_z = 0x01;
+  s_status_n = 0x00;
+  ram_poke(0x0305, 0x01);
+  ram_poke(0x6c46, 0x01);
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_draw_head(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // Draw the cell the caller set up, then -- if $0305 says the head is on it
+  // -- merge shape 1 over the top, so the head reads as a head rather than
+  // replacing the body cell underneath. $0305 is consumed here.
+  /*$6BDA*/ CYCLES(0x6bda, 6);
+  game_plot_shape(0x6bdc);
+
+  /*$6BDD*/ CYCLES(0x6bdd, 6);
+  if (ram_peek(0x0305)) {
+    /*$6BE2*/ CYCLES(0x6be2, 11);
+    ram_poke(0x0000, 0x01);
+    game_plot_shape_merge(0x6be8);
+  } else {
+    /*$6BE0*/ CYCLES_EDGE(0x6be0, 1);
+  }
+
+  /*$6BE9*/ CYCLES(0x6be9, 12);
+  s_status_not_z = 0x00;
+  s_status_n = 0x00;
+  ram_poke(0x0305, 0x00);
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_set_apple_value(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // $71CB/$71CC = $71C8[difficulty] * level, by repeated BCD addition. X is
+  // never touched in the loop, so it is the same table entry added $0303
+  // times.
+  /*$71CD*/ CYCLES(0x71cd, 20);
+  ram_poke(0x71cb, 0x00);
+  ram_poke(0x71cc, 0x00);
+  s_x = ram_peek(0x0301);
+  s_y = ram_peek(0x0303);
+  s_status_d = 0x01;
+
+  for (;;) {
+    /*$71DC*/ CYCLES(0x71dc, 28);
+    s_a = ram_peek(0x71c8 + s_x);
+    s_status_c = 0x00;
+
+    uint16_t r = adc_dec16(s_a, ram_peek(0x71cb), s_status_c);
+    s_a = (uint8_t)r;
+    s_status_c = ((uint8_t)(r >> 8) & 0x01);
+    ram_poke(0x71cb, s_a);
+
+    r = adc_dec16(ram_peek(0x71cc), 0x00, s_status_c);
+    s_a = (uint8_t)r;
+    const uint8_t flags = (uint8_t)(r >> 8);
+    s_status_c = (flags & 0x01);
+    s_status_v = ((flags & 0x40) != 0);
+    ram_poke(0x71cc, s_a);
+
+    // DEY overwrites the N and Z the ADC just left.
+    const uint8_t n = (uint8_t)(s_y - 0x01);
+    s_y = n;
+    s_status_not_z = n;
+    s_status_n = (n & 0x80);
+    if (!n)
+      break;
+    /*$71EF*/ CYCLES_EDGE(0x71ef, 1);
+  }
+
+  /*$71F1*/ CYCLES(0x71f1, 8);
+  s_status_d = 0x00;
+
+  if (ret_addr)
+    pop16();
+}

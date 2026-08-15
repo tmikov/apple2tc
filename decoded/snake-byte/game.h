@@ -83,3 +83,21 @@ void game_plot_shape_merge(uint16_t ret_addr);
 /// $7045 -- clear the screen, draw the border, then interpret the current
 /// level's display list at $8000. See game.c for the opcodes.
 void game_draw_playfield(uint16_t ret_addr);
+
+/* --- snake state and scoring setup --------------------------------------- */
+
+/// $6641 -- point CSWL/CSWH at $664A so COUT reaches game_cout_hook.
+void game_install_cout_hook(uint16_t ret_addr);
+
+/// $660F -- reset the snake: head column from A, direction state to defaults.
+void game_reset_snake(uint16_t ret_addr);
+
+/// $6BEF -- PLOT the head onto the lo-res map and raise $0305 and $6C46.
+void game_mark_head(uint16_t ret_addr);
+
+/// $6BDA -- draw the caller's cell, merging shape 1 over it when $0305 is set.
+void game_draw_head(uint16_t ret_addr);
+
+/// $71CD -- set the per-apple score at $71CB/$71CC to $71C8[difficulty] times
+/// the level, in BCD.
+void game_set_apple_value(uint16_t ret_addr);
