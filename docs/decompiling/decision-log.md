@@ -1828,3 +1828,84 @@ to change control flow to matter, which the trace check covers.
 - Nothing compares the interpreter against a generated build for `robotron` or
   `bolo`; the machinery is now generic, but no coordinate script exists for
   either.
+
+
+## 2026-08-15 — `--ret-addr` for verification, and how much the cycle phase matters
+
+**Scope:** decoded/* · **Status:** applied; the phase question is measured and bounded
+
+**Decision:** decompile the games with `--ret-addr` and record, loudly, that it
+is a verification setting rather than something a shipped decompilation wants.
+
+### The flag already existed
+
+`routines.cpp:652` has always had it: with `--ret-addr` a `JSR` pushes
+`inst->getAddress() + 2`, which is exactly what a 6502 pushes; without it, the
+sentinel `$FFFE`. Only `decoded/rom` was using it. The other games were not,
+which is why the previous entry found the emulated stack full of `$FFFE`.
+
+The reason to turn it on is not the stack comparison. It is that the
+inline-data-after-`JSR` idiom locates its data by *reading* the pushed address,
+Snake Byte uses that idiom (the `"VALUE: "` string, already in HANDOFF.md's
+traps table), and under `$FFFE` such code reads from the wrong place. It does
+not bite on the recorded path — 1,300 frames pass either way — but "the
+sentinel happens not to be read here" is a much weaker property than "the
+address is real."
+
+It is free. The address is a compile-time constant at each call site, so it is
+the same `push16` of a different literal: identical line counts, 638 changed
+constants in `snake-bytec1.c`, and `verify.sh` 4/4 against baselines recorded
+*before* the flag. `bolo` is untouched — its active line is `--simple-c`, which
+has no `ret_addr` concept at all (verified: the flag changes its output not at
+all).
+
+**Not for a shipped artifact.** A final decompilation wants `ret_addr == 0` —
+no emulated stack maintenance whatsoever, since native C has no use for one.
+That is a different setting, and `decoded/snake-byte/decompile.sh` carries the
+distinction in a comment.
+
+### The stack is now compared
+
+`ram.probe` hashes everything above SP. Live stack: 27,232 differing bytes
+before the flag, **zero** after, across the same 6,808 in-game samples. Bytes
+below SP stay excluded — dead residue, 13,700 differing before and 2 after;
+hashing them would compare reset fill patterns.
+
+### How much does the cycle phase matter
+
+Measured over the full run: **interpreter 22,147,953 cycles, generated
+22,147,957** — four cycles apart in 22.1 million. Per-frame delta ranges −1 to
++57, and the 100-frame bucket means wander (1.1, 1.1, 4.1, 3.9, 4.9, 6.5, 8.7,
+6.2, 8.4, 4.5, 1.5, 1.5, 1.5) and return. **The rate is identical; only the
+phase differs.**
+
+The mechanism is the yield granularity: `CYCLES(pc, n)` charges a whole basic
+block at its head, before the block runs, while the interpreter charges each
+instruction before that instruction runs. Mid-block the generated counter is
+ahead by up to one block. Largest block constants: 85 cycles (snake-byte), 80
+(rom), 118 (robotron) — 0.50%, 0.47% and 0.69% of a 17,050-cycle frame.
+
+Where that can and cannot matter:
+
+- **The program's own behaviour: never.** A 6502 has no readable cycle counter.
+  Phase is only visible where the *host* reads the counter.
+- **Host video sampling: visible, and it is the 8-of-1300 frame-hash residue.**
+  A property of the measuring apparatus, not the program — which is why
+  probe-sampled comparison replaced it.
+- **Key delivery: eliminated.** Now on a probe coordinate, not cycles.
+- **Speaker timing: bounded and negligible here.** Snake Byte reaches `$C030`
+  at exactly one address, `$FBE9` in the ROM's BELL, and that address is itself
+  a block head costing 8 cycles — so the toggle's timestamp can be off by at
+  most ~8 cycles (~8 us). Against a 1 kHz tone's 500 us half-period that is
+  1.6%, inaudible. A game with speaker writes buried inside large blocks would
+  have a proportionally larger bound; none of these do.
+- **Timing-sensitive hardware: not used.** No paddle (`$C064-$C067`, `$C070`)
+  or cassette (`$C060`) access anywhere in Snake Byte, which is where a
+  cycle-counted read loop would have made phase behavioural rather than
+  cosmetic.
+
+So: significant for anything that samples the machine on a fixed cycle
+interval, and the answer there is to sample on a program coordinate instead.
+Not significant for the decompiled program's behaviour, and not significant for
+this game's audio. It would need re-examining for a title that reads the
+paddles or generates tone from inside large basic blocks.
