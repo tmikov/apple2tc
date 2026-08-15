@@ -37,6 +37,13 @@
 # at the end), but nothing requires that to stay true.
 
 set -e
+# The site-list pipelines below (`grep | sed | sort -u`) run under `set -e`
+# alone, `$?` is `sort`'s, not `grep`'s: a `grep` that hard-fails on a
+# missing/renamed source file (exit 2, plus a warning on stderr) would still
+# leave `sort` exiting 0, so the script would sail on with a silently
+# shrunken site list. pipefail makes the pipeline's status the worst of its
+# parts, so that failure now aborts here instead.
+set -o pipefail
 
 if [ -z "$1" ]; then
   echo "Usage: $0 <build-dir>" >&2
@@ -53,12 +60,28 @@ frames=${FRAMES:-1300}
 b33="$here/snake-byte.b33"
 keys="$here/play.pkeys"
 
+# The number of keys a correct run must load and deliver, derived from
+# play.pkeys itself rather than hardcoded: an empty or truncated key file (a
+# regression in the file, or a mis-parse) would otherwise still make the rest
+# of this script pass -- see the "Loaded N keys" check below for why an empty
+# key file is exactly the failure mode this exists to catch. `|| true`: grep
+# exits 1 on zero matches (an empty/all-comment file), which would otherwise
+# trip `set -e` here and abort with no explanation before the check below
+# ever runs.
+expected_keys=$(grep -vc '^#' "$keys" || true)
+if [ "$expected_keys" -eq 0 ]; then
+  echo "FAIL: $keys has no keys to replay -- empty, all-comment, or missing" >&2
+  exit 1
+fi
+echo "expected key count (from $keys): $expected_keys"
+
 # Compare one generated build against the interpreter on that build's own
 # block heads. $1: label, $2: generated binary, $3: probe script, $4: where to
-# keep the site list, $5..: the C source(s) that make up the binary.
+# keep the site list, $5: minimum acceptable site count, $6..: the C
+# source(s) that make up the binary.
 check_backend() {
-  local label=$1 prog=$2 probe=$3 sites=$4
-  shift 4
+  local label=$1 prog=$2 probe=$3 sites=$4 floor=$5
+  shift 5
   local srcs=("$@")
   local interp="/tmp/pkeys-probe-interp-$label.txt" gen="/tmp/pkeys-probe-$label.txt"
 
@@ -69,7 +92,19 @@ check_backend() {
   # it is still rebuilt here so it never goes stale relative to the C actually
   # being tested.
   grep -ohE 'CYCLES\(0x[0-9a-f]+' "${srcs[@]}" | sed 's/CYCLES(0x//' | sort -u > "$sites"
-  echo "[$label] site list: $(wc -l < "$sites") block heads"
+  local nsites
+  nsites=$(wc -l < "$sites")
+  echo "[$label] site list: $nsites block heads"
+  # An empty list is already caught downstream (the probe compiler rejects
+  # it), but a partial one is not: e.g. one of several source files present
+  # but truncated to empty would still let grep/sort exit 0. $floor is a
+  # generous margin below the count committed in $sites (not a tight pin --
+  # see the call sites below for the actual numbers), just enough to catch a
+  # source file's worth of sites silently going missing.
+  if [ "$nsites" -lt "$floor" ]; then
+    echo "FAIL [$label]: site list has only $nsites block heads, expected at least $floor" >&2
+    exit 1
+  fi
 
   "$a2run" --preload "$b33" --key-file="$keys" --probe="$probe" \
     --probe-out="$interp" --frames="$frames" \
@@ -81,11 +116,26 @@ check_backend() {
   # A probe that never fired means the two sides did not cover the same set,
   # even if what they did emit matches -- e.g. a site both installed but
   # neither ever executed would leave two empty reports that diff clean.
+  #
+  # Neither check below is enough on its own to prove keys were actually
+  # delivered: an empty --key-file= makes both engines produce identical,
+  # "never fired"-free traces too -- the reports agree vacuously because
+  # nothing input-dependent ran. "Loaded $expected_keys keys" is a2host's own
+  # confirmation (lib/a2host/a2host.c's load_key_file()) that the file was
+  # read and parsed, not skipped, empty, or truncated; asserting it in BOTH
+  # runs is what makes this gate mean "the two engines agree with real input
+  # in play," not just "the two engines agree."
   local side
   for side in "interp-$label" "$label"; do
     if grep -q "never fired" "/tmp/pkeys-probe-$side.err"; then
       echo "FAIL [$side]: a probe never fired" >&2
       grep "never fired" "/tmp/pkeys-probe-$side.err" >&2
+      exit 1
+    fi
+    if ! grep -qx "Loaded $expected_keys keys" "/tmp/pkeys-probe-$side.err"; then
+      echo "FAIL [$side]: expected to see 'Loaded $expected_keys keys' on stderr" \
+           "(from $keys) -- keys were not actually delivered" >&2
+      cat "/tmp/pkeys-probe-$side.err" >&2
       exit 1
     fi
   done
@@ -117,10 +167,16 @@ if ! diff -q <(strip_probe "$here/trace.probe") <(strip_probe "$here/trace-ext.p
   exit 1
 fi
 
+# Floors: measured 1,694 (trace) and 1,669 (trace-ext) block heads as of this
+# writing. 1,600 leaves headroom for legitimate drift (a simplifyCFG change
+# that merges a few blocks) while still catching the failure this guards
+# against -- a whole source file (a2rom.c alone contributes 75 sites, game.c
+# 5, and losing snake-bytec1-ext.c itself would collapse the -ext list to
+# under 100) going missing or empty out of the grep.
 check_backend trace "$bin/decoded/snake-byte/snake-bytec1-run" "$here/trace.probe" \
-  "$here/blocks.txt" "$here/snake-bytec1.c"
+  "$here/blocks.txt" 1600 "$here/snake-bytec1.c"
 check_backend trace-ext "$bin/decoded/snake-byte/snake-bytec1-ext-run" "$here/trace-ext.probe" \
-  "$here/blocks-ext.txt" "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c"
+  "$here/blocks-ext.txt" 1600 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c"
 
 if diff -q "$here/blocks.txt" "$here/blocks-ext.txt" > /dev/null; then
   echo "the two back ends agree on the block-head set"
