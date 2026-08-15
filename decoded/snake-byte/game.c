@@ -1602,3 +1602,165 @@ void game_eat_apple(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $6217, $7590, $6B3D                                                        */
+/* ========================================================================== */
+
+void game_read_key(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // A 16-entry ring buffer at $623C: $624D is the write index, $624C the
+  // read index. If advancing the write index would land on the read index the
+  // buffer is full, and the key is dropped -- note it has already been stored
+  // by then, so the byte is written and then disowned by not committing the
+  // index. The RTS at $6216 belongs to the routine before this one; both of
+  // the early exits here share it.
+  /*$6217*/ CYCLES(0x6217, 10);
+  s_x = ram_peek(0x624d);
+  const uint8_t key = io_peek(0xc000);
+  s_a = key;
+
+  if (key & 0x80) {
+    /*$621F*/ CYCLES(0x621f, 21);
+    io_poke(0xc010, key); // clear the strobe
+    const uint8_t w = s_x;
+    ram_poke(0x623c + w, key);
+    const uint8_t next = (uint8_t)((uint8_t)(w + 0x01) & 0x0f);
+    s_x = (uint8_t)(w + 0x01);
+    s_a = next;
+
+    if (next != ram_peek(0x624c)) {
+      /*$622E*/ CYCLES(0x622e, 10);
+      ram_poke(0x624d, next);
+      if (ret_addr)
+        pop16();
+      return;
+    }
+    /*$622C*/ CYCLES_EDGE(0x622c, 1);
+  } else {
+    /*$621D*/ CYCLES_EDGE(0x621d, 1);
+  }
+
+  /*$6216*/ CYCLES(0x6216, 6);
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_show_key(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // Print the character in A at slot X of the key-redefinition screen. The
+  // two arrow keys have no printable glyph, so they are shown as 'f' and 'g'
+  // -- which in the game's own font at $66A9 is where the arrow shapes live.
+  /*$7590*/ CYCLES(0x7590, 7);
+  ram_poke(0x0002, s_x);
+  if (s_a == 0x88) { // left arrow
+    /*$7596*/ CYCLES(0x7596, 2);
+    s_a = 0xe6;
+  } else {
+    /*$7594*/ CYCLES_EDGE(0x7594, 1);
+  }
+
+  /*$7598*/ CYCLES(0x7598, 4);
+  s_status_c = (s_a >= 0x95);
+  if (s_a == 0x95) { // right arrow
+    /*$759C*/ CYCLES(0x759c, 2);
+    s_a = 0xe7;
+  } else {
+    /*$759A*/ CYCLES_EDGE(0x759a, 1);
+  }
+
+  // Position the cursor from the per-slot tables, then print.
+  /*$759E*/ CYCLES(0x759e, 23);
+  push8(s_a);
+  const uint8_t slot = s_x;
+  ram_poke(0x0024, ram_peek(0x75b3 + slot));
+  ram_poke(0x0025, ram_peek(0x75b9 + slot));
+  rom_fc68(0x75ab);
+
+  /*$75AC*/ CYCLES(0x75ac, 10);
+  s_a = pop8();
+  s_status_not_z = s_a;
+  s_status_n = (s_a & 0x80);
+  rom_cout(0x75af);
+
+  /*$75B0*/ CYCLES(0x75b0, 9);
+  s_x = ram_peek(0x0002);
+  s_status_not_z = s_x;
+  s_status_n = (s_x & 0x80);
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_draw_side_walls(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // Both side walls, each in two segments of different ink, with the seam at
+  // a row derived from $6255. The seam is what the player aims for.
+  /*$6B3D*/ CYCLES(0x6b3d, 6);
+  game_rand_byte(0x6b3f);
+
+  /*$6B40*/ CYCLES(0x6b40, 26);
+  ram_poke(0x0000, 0x15); // shape
+  ram_poke(0x0001, 0x02); // ink of the upper segment
+  ram_poke(0x0002, 0x00); // left wall
+  ram_poke(0x0003, 0x01);
+  const uint8_t seed = ram_peek(0x6255);
+  s_a = seed;
+  if (seed & 0x80) {
+    // A negative seed is clamped, and $6255 is reset so the next call starts
+    // from a known place.
+    /*$6B55*/ CYCLES(0x6b55, 8);
+    ram_poke(0x6255, 0xff);
+    s_a = 0x70;
+  } else {
+    /*$6B53*/ CYCLES_EDGE(0x6b53, 1);
+  }
+
+  /*$6B5C*/ CYCLES(0x6b5c, 18);
+  const uint8_t v = s_a;
+  s_status_c = ((v >> 0x01) & 0x01); // LSR, then LSR again into $08
+  ram_poke(0x0008, (uint8_t)(v >> 0x02));
+  ram_poke(0x0008, (uint8_t)(ram_peek(0x0008) + 0x01));
+  game_plot_vline(0x6b64);
+
+  /*$6B65*/ CYCLES(0x6b65, 16);
+  ram_poke(0x0002, 0x27); // right wall, same rows
+  ram_poke(0x0003, 0x01);
+  game_plot_vline(0x6b6f);
+
+  /*$6B70*/ CYCLES(0x6b70, 30);
+  ram_poke(0x0008, (uint8_t)(ram_peek(0x0008) + 0x01));
+  const uint8_t seam = ram_peek(0x0008);
+  push8(seam);
+  ram_poke(0x0003, seam);
+  ram_poke(0x0001, 0x0d); // ink of the lower segment
+  ram_poke(0x0008, 0x27);
+  game_plot_vline(0x6b81);
+
+  /*$6B82*/ CYCLES(0x6b82, 18);
+  ram_poke(0x0003, pop8());
+  ram_poke(0x0002, 0x00);
+  game_plot_vline(0x6b8b);
+
+  // Tail call: SCRN of the bottom-centre cell, whose result the caller reads.
+  /*$6B8C*/ CYCLES(0x6b8c, 7);
+  s_a = 0x27;
+  s_y = 0x14;
+  rom_scrn(0x0000);
+
+  if (ret_addr)
+    pop16();
+}
