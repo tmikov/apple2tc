@@ -1,0 +1,27 @@
+# The recording half. One counter, advanced wherever the program reads the
+# keyboard, across four sites:
+#   $FD1B - the ROM's KEYIN wait loop (keys typed at the BASIC prompt)
+#   $741F - the game's control-select delay loop poll
+#   $7890 - the game's wait-for-space loop
+#   $6217 - the game's own real-time keyboard ingest: LDA $C000, and on a key
+#           it clears the strobe (STA $C010) and fills the ring buffer at
+#           $623C. This is the one that actually takes the key from the
+#           hardware, not merely peeks at it, and it is what feeds the
+#           in-game I/J/K/M movement dispatch. Confirmed empirically, not
+#           just by static trace: recording play.keys (23 keys) with only
+#           the first three sites yields 11 records (the BASIC-prompt phase
+#           only); adding $6217 yields all 23. Without it the coordinate has
+#           a hole and the entire game phase goes undelivered, not merely
+#           cycle-quantised -- see docs/plans/2026-08-14-probe-stamped-keys-plan.md
+#           task 4 and its report for the experiment.
+#
+# play.probe must install at exactly these sites and count exactly this way.
+# Nothing enforces that; a mismatch shows up as a failed replay.
+counter n
+
+probe kb() {
+  inc n
+  record n
+}
+
+install kb at $FD1B, $741F, $7890, $6217

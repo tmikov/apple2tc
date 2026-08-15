@@ -1,0 +1,11 @@
+# The replay half of rec.probe -- same sites, same counter, `key` instead of
+# `record`. See rec.probe for why these four sites, including $6217 (the
+# in-game ingest that clears the strobe and fills the ring buffer at $623C).
+counter n
+
+probe kb() {
+  inc n
+  key n
+}
+
+install kb at $FD1B, $741F, $7890, $6217
