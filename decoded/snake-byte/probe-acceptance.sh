@@ -392,6 +392,9 @@ coverage_report trace "$here/blocks.txt" 0
 #       in either recording -- a fact about the play, not about the decode.
 #   $64D2 $6572   game_move_bouncer's two "row is 0" exits, entry and exit.
 #       The bouncer is on the board throughout both recordings.
+#   $65D9 $65F4   the second bouncer in game_step_bouncers, which exists only
+#       at difficulty 2. Both recordings play at difficulty 1. The same $0301
+#       also gates $70A5 above, so those three are one gap, not two.
 #   $7021   game_next_byte's page-crossing branch, which needs a display list
 #       that straddles a page.
 #
@@ -399,4 +402,4 @@ coverage_report trace "$here/blocks.txt" 0
 # scenario reached $6C4F. Each entry is a block whose hand-decode nothing
 # verifies; the number is here to stop that set growing quietly, and to be
 # ratcheted down whenever a scenario reaches one of them.
-coverage_report trace-ext "$here/blocks-ext.txt" 34 "$here/a2rom.c" "$here/game.c"
+coverage_report trace-ext "$here/blocks-ext.txt" 36 "$here/a2rom.c" "$here/game.c"

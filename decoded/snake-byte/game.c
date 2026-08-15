@@ -2273,3 +2273,189 @@ void game_tick_sound(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $6594, $69C3                                                               */
+/* ========================================================================== */
+
+void game_step_bouncers(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // Difficulty ($0301) decides how many bouncers exist: none at 0, one at 1,
+  // two above. That is the same count as the wall gaps game_draw_playfield
+  // opens, one per bouncer.
+  //
+  // Each bouncer's state is swapped into the working locations $6633-$6636
+  // that game_move_bouncer operates on, and swapped back out afterwards.
+  // Bouncer 1 lives at $6639/$663A/$663D/$663E, bouncer 2 at
+  // $663B/$663C/$663F/$6640.
+  //
+  // Every path then falls into the key dequeue at $6200, whose byte is this
+  // routine's return value in A.
+  /*$6594*/ CYCLES(0x6594, 6);
+  if (ram_peek(0x0301)) {
+    /*$6597*/ CYCLES_EDGE(0x6597, 1);
+    /*$659C*/ CYCLES(0x659c, 38);
+    ram_poke(0x6633, ram_peek(0x6639));
+    ram_poke(0x6634, ram_peek(0x663a));
+    ram_poke(0x6635, ram_peek(0x663d));
+    ram_poke(0x6636, ram_peek(0x663e));
+    game_move_bouncer(0x65b6);
+
+    /*$65B7*/ CYCLES(0x65b7, 40);
+    ram_poke(0x6639, ram_peek(0x6633));
+    ram_poke(0x663a, ram_peek(0x6634));
+    ram_poke(0x663d, ram_peek(0x6635));
+    ram_poke(0x663e, ram_peek(0x6636));
+    const uint8_t diff = ram_peek(0x0301);
+    s_status_c = (diff >= 0x01);
+    if (diff != 0x01) {
+      /*$65D4*/ CYCLES_EDGE(0x65d4, 1);
+      /*$65D9*/ CYCLES(0x65d9, 38);
+      ram_poke(0x6633, ram_peek(0x663b));
+      ram_poke(0x6634, ram_peek(0x663c));
+      ram_poke(0x6635, ram_peek(0x663f));
+      ram_poke(0x6636, ram_peek(0x6640));
+      game_move_bouncer(0x65f3);
+
+      /*$65F4*/ CYCLES(0x65f4, 35);
+      ram_poke(0x663b, ram_peek(0x6633));
+      ram_poke(0x663c, ram_peek(0x6634));
+      ram_poke(0x663f, ram_peek(0x6635));
+      ram_poke(0x6640, ram_peek(0x6636));
+    } else {
+      /*$65D6*/ CYCLES(0x65d6, 3);
+    }
+  } else {
+    /*$6599*/ CYCLES(0x6599, 3);
+  }
+
+  // $6200: take the next key out of the ring buffer game_read_key fills.
+  // Only a byte with bit 7 set counts as a key; the slot is cleared and the
+  // read index advances. Shares the RTS at $6216 with game_read_key.
+  /*$6200*/ CYCLES(0x6200, 10);
+  const uint8_t r = ram_peek(0x624c);
+  s_x = r;
+  const uint8_t key = ram_peek(0x623c + r);
+  s_a = key;
+  if (key & 0x80) {
+    /*$6208*/ CYCLES(0x6208, 24);
+    push8(key);
+    ram_poke(0x623c + r, 0x00);
+    s_x = (uint8_t)(r + 0x01);
+    ram_poke(0x624c, (uint8_t)(s_x & 0x0f));
+    s_a = pop8();
+  } else {
+    /*$6206*/ CYCLES_EDGE(0x6206, 1);
+  }
+
+  /*$6216*/ CYCLES(0x6216, 6);
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_find_apple(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // Look for an apple ($0F on the occupancy map) by sweeping whole columns,
+  // starting at the snake's own column and working left, then starting over
+  // and working right. The first hit wins, so the result is biased left. The
+  // position lands in $6B3B/$6B3C, which is what the direction chooser at
+  // $6A40 steers towards. Nothing found leaves row 0, column $14.
+  /*$69C3*/ CYCLES(0x69c3, 14);
+  ram_poke(0x6b39, ram_peek(0x624f));
+  ram_poke(0x6b3a, 0x01);
+
+  bool found = false;
+  for (;;) { // leftward sweep
+    /*$69CE*/ CYCLES(0x69ce, 14);
+    s_a = ram_peek(0x6b3a);
+    s_y = ram_peek(0x6b39);
+    rom_scrn(0x69d6);
+
+    /*$69D7*/ CYCLES(0x69d7, 4);
+    const uint8_t cell = s_a;
+    s_status_c = (cell >= 0x0f);
+    if (cell == 0x0f) {
+      /*$69D9*/ CYCLES_EDGE(0x69d9, 1);
+      found = true;
+      break;
+    }
+
+    /*$69DB*/ CYCLES(0x69db, 14);
+    ram_poke(0x6b3a, (uint8_t)(ram_peek(0x6b3a) + 0x01));
+    if (ram_peek(0x6b3a) != 0x27) {
+      /*$69E3*/ CYCLES_EDGE(0x69e3, 1);
+      continue;
+    }
+
+    /*$69E5*/ CYCLES(0x69e5, 14);
+    ram_poke(0x6b3a, 0x01);
+    const uint8_t col = (uint8_t)(ram_peek(0x6b39) - 0x01);
+    ram_poke(0x6b39, col);
+    if (!col)
+      break;
+    /*$69ED*/ CYCLES_EDGE(0x69ed, 1);
+  }
+
+  if (!found) {
+    /*$69EF*/ CYCLES(0x69ef, 8);
+    ram_poke(0x6b39, ram_peek(0x624f));
+
+    for (;;) { // rightward sweep
+      /*$69F5*/ CYCLES(0x69f5, 14);
+      s_a = ram_peek(0x6b3a);
+      s_y = ram_peek(0x6b39);
+      rom_scrn(0x69fd);
+
+      /*$69FE*/ CYCLES(0x69fe, 2);
+      const uint8_t cell = s_a;
+      s_status_not_z = (cell != 0x0f);
+      s_status_c = (cell >= 0x0f);
+
+      /*$6A00*/ CYCLES(0x6a00, 2);
+      if (cell == 0x0f) {
+        /*$6A00*/ CYCLES_EDGE(0x6a00, 1);
+        break;
+      }
+
+      /*$6A02*/ CYCLES(0x6a02, 14);
+      ram_poke(0x6b3a, (uint8_t)(ram_peek(0x6b3a) + 0x01));
+      if (ram_peek(0x6b3a) != 0x27) {
+        /*$6A0A*/ CYCLES_EDGE(0x6a0a, 1);
+        continue;
+      }
+
+      /*$6A0C*/ CYCLES(0x6a0c, 20);
+      ram_poke(0x6b3a, 0x01);
+      ram_poke(0x6b39, (uint8_t)(ram_peek(0x6b39) + 0x01));
+      const uint8_t col = ram_peek(0x6b39);
+      s_status_c = (col >= 0x27);
+      if (col == 0x27) {
+        /*$6A1B*/ CYCLES(0x6a1b, 12);
+        ram_poke(0x6b3a, 0x00);
+        ram_poke(0x6b39, 0x14);
+        break;
+      }
+      /*$6A19*/ CYCLES_EDGE(0x6a19, 1);
+    }
+  }
+
+  /*$6A25*/ CYCLES(0x6a25, 22);
+  ram_poke(0x6b3b, ram_peek(0x6b39));
+  const uint8_t row = ram_peek(0x6b3a);
+  s_a = row;
+  s_status_not_z = row;
+  s_status_n = (row & 0x80);
+  ram_poke(0x6b3c, row);
+
+  if (ret_addr)
+    pop16();
+}

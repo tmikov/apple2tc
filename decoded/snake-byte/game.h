@@ -136,3 +136,11 @@ void game_update_high_score(uint16_t ret_addr);
 
 /// $6BFB -- twenty passes of a falling tone, driven by the period at $6C46.
 void game_tick_sound(uint16_t ret_addr);
+
+/// $6594 -- step the bouncers the difficulty calls for, then return the next
+/// queued key in A.
+void game_step_bouncers(uint16_t ret_addr);
+
+/// $69C3 -- find an apple by sweeping columns outward from the snake, leaving
+/// the result at $6B3B/$6B3C.
+void game_find_apple(uint16_t ret_addr);
