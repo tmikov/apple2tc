@@ -1428,3 +1428,177 @@ void game_set_apple_value(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $7642, $64A9, $7633 -- apples, and the sound trick.                        */
+/*                                                                            */
+/* $6C49 is the game's mute switch, and it is a nice piece of work: every     */
+/* sound routine reads `LDA $C000,Y` with Y = $6C49, and $6C2C picks either   */
+/* $30 or $20 for it. $C030 is the speaker; $C020 is the cassette output. So  */
+/* turning the sound off routes the identical click to a port nobody is       */
+/* listening to, and the timing loops do not change at all -- no branch in    */
+/* the hot path, and muting cannot alter the game's speed.                    */
+/* ========================================================================== */
+
+void game_place_apple(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // Rejection sampling: take two pseudo-random bytes as column and row, ask
+  // the lo-res map whether that cell is free, and start over if it is not.
+  // game_rand_byte returns $00-$7F while the field is 40x40, so most draws
+  // land outside it and hit the non-zero border or garbage -- the retry loop
+  // is doing more work than it looks like.
+  for (;;) {
+    /*$7642*/ CYCLES(0x7642, 6);
+    game_rand_byte(0x7644);
+    /*$7645*/ CYCLES(0x7645, 9);
+    ram_poke(0x0002, s_a);
+    game_rand_byte(0x7649);
+    /*$764A*/ CYCLES(0x764a, 15);
+    ram_poke(0x0003, s_a);
+    s_a = ram_peek(0x0003);
+    const uint8_t col = ram_peek(0x0002);
+    s_status_not_z = col;
+    s_y = col;
+    rom_scrn(0x7652);
+
+    /*$7653*/ CYCLES(0x7653, 2);
+    if (!s_status_not_z)
+      break;
+    /*$7653*/ CYCLES_EDGE(0x7653, 1);
+  }
+
+  // White on the occupancy map, so the snake's collision test sees it.
+  /*$7655*/ CYCLES(0x7655, 8);
+  s_a = 0x0f;
+  rom_setcol(0x7659);
+
+  /*$765A*/ CYCLES(0x765a, 12);
+  s_a = ram_peek(0x0003);
+  s_y = ram_peek(0x0002);
+  rom_plot(0x7660);
+
+  /*$7661*/ CYCLES(0x7661, 16);
+  ram_poke(0x0000, 0x01); // shape 1
+  ram_poke(0x0001, 0x09); // ink 9
+  game_plot_shape(0x766b);
+
+  // One more apple on screen, BCD at $725F/$7260. $77D0 checks this pair and
+  // calls back here when it reaches zero.
+  /*$766C*/ CYCLES(0x766c, 32);
+  s_status_d = 0x01;
+  uint16_t r = adc_dec16(ram_peek(0x725f), 0x01, 0x00);
+  s_status_c = ((uint8_t)(r >> 8) & 0x01);
+  ram_poke(0x725f, (uint8_t)r);
+
+  r = adc_dec16(ram_peek(0x7260), 0x00, s_status_c);
+  s_a = (uint8_t)r;
+  const uint8_t flags = (uint8_t)(r >> 8);
+  s_status_c = (flags & 0x01);
+  s_status_not_z = (~flags & 2);
+  s_status_v = ((flags & 0x40) != 0);
+  s_status_n = (flags & 0x80);
+  ram_poke(0x7260, s_a);
+  s_status_d = 0x00;
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_sound_sweep(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // Two sweeps. X starts at 0, so the first DEX wraps to 255 and the delay
+  // between clicks runs 256, 255, ... 1 -- the pitch rises. The second half
+  // counts X up from 0, so the delay runs 256, 1, 2, ... 255 and the pitch
+  // falls. Together: the sound an apple makes.
+  /*$64A9*/ CYCLES(0x64a9, 2);
+  s_x = 0x00;
+
+  do {
+    /*$64AB*/ CYCLES(0x64ab, 4);
+    s_y = s_x; // TXA / TAY
+
+    uint8_t y;
+    do {
+      /*$64AD*/ CYCLES(0x64ad, 4);
+      y = (uint8_t)(s_y - 0x01);
+      s_y = y;
+      if (y) {
+        /*$64AE*/ CYCLES_EDGE(0x64ae, 1);
+      }
+    } while (y);
+
+    /*$64B0*/ CYCLES(0x64b0, 12);
+    // The click. LDY $6C49 / LDA $C000,Y -- speaker or cassette, see above.
+    // Neither the Y it loads nor the byte it reads outlives the next TAY.
+    peek((uint16_t)(0xc000 + ram_peek(0x6c49)));
+    s_x = (uint8_t)(s_x - 0x01);
+    if (s_x) {
+      /*$64B7*/ CYCLES_EDGE(0x64b7, 1);
+    }
+  } while (s_x);
+
+  do {
+    /*$64B9*/ CYCLES(0x64b9, 4);
+    s_y = s_x;
+
+    uint8_t y;
+    do {
+      /*$64BB*/ CYCLES(0x64bb, 4);
+      y = (uint8_t)(s_y - 0x01);
+      s_y = y;
+      if (y) {
+        /*$64BC*/ CYCLES_EDGE(0x64bc, 1);
+      }
+    } while (y);
+
+    /*$64BE*/ CYCLES(0x64be, 12);
+    // Here the Y and A do outlive the loop -- this is the last click before
+    // the RTS, so the caller sees them.
+    const uint8_t port = ram_peek(0x6c49);
+    s_y = port;
+    s_a = peek((uint16_t)(0xc000 + port));
+    s_x = (uint8_t)(s_x + 0x01);
+    s_status_not_z = s_x;
+    s_status_n = (s_x & 0x80);
+    if (s_x) {
+      /*$64C5*/ CYCLES_EDGE(0x64c5, 1);
+    }
+  } while (s_x);
+
+  /*$64C7*/ CYCLES(0x64c7, 6);
+
+  if (ret_addr)
+    pop16();
+}
+
+void game_eat_apple(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // One more apple eaten this level, BCD at $725E -- $77F8 compares it with
+  // $78B2 -- and then the sound.
+  /*$7633*/ CYCLES(0x7633, 22);
+  s_status_d = 0x01;
+  const uint16_t r = adc_dec16(ram_peek(0x725e), 0x01, 0x00);
+  const uint8_t flags = (uint8_t)(r >> 8);
+  s_status_c = (flags & 0x01);
+  s_status_v = ((flags & 0x40) != 0);
+  ram_poke(0x725e, (uint8_t)r);
+  s_status_d = 0x00;
+  game_sound_sweep(0x7640);
+
+  /*$7641*/ CYCLES(0x7641, 6);
+
+  if (ret_addr)
+    pop16();
+}

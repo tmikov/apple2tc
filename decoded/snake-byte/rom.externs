@@ -42,3 +42,6 @@ FE93 rom_setvid
 6BEF game_mark_head
 6BDA game_draw_head
 71CD game_set_apple_value
+7642 game_place_apple
+64A9 game_sound_sweep
+7633 game_eat_apple

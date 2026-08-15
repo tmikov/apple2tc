@@ -101,3 +101,14 @@ void game_draw_head(uint16_t ret_addr);
 /// $71CD -- set the per-apple score at $71CB/$71CC to $71C8[difficulty] times
 /// the level, in BCD.
 void game_set_apple_value(uint16_t ret_addr);
+
+/* --- apples and sound ---------------------------------------------------- */
+
+/// $7642 -- place a new apple on a free cell, found by rejection sampling.
+void game_place_apple(uint16_t ret_addr);
+
+/// $64A9 -- a rising then falling pitch sweep, clicked through $6C49.
+void game_sound_sweep(uint16_t ret_addr);
+
+/// $7633 -- count one apple eaten and play the sweep.
+void game_eat_apple(uint16_t ret_addr);
