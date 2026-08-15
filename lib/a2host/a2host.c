@@ -325,9 +325,18 @@ static void drain_key_presses() {
 /// counter -- compared directly against the `cycles` stamps drain_key_presses
 /// above compares against get_cycles(). The two draw from the same
 /// key_presses_ list and share next_key_press_ as their cursor, so whichever
-/// one advances it, the other still sees a consistent view; this function
-/// does not free the list on exhaustion because drain_key_presses already
-/// does, on whichever frame notices the cursor has reached the end.
+/// one advances it, the other still sees a consistent view.
+///
+/// Neither this function nor drain_key_presses() frees key_presses_ once a
+/// probe script delivers keys. drain_key_presses() used to be the one that
+/// noticed exhaustion and freed the list, but it now returns immediately
+/// whenever probe_uses_key() is true (see its own comment) and never reaches
+/// that code, so on this path the list is deliberately never freed: it stays
+/// non-NULL for the rest of the run. That is load-bearing, not an oversight
+/// -- a2host_key_replay_active() reads key_presses_ != NULL as "replay still
+/// active" and a2host_gui.c uses it to keep ignoring live keystrokes for the
+/// whole run, and freeing here would flip that, and the kbd_file_ fallback in
+/// a2host_simulate_frame(), mid-run the moment the scripted keys run out.
 void probe_deliver_keys(uint32_t now) {
   // push_key(), not a2_io_push_key() -- see drain_key_presses' comment; the
   // two share key_presses_ and must divert identically while recording.
