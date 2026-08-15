@@ -248,6 +248,20 @@ check_literal_sites() {
 }
 check_literal_sites "$here/a2rom.c" "$here/game.c"
 
+# game_native.c must contain no CYCLES at all.
+#
+# It is not in the site-list grep above, and must not be: it holds real C, with
+# no block structure to account for. But that also means a CYCLES written there
+# would charge cycles and never be probed -- the same silent hole as a
+# non-literal address, arriving from the other direction. Block accounting
+# belongs in the adapter in game.c, which is what keeps a converted routine's
+# trace intact.
+if grep -qE 'CYCLES(_EDGE)?\([^)]' "$here/game_native.c"; then
+  echo "FAIL: game_native.c contains CYCLES; it is not in any site list" >&2
+  grep -nE 'CYCLES(_EDGE)?\([^)]' "$here/game_native.c" >&2
+  exit 1
+fi
+
 # The built program must start on its own, with no key file at all.
 #
 # The decompilation boots to the Applesoft prompt, exactly as the machine did,

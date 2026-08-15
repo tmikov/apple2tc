@@ -38,7 +38,7 @@ FE93 rom_setvid
 6B93 game_plot_shape_merge
 7045 game_draw_playfield
 6641 game_install_cout_hook
-660F game_reset_snake
+660F game_start_life_adapter
 6BEF game_mark_head
 6BDA game_draw_head
 71CD game_set_apple_value

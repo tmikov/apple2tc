@@ -51,7 +51,8 @@
 #include "snake-byte-easyc1-ext.c"
 #undef init_emulated
 #include "a2rom.c"
-#include "game.c" /* after a2rom.c: uses its static rom_cout1() */
+#include "game_native.c" /* real C; game.c's adapters call into it */
+#include "game.c"      /* after a2rom.c: uses its static rom_cout1() */
 
 /// Why init_emulated() is wrapped
 /// ------------------------------

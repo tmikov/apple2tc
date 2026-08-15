@@ -25,10 +25,10 @@ add_a2_program(snake-bytec1
 # give each object file its own private copy of s_ram and still link cleanly.
 add_a2_program(snake-bytec1-ext
   snake-byte-ext.c
-  snake-bytec1-ext.c a2rom.c a2rom.h game.c game.h
+  snake-bytec1-ext.c a2rom.c a2rom.h game_native.c game_native.h game.c game.h
   ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   )
-set_source_files_properties(snake-bytec1-ext.c a2rom.c game.c
+set_source_files_properties(snake-bytec1-ext.c a2rom.c game_native.c game.c
   PROPERTIES HEADER_FILE_ONLY TRUE)
 
 # The `easy` test fixture: the same extern build, but decompiled from
@@ -38,8 +38,8 @@ set_source_files_properties(snake-bytec1-ext.c a2rom.c game.c
 # of the game and nothing ships from it.
 add_a2_program(snake-byte-easyc1-ext
   snake-byte-easy-ext.c
-  snake-byte-easyc1-ext.c a2rom.c a2rom.h game.c game.h
+  snake-byte-easyc1-ext.c a2rom.c a2rom.h game_native.c game_native.h game.c game.h
   ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   )
-set_source_files_properties(snake-byte-easyc1-ext.c
+set_source_files_properties(snake-byte-easyc1-ext.c game_native.c
   PROPERTIES HEADER_FILE_ONLY TRUE)

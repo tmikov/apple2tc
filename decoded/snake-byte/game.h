@@ -89,8 +89,9 @@ void game_draw_playfield(uint16_t ret_addr);
 /// $6641 -- point CSWL/CSWH at $664A so COUT reaches game_cout_hook.
 void game_install_cout_hook(uint16_t ret_addr);
 
-/// $660F -- reset the snake: head column from A, direction state to defaults.
-void game_reset_snake(uint16_t ret_addr);
+/// $660F -- adapter for game_start_life(): head column in A, both bouncers
+/// placed at opposite corners.
+void game_start_life_adapter(uint16_t ret_addr);
 
 /// $6BEF -- PLOT the head onto the lo-res map and raise $0305 and $6C46.
 void game_mark_head(uint16_t ret_addr);

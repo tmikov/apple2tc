@@ -71,7 +71,7 @@ void game_rand_byte(uint16_t ret_addr);
 void game_plot_shape_merge(uint16_t ret_addr);
 void game_draw_playfield(uint16_t ret_addr);
 void game_install_cout_hook(uint16_t ret_addr);
-void game_reset_snake(uint16_t ret_addr);
+void game_start_life_adapter(uint16_t ret_addr);
 void game_mark_head(uint16_t ret_addr);
 void game_draw_head(uint16_t ret_addr);
 void game_set_apple_value(uint16_t ret_addr);
@@ -3346,7 +3346,7 @@ void func_t001(uint16_t ret_addr) {
     case 23:  // $6256
       /*$6256*/ CYCLES(0x6256, 8);
                 s_a = 0x14;
-      /*$6258*/ game_reset_snake(0x625a);
+      /*$6258*/ game_start_life_adapter(0x625a);
       /*$625B*/ CYCLES(0x625b, 36);
                 ram_poke(0x6251, s_a);
       /*$6260*/ ram_poke(0x6250, 0x27);

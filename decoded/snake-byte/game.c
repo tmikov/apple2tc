@@ -21,6 +21,7 @@
 /// case here, so these routines are decoded from the binary directly.
 
 #include "game.h"
+#include "game_native.h"
 
 /* ========================================================================== */
 /* $664A -- the game's own COUT handler.                                      */
@@ -181,24 +182,20 @@ void game_cout_hook(uint16_t ret_addr) {
 /* ========================================================================== */
 
 void game_load_shape(uint16_t ret_addr) {
-  // Read by CYCLES() when tracing is on; every generated function
-  // declares it too.
+  // Adapter. The body is game_load_shape_masks() in game_native.c; what is
+  // left here is the machine state its generated callers observe. One block,
+  // so the CYCLES site and the block-head trace are unaffected.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
   /*$6127*/ CYCLES(0x6127, 53);
-  // Four masks per shape, so the index is shape * 4. The original built that
-  // with two ASLs and then walked the table with INX, which is why X is left
-  // pointing at the last entry rather than one past it.
-  const uint8_t first = (uint8_t)(ram_peek(0x0000) << 2);
-  uint8_t mask = 0;
-  for (unsigned line = 0; line < 4; ++line) {
-    mask = ram_peek(0x6174 + (uint8_t)(first + line));
-    ram_poke(0x6060 + line, mask);
-  }
-  s_x = (uint8_t)(first + 3);
+  const uint8_t shape = ram_peek(0x0000);
+  const uint8_t mask = game_load_shape_masks(shape);
+  // The original walked the table with INX, so X is left pointing at the last
+  // entry rather than one past it.
+  s_x = (uint8_t)((uint8_t)(shape << 2) + 3);
   s_a = mask;
   s_status_not_z = mask;
   s_status_n = (mask & 0x80);
@@ -1284,43 +1281,39 @@ restart:
 /* ========================================================================== */
 
 void game_install_cout_hook(uint16_t ret_addr) {
+  // Adapter for game_install_cout_vector().
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // Point CSWL/CSWH at $664A, so every later COUT lands in game_cout_hook.
   /*$6641*/ CYCLES(0x6641, 16);
-  ram_poke(0x0036, 0x4a); // the LDA #$4A flags are overwritten two loads later
+  game_install_cout_vector();
+  // The LDA #$4A flags are overwritten by the second load; only these outlive.
   s_a = 0x66;
   s_status_not_z = 0x66;
   s_status_n = 0x00;
-  ram_poke(0x0037, 0x66);
 
   if (ret_addr)
     pop16();
 }
 
-void game_reset_snake(uint16_t ret_addr) {
+void game_start_life_adapter(uint16_t ret_addr) {
+  // Adapter for game_start_life(). Named for what it is; rom.externs maps
+  // $660F to this.
+  //
+  // Renamed from game_reset_snake on the way through: it sets the snake's head
+  // column, but the other eight stores are the two bouncers, placed at
+  // opposite corners and converging. Writing it as a struct is what made that
+  // obvious -- as parallel ram_pokes it read as nine unrelated bytes.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // Head column arrives in A; $6256 passes $14, the middle of the field, and
-  // stores the $14 this leaves in A into the tail column right afterwards.
   /*$660F*/ CYCLES(0x660f, 50);
-  ram_poke(0x624f, s_a);
-  ram_poke(0x6639, 0x01);
-  ram_poke(0x663a, 0x01);
-  ram_poke(0x663d, 0x01);
-  ram_poke(0x663e, 0x01);
-  ram_poke(0x6640, 0x01);
-  ram_poke(0x663c, 0x01);
-  ram_poke(0x663b, 0x26);
-  ram_poke(0x663f, 0xff);
-  s_a = 0x14;
-  s_status_not_z = 0x14;
+  s_a = game_start_life(s_a);
+  s_status_not_z = s_a;
   s_status_n = 0x00;
 
   if (ret_addr)
