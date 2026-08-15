@@ -14,5 +14,5 @@ probe trace(site = pc) {
   printf("%04X\n", site)
 }
 
-install kb at $FD1B, $741F, $7890, $6217
+install kb at $FD1B, $741F, $7890, $6217, $760F, $FB7C, $FD26
 install trace at @"blocks-ext.txt"

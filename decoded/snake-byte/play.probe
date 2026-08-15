@@ -1,6 +1,30 @@
-# The replay half of rec.probe -- same sites, same counter, `key` instead of
-# `record`. See rec.probe for why these four sites, including $6217 (the
-# in-game ingest that clears the strobe and fills the ring buffer at $623C).
+# The coordinate: one counter, advanced wherever the program reads the keyboard.
+# Both scripts here and the three under probe-acceptance.sh must install `kb` at
+# exactly this set and count it exactly this way; probe-acceptance.sh checks
+# that rather than trusting it.
+#
+#   $FD1B  the ROM's KEYIN wait loop head (keys typed at the BASIC prompt)
+#   $FD26  KEYIN's exit, where the key is actually fetched and the strobe cleared
+#   $741F  the game's delay-loop poll
+#   $7890  the game's wait-for-space loop (play scenario only)
+#   $6217  the in-game ingest: clears the strobe, fills the ring buffer at $623C
+#   $760F  the key-redefinition screen's read -- reached only through --code-at
+#          control flow, so it appears as DFB data in snake-byte.lst and is
+#          visible only in the generated C.
+#   $FB7C  a ROM read the hi-res path reaches 20 times
+#
+# Measured, not assumed. Against play-hires.keys (19 keys): the four sites this
+# set grew from capture 13; adding $760F alone captures all 19; adding $FB7C or
+# $FD26 instead captures 13. So $760F is the one that matters and the other two
+# take no keys in either recording.
+#
+# They are in the set anyway. A site that fires without consuming costs one
+# counter increment, both engines count it identically, and the failure this
+# guards against is a read site nobody thought about turning out to consume --
+# $6217 and $760F were each found that way, one per scenario. $FD26 in
+# particular is where KEYIN actually fetches its key; it takes none here only
+# because $FD1B always fires first.
+
 counter n
 
 probe kb() {
@@ -8,4 +32,4 @@ probe kb() {
   key n
 }
 
-install kb at $FD1B, $741F, $7890, $6217
+install kb at $FD1B, $741F, $7890, $6217, $760F, $FB7C, $FD26

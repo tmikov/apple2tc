@@ -1,21 +1,24 @@
 #!/bin/bash
 #
 # The cross-engine gate for probe-stamped input: the interpreter and each
-# generated build must produce byte-identical block-head traces when replayed
-# from play.pkeys -- the 23 keystrokes stamped on the probe counter that
-# play.probe/rec.probe define, rather than on raw cycles. Modeled directly on
-# decoded/rom/probe-acceptance.sh; read that file's header first.
+# generated build must produce byte-identical block-head traces, and identical
+# memory, when replayed from the .pkeys files -- keystrokes stamped on the probe
+# counter that play.probe/rec.probe define, rather than on raw cycles. Both of
+# verify.sh's scenarios are run: play.pkeys (23 keys) and play-hires.pkeys (19).
+# Modeled directly on decoded/rom/probe-acceptance.sh; read that header first.
 #
 # Why this is stricter than verify.sh. verify.sh (play.keys, cycle-stamped)
 # diffs one video hash per frame -- 1,300 numbers. This diffs the address of
 # every basic block dispatched over the same run, which is on the order of
 # 2.7 million lines. Two programs can hash the same screen at frame boundaries
 # while taking different paths to get there; they cannot produce the same
-# 2.7-million-line PC trace by accident. trace.probe carries play.probe's own
-# `kb` delivery (same four sites, same counter, `key` instead of `record`) so
-# the replay lands on the coordinate play.pkeys was stamped on, not on wall
-# cycles -- see rec.probe for why the coordinate needs exactly those four
-# sites, including $6217.
+# 2.7-million-line PC trace by accident. And ram.probe then compares memory at
+# every in-game sample, because a wrong byte written need not change control
+# flow within one run. trace.probe carries play.probe's own `kb` delivery (same
+# sites, same counter, `key` instead of `record`) so the replay lands on the
+# coordinate the .pkeys file was stamped on, not on wall cycles -- see
+# rec.probe for why the coordinate needs exactly those sites, and for the
+# measurements behind $6217 and $760F.
 #
 # Why two site lists. snake-bytec1.c decompiles the ROM alongside the game and
 # is self-contained. snake-bytec1-ext.c has the ROM entry points listed in
@@ -58,22 +61,48 @@ here=$(dirname "$0")
 
 frames=${FRAMES:-1300}
 b33="$here/snake-byte.b33"
-keys="$here/play.pkeys"
+keys="${KEYS:-$here/play.pkeys}"
 
-# The number of keys a correct run must load and deliver, derived from
-# play.pkeys itself rather than hardcoded: an empty or truncated key file (a
+# Every script that delivers keys carries its own copy of the coordinate --
+# the probe language has no include, so the `install kb at ...` line is
+# duplicated five ways. They must all name the same sites in the same order or
+# the stamps in a .pkeys file mean different things to different scripts, and
+# each script stays individually valid while the set quietly disagrees. That is
+# the same drift hazard the trace.probe/trace-ext.probe check covers, so it is
+# checked the same way: asserted, not trusted.
+coord=$(grep -h '^install kb at ' "$here/rec.probe")
+for p in play.probe trace.probe trace-ext.probe ram.probe; do
+  if [ "$(grep -h '^install kb at ' "$here/$p")" != "$coord" ]; then
+    echo "FAIL: $p installs the coordinate differently from rec.probe" >&2
+    echo "  rec.probe: $coord" >&2
+    echo "  $p: $(grep -h '^install kb at ' "$here/$p")" >&2
+    exit 1
+  fi
+done
+echo "coordinate: ${coord#install kb at }"
+
+# The number of keys a correct run must load and deliver, derived from the
+# .pkeys file itself rather than hardcoded: an empty or truncated key file (a
 # regression in the file, or a mis-parse) would otherwise still make the rest
 # of this script pass -- see the "Loaded N keys" check below for why an empty
 # key file is exactly the failure mode this exists to catch. `|| true`: grep
 # exits 1 on zero matches (an empty/all-comment file), which would otherwise
-# trip `set -e` here and abort with no explanation before the check below
-# ever runs.
-expected_keys=$(grep -vc '^#' "$keys" || true)
-if [ "$expected_keys" -eq 0 ]; then
-  echo "FAIL: $keys has no keys to replay -- empty, all-comment, or missing" >&2
-  exit 1
-fi
-echo "expected key count (from $keys): $expected_keys"
+# trip `set -e` and abort with no explanation before the check below runs.
+set_scenario() {
+  # $1: the .pkeys file for this scenario. Sets $keys and $expected_keys, which
+  # check_backend and check_memory both read.
+  keys=$1
+  if [ ! -f "$keys" ]; then
+    echo "FAIL: $keys does not exist" >&2
+    exit 1
+  fi
+  expected_keys=$(grep -vc '^#' "$keys" || true)
+  if [ "$expected_keys" -eq 0 ]; then
+    echo "FAIL: $keys has no keys to replay -- empty or all-comment" >&2
+    exit 1
+  fi
+  echo "--- scenario $(basename "$keys"): $expected_keys keys ---"
+}
 
 # Compare one generated build against the interpreter on that build's own
 # block heads. $1: label, $2: generated binary, $3: probe script, $4: where to
@@ -83,7 +112,8 @@ check_backend() {
   local label=$1 prog=$2 probe=$3 sites=$4 floor=$5
   shift 5
   local srcs=("$@")
-  local interp="/tmp/pkeys-probe-interp-$label.txt" gen="/tmp/pkeys-probe-$label.txt"
+  local tag="$label-$(basename "$keys" .pkeys)"
+  local interp="/tmp/pkeys-probe-interp-$tag.txt" gen="/tmp/pkeys-probe-$tag.txt"
 
   [ -x "$prog" ] || { echo "Error: not found: $prog" >&2; exit 1; }
 
@@ -108,10 +138,10 @@ check_backend() {
 
   "$a2run" --preload "$b33" --key-file="$keys" --probe="$probe" \
     --probe-out="$interp" --frames="$frames" \
-    > /dev/null 2>"/tmp/pkeys-probe-interp-$label.err"
+    > /dev/null 2>"/tmp/pkeys-probe-interp-$tag.err"
   "$prog" --key-file="$keys" --probe="$probe" \
     --probe-out="$gen" --frames="$frames" \
-    > /dev/null 2>"/tmp/pkeys-probe-$label.err"
+    > /dev/null 2>"/tmp/pkeys-probe-$tag.err"
 
   # A probe that never fired means the two sides did not cover the same set,
   # even if what they did emit matches -- e.g. a site both installed but
@@ -126,7 +156,7 @@ check_backend() {
   # runs is what makes this gate mean "the two engines agree with real input
   # in play," not just "the two engines agree."
   local side
-  for side in "interp-$label" "$label"; do
+  for side in "interp-$tag" "$tag"; do
     if grep -q "never fired" "/tmp/pkeys-probe-$side.err"; then
       echo "FAIL [$side]: a probe never fired" >&2
       grep "never fired" "/tmp/pkeys-probe-$side.err" >&2
@@ -173,6 +203,15 @@ fi
 # against -- a whole source file (a2rom.c alone contributes 75 sites, game.c
 # 5, and losing snake-bytec1-ext.c itself would collapse the -ext list to
 # under 100) going missing or empty out of the grep.
+# Both scenarios verify.sh replays, now against the interpreter as well.
+# play-hires is not a duplicate of play: it reaches $664A (the game's own hi-res
+# COUT hook) and $7541, code the recording never took and that exists only via
+# --code-at -- and in the -ext build $664A is hand-written C in game.c, so the
+# hires/ext pair is the only cross-engine check that hand-written replacement
+# gets. KEYS= overrides the list for a one-off run.
+for keyfile in ${KEYS:-"$here/play.pkeys" "$here/play-hires.pkeys"}; do
+  set_scenario "$keyfile"
+
 check_backend trace "$bin/decoded/snake-byte/snake-bytec1-run" "$here/trace.probe" \
   "$here/blocks.txt" 1600 "$here/snake-bytec1.c"
 check_backend trace-ext "$bin/decoded/snake-byte/snake-bytec1-ext-run" "$here/trace-ext.probe" \
@@ -197,19 +236,20 @@ fi
 # input, memory would agree vacuously the same way the traces would.
 check_memory() {
   local label=$1 prog=$2
-  local interp="/tmp/pkeys-ram-interp-$label.txt" gen="/tmp/pkeys-ram-$label.txt"
+  local tag="$label-$(basename "$keys" .pkeys)"
+  local interp="/tmp/pkeys-ram-interp-$tag.txt" gen="/tmp/pkeys-ram-$tag.txt"
 
   [ -x "$prog" ] || { echo "Error: not found: $prog" >&2; exit 1; }
 
   "$a2run" --preload "$b33" --key-file="$keys" --probe="$here/ram.probe" \
     --probe-out="$interp" --frames="$frames" \
-    > /dev/null 2>"/tmp/pkeys-ram-interp-$label.err"
+    > /dev/null 2>"/tmp/pkeys-ram-interp-$tag.err"
   "$prog" --key-file="$keys" --probe="$here/ram.probe" \
     --probe-out="$gen" --frames="$frames" \
-    > /dev/null 2>"/tmp/pkeys-ram-$label.err"
+    > /dev/null 2>"/tmp/pkeys-ram-$tag.err"
 
   local side
-  for side in "interp-$label" "$label"; do
+  for side in "interp-$tag" "$tag"; do
     if grep -q "never fired" "/tmp/pkeys-ram-$side.err"; then
       echo "FAIL [ram/$side]: a probe never fired" >&2
       exit 1
@@ -231,3 +271,4 @@ check_memory() {
 
 check_memory ref "$bin/decoded/snake-byte/snake-bytec1-run"
 check_memory ext "$bin/decoded/snake-byte/snake-bytec1-ext-run"
+done

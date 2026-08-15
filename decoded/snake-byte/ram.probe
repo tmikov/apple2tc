@@ -54,5 +54,5 @@ probe mem(
   }
 }
 
-install kb at $FD1B, $741F, $7890, $6217
+install kb at $FD1B, $741F, $7890, $6217, $760F, $FB7C, $FD26
 install mem at $6217
