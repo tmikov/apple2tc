@@ -4,13 +4,15 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
-**Last commit:** `bf40028`. 102 commits on `snake-byte`, nothing pushed, tree
-clean. The most recent 52 are infrastructure that did not touch the game at
+**Last commit:** `3f3990e`. 124 commits on `snake-byte`, nothing pushed, tree
+clean. The most recent 74 are infrastructure that did not touch the game at
 all: the **host/engine split** (2026-08-11 log entry), the **probe compiler and
 VM** (2026-08-12, 2026-08-13), **accurate cycle costs** in both engines
-(2026-08-13), and two apple2tc bug fixes (2026-08-13, 2026-08-14). All are
-summarised under "Host, engines and probes" below; read that before assuming
-anything about how verification runs, because it changed.
+(2026-08-13), two apple2tc bug fixes (2026-08-13, 2026-08-14), and
+**probe-stamped input** (2026-08-14, 2026-08-15), which is what finally made
+the interpreter and the generated C comparable. All are summarised under
+"Host, engines and probes" below; read that before assuming anything about how
+verification runs, because it changed.
 
 ---
 
@@ -141,9 +143,22 @@ Options: `--probe=`, `--probe-out=`, `--probe-dump`, `--record-keys=`.
 `decoded/rom/probe-acceptance.sh <build-dir>` is the cross-engine gate: the
 interpreter against both generated back ends over 120 frames of ROM boot,
 276,255 probe hits each, byte-identical. Run it alongside `verify.sh`.
+
 `decoded/snake-byte/probe-acceptance.sh <build-dir>` is its Snake Byte
-counterpart, replaying `play.pkeys` (probe-stamped, not cycle-stamped —
-item 5 under "Next" below) instead of booting with no input.
+counterpart and the stronger one. It replays probe-stamped input (`play.pkeys`,
+`play-hires.pkeys` — not cycle-stamped; item 5 under "Next") through both of
+`verify.sh`'s scenarios, and checks two things per scenario per back end:
+
+| | play | hires |
+|---|---|---|
+| block-head trace | 2,744,938 hits identical | 2,864,242 identical |
+| memory (`ram.probe`) | identical at 6,808 samples | identical at 8,465 |
+
+The memory check is not redundant with the trace: a wrong byte written need not
+change control flow within one run. The hires scenario is not redundant with
+play: it reaches `$664A` and `$7541`, code the recording never took, and in the
+`-ext` build `$664A` is hand-written C in `game.c` — so hires/ext is the only
+cross-engine check that hand-written replacement gets.
 
 **The hazard, stated once here because it is easy to lose:** `CYCLES` is emitted
 per basic block, not per instruction, so a probe installed at a non-block-head
@@ -330,18 +345,20 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
    generated builds produces a byte-identical 2,744,938-hit block-head trace
    over all 1,300 frames, and frame 623 itself now matches.
 
-   What is left: 8 of 1,300 frame hashes still differ (frames 172, 173, 271,
-   596, 761, 823, 871, 933 — 172/173 is one two-frame event, so 7 distinct
-   events) even though the block-head trace proves the two engines took an
-   identical control-flow path for the entire run. Every differing frame
-   re-converges on the very next frame, and for 6 of the 7 events neither
-   engine's hash matches its own neighboring frames — both are mid-write at
-   slightly different points, not one engine lagging the other. That pattern
-   is consistent with the fixed-interval video-hash sample landing on
-   different sides of an in-progress screen write depending on the two
-   engines' (by-design) differing cycle counts, rather than with a real
-   behavioural difference — but that explanation is not proven, and
-   root-causing the 8 frames is unstarted work.
+   **The 8 residual frames are now accounted for too** (2026-08-15 entry).
+   8 of 1,300 frame hashes still differ, but nothing in the machine does:
+   sampling state at program-defined instants instead of at the host's frame
+   timer shows all memory outside the stack page identical at 6,808 in-game
+   samples, SP identical, and — once `--ret-addr` was turned on — the live
+   stack identical too. The frame hashes differ only because the host samples
+   video on a fixed cycle interval while the two engines sit up to one basic
+   block apart in *phase* (not rate: 22,147,953 vs 22,147,957 cycles over the
+   whole run). It is a property of the measuring apparatus.
+
+   Both scenarios are converted (`play.pkeys`, `play-hires.pkeys`) and both are
+   gated. What is genuinely left is `robotron` and `bolo`: the machinery is
+   generic, but neither has a coordinate script, and `bolo`'s `--irc1` line is
+   commented out in its `decompile.sh`.
 
    Probe phase 3 is still unbuilt: apple2tc does not yet emit `PROBE_x(...)`
    placeholder sites, so a probe can observe machine state but not the
@@ -377,6 +394,8 @@ Mistakes already made here. The log has the full accounts.
 | Comparing register traces across engines | `CPURegLiveness` and `dce` drop stores to dead registers by design, so the generated code does not maintain `Y` or the flags where nothing reads them. Traces diverge on line 2. `--compat` makes the format diffable, not the content. |
 | A rejection test that greps for `FATAL` | Twice during the probe work a test passed while covering nothing, because a *different* check fired first and satisfied the grep. Assert the specific message, and prove the test can fail by deleting the check it covers and watching the suite go red. |
 | A probe that produces no output | Says nothing about agreement. A probe on a non-block-head address fires in the interpreter and does not exist in the generated program; the report then reads as agreement while covering less than you think. |
+| `snake-byte.lst` shows you every keyboard read | It cannot. `$7541` and `$664A` are reached only through `--code-at` control flow, so the disassembler never traced them and the listing prints them as `DFB` data. `$760F`, the read that takes 6 of the 19 keys in the hires scenario, is visible *only* in the generated C. Grep the C, not the listing, for anything on a `--code-at` path. |
+| `--ret-addr` is a cosmetic verification flag | It is on for a correctness reason. Without it a `JSR` pushes the sentinel `$FFFE`, and the inline-data-after-`JSR` idiom — which Snake Byte uses — finds its data by *reading* that address. It costs nothing (same `push16`, different compile-time constant). But it is **not** for a shipped artifact: that wants `ret_addr == 0`, no emulated stack at all. |
 | Every `CYCLES`-shaped call site is a program location | It is not. The taken-branch penalty is charged on the *edge*, in a block carrying the branch's address that the program is never actually *at* — so it must not trace or dispatch probes, or one execution of that branch gets reported twice. Hence `AddEdgeCycles`/`CYCLES_EDGE`. 698 ROM addresses are edges and 121 of them are also real block heads, so the two are not distinguishable by address. |
 | A plan's list of keyboard-read sites is complete because it was grepped once | Snake Byte's coordinate plan named three sites (`$FD1B`, `$741F`, `$7890`); a fourth, `$6217` — the in-game ingest that clears the strobe and fills the ring buffer at `$623C` — was missing. Recording with only the three captured 11 of 23 keys, not 11 cycle-quantised ones: once a script delivers via `key` at all, the host's per-frame drain stands down entirely (`probe_uses_key()`), so an uncovered site's keys are never delivered, not merely mis-timed. Found by recording and counting, not by reading the disassembly harder. |
 | A test that fails proves the check it names | Task 3's own drain-guard regression test specified `--frames=10`. At that frame count the buggy (unguarded) and the fixed (guarded) build produce byte-identical output — the installed keyboard site isn't even reached until roughly frame 8.3, and the one key that would distinguish the two builds is stamped for a point roughly 59 frames further out — so the test failed identically before and after the fix and proved nothing either way. Needed `--frames=100`. A red result is only evidence once you have also seen it turn green for the right reason. |

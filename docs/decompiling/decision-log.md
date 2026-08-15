@@ -1909,3 +1909,83 @@ interval, and the answer there is to sample on a program coordinate instead.
 Not significant for the decompiled program's behaviour, and not significant for
 this game's audio. It would need re-examining for a title that reads the
 paddles or generates tone from inside large basic blocks.
+
+
+## 2026-08-15 — Converting `play-hires.keys`, and a read site the listing cannot show
+
+**Scope:** decoded/snake-byte · **Status:** done; both scenarios gated
+
+**Decision:** convert the second recording too, so the cross-engine gate covers
+the hi-res path. It was the last scenario running on cycle-stamped input.
+
+### Why this one was worth doing
+
+It is not a second helping of the same test. The hires scenario reaches `$664A`
+(the game's own hi-res COUT hook) and `$7541`, code the recorded session never
+took and that exists only because `code-at.txt` asserts the edges. And in the
+`-ext` build `$664A` is not decompiler output at all — it is hand-written C in
+`game.c`. So hires/ext is the only cross-engine check that hand-written
+replacement has ever had.
+
+### The listing could not answer the site question
+
+The coordinate has to cover every place the program takes a key, or the key is
+dropped outright — `probe_uses_key()` stands the cycle drain down, so an
+uncovered ingest is not a mis-timed key but a missing one.
+
+Checking `snake-byte.lst` for `$C000` reads on the hires path found nothing new,
+and that was misleading: `$7541` and `$664A` appear in the listing as `DFB`,
+because the disassembler never traced them. **A `--code-at` region is invisible
+to the listing by construction.** Grepping the generated C instead — the thing
+that actually runs — turned up `$760F`, `$FB7C` and `$FD26`, none of them in the
+coordinate. Which of those fire on the hires path, measured rather than
+reasoned: `$FD1B` 181,193, `$6217` 8,465, `$760F` 1,059, `$741F` 536, `$FB7C`
+20, `$FD26` 11, and `$7890` not at all (it is play-only).
+
+### Which sites the keys actually need
+
+Against `play-hires.keys`, 19 keys:
+
+| coordinate | captured |
+|---|---|
+| the four sites from the play scenario | 13 of 19 |
+| four + `$760F` | **19 of 19** |
+| four + `$FB7C` | 13 of 19 |
+| four + `$FD26` | 13 of 19 |
+
+`$760F` is the one that matters. `$FB7C` and `$FD26` are in the set anyway: a
+site that fires without consuming costs one counter increment, both engines
+count it identically, and a read site nobody thought about turning out to
+consume is exactly the failure being guarded against — it has now happened
+twice, `$6217` for play and `$760F` for hires. `$FD26` is in fact where KEYIN
+fetches its key; it takes none here only because `$FD1B` always fires first.
+
+All seven are block heads in both builds, checked before use.
+
+`play.pkeys` was re-derived on the seven-site coordinate. Both files replay to
+their conversion run's frames exactly, 1300/1300.
+
+### Result
+
+Interpreter against both generated builds:
+
+| scenario | block-head trace | memory |
+|---|---|---|
+| play | 2,744,938 hits identical | identical at 6,808 samples |
+| hires | 2,864,242 hits identical | identical at 8,465 samples |
+
+### One hazard closed on the way
+
+The coordinate is duplicated across five scripts, because the probe language
+has no include. That is the `trace.probe`/`trace-ext.probe` drift hazard
+multiplied, and worse in kind: a stamp file would silently mean different
+things to different scripts while each stayed individually valid. The gate now
+asserts all five `install kb` lines are identical and prints the coordinate it
+ran with.
+
+### Left open
+
+- `robotron` and `bolo` have no cross-engine comparison. The machinery is
+  generic now — a coordinate script and a converted key file are all either
+  needs — but `bolo`'s `--irc1` line is still commented out in its
+  `decompile.sh`, so it has no `c1` build to compare against.
