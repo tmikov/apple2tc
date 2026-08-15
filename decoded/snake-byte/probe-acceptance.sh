@@ -109,10 +109,10 @@ set_scenario() {
 
 # Compare one generated build against the interpreter on that build's own
 # block heads. $1: label, $2: generated binary, $3: probe script, $4: where to
-# keep the site list, $5: minimum acceptable site count, $6..: the C
+# keep the site list, $5: the exact expected site count, $6..: the C
 # source(s) that make up the binary.
 check_backend() {
-  local label=$1 prog=$2 probe=$3 sites=$4 floor=$5
+  local label=$1 prog=$2 probe=$3 sites=$4 expect=$5
   shift 5
   local srcs=("$@")
   local tag="$label-$(basename "$keys" .pkeys)"
@@ -128,14 +128,15 @@ check_backend() {
   local nsites
   nsites=$(wc -l < "$sites")
   echo "[$label] site list: $nsites block heads"
-  # An empty list is already caught downstream (the probe compiler rejects
-  # it), but a partial one is not: e.g. one of several source files present
-  # but truncated to empty would still let grep/sort exit 0. $floor is a
-  # generous margin below the count committed in $sites (not a tight pin --
-  # see the call sites below for the actual numbers), just enough to catch a
-  # source file's worth of sites silently going missing.
-  if [ "$nsites" -lt "$floor" ]; then
-    echo "FAIL [$label]: site list has only $nsites block heads, expected at least $floor" >&2
+  # Exact, not a floor. It began as a floor -- a generous margin, enough to
+  # notice a source file going missing out of the grep. That was the only way
+  # the number could move. It is not any more: every routine converted to real
+  # C in game_native.c takes its block heads out of this list on purpose, so
+  # the count is now the running cost of the conversion. Pinning it exactly is
+  # what puts that cost in the diff instead of in a number nobody reads.
+  if [ "$nsites" -ne "$expect" ]; then
+    echo "FAIL [$label]: site list has $nsites block heads, expected exactly $expect" >&2
+    echo "  A conversion lowers this deliberately; anything else is a regression." >&2
     exit 1
   fi
 
@@ -329,12 +330,11 @@ for other in trace-ext trace-easy; do
   fi
 done
 
-# Floors: measured 1,694 (trace) and 1,669 (trace-ext) block heads as of this
-# writing. 1,600 leaves headroom for legitimate drift (a simplifyCFG change
-# that merges a few blocks) while still catching the failure this guards
-# against -- a whole source file (a2rom.c alone contributes 75 sites, game.c
-# 31, and losing snake-bytec1-ext.c itself would collapse the -ext list to
-# under 100) going missing or empty out of the grep.
+# The three expected counts. 1,694 for the reference build, which is pure
+# decompiler output and moves only if the decompiler does. 1,547 for the two
+# extern builds, which is 1,669 minus the 122 block heads given up so far to
+# game_native.c -- see that file's header for what each conversion cost and
+# why.
 # Both scenarios verify.sh replays, now against the interpreter as well.
 # play-hires is not a duplicate of play: it reaches $664A (the game's own hi-res
 # COUT hook) and $7541, code the recording never took and that exists only via
@@ -346,9 +346,9 @@ for keyfile in ${KEYS:-"$here/play.pkeys" "$here/play-hires.pkeys"}; do
   set_scenario "$keyfile"
 
 check_backend trace "$bin/decoded/snake-byte/snake-bytec1-run" "$here/trace.probe" \
-  "$here/blocks.txt" 1600 "$here/snake-bytec1.c"
+  "$here/blocks.txt" 1694 "$here/snake-bytec1.c"
 check_backend trace-ext "$bin/decoded/snake-byte/snake-bytec1-ext-run" "$here/trace-ext.probe" \
-  "$here/blocks-ext.txt" 1600 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c"
+  "$here/blocks-ext.txt" 1547 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c"
 
 if diff -q "$here/blocks.txt" "$here/blocks-ext.txt" > /dev/null; then
   echo "the two back ends agree on the block-head set"
@@ -455,7 +455,7 @@ frames=${EASY_FRAMES:-3000}
 set_scenario "$here/play-hires.pkeys"
 echo "    (against snake-byte-easy.b33, $frames frames)"
 check_backend trace-easy "$bin/decoded/snake-byte/snake-byte-easyc1-ext-run" \
-  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1600 \
+  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1547 \
   "$here/snake-byte-easyc1-ext.c" "$here/a2rom.c" "$here/game.c"
 
 # The fixture's block heads are the same set as the stock extern build's, and
@@ -498,4 +498,4 @@ coverage_report trace "$here/blocks.txt" 0
 # The number exists to stop that set growing quietly, and to be ratcheted down
 # whenever a scenario reaches one of them -- as happened at 22 -> 21 when the
 # `easy` fixture covered $6C4F. It is not a target to be satisfied.
-coverage_report trace-ext "$here/blocks-ext.txt" 57 "$here/a2rom.c" "$here/game.c"
+coverage_report trace-ext "$here/blocks-ext.txt" 47 "$here/a2rom.c" "$here/game.c"

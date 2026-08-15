@@ -486,3 +486,340 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
   GAME_CYCLES(0x6b35, 8);
   return MOVE_DEAD_END;
 }
+
+/* ========================================================================== */
+/* $7045 -- draw the playfield                                                */
+/*                                                                            */
+/* 62 blocks in one routine, and six things: set the video mode, spin, wipe    */
+/* the occupancy map, open the wall gaps the difficulty calls for, draw the    */
+/* border in both representations, and run the level's display list.           */
+/*                                                                            */
+/* The display list is the reason this one was worth the trace it cost. $8000  */
+/* holds 29 scripts, one per level, each ending in '*'; the interpreter skips  */
+/* level-1 scripts to find the current one and then dispatches single-letter   */
+/* opcodes. As a chain of CMP/BNE with the operand loads interleaved it is 180 */
+/* bytes that read as noise.                                                  */
+/* ========================================================================== */
+
+/// The display list's opcodes. Single letters, in Apple II ASCII.
+typedef enum {
+  OP_RESTART = 0x45, ///< 'E' -- back to level 1 and start over. Level 30 only.
+  OP_HLINE = 0x48,   ///< 'H' -- ink, column, last column, row
+  OP_PLOT = 0x50,    ///< 'P' -- ink, column, row. No script uses it.
+  OP_STORE = 0x54,   ///< 'T' -- one byte, into $0304
+  OP_VLINE = 0x56,   ///< 'V' -- ink, row, last row, column
+  OP_END = 0x2a,     ///< '*' -- end of this level's script
+} ScriptOp;
+
+/// $7024 through its adapter. The ink arrives in the Z flag, not in A.
+static void set_ink(uint8_t ink, uint16_t ret) {
+  s_a = ink;
+  s_status_not_z = ink;
+  s_status_n = (ink & 0x80);
+  game_set_ink(ret);
+}
+
+/// The ROM's HLINE, which takes its right-hand end from $2C.
+static void lores_hline(uint8_t row, uint8_t from_col, uint16_t ret) {
+  s_a = row;
+  s_y = from_col;
+  rom_hline(ret);
+}
+
+/// The ROM's PLOT.
+static void lores_plot(uint8_t row, uint8_t col, uint16_t ret) {
+  s_a = row;
+  s_y = col;
+  rom_plot(ret);
+}
+
+/// $7019 through its adapter: the next display-list byte.
+static uint8_t script_byte(uint16_t ret) {
+  game_next_byte(ret);
+  return s_a;
+}
+
+/// Graphics, hi-res, page 2, full screen. The reads are the writes.
+static void select_hires_page2(void) {
+  GAME_CYCLES(0x7048, 32);
+  ram_poke(0x6c46, 0x00);
+  io_peek(0xc050);
+  io_peek(0xc057);
+  io_peek(0xc055);
+  io_peek(0xc052);
+  ram_poke(0x0002, 0x04);
+  ram_poke(0x0003, 0x00);
+}
+
+/// A plain three-deep delay. Y is whatever the caller left in it; the original
+/// does not initialise it, and the counters live in zero page because there is
+/// nowhere else to put them.
+static void spin(void) {
+  for (;;) {
+    GAME_CYCLES(0x7061, 4);
+    if (--s_y) {
+      GAME_CYCLES(0x7062, 1);
+      continue;
+    }
+    GAME_CYCLES(0x7064, 7);
+    ram_poke(0x0003, (uint8_t)(ram_peek(0x0003) - 1));
+    if (ram_peek(0x0003)) {
+      GAME_CYCLES(0x7066, 1);
+      continue;
+    }
+    GAME_CYCLES(0x7068, 7);
+    ram_poke(0x0002, (uint8_t)(ram_peek(0x0002) - 1));
+    if (!ram_peek(0x0002))
+      break;
+    GAME_CYCLES(0x706a, 1);
+  }
+}
+
+/// Clear the lo-res occupancy map, one full-width row at a time from the
+/// bottom up. Ink 0 is black, so this erases.
+static void wipe_occupancy_map(void) {
+  GAME_CYCLES(0x706c, 13);
+  ram_poke(0x0003, 0x27);
+  set_ink(0x00, 0x7074);
+
+  for (;;) {
+    GAME_CYCLES(0x7075, 16);
+    ram_poke(0x002c, 0x27);
+    lores_hline(ram_peek(0x0003), 0x00, 0x707f);
+
+    GAME_CYCLES(0x7080, 7);
+    const uint8_t row = (uint8_t)(ram_peek(0x0003) - 1);
+    ram_poke(0x0003, row);
+    // BPL: row 0 is drawn, and the loop ends one step later.
+    if (row & 0x80)
+      break;
+    GAME_CYCLES(0x7082, 1);
+  }
+}
+
+/// One gap per bouncer, which is what the difficulty counts.
+static void open_wall_gaps(void) {
+  GAME_CYCLES(0x7093, 6);
+  const uint8_t difficulty = ram_peek(0x0301);
+  if (!difficulty) {
+    GAME_CYCLES(0x7096, 1);
+    return;
+  }
+
+  GAME_CYCLES(0x7098, 10);
+  lores_plot(0x01, 0x01, 0x709d);
+
+  GAME_CYCLES(0x709e, 8);
+  if (ram_peek(0x0301) == 0x01) {
+    GAME_CYCLES(0x70a3, 1);
+    return;
+  }
+  GAME_CYCLES(0x70a5, 10);
+  lores_plot(0x01, 0x26, 0x70ab);
+}
+
+/// The border, in both representations, plus the gap the snake leaves through.
+static void draw_border(void) {
+  GAME_CYCLES(0x70ac, 10);
+  lores_hline(0x00, 0x00, 0x70b2); // $2C is still $27 from the wipe
+
+  GAME_CYCLES(0x70b3, 10);
+  lores_hline(0x27, 0x00, 0x70b9);
+
+  GAME_CYCLES(0x70ba, 21);
+  ram_poke(0x0002, 0x00);
+  ram_poke(0x0003, 0x00);
+  ram_poke(0x0008, 0x27);
+  game_lores_vline(0x70c8);
+
+  GAME_CYCLES(0x70c9, 16);
+  ram_poke(0x0003, 0x00);
+  ram_poke(0x0002, 0x27);
+  game_lores_vline(0x70d3);
+
+  GAME_CYCLES(0x70d4, 19);
+  ram_poke(0x0002, 0x00);
+  ram_poke(0x0003, 0x00);
+  ram_poke(0x0008, 0x27);
+  game_plot_hline(0x70e0);
+
+  GAME_CYCLES(0x70e1, 16);
+  ram_poke(0x0002, 0x00);
+  ram_poke(0x0003, 0x27);
+  game_plot_hline(0x70eb);
+
+  GAME_CYCLES(0x70ec, 14);
+  ram_poke(0x0002, 0x00);
+  ram_poke(0x0003, 0x00);
+  game_plot_vline(0x70f4);
+
+  GAME_CYCLES(0x70f5, 16);
+  ram_poke(0x0003, 0x00);
+  ram_poke(0x0002, 0x27);
+  game_plot_vline(0x70ff);
+
+  // Ink 3 over columns $12-$16 of the bottom row, on top of the border just
+  // laid down: the gap the snake leaves through.
+  GAME_CYCLES(0x7100, 26);
+  ram_poke(0x0001, 0x03);
+  ram_poke(0x0003, 0x27);
+  ram_poke(0x0002, 0x12);
+  ram_poke(0x0008, 0x16);
+  game_plot_hline(0x7112);
+}
+
+/// Walk the pointer to the current level's script, skipping one whole script
+/// per level below it. DEX first, so level 1 skips nothing.
+static void seek_script(void) {
+  GAME_CYCLES(0x7113, 14);
+  s_x = ram_peek(0x0303);
+  ram_poke(0x000a, 0x00);
+  ram_poke(0x000b, 0x80);
+
+  for (;;) {
+    GAME_CYCLES(0x711e, 4);
+    if (!--s_x) {
+      GAME_CYCLES(0x711f, 1);
+      return;
+    }
+    for (;;) {
+      GAME_CYCLES(0x7121, 6);
+      const uint8_t b = script_byte(0x7123);
+      GAME_CYCLES(0x7124, 4);
+      if (b == OP_END) {
+        GAME_CYCLES(0x7126, 1);
+        break;
+      }
+      GAME_CYCLES(0x7128, 3);
+    }
+  }
+}
+
+void game_draw_playfield_native(void) {
+  GAME_CYCLES(0x7045, 6);
+  game_clear_hgr(0x7047);
+  select_hires_page2();
+  spin();
+  wipe_occupancy_map();
+
+  GAME_CYCLES(0x7084, 21);
+  ram_poke(0x0022, 0x14); // text window top
+  ram_poke(0x0000, 0x15); // shape
+  ram_poke(0x0001, 0x0d); // ink
+  set_ink(0x0d, 0x7092);
+
+  open_wall_gaps();
+  draw_border();
+
+restart:
+  seek_script();
+
+  for (;;) {
+    GAME_CYCLES(0x712b, 6);
+    const uint8_t op = script_byte(0x712d);
+
+    GAME_CYCLES(0x712e, 4);
+    if (op == OP_RESTART) {
+      GAME_CYCLES(0x7132, 9);
+      ram_poke(0x0303, 0x01);
+      goto restart;
+    }
+    GAME_CYCLES(0x7130, 1);
+
+    GAME_CYCLES(0x713a, 4);
+    if (op == OP_HLINE) {
+      GAME_CYCLES(0x713e, 6);
+      const uint8_t ink = script_byte(0x7140);
+      GAME_CYCLES(0x7141, 9);
+      ram_poke(0x0001, ink);
+      const uint8_t col = script_byte(0x7145);
+      GAME_CYCLES(0x7146, 9);
+      ram_poke(0x0002, col);
+      const uint8_t last = script_byte(0x714a);
+      GAME_CYCLES(0x714b, 9);
+      ram_poke(0x0008, last);
+      const uint8_t row = script_byte(0x714f);
+      GAME_CYCLES(0x7150, 12);
+      ram_poke(0x0003, row);
+      set_ink(ram_peek(0x0001), 0x7156);
+
+      GAME_CYCLES(0x7157, 18);
+      ram_poke(0x002c, ram_peek(0x0008));
+      lores_hline(ram_peek(0x0003), ram_peek(0x0002), 0x7161);
+
+      GAME_CYCLES(0x7162, 6);
+      game_plot_hline(0x7164);
+      GAME_CYCLES(0x7165, 3);
+      continue;
+    }
+    GAME_CYCLES(0x713c, 1);
+
+    GAME_CYCLES(0x7168, 4);
+    if (op == OP_VLINE) {
+      GAME_CYCLES(0x716c, 6);
+      const uint8_t ink = script_byte(0x716e);
+      GAME_CYCLES(0x716f, 9);
+      ram_poke(0x0001, ink);
+      const uint8_t row = script_byte(0x7173);
+      GAME_CYCLES(0x7174, 9);
+      ram_poke(0x0003, row);
+      const uint8_t last = script_byte(0x7178);
+      GAME_CYCLES(0x7179, 9);
+      ram_poke(0x0008, last);
+      const uint8_t col = script_byte(0x717d);
+      GAME_CYCLES(0x717e, 12);
+      ram_poke(0x0002, col);
+      set_ink(ram_peek(0x0001), 0x7184);
+
+      GAME_CYCLES(0x7185, 6);
+      game_lores_vline(0x7187);
+      GAME_CYCLES(0x7188, 6);
+      game_plot_vline(0x718a);
+      GAME_CYCLES(0x718b, 3);
+      continue;
+    }
+    GAME_CYCLES(0x716a, 1);
+
+    GAME_CYCLES(0x718e, 4);
+    if (op == OP_PLOT) {
+      GAME_CYCLES(0x7192, 6);
+      const uint8_t ink = script_byte(0x7194);
+      GAME_CYCLES(0x7195, 9);
+      ram_poke(0x0001, ink);
+      const uint8_t col = script_byte(0x7199);
+      GAME_CYCLES(0x719a, 9);
+      ram_poke(0x0002, col);
+      const uint8_t row = script_byte(0x719e);
+      GAME_CYCLES(0x719f, 12);
+      ram_poke(0x0003, row);
+      set_ink(ram_peek(0x0001), 0x71a5);
+
+      GAME_CYCLES(0x71a6, 12);
+      lores_plot(ram_peek(0x0003), ram_peek(0x0002), 0x71ac);
+      GAME_CYCLES(0x71ad, 6);
+      game_plot_shape(0x71af);
+      GAME_CYCLES(0x71b0, 3);
+      continue;
+    }
+    GAME_CYCLES(0x7190, 1);
+
+    GAME_CYCLES(0x71b3, 4);
+    if (op == OP_STORE) {
+      GAME_CYCLES(0x71b7, 6);
+      const uint8_t v = script_byte(0x71b9);
+      GAME_CYCLES(0x71ba, 7);
+      ram_poke(0x0304, v);
+      continue;
+    }
+    GAME_CYCLES(0x71b5, 1);
+
+    GAME_CYCLES(0x71c0, 4);
+    if (op == OP_END) {
+      GAME_CYCLES(0x71c2, 1);
+      GAME_CYCLES(0x71c7, 6);
+      return;
+    }
+    // Anything unrecognised is skipped. No script contains one.
+    GAME_CYCLES(0x71c4, 3);
+  }
+}

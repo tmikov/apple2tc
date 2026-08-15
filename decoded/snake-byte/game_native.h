@@ -142,6 +142,10 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out);
 /// it, comparing BCD bytes most significant first.
 void game_promote_high_score(void);
 
+/// $7045 -- clear the screen, draw the border, and run the current level's
+/// display list from $8000.
+void game_draw_playfield_native(void);
+
 /// $69C3 -- sweep columns outward from the snake for an apple, leaving the
 /// answer at $6B3B/$6B3C.
 void game_find_nearest_apple(void);
