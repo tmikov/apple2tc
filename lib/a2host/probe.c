@@ -52,14 +52,15 @@ _Noreturn static void probe_fatal_open(const char *what, const char *path) {
 static script_t *s_script = NULL;
 static bool s_loaded = false;
 
-/// Set by probe_load_script() once, by scanning the compiled code for
-/// OP_KEY -- see probe_uses_key() below. False (the correct answer, "no
-/// script loaded") until then.
+/// Set by probe_load_script() once, by scanning the compiled code for OP_KEY
+/// and OP_RECORD respectively -- see probe_uses_key()/probe_uses_record()
+/// below. False (the correct answer, "no script loaded") until then.
 static bool s_uses_key = false;
+static bool s_uses_record = false;
 
 /// Forward-declared: defined below has_operand(), which it needs, but
 /// probe_load_script() (which calls it) comes first in the file.
-static bool probe_code_has_key(const script_t *sc, const probe_t *pr);
+static bool probe_code_has_op(const script_t *sc, const probe_t *pr, opcode_t target);
 
 /// Non-NULL exactly when a script with at least one install site is loaded --
 /// see the extern declaration in include/apple2tc/probe.h for why this is a
@@ -169,9 +170,15 @@ void probe_load_script(const char *path) {
   // Scanned from the compiled code rather than flagged in the parser: the
   // parser has several exits, and a flag set on only one of them is a thing
   // to keep in sync, whereas the code array is the artefact that actually
-  // determines behaviour.
-  for (unsigned i = 0; i != s_script->nprobes && !s_uses_key; ++i)
-    s_uses_key = probe_code_has_key(s_script, &s_script->probes[i]);
+  // determines behaviour. One pass over each probe answers both questions;
+  // the loop stops the moment both are known rather than always walking
+  // every probe.
+  for (unsigned i = 0; i != s_script->nprobes && !(s_uses_key && s_uses_record); ++i) {
+    if (!s_uses_key)
+      s_uses_key = probe_code_has_op(s_script, &s_script->probes[i], OP_KEY);
+    if (!s_uses_record)
+      s_uses_record = probe_code_has_op(s_script, &s_script->probes[i], OP_RECORD);
+  }
   s_loaded = true;
   // Only now, and only if something was actually installed: an empty script
   // must leave the hot path untouched.
@@ -420,14 +427,15 @@ static bool has_operand(opcode_t op) {
 }
 
 /// True if \p sc's code for one probe (init_offset through end_offset, the
-/// same span probe_dump walks) contains an OP_KEY. Steps through the same
-/// instruction boundaries dump_insn does (via has_operand), so an operand
-/// value that happens to equal OP_KEY's numeric encoding is never mistaken
-/// for the opcode itself.
-static bool probe_code_has_key(const script_t *sc, const probe_t *pr) {
+/// same span probe_dump walks) contains an instance of \p target. Steps
+/// through the same instruction boundaries dump_insn does (via has_operand),
+/// so an operand value that happens to equal \p target's numeric encoding is
+/// never mistaken for the opcode itself. Shared by probe_uses_key() and
+/// probe_uses_record(), which scan for OP_KEY and OP_RECORD respectively.
+static bool probe_code_has_op(const script_t *sc, const probe_t *pr, opcode_t target) {
   for (uint32_t ip = pr->init_offset; ip < pr->end_offset;) {
     opcode_t op = (opcode_t)sc->code[ip++];
-    if (op == OP_KEY)
+    if (op == target)
       return true;
     if (op == OP_PRINTF)
       ip += 2; // fmt index, argc -- see dump_insn
@@ -533,6 +541,10 @@ bool probe_installed(void) {
 
 bool probe_uses_key(void) {
   return s_uses_key;
+}
+
+bool probe_uses_record(void) {
+  return s_uses_record;
 }
 
 void probe_dispatch(uint16_t pc) {

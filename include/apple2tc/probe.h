@@ -58,6 +58,14 @@ bool probe_installed(void);
 /// drain would win every time.
 bool probe_uses_key(void);
 
+/// True when the loaded script contains at least one `record` statement,
+/// i.e. when the script defines a coordinate for `--record-keys=` to stamp
+/// on. `--record-keys=` rejects a script without one -- see its guard in
+/// `a2host_parse_args` -- because push_key() would divert every key into the
+/// pending queue with nothing to ever release it, holding it forever with no
+/// diagnostic.
+bool probe_uses_record(void);
+
 /// Run whatever is installed at \p pc, returning immediately if nothing is.
 /// The overwhelmingly common case is no site at this address.
 void probe_dispatch(uint16_t pc);
