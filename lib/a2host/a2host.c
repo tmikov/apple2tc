@@ -290,6 +290,10 @@ static void drain_kbd_file() {
 static void drain_key_presses() {
   if (!key_presses_)
     return;
+  // The script delivers; see probe_uses_key(). Returning here rather than
+  // skipping the call site keeps the one rule in one place.
+  if (probe_uses_key())
+    return;
 
   static unsigned last_cycles = 0;
   unsigned cycles = get_cycles();

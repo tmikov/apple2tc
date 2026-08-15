@@ -52,6 +52,15 @@ _Noreturn static void probe_fatal_open(const char *what, const char *path) {
 static script_t *s_script = NULL;
 static bool s_loaded = false;
 
+/// Set by probe_load_script() once, by scanning the compiled code for
+/// OP_KEY -- see probe_uses_key() below. False (the correct answer, "no
+/// script loaded") until then.
+static bool s_uses_key = false;
+
+/// Forward-declared: defined below has_operand(), which it needs, but
+/// probe_load_script() (which calls it) comes first in the file.
+static bool probe_code_has_key(const script_t *sc, const probe_t *pr);
+
 /// Non-NULL exactly when a script with at least one install site is loaded --
 /// see the extern declaration in include/apple2tc/probe.h for why this is a
 /// plain pointer and not wrapped in a function. Set at the end of
@@ -157,6 +166,12 @@ void probe_load_script(const char *path) {
   free(src);
   probe_build_sites(s_script);
   probe_vm_init_counters(s_script);
+  // Scanned from the compiled code rather than flagged in the parser: the
+  // parser has several exits, and a flag set on only one of them is a thing
+  // to keep in sync, whereas the code array is the artefact that actually
+  // determines behaviour.
+  for (unsigned i = 0; i != s_script->nprobes && !s_uses_key; ++i)
+    s_uses_key = probe_code_has_key(s_script, &s_script->probes[i]);
   s_loaded = true;
   // Only now, and only if something was actually installed: an empty script
   // must leave the hot path untouched.
@@ -404,6 +419,24 @@ static bool has_operand(opcode_t op) {
   return false; // unreachable if -Wswitch is honored; see opname() above
 }
 
+/// True if \p sc's code for one probe (init_offset through end_offset, the
+/// same span probe_dump walks) contains an OP_KEY. Steps through the same
+/// instruction boundaries dump_insn does (via has_operand), so an operand
+/// value that happens to equal OP_KEY's numeric encoding is never mistaken
+/// for the opcode itself.
+static bool probe_code_has_key(const script_t *sc, const probe_t *pr) {
+  for (uint32_t ip = pr->init_offset; ip < pr->end_offset;) {
+    opcode_t op = (opcode_t)sc->code[ip++];
+    if (op == OP_KEY)
+      return true;
+    if (op == OP_PRINTF)
+      ip += 2; // fmt index, argc -- see dump_insn
+    else if (has_operand(op))
+      ++ip;
+  }
+  return false;
+}
+
 /// Print a format string with escapes restored, so one line of dump stays one
 /// line however many newlines the string contains, and every other
 /// non-printable byte (raw BEL, ESC, VT, FF, ...) renders visibly instead of
@@ -496,6 +529,10 @@ void probe_dump(FILE *f) {
 
 bool probe_installed(void) {
   return g_probe_sites != NULL;
+}
+
+bool probe_uses_key(void) {
+  return s_uses_key;
 }
 
 void probe_dispatch(uint16_t pc) {

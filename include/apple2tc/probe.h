@@ -51,6 +51,13 @@ extern const void *g_probe_sites;
 /// are not on a hot path.
 bool probe_installed(void);
 
+/// True when the loaded script contains at least one `key` statement, i.e.
+/// when key delivery is the script's job. The host's per-frame cycle drain
+/// must stand down in that case -- the two would otherwise both deliver from
+/// the same list, and since a counter stamp is a small integer, the cycle
+/// drain would win every time.
+bool probe_uses_key(void);
+
 /// Run whatever is installed at \p pc, returning immediately if nothing is.
 /// The overwhelmingly common case is no site at this address.
 void probe_dispatch(uint16_t pc);

@@ -1,0 +1,11 @@
+# The control: same sites, same counter, same report, no delivery at all.
+counter n
+
+probe kb() {
+  if (n == 0) {
+    inc n
+  }
+  printf("%u\n", n)
+}
+
+install kb at $FD1B

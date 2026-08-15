@@ -607,6 +607,43 @@ if [ "$tracecount" -ne 3 ]; then
   exit 1
 fi
 
+# Replay of a counter-stamped file must be driven by `key`, not by the frame
+# drain. Counter stamps are small integers, so against get_cycles() they are
+# all already in the past and an unguarded drain delivers the whole file
+# during the first simulated frame -- leaving `key` nothing to do and making
+# the two scripts below behave identically.
+#
+# replay-key.probe releases only the key stamped 1; replay-nokey.probe
+# releases nothing at all. With the drain guarded, the ROM gets one key in the
+# first case and none in the second, so the two reports differ. With the drain
+# unguarded, the drain delivers both keys in both cases and the reports are
+# the same -- which is the failure this asserts against.
+#
+# --frames=100 is load-bearing, not a round number: with no --bin=/--rom=,
+# a2run boots the bundled ROM's self-test and slot scan before anything else
+# runs, so the installed $FD1B KEYIN loop is not reached until roughly cycle
+# 141,500 (about frame 8) -- measured directly by tracing $C000/$C010
+# accesses. Before that, neither script has anything to distinguish: the key
+# stamped 1 is already queued (via drain or via `key`, whichever the script
+# uses) long before the loop's first check either way. The two scripts only
+# diverge once the second key, stamped 999999, becomes cycle-due for the
+# unguarded drain -- measured at roughly frame 59 (999999 cycles /
+# ~17,051 cycles per frame). A run shorter than that -- --frames=10, as this
+# test originally read -- passes or fails for the wrong reason: it reports
+# the same "FAIL" whether or not the guard exists, because the divergence it
+# depends on hasn't happened yet. 100 clears frame 59 with headroom rather
+# than sitting on that threshold, so the test does not go brittle against a
+# future change to ROM boot timing or cycle accounting.
+printf '1 65\n999999 66\n' > probe-tmp/two.pkeys
+$a2run --frames=100 --probe=probe/replay-key.probe --key-file=probe-tmp/two.pkeys \
+  --probe-out=probe-tmp/replay-key.txt > /dev/null
+$a2run --frames=100 --probe=probe/replay-nokey.probe --key-file=probe-tmp/two.pkeys \
+  --probe-out=probe-tmp/replay-nokey.txt > /dev/null
+if diff -q probe-tmp/replay-key.txt probe-tmp/replay-nokey.txt > /dev/null; then
+  echo "FAIL: delivering a key changed nothing -- the frame drain delivered it anyway" >&2
+  exit 1
+fi
+
 rm -rf probe-tmp
 
 echo "Success!"

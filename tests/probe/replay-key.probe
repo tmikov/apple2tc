@@ -1,0 +1,14 @@
+# Releases exactly the key stamped 1: `n` reaches 1 and stops, so the key
+# stamped 999999 is never due. The report is the ROM's keyboard-loop trace,
+# which changes shape once a key actually arrives.
+counter n
+
+probe kb() {
+  if (n == 0) {
+    inc n
+  }
+  key n
+  printf("%u\n", n)
+}
+
+install kb at $FD1B
