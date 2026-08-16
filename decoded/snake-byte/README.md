@@ -24,3 +24,35 @@ So do not overwrite `snake-byte.json` casually. Every committed artefact
 downstream — the generated C, `play.frames`, the coverage report — is keyed to
 it, and replacing it invalidates all of them at once. Regenerate deliberately,
 into a scratch file, and re-verify everything before adopting it.
+
+## Recording a session
+
+The `.pkeys` files are keystrokes stamped on the probe counter `rec.probe`
+defines, and they drive every check in `probe-acceptance.sh`. To capture a new
+one, play the *original* binary in the windowed emulator:
+
+```shell
+../../cmake-build-release/tools/a2emu/a2emu --preload snake-byte.b33 \
+    --probe=rec.probe --record-keys=play-new.pkeys
+```
+
+`--preload` types nothing for you, so `CALL 14160` ends up in the recording the
+way it does in the committed ones. Close the window when done — that runs
+sokol's cleanup hook, which is what closes the file. Ctrl-C in the terminal
+does not, and truncates it.
+
+`--trace-keys > play-new.keys` instead captures *cycle*-stamped keys, the older
+format, which `a2run --key-file=... --probe=rec.probe --record-keys=...`
+converts. That is how `play.keys` became `play.pkeys`, and how
+`play-rebind.pkeys` was made.
+
+Then replay it for long enough to deliver every key — `play-rebind` needs 3300
+frames for its 45 — and add it to the scenario list at the top of
+`probe-acceptance.sh` as `<keys>:<frames>`.
+
+**What a recording is worth is what it varies.** Both original recordings press
+the default direction keys, where the two key tables at `$6C63` and `$6C6A` hold
+identical bytes, so nothing checked that the game reads the right one of the
+two — with full block coverage of the code that does. `play-rebind` exists for
+exactly that: it rebinds to W A S Z Q E and then plays. Coverage will not tell
+you which recordings you are missing; a mutation test will.

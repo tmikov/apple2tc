@@ -1105,14 +1105,17 @@ uint8_t game_step_bouncers_native(void) {
 /// from the title screen. Both tables are part of the loaded image, and the
 /// first is written at $757C, from the redefinition screen.
 ///
-/// Nothing here is checked by any oracle, and coverage cannot say so. The two
-/// blocks that do the substitution both run -- play.pkeys presses I, J, K and
-/// M all through the round -- but it presses the *default* bindings, where the
-/// two tables are byte-identical and reading the wrong one is invisible.
-/// play-hires.pkeys does rebind, to W A D X Q E, and then the recording ends:
-/// it never plays afterwards. Measured, not assumed -- swapping input_code for
-/// input_key here passes verify.sh 4/4, all three traces, memory and screen.
-/// A recording that rebinds and then plays would close it.
+/// The substitution went unchecked for a while, and coverage could not say so.
+/// Both blocks that perform it run constantly -- play.pkeys presses I, J, K
+/// and M all through the round -- but those are the *default* bindings, where
+/// the two tables hold identical bytes and reading the wrong one is invisible.
+/// play-hires.pkeys does rebind, and then the recording ends without playing.
+/// Swapping input_code for input_key passed verify.sh 4/4, all three traces,
+/// memory and screen.
+///
+/// play-rebind.pkeys closes it: bound to W A S Z Q E and then played with
+/// them, so the tables differ across all 8 substitutions it performs. The same
+/// swap now fails trace-ext.
 enum { kInputCount = 6 };
 
 static uint8_t input_key(int i) {

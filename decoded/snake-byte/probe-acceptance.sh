@@ -444,14 +444,29 @@ done
 # extern builds, which is 1,669 minus the 150 block heads given up so far to
 # game_native.c -- see that file's header for what each conversion cost and
 # why.
-# Both scenarios verify.sh replays, now against the interpreter as well.
-# play-hires is not a duplicate of play: it reaches $664A (the game's own hi-res
-# COUT hook) and $7541, code the recording never took and that exists only via
-# --code-at -- and in the -ext build $664A is hand-written C in game.c, so the
-# hires/ext pair is the only cross-engine check that hand-written replacement
-# gets. KEYS= overrides the list for a one-off run.
+# The scenarios, as `<keys>:<frames>`. The frame count is per scenario because
+# they are not the same length: a recording is only worth replaying for as long
+# as it has keys left to deliver.
+#
+# play and play-hires are the two verify.sh replays, now run against the
+# interpreter as well. play-hires is not a duplicate of play: it reaches $664A
+# (the game's own hi-res COUT hook) and $7541, code the recording never took
+# and that exists only via --code-at -- and in the -ext build $664A is
+# hand-written C, so the hires/ext pair is the only cross-engine check that
+# replacement gets.
+#
+# play-rebind is what the other two could not do. Both of them press the
+# *default* direction keys, where $6C63 and $6C6A hold identical bytes, so the
+# substitution $6C93/$6C9E performs is invisible -- reading the wrong table
+# passed every check in this file. This one rebinds to W A S Z Q E and then
+# plays with them: 8 substitutions with the two tables differing. It also
+# enters $69A9 for the first time.
+#
+# KEYS= overrides the list for a one-off run; entries still need their `:frames`.
 rm -f /tmp/pkeys-cover-*.txt
-for keyfile in ${KEYS:-"$here/play.pkeys" "$here/play-hires.pkeys"}; do
+for scenario in ${KEYS:-"$here/play.pkeys:1300" "$here/play-hires.pkeys:1300" \
+                        "$here/play-rebind.pkeys:3300"}; do
+  IFS=: read -r keyfile frames <<<"$scenario"
   set_scenario "$keyfile"
 
 check_backend trace "$bin/decoded/snake-byte/snake-bytec1-run" "$here/trace.probe" \
@@ -593,10 +608,13 @@ coverage_report trace "$here/blocks.txt" 0
 #   the 'P' opcode (7)  $7192-$71B0. None of the 29 level scripts uses it.
 #   the ROM (20)        in a2rom.c, mostly paths for arguments the game never
 #       passes to PLOT, HLINE and SCRN.
-#   pause and mute (6)  all of $69A9. Neither recording presses ESC or Ctrl-S.
-#       Deliberately *not* converted to real C while that is true: a conversion
-#       is checked by the recordings running it, and this one would be an
-#       unchecked rewrite that also removed the last accounting of itself.
+#   pause and mute (3)  $69AD $69B2, the ESC spin, and $69B9, the Ctrl-S
+#       toggle. play-rebind reaches $69A9 itself and both its fall-through
+#       blocks, so this group is half covered; what is left needs a recording
+#       that actually presses those two keys. Still deliberately *not*
+#       converted to real C while that is true: a conversion is checked by the
+#       recordings running it, and half a routine's worth of check is not
+#       enough to rewrite the other half under.
 #   (was: arrow keys (3), $7623 $7627 $762B -- the redefinition screen's arrow
 #   cases, which play-hires never reaches because it assigns W A D X Q E, all
 #   above $A1. Off the list with game_edit_key's conversion, and unverified
@@ -620,5 +638,5 @@ coverage_report trace "$here/blocks.txt" 0
 # The number exists to stop that set growing quietly, and to be ratcheted down
 # whenever a scenario reaches one of them -- as happened at 22 -> 21 when the
 # `easy` fixture covered $6C4F. It is not a target to be satisfied.
-coverage_report trace-ext "$here/blocks-ext.txt" 26 "$here/a2rom.c" "$here/game.c" \
+coverage_report trace-ext "$here/blocks-ext.txt" 23 "$here/a2rom.c" "$here/game.c" \
   "$here/game_native.c"
