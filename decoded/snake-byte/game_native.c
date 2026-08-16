@@ -1549,3 +1549,77 @@ void game_tick_sound_native(void) {
   }
   GAME_CYCLES(0x6c45, 6);
 }
+
+/* ========================================================================== */
+/* $71F3 -- a BCD byte, with leading zeros suppressed                         */
+/* ========================================================================== */
+
+/// $002C -- the significance flag, holding the last significant digit rather
+/// than a plain 1. Its caller clears it before the first byte of a number, so
+/// leading zeros print nothing and interior ones print; $7226 consults it
+/// after the last byte, and prints a single "0" if the whole number was.
+static bool digit_seen(void) {
+  return ram_peek(0x002c) != 0;
+}
+
+static void note_digit(uint8_t digit) {
+  ram_poke(0x002c, digit);
+}
+
+/// `CLC / ADC #$B0`, which is what turns 0-9 into the character for it.
+///
+/// The original's ADC honours the D flag; this addition does not. Digits are
+/// printed with D clear -- $7267 is the only thing in the game that sets it,
+/// and it clears it again before returning -- so say so loudly rather than
+/// carry a decimal path that cannot be reached.
+static void cout_digit(uint8_t digit, uint16_t ret) {
+  if (s_status_d) {
+    fprintf(stderr, "cout_digit: entered with decimal mode set\n");
+    error_handler(0x71f3);
+    abort();
+  }
+  s_a = (uint8_t)(0xb0 + digit);
+  rom_cout(ret);
+}
+
+void game_print_bcd_native(uint8_t byte) {
+  const uint8_t high = (uint8_t)(byte >> 4);
+
+  GAME_CYCLES(0x71f3, 15);
+  if (!high) {
+    GAME_CYCLES(0x71fa, 1);
+  } else {
+    GAME_CYCLES(0x71fc, 3);
+    note_digit(high);
+  }
+
+  GAME_CYCLES(0x71fe, 8);
+  if (digit_seen()) {
+    GAME_CYCLES(0x7201, 1);
+    GAME_CYCLES(0x7207, 14);
+    cout_digit(high, 0x720d);
+  } else {
+    // A leading zero: dropped, and nothing is printed.
+    GAME_CYCLES(0x7203, 7);
+  }
+
+  const uint8_t low = (uint8_t)(byte & 0x0f);
+
+  GAME_CYCLES_SHARED(0x720e, 10);
+  if (!low) {
+    GAME_CYCLES(0x7213, 1);
+  } else {
+    GAME_CYCLES_SHARED(0x7215, 3);
+    note_digit(low);
+  }
+
+  GAME_CYCLES_SHARED(0x7217, 8);
+  if (digit_seen()) {
+    GAME_CYCLES(0x721a, 1);
+    GAME_CYCLES_SHARED(0x721e, 14);
+    cout_digit(low, 0x7224);
+    GAME_CYCLES_SHARED(0x7225, 6);
+  } else {
+    GAME_CYCLES_SHARED(0x721c, 10);
+  }
+}

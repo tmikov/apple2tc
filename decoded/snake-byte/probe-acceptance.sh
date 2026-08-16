@@ -294,36 +294,100 @@ if strip_comments "$here/game_native.c" | grep -qE '(^|[^_A-Za-z])CYCLES\([^)]';
   exit 1
 fi
 
-# ...with one spelled exception, and it is bounded here.
+# ...with two spelled exceptions, and both are bounded here.
 #
-# Replay stamps keys on the probe counter, not on cycles, and that counter is
-# incremented at the seven addresses $coord names. Two of them sit inside
-# routines being converted. If one silently became a CYCLES_EDGE the counter
-# would stop advancing there and every stamp recorded after it would land at a
-# different instant -- the recordings would replay wrong rather than fail, and
-# no comparison in this script would say so, because both engines would be
-# reading the same shifted input.
+# Converted code normally takes its block heads out of the comparison
+# altogether: nothing probes them on either engine, and the two agree by saying
+# nothing. Two situations break that, and each gets its own spelling so the
+# reason is at the call site rather than in a list somewhere else.
 #
-# So GAME_CYCLES_COORD keeps the probe, and the set of addresses allowed to use
-# it is exactly the coordinate's. Anything else spelled that way is a site
-# claiming an exemption it has no reason to hold.
+# GAME_CYCLES_COORD: replay stamps keys on a counter incremented at the seven
+# addresses $coord names, and two of them sit inside routines being converted.
+# Dropping the probe there stops the counter and every later keystroke lands at
+# a different instant. It is caught -- only the generated side drifts -- but as
+# a 640,000-line trace diff naming an unrelated screen.
 #
-# `|| true` on the grep: having no such sites at all is perfectly legitimate,
-# but grep exits 1 on no match and pipefail hands that to `set -e`, which
-# aborted the whole script with no message the first time it was true.
-coord_addrs=$(echo "${coord#install kb at }" | tr -d ' ' | tr ',' '\n' | tr -d '$' \
-  | tr 'A-F' 'a-f' | sort -u)
-used_coord=$(strip_comments "$here/game_native.c" \
-  | grep -ohE 'GAME_CYCLES_COORD\(0x[0-9a-f]+' | sed 's/.*0x//' | sort -u || true)
-if [ -n "$used_coord" ]; then
-  notcoord=$(comm -23 <(echo "$used_coord") <(echo "$coord_addrs"))
-  if [ -n "$notcoord" ]; then
-    echo "FAIL: GAME_CYCLES_COORD used at addresses that are not on the coordinate:" >&2
-    echo "$notcoord" >&2
+# GAME_CYCLES_SHARED: some other source still emits a CYCLES for the same
+# address, so the interpreter reports it and the converted build would not.
+# Twice so far: $6216, an RTS two routines share, one converted and one not;
+# and $720E, the low half of $71F3, which survives in the generated C as an
+# orphan nothing can reach but which is still text in the file and so still on
+# the site list.
+#
+# The pinned site count sees neither: it was right both times. So all three
+# spellings are checked against the site list built from every source but this
+# one. `|| true` on each grep: finding none is legitimate, and pipefail would
+# otherwise hand grep's exit 1 to set -e and abort with no message.
+native_addrs() {
+  # $1: the macro name, exactly. Its own name is anchored so that GAME_CYCLES
+  # does not also match GAME_CYCLES_SHARED.
+  strip_comments "$here/game_native.c" \
+    | grep -ohE "$1\\(0x[0-9a-f]+" | sed 's/.*0x//' | sort -u || true
+}
+
+# An adapter's entry probe is the one legitimate way an address can be in both
+# files. `CYCLES(addr, 0)` in game.c fires the probe and charges nothing; the
+# native routine then charges the cycles with GAME_CYCLES and does not probe.
+# Between them the address is probed once and charged once, which is how a
+# converted routine keeps its own entry in the trace for free. Recognised by
+# the zero, and only in game.c -- the generated C has zero-cycle sites of its
+# own, at addresses of its own.
+adapter_entry_sites() {
+  grep -ohE 'CYCLES\(0x[0-9a-f]+, 0\)' "$here/game.c" | sed 's/.*0x//;s/,.*//' | sort -u || true
+}
+
+check_native_spellings() {
+  # $1 label, $2.. every source of this build except game_native.c.
+  local label=$1
+  shift
+  local others entries plain shared coordu bad
+  others=$(site_addrs "$@")
+  entries=$(adapter_entry_sites)
+  plain=$(native_addrs GAME_CYCLES)
+  shared=$(native_addrs GAME_CYCLES_SHARED)
+  coordu=$(native_addrs GAME_CYCLES_COORD)
+
+  # An entry site must be the adapter's alone. If the generated C emits the
+  # same address the zero-cycle probe is not the only one, and the exemption
+  # below would be hiding a real divergence.
+  bad=$(comm -12 <(echo "$entries") <(site_addrs "$1"))
+  if [ -n "$bad" ]; then
+    echo "FAIL [$label]: adapter entry probe at an address the generated C also emits:" >&2
+    echo "$bad" >&2
     exit 1
   fi
-  echo "coordinate sites kept in game_native.c: $(echo $used_coord)"
-fi
+
+  bad=$(comm -12 <(echo "$plain") <(comm -23 <(echo "$others") <(echo "$entries")))
+  if [ -n "$bad" ]; then
+    echo "FAIL [$label]: game_native.c drops the probe at addresses another source still emits:" >&2
+    echo "$bad" >&2
+    echo "  Use GAME_CYCLES_SHARED, or the interpreter will report them and the build will not." >&2
+    exit 1
+  fi
+
+  bad=$(comm -23 <(echo "$shared") <(echo "$others"))
+  if [ -n "$bad" ]; then
+    echo "FAIL [$label]: GAME_CYCLES_SHARED at addresses no other source emits:" >&2
+    echo "$bad" >&2
+    echo "  Nothing is sharing them; plain GAME_CYCLES is what they want." >&2
+    exit 1
+  fi
+
+  bad=$(comm -23 <(echo "$coordu") <(echo "$coord_addrs"))
+  if [ -n "$bad" ]; then
+    echo "FAIL [$label]: GAME_CYCLES_COORD at addresses that are not on the coordinate:" >&2
+    echo "$bad" >&2
+    exit 1
+  fi
+
+  echo "[$label] probes kept in converted code: $(echo ${shared:-none}) (shared)," \
+       "$(echo ${coordu:-none}) (coordinate)"
+}
+
+coord_addrs=$(echo "${coord#install kb at }" | tr -d ' ' | tr ',' '\n' | tr -d '$' \
+  | tr 'A-F' 'a-f' | sort -u)
+check_native_spellings ext "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c"
+check_native_spellings easy "$here/snake-byte-easyc1-ext.c" "$here/a2rom.c" "$here/game.c"
 
 # The built program must start on its own, with no key file at all.
 #
@@ -393,7 +457,7 @@ for keyfile in ${KEYS:-"$here/play.pkeys" "$here/play-hires.pkeys"}; do
 check_backend trace "$bin/decoded/snake-byte/snake-bytec1-run" "$here/trace.probe" \
   "$here/blocks.txt" 1694 "$here/snake-bytec1.c"
 check_backend trace-ext "$bin/decoded/snake-byte/snake-bytec1-ext-run" "$here/trace-ext.probe" \
-  "$here/blocks-ext.txt" 1459 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c" \
+  "$here/blocks-ext.txt" 1454 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c" \
   "$here/game_native.c"
 
 if diff -q "$here/blocks.txt" "$here/blocks-ext.txt" > /dev/null; then
@@ -501,7 +565,7 @@ frames=${EASY_FRAMES:-3000}
 set_scenario "$here/play-hires.pkeys"
 echo "    (against snake-byte-easy.b33, $frames frames)"
 check_backend trace-easy "$bin/decoded/snake-byte/snake-byte-easyc1-ext-run" \
-  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1459 \
+  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1454 \
   "$here/snake-byte-easyc1-ext.c" "$here/a2rom.c" "$here/game.c" "$here/game_native.c"
 
 # The fixture's block heads are the same set as the stock extern build's, and

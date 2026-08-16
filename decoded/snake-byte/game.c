@@ -445,91 +445,17 @@ void game_lores_vline(uint16_t ret_addr) {
 /// $7209 and $7220: CLC / ADC #$B0 / JSR COUT. The two are byte-identical
 /// apart from the return address the JSR pushes, so they share one body here.
 /// No CYCLES of its own -- both call sites are already inside a counted block.
-static void game_emit_digit(uint16_t cout_ret) {
-  // ADC honours the D flag. Digits are printed with D clear: $7267 is the
-  // only thing that sets it and it clears it again before returning. Say so
-  // loudly rather than carry a decimal path that cannot be reached.
-  if (s_status_d) {
-    fprintf(stderr, "game_emit_digit: entered with decimal mode set\n");
-    error_handler(0x71f3);
-    abort();
-  }
-
-  const uint8_t digit = s_a;
-  const uint16_t sum = (uint16_t)digit + 0x00b0 + s_status_c;
-  s_status_c = (uint8_t)(sum >> 8);
-  s_status_v = ovf8((uint8_t)sum, digit, 0xb0);
-  s_a = (uint8_t)sum;
-  s_status_not_z = s_a;
-  s_status_n = (s_a & 0x80);
-  rom_cout(cout_ret);
-}
 
 void game_print_bcd(uint16_t ret_addr) {
+  // Adapter for game_print_bcd_native(). Costs 11 trace sites. No flags are
+  // put back: every caller's next act is an `LDA` or a store, so `apple2tc
+  // --ir` has nothing live here.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  /*$71F3*/ CYCLES(0x71f3, 15);
-  const uint8_t byte = s_a;
-  push8(byte);
-  uint8_t digit = (uint8_t)(byte >> 4);
-  s_a = digit;
-  // $71F8 CMP #$00. N is always clear here -- a nibble cannot reach $80 --
-  // but the compare still happens, so record what it leaves.
-  s_status_c = 0x01;
-  s_status_not_z = digit;
-  s_status_n = 0x00;
-
-  if (!digit) {
-    /*$71FA*/ CYCLES_EDGE(0x71fa, 1);
-  } else {
-    /*$71FC*/ CYCLES(0x71fc, 3);
-    ram_poke(0x002c, digit);
-  }
-
-  /*$71FE*/ CYCLES(0x71fe, 8);
-  push8(digit);
-  if (ram_peek(0x002c)) {
-    /*$7201*/ CYCLES_EDGE(0x7201, 1);
-    /*$7207*/ CYCLES(0x7207, 14);
-    s_a = pop8();
-    s_status_c = 0x00;
-    game_emit_digit(0x720d);
-  } else {
-    /*$7203*/ CYCLES(0x7203, 7);
-    pop8(); // The digit is dropped -- nothing significant has been printed.
-  }
-
-  /*$720E*/ CYCLES(0x720e, 10);
-  digit = (uint8_t)(pop8() & 0x0f);
-  s_a = digit;
-  // $7211 CMP #$00, as above.
-  s_status_c = 0x01;
-  s_status_not_z = digit;
-  s_status_n = 0x00;
-
-  if (!digit) {
-    /*$7213*/ CYCLES_EDGE(0x7213, 1);
-  } else {
-    /*$7215*/ CYCLES(0x7215, 3);
-    ram_poke(0x002c, digit);
-  }
-
-  /*$7217*/ CYCLES(0x7217, 8);
-  push8(digit);
-  if (ram_peek(0x002c)) {
-    /*$721A*/ CYCLES_EDGE(0x721a, 1);
-    /*$721E*/ CYCLES(0x721e, 14);
-    s_a = pop8();
-    s_status_c = 0x00;
-    game_emit_digit(0x7224);
-    /*$7225*/ CYCLES(0x7225, 6);
-  } else {
-    /*$721C*/ CYCLES(0x721c, 10);
-    pop8();
-  }
+  game_print_bcd_native(s_a);
 
   if (ret_addr)
     pop16();

@@ -116,6 +116,27 @@ typedef struct {
     (void)branchTarget;            \
   } while (0)
 
+/// Charge the cycles and keep the probe, because some *other* source still
+/// names this address.
+///
+/// A converted routine normally takes its block heads out of the comparison
+/// altogether: nothing probes them, on either engine, and the two agree by
+/// saying nothing. That argument fails the moment another file still emits a
+/// `CYCLES` for the same address, because then the interpreter reports it and
+/// the generated build does not.
+///
+/// It has happened twice, for two different reasons. $6216 is an RTS shared by
+/// two routines, one converted and one not. $720E is stranger: the low half of
+/// $71F3 survives in the generated C as an orphan -- its only predecessors were
+/// in the extern-replaced region, so nothing can reach it -- but it is still
+/// text in the file, so it is still on the site list. Neither is visible in the
+/// pinned count, which was right both times.
+///
+/// probe-acceptance.sh checks all three spellings against the site list built
+/// from the other sources: an address here must be in it, an address on plain
+/// GAME_CYCLES must not be, and GAME_CYCLES_COORD must be on the coordinate.
+#define GAME_CYCLES_SHARED(addr, n) GAME_CYCLES_COORD((addr), (n))
+
 /* --- The bouncers --------------------------------------------------------- */
 
 /// One of the two objects that ricochet around the playfield. The original
@@ -218,3 +239,6 @@ uint8_t game_edit_key_native(uint8_t slot);
 
 /// $6BFB -- twenty passes of the falling tone that plays while the head moves.
 void game_tick_sound_native(void);
+
+/// $71F3 -- print \p byte as two decimal digits, dropping leading zeros.
+void game_print_bcd_native(uint8_t byte);
