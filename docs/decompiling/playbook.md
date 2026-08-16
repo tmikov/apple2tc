@@ -390,6 +390,27 @@ replays cycle-stamped keys, does not notice at all. Give those sites their own
 spelling (`GAME_CYCLES_COORD`), assert the set of addresses using it equals the
 coordinate's, and the same mistake is one line naming the address.
 
+**`[process]` A relaxation that passes every oracle can still be wrong, and
+the way to tell is structural.** Snake Byte's `$6A32` is rejected as a routine
+because `$6AB3` is `PLA / PLA / JMP` -- it discards the caller's frame and jumps
+into the main loop. Switching off the two stack-depth checks that reject it gets
+the main loop identified as a routine at last, and passes everything: four
+1300-frame scenarios, three block-head traces, memory including the stack
+pointer, and the screen.
+
+It is still wrong. The routine's block set is computed by following successors,
+so the unwind edge pulls the *caller's* loop into the callee: the emitted
+`func_6a32` contains `$6291`, the main loop head, and calls `func_6a32`. Every
+unwind would add a C frame that never returns. The reason nothing failed is
+measurable -- `$6A32` runs 143 times across the three recordings and `$6AB3`
+runs zero -- so the recursion is latent, and no recording anyone is likely to
+make would reach it either.
+
+Two checks would have caught it and neither is a test: does any generated
+function now call itself, and does a routine's block set contain an address
+that belongs to its caller. Both are one grep. Run them on any change that
+makes the decompiler accept something it used to reject.
+
 **`[process]` Do not convert code no recording runs.** The conversion of a
 routine to real C is checked by exactly one thing: the recordings executing it
 and the oracles agreeing. For a routine nothing executes there is no check at
