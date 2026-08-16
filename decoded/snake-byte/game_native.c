@@ -1727,3 +1727,131 @@ void game_next_byte_native(void) {
   GAME_CYCLES(0x7023, 6);
   // A and Y are live out; N and Z are not.
 }
+
+/* ========================================================================== */
+/* $6C4B, $7642, $71CD -- apples                                              */
+/* ========================================================================== */
+
+/// $6C4B -- the game's random number. A pointer at $000E walks memory from
+/// $1800 upward and the first byte with bit 7 clear is the answer; the pointer
+/// is reset to $1800 whenever it finds one that is not. Not random, but
+/// unpredictable enough to place an apple and it costs nothing to keep.
+uint8_t game_rand_byte_native(void) {
+  GAME_CYCLES(0x6c4b, 7);
+  const uint8_t lo = (uint8_t)(ram_peek(0x000e) + 1);
+  ram_poke(0x000e, lo);
+  if (lo) {
+    GAME_CYCLES(0x6c4d, 1);
+  } else {
+    GAME_CYCLES(0x6c4f, 5);
+    ram_poke(0x000f, (uint8_t)(ram_peek(0x000f) + 1));
+  }
+
+  for (;;) {
+    GAME_CYCLES(0x6c51, 9);
+    const uint8_t b = peek(ram_peek16al(0x000e));
+    if (!(b & 0x80)) {
+      GAME_CYCLES(0x6c55, 1);
+      GAME_CYCLES(0x6c62, 6);
+      return b;
+    }
+
+    GAME_CYCLES(0x6c57, 13);
+    ram_poke(0x000e, 0x00);
+    ram_poke(0x000f, 0x18);
+  }
+}
+
+/// Add one, in BCD, to the two-byte counter at \p at. Returns the flags
+/// adc_dec16 left on the second byte, because two of them are live out of
+/// $7642.
+static uint8_t bcd_inc16(uint16_t at) {
+  s_status_d = 0x01;
+  uint16_t r = adc_dec16(ram_peek(at), 0x01, 0x00);
+  ram_poke(at, (uint8_t)r);
+
+  r = adc_dec16(ram_peek(at + 1), 0x00, (uint8_t)(r >> 8) & 0x01);
+  s_a = (uint8_t)r;
+  ram_poke(at + 1, s_a);
+  s_status_d = 0x00;
+  return (uint8_t)(r >> 8);
+}
+
+void game_place_apple_native(void) {
+  // Rejection sampling: two pseudo-random bytes as column and row, ask the
+  // lo-res map whether that cell is free, and start over if it is not.
+  // game_rand_byte returns $00-$7F while the field is 40x40, so most draws
+  // land outside it and hit the border or garbage -- the retry loop does far
+  // more work than it looks like.
+  for (;;) {
+    GAME_CYCLES(0x7642, 6);
+    const uint8_t col = game_rand_byte_native();
+
+    GAME_CYCLES(0x7645, 9);
+    ram_poke(0x0002, col);
+    const uint8_t row = game_rand_byte_native();
+
+    GAME_CYCLES(0x764a, 15);
+    ram_poke(0x0003, row);
+    const bool taken = cell_taken(ram_peek(0x0002), ram_peek(0x0003), 0x7652);
+
+    GAME_CYCLES(0x7653, 2);
+    if (!taken)
+      break;
+    GAME_CYCLES(0x7653, 1);
+  }
+
+  // White on the occupancy map, so the snake's collision test sees it.
+  GAME_CYCLES(0x7655, 8);
+  s_a = 0x0f;
+  rom_setcol(0x7659);
+
+  GAME_CYCLES(0x765a, 12);
+  s_a = ram_peek(0x0003);
+  s_y = ram_peek(0x0002);
+  rom_plot(0x7660);
+
+  GAME_CYCLES(0x7661, 16);
+  ram_poke(0x0000, 0x01); // shape 1
+  ram_poke(0x0001, 0x09); // ink 9
+  game_plot_shape(0x766b);
+
+  // One more apple on screen. $77D0 watches this pair and calls back here when
+  // it reaches zero.
+  GAME_CYCLES(0x766c, 32);
+  const uint8_t flags = bcd_inc16(0x725f);
+  s_status_c = (flags & 0x01);
+  s_status_v = ((flags & 0x40) != 0);
+}
+
+/// $71CD -- what one apple is worth: the difficulty's entry in the $71C8 table
+/// added to itself once per level, in BCD, into $71CB. X is never touched in
+/// the original's loop, which is what makes it the same entry every time.
+void game_set_apple_value_native(void) {
+  GAME_CYCLES(0x71cd, 20);
+  ram_poke(0x71cb, 0x00);
+  ram_poke(0x71cc, 0x00);
+  const uint8_t per_apple = ram_peek(0x71c8 + ram_peek(0x0301));
+  uint8_t levels = ram_peek(0x0303);
+  s_status_d = 0x01;
+
+  uint8_t flags = 0;
+  for (;;) {
+    GAME_CYCLES(0x71dc, 28);
+    uint16_t r = adc_dec16(per_apple, ram_peek(0x71cb), 0x00);
+    ram_poke(0x71cb, (uint8_t)r);
+
+    r = adc_dec16(ram_peek(0x71cc), 0x00, (uint8_t)(r >> 8) & 0x01);
+    ram_poke(0x71cc, (uint8_t)r);
+    flags = (uint8_t)(r >> 8);
+
+    if (!--levels)
+      break;
+    GAME_CYCLES(0x71ef, 1);
+  }
+
+  GAME_CYCLES(0x71f1, 8);
+  // V and D are the whole of this routine's live-out set.
+  s_status_v = ((flags & 0x40) != 0);
+  s_status_d = 0x00;
+}

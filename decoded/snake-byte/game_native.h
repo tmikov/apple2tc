@@ -255,3 +255,12 @@ void game_set_ink_native(uint8_t ink);
 
 /// $7019 -- read the byte at the $000A pointer into A and advance it.
 void game_next_byte_native(void);
+
+/// $6C4B -- the game's pseudo-random byte, always $00-$7F.
+uint8_t game_rand_byte_native(void);
+
+/// $7642 -- put an apple on a free cell, by rejection sampling.
+void game_place_apple_native(void);
+
+/// $71CD -- recompute what one apple is worth for the current level.
+void game_set_apple_value_native(void);

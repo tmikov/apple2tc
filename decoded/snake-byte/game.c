@@ -493,37 +493,13 @@ void game_clear_hgr(uint16_t ret_addr) {
 /* ========================================================================== */
 
 void game_rand_byte(uint16_t ret_addr) {
+  // Adapter for game_rand_byte_native(). Costs 5 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  /*$6C4B*/ CYCLES(0x6c4b, 7);
-  const uint8_t lo = (uint8_t)(ram_peek(0x000e) + 0x01);
-  ram_poke(0x000e, lo);
-  if (lo) {
-    /*$6C4D*/ CYCLES_EDGE(0x6c4d, 1);
-  } else {
-    /*$6C4F*/ CYCLES(0x6c4f, 5);
-    ram_poke(0x000f, (uint8_t)(ram_peek(0x000f) + 0x01));
-  }
-
-  for (;;) {
-    /*$6C51*/ CYCLES(0x6c51, 9);
-    s_y = 0x00;
-    const uint8_t b = peek(ram_peek16al(0x000e));
-    s_a = b;
-    s_status_not_z = b;
-    s_status_n = (b & 0x80);
-    if (!(b & 0x80)) {
-      /*$6C55*/ CYCLES_EDGE(0x6c55, 1);
-      /*$6C62*/ CYCLES(0x6c62, 6);
-      break;
-    }
-    /*$6C57*/ CYCLES(0x6c57, 13);
-    ram_poke(0x000e, 0x00);
-    ram_poke(0x000f, 0x18);
-  }
+  s_a = game_rand_byte_native();
 
   if (ret_addr)
     pop16();
@@ -758,50 +734,13 @@ void game_draw_head(uint16_t ret_addr) {
 }
 
 void game_set_apple_value(uint16_t ret_addr) {
+  // Adapter for game_set_apple_value_native(). Costs 3 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // $71CB/$71CC = $71C8[difficulty] * level, by repeated BCD addition. X is
-  // never touched in the loop, so it is the same table entry added $0303
-  // times.
-  /*$71CD*/ CYCLES(0x71cd, 20);
-  ram_poke(0x71cb, 0x00);
-  ram_poke(0x71cc, 0x00);
-  s_x = ram_peek(0x0301);
-  s_y = ram_peek(0x0303);
-  s_status_d = 0x01;
-
-  for (;;) {
-    /*$71DC*/ CYCLES(0x71dc, 28);
-    s_a = ram_peek(0x71c8 + s_x);
-    s_status_c = 0x00;
-
-    uint16_t r = adc_dec16(s_a, ram_peek(0x71cb), s_status_c);
-    s_a = (uint8_t)r;
-    s_status_c = ((uint8_t)(r >> 8) & 0x01);
-    ram_poke(0x71cb, s_a);
-
-    r = adc_dec16(ram_peek(0x71cc), 0x00, s_status_c);
-    s_a = (uint8_t)r;
-    const uint8_t flags = (uint8_t)(r >> 8);
-    s_status_c = (flags & 0x01);
-    s_status_v = ((flags & 0x40) != 0);
-    ram_poke(0x71cc, s_a);
-
-    // DEY overwrites the N and Z the ADC just left.
-    const uint8_t n = (uint8_t)(s_y - 0x01);
-    s_y = n;
-    s_status_not_z = n;
-    s_status_n = (n & 0x80);
-    if (!n)
-      break;
-    /*$71EF*/ CYCLES_EDGE(0x71ef, 1);
-  }
-
-  /*$71F1*/ CYCLES(0x71f1, 8);
-  s_status_d = 0x00;
+  game_set_apple_value_native();
 
   if (ret_addr)
     pop16();
@@ -819,68 +758,13 @@ void game_set_apple_value(uint16_t ret_addr) {
 /* ========================================================================== */
 
 void game_place_apple(uint16_t ret_addr) {
+  // Adapter for game_place_apple_native(). Costs 8 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // Rejection sampling: take two pseudo-random bytes as column and row, ask
-  // the lo-res map whether that cell is free, and start over if it is not.
-  // game_rand_byte returns $00-$7F while the field is 40x40, so most draws
-  // land outside it and hit the non-zero border or garbage -- the retry loop
-  // is doing more work than it looks like.
-  for (;;) {
-    /*$7642*/ CYCLES(0x7642, 6);
-    game_rand_byte(0x7644);
-    /*$7645*/ CYCLES(0x7645, 9);
-    ram_poke(0x0002, s_a);
-    game_rand_byte(0x7649);
-    /*$764A*/ CYCLES(0x764a, 15);
-    ram_poke(0x0003, s_a);
-    s_a = ram_peek(0x0003);
-    const uint8_t col = ram_peek(0x0002);
-    s_status_not_z = col;
-    s_y = col;
-    rom_scrn(0x7652);
-
-    /*$7653*/ CYCLES(0x7653, 2);
-    if (!s_status_not_z)
-      break;
-    /*$7653*/ CYCLES_EDGE(0x7653, 1);
-  }
-
-  // White on the occupancy map, so the snake's collision test sees it.
-  /*$7655*/ CYCLES(0x7655, 8);
-  s_a = 0x0f;
-  rom_setcol(0x7659);
-
-  /*$765A*/ CYCLES(0x765a, 12);
-  s_a = ram_peek(0x0003);
-  s_y = ram_peek(0x0002);
-  rom_plot(0x7660);
-
-  /*$7661*/ CYCLES(0x7661, 16);
-  ram_poke(0x0000, 0x01); // shape 1
-  ram_poke(0x0001, 0x09); // ink 9
-  game_plot_shape(0x766b);
-
-  // One more apple on screen, BCD at $725F/$7260. $77D0 checks this pair and
-  // calls back here when it reaches zero.
-  /*$766C*/ CYCLES(0x766c, 32);
-  s_status_d = 0x01;
-  uint16_t r = adc_dec16(ram_peek(0x725f), 0x01, 0x00);
-  s_status_c = ((uint8_t)(r >> 8) & 0x01);
-  ram_poke(0x725f, (uint8_t)r);
-
-  r = adc_dec16(ram_peek(0x7260), 0x00, s_status_c);
-  s_a = (uint8_t)r;
-  const uint8_t flags = (uint8_t)(r >> 8);
-  s_status_c = (flags & 0x01);
-  s_status_not_z = (~flags & 2);
-  s_status_v = ((flags & 0x40) != 0);
-  s_status_n = (flags & 0x80);
-  ram_poke(0x7260, s_a);
-  s_status_d = 0x00;
+  game_place_apple_native();
 
   if (ret_addr)
     pop16();
