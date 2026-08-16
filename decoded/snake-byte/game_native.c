@@ -1442,3 +1442,110 @@ uint8_t game_edit_key_native(uint8_t slot) {
   GAME_CYCLES(0x7630, 9);
   return key;
 }
+
+/* ========================================================================== */
+/* $6BFB -- the falling tone                                                  */
+/* ========================================================================== */
+
+/// The whole tone is four bytes. $6C46 is the period, and doubles as the
+/// on/off switch: game_mark_head raises it to 1 when the head moves and
+/// game_draw_playfield clears it, so the sound follows the snake and stops
+/// with it.
+static uint8_t tone_period(void) {
+  return ram_peek(0x6c46);
+}
+
+static void set_tone_period(uint8_t v) {
+  ram_poke(0x6c46, v);
+}
+
+/// Passes left before the next click.
+static uint8_t tone_countdown(void) {
+  return ram_peek(0x6c47);
+}
+
+static void set_tone_countdown(uint8_t v) {
+  ram_poke(0x6c47, v);
+}
+
+/// Where the click goes, as the low byte of the soft switch: $C030 is the
+/// speaker and $C020 the cassette output, which nobody can hear. Muting is
+/// therefore a store rather than a branch, and the click itself is one indexed
+/// read -- see the $7642 header for why that shape was chosen.
+static void set_click_port(uint8_t lo) {
+  ram_poke(0x6c49, lo);
+}
+
+/// $69C2 -- toggled by Ctrl-S at $69B9.
+static bool sound_muted(void) {
+  return ram_peek(0x69c2) != 0;
+}
+
+void game_tick_sound_native(void) {
+  GAME_CYCLES(0x6bfb, 6);
+  ram_poke(0x6c48, 0x14); // twenty passes
+
+  for (;;) {
+    GAME_CYCLES(0x6c00, 6);
+    const uint8_t period = tone_period();
+    if (period) {
+      GAME_CYCLES(0x6c05, 4);
+      if (period < 0x80) {
+        GAME_CYCLES(0x6c09, 8);
+        const uint8_t left = (uint8_t)(tone_countdown() - 1);
+        set_tone_countdown(left);
+        if (!left) {
+          GAME_CYCLES(0x6c0e, 28);
+          const uint8_t port = ram_peek(0x6c49);
+          s_y = port; // live out of this routine; the click is `LDA $C000,Y`
+          peek((uint16_t)(0xc000 + port));
+
+          // Two INC $6C46: every click lengthens the period, so the pitch
+          // falls for as long as the head keeps moving.
+          set_tone_period((uint8_t)(tone_period() + 2));
+          set_tone_countdown(tone_period());
+        } else {
+          GAME_CYCLES(0x6c0c, 1);
+        }
+      } else {
+        GAME_CYCLES(0x6c07, 1);
+      }
+    } else {
+      GAME_CYCLES(0x6c03, 1);
+    }
+
+    GAME_CYCLES(0x6c20, 8);
+    if (tone_period() >= 0x80) {
+      // Fallen off the bottom of the range: silence until something restarts
+      // it. $80 is reached from below in steps of two, so this is the end of
+      // one slide rather than a wrap.
+      GAME_CYCLES(0x6c27, 6);
+      set_tone_period(0x00);
+    } else {
+      GAME_CYCLES(0x6c25, 1);
+    }
+
+    // Chosen afresh every pass, and defaulting to inaudible.
+    GAME_CYCLES(0x6c2c, 12);
+    set_click_port(0x20);
+    if (!attract_mode()) {
+      GAME_CYCLES(0x6c36, 6);
+      if (!sound_muted()) {
+        GAME_CYCLES(0x6c3b, 6);
+        set_click_port(0x30);
+      } else {
+        GAME_CYCLES(0x6c39, 1);
+      }
+    } else {
+      GAME_CYCLES(0x6c34, 1);
+    }
+
+    GAME_CYCLES(0x6c40, 8);
+    const uint8_t left = (uint8_t)(ram_peek(0x6c48) - 1);
+    ram_poke(0x6c48, left);
+    if (!left)
+      break;
+    GAME_CYCLES(0x6c43, 1);
+  }
+  GAME_CYCLES(0x6c45, 6);
+}

@@ -215,3 +215,6 @@ uint8_t game_read_direction_native(uint8_t key);
 /// $75D1 -- blink slot \p slot on the key-redefinition screen until the player
 /// presses something it will accept, and return that key.
 uint8_t game_edit_key_native(uint8_t slot);
+
+/// $6BFB -- twenty passes of the falling tone that plays while the head moves.
+void game_tick_sound_native(void);

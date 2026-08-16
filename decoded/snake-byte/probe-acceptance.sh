@@ -393,7 +393,7 @@ for keyfile in ${KEYS:-"$here/play.pkeys" "$here/play-hires.pkeys"}; do
 check_backend trace "$bin/decoded/snake-byte/snake-bytec1-run" "$here/trace.probe" \
   "$here/blocks.txt" 1694 "$here/snake-bytec1.c"
 check_backend trace-ext "$bin/decoded/snake-byte/snake-bytec1-ext-run" "$here/trace-ext.probe" \
-  "$here/blocks-ext.txt" 1471 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c" \
+  "$here/blocks-ext.txt" 1459 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c" \
   "$here/game_native.c"
 
 if diff -q "$here/blocks.txt" "$here/blocks-ext.txt" > /dev/null; then
@@ -501,7 +501,7 @@ frames=${EASY_FRAMES:-3000}
 set_scenario "$here/play-hires.pkeys"
 echo "    (against snake-byte-easy.b33, $frames frames)"
 check_backend trace-easy "$bin/decoded/snake-byte/snake-byte-easyc1-ext-run" \
-  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1471 \
+  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1459 \
   "$here/snake-byte-easyc1-ext.c" "$here/a2rom.c" "$here/game.c" "$here/game_native.c"
 
 # The fixture's block heads are the same set as the stock extern build's, and

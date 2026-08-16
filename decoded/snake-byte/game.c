@@ -1467,89 +1467,13 @@ void game_update_high_score(uint16_t ret_addr) {
 }
 
 void game_tick_sound(uint16_t ret_addr) {
+  // Adapter for game_tick_sound_native(). Costs 12 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // Twenty passes of a falling tone. $6C46 is the period and $6C47 the
-  // countdown to the next click; each click lengthens the period by two, so
-  // the pitch drops, and the period wraps back to zero once it passes $80.
-  // $6C46 is raised to 1 by game_mark_head and cleared by game_draw_playfield,
-  // so the tone plays while the head is moving and stops when it is not.
-  /*$6BFB*/ CYCLES(0x6bfb, 6);
-  ram_poke(0x6c48, 0x14);
-
-  for (;;) {
-    /*$6C00*/ CYCLES(0x6c00, 6);
-    const uint8_t period = ram_peek(0x6c46);
-    s_a = period;
-    if (period) {
-      /*$6C05*/ CYCLES(0x6c05, 4);
-      if (period < 0x80) {
-        /*$6C09*/ CYCLES(0x6c09, 8);
-        const uint8_t left = (uint8_t)(ram_peek(0x6c47) - 0x01);
-        ram_poke(0x6c47, left);
-        if (!left) {
-          /*$6C0E*/ CYCLES(0x6c0e, 28);
-          const uint8_t port = ram_peek(0x6c49);
-          s_y = port;
-          peek((uint16_t)(0xc000 + port)); // the click
-          ram_poke(0x6c46, (uint8_t)(ram_peek(0x6c46) + 0x01));
-          ram_poke(0x6c46, (uint8_t)(ram_peek(0x6c46) + 0x01));
-          ram_poke(0x6c47, ram_peek(0x6c46));
-        } else {
-          /*$6C0C*/ CYCLES_EDGE(0x6c0c, 1);
-        }
-      } else {
-        /*$6C07*/ CYCLES_EDGE(0x6c07, 1);
-      }
-    } else {
-      /*$6C03*/ CYCLES_EDGE(0x6c03, 1);
-    }
-
-    /*$6C20*/ CYCLES(0x6c20, 8);
-    s_status_c = (ram_peek(0x6c46) >= 0x80);
-    if (s_status_c) {
-      /*$6C27*/ CYCLES(0x6c27, 6);
-      ram_poke(0x6c46, 0x00);
-    } else {
-      /*$6C25*/ CYCLES_EDGE(0x6c25, 1);
-    }
-
-    // Route the click: cassette by default, speaker only when both $0302 and
-    // $69C2 are clear. See the $7642 header for why this is done with an
-    // address rather than a branch.
-    /*$6C2C*/ CYCLES(0x6c2c, 12);
-    ram_poke(0x6c49, 0x20);
-    const uint8_t muted = ram_peek(0x0302);
-    s_a = muted;
-    if (!muted) {
-      /*$6C36*/ CYCLES(0x6c36, 6);
-      const uint8_t busy = ram_peek(0x69c2);
-      s_a = busy;
-      if (!busy) {
-        /*$6C3B*/ CYCLES(0x6c3b, 6);
-        s_a = 0x30;
-        ram_poke(0x6c49, 0x30);
-      } else {
-        /*$6C39*/ CYCLES_EDGE(0x6c39, 1);
-      }
-    } else {
-      /*$6C34*/ CYCLES_EDGE(0x6c34, 1);
-    }
-
-    /*$6C40*/ CYCLES(0x6c40, 8);
-    const uint8_t n = (uint8_t)(ram_peek(0x6c48) - 0x01);
-    s_status_not_z = n;
-    s_status_n = (n & 0x80);
-    ram_poke(0x6c48, n);
-    if (!n)
-      break;
-    /*$6C43*/ CYCLES_EDGE(0x6c43, 1);
-  }
-
-  /*$6C45*/ CYCLES(0x6c45, 6);
+  game_tick_sound_native();
 
   if (ret_addr)
     pop16();
