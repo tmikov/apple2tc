@@ -64,10 +64,21 @@ Output format flags: `--simple-c`, `--ir`, `--irc1`, `--asm` (default)
 
 ### Tools (tools/)
 
-- **`a2emu`** — Apple II emulator with runtime data collection for the decompiler. Bundles Bolo and Robotron games (F1/F2 to load)
+- **`a2emu`** — Apple II emulator, **windowed**. Bundles Bolo and Robotron (F1/F2 to load). Use this one to play, and to record keystrokes from a session
+- **`a2run`** — the same emulator, **console**. `tools/a2run/` has no sources; `main()` is `lib/a2host/console_main.c`, which calls `a2host_run_headless()` and therefore *requires* `--frames` and never opens a window. Use this one for batch replay, run-data collection and anything scripted
 - **`apple2tc`** — The decompiler itself
 - **`a6502`** — 6502 two-pass symbolic assembler (produces bit-accurate ROM images)
 - **`id`** — Interactive disassembler for binary exploration
+- **`textemu`** — text-mode (ncurses) emulator, plus `disk_test`. Needs Curses; unrelated to the a2emu/a2run pair
+
+`a2emu` and `a2run` are one program with two front ends. The machine, the
+command line, the keyboard and the probe engine are all `lib/a2host`; the
+6502 is `lib/engine6502`. Two executables rather than one flag because on
+Windows console-versus-GUI is a link-time subsystem property. So their
+options are identical, and `a2emu --headless --key-file=K --hash-frames=F`
+must produce byte-identical output to `a2run` — `tests/run-tests.sh` checks
+that. Beware `--help` on `a2run` listing `--headless`: it comes from the
+shared parser and is redundant, since `a2run` is never anything else.
 
 ### Decoded Examples (decoded/)
 
