@@ -236,16 +236,13 @@ void game_draw_cell(uint16_t ret_addr) {
 }
 
 void game_plot_shape(uint16_t ret_addr) {
-  // Read by CYCLES() when tracing is on; every generated function
-  // declares it too.
+  // Adapter for game_plot_shape_native(). Costs 1 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  /*$60E4*/ CYCLES(0x60e4, 6);
-  game_load_shape(0x60e6);
-  game_draw_cell(0x0000);
+  game_plot_shape_native();
 
   if (ret_addr)
     pop16();
@@ -682,52 +679,26 @@ void game_start_life_adapter(uint16_t ret_addr) {
 }
 
 void game_mark_head(uint16_t ret_addr) {
+  // Adapter for game_mark_head_native(). Costs 2 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // PLOT with the row and column the caller loaded, marking the head on the
-  // lo-res occupancy map, then raise the two flags that say it is there.
-  /*$6BEF*/ CYCLES(0x6bef, 6);
-  rom_plot(0x6bf1);
-
-  /*$6BF2*/ CYCLES(0x6bf2, 16);
-  s_a = 0x01;
-  s_status_not_z = 0x01;
-  s_status_n = 0x00;
-  ram_poke(0x0305, 0x01);
-  ram_poke(0x6c46, 0x01);
+  game_mark_head_native();
 
   if (ret_addr)
     pop16();
 }
 
 void game_draw_head(uint16_t ret_addr) {
+  // Adapter for game_draw_head_native(). Costs 4 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // Draw the cell the caller set up, then -- if $0305 says the head is on it
-  // -- merge shape 1 over the top, so the head reads as a head rather than
-  // replacing the body cell underneath. $0305 is consumed here.
-  /*$6BDA*/ CYCLES(0x6bda, 6);
-  game_plot_shape(0x6bdc);
-
-  /*$6BDD*/ CYCLES(0x6bdd, 6);
-  if (ram_peek(0x0305)) {
-    /*$6BE2*/ CYCLES(0x6be2, 11);
-    ram_poke(0x0000, 0x01);
-    game_plot_shape_merge(0x6be8);
-  } else {
-    /*$6BE0*/ CYCLES_EDGE(0x6be0, 1);
-  }
-
-  /*$6BE9*/ CYCLES(0x6be9, 12);
-  s_status_not_z = 0x00;
-  s_status_n = 0x00;
-  ram_poke(0x0305, 0x00);
+  game_draw_head_native();
 
   if (ret_addr)
     pop16();
@@ -771,95 +742,26 @@ void game_place_apple(uint16_t ret_addr) {
 }
 
 void game_sound_sweep(uint16_t ret_addr) {
+  // Adapter for game_sound_sweep_native(). Costs 8 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // Two sweeps. X starts at 0, so the first DEX wraps to 255 and the delay
-  // between clicks runs 256, 255, ... 1 -- the pitch rises. The second half
-  // counts X up from 0, so the delay runs 256, 1, 2, ... 255 and the pitch
-  // falls. Together: the sound an apple makes.
-  /*$64A9*/ CYCLES(0x64a9, 2);
-  s_x = 0x00;
-
-  do {
-    /*$64AB*/ CYCLES(0x64ab, 4);
-    s_y = s_x; // TXA / TAY
-
-    uint8_t y;
-    do {
-      /*$64AD*/ CYCLES(0x64ad, 4);
-      y = (uint8_t)(s_y - 0x01);
-      s_y = y;
-      if (y) {
-        /*$64AE*/ CYCLES_EDGE(0x64ae, 1);
-      }
-    } while (y);
-
-    /*$64B0*/ CYCLES(0x64b0, 12);
-    // The click. LDY $6C49 / LDA $C000,Y -- speaker or cassette, see above.
-    // Neither the Y it loads nor the byte it reads outlives the next TAY.
-    peek((uint16_t)(0xc000 + ram_peek(0x6c49)));
-    s_x = (uint8_t)(s_x - 0x01);
-    if (s_x) {
-      /*$64B7*/ CYCLES_EDGE(0x64b7, 1);
-    }
-  } while (s_x);
-
-  do {
-    /*$64B9*/ CYCLES(0x64b9, 4);
-    s_y = s_x;
-
-    uint8_t y;
-    do {
-      /*$64BB*/ CYCLES(0x64bb, 4);
-      y = (uint8_t)(s_y - 0x01);
-      s_y = y;
-      if (y) {
-        /*$64BC*/ CYCLES_EDGE(0x64bc, 1);
-      }
-    } while (y);
-
-    /*$64BE*/ CYCLES(0x64be, 12);
-    // Here the Y and A do outlive the loop -- this is the last click before
-    // the RTS, so the caller sees them.
-    const uint8_t port = ram_peek(0x6c49);
-    s_y = port;
-    s_a = peek((uint16_t)(0xc000 + port));
-    s_x = (uint8_t)(s_x + 0x01);
-    s_status_not_z = s_x;
-    s_status_n = (s_x & 0x80);
-    if (s_x) {
-      /*$64C5*/ CYCLES_EDGE(0x64c5, 1);
-    }
-  } while (s_x);
-
-  /*$64C7*/ CYCLES(0x64c7, 6);
+  game_sound_sweep_native();
 
   if (ret_addr)
     pop16();
 }
 
 void game_eat_apple(uint16_t ret_addr) {
+  // Adapter for game_eat_apple_native(). Costs 2 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // One more apple eaten this level, BCD at $725E -- $77F8 compares it with
-  // $78B2 -- and then the sound.
-  /*$7633*/ CYCLES(0x7633, 22);
-  s_status_d = 0x01;
-  const uint16_t r = adc_dec16(ram_peek(0x725e), 0x01, 0x00);
-  const uint8_t flags = (uint8_t)(r >> 8);
-  s_status_c = (flags & 0x01);
-  s_status_v = ((flags & 0x40) != 0);
-  ram_poke(0x725e, (uint8_t)r);
-  s_status_d = 0x00;
-  game_sound_sweep(0x7640);
-
-  /*$7641*/ CYCLES(0x7641, 6);
+  game_eat_apple_native();
 
   if (ret_addr)
     pop16();
@@ -914,114 +816,26 @@ void game_read_key(uint16_t ret_addr) {
 }
 
 void game_show_key(uint16_t ret_addr) {
+  // Adapter for game_show_key_native(). Costs 7 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // Print the character in A at slot X of the key-redefinition screen. The
-  // two arrow keys have no printable glyph, so they are shown as 'f' and 'g'
-  // -- which in the game's own font at $66A9 is where the arrow shapes live.
-  /*$7590*/ CYCLES(0x7590, 7);
-  ram_poke(0x0002, s_x);
-  if (s_a == 0x88) { // left arrow
-    /*$7596*/ CYCLES(0x7596, 2);
-    s_a = 0xe6;
-  } else {
-    /*$7594*/ CYCLES_EDGE(0x7594, 1);
-  }
-
-  /*$7598*/ CYCLES(0x7598, 4);
-  s_status_c = (s_a >= 0x95);
-  if (s_a == 0x95) { // right arrow
-    /*$759C*/ CYCLES(0x759c, 2);
-    s_a = 0xe7;
-  } else {
-    /*$759A*/ CYCLES_EDGE(0x759a, 1);
-  }
-
-  // Position the cursor from the per-slot tables, then print.
-  /*$759E*/ CYCLES(0x759e, 23);
-  push8(s_a);
-  const uint8_t slot = s_x;
-  ram_poke(0x0024, ram_peek(0x75b3 + slot));
-  ram_poke(0x0025, ram_peek(0x75b9 + slot));
-  rom_fc68(0x75ab);
-
-  /*$75AC*/ CYCLES(0x75ac, 10);
-  s_a = pop8();
-  s_status_not_z = s_a;
-  s_status_n = (s_a & 0x80);
-  rom_cout(0x75af);
-
-  /*$75B0*/ CYCLES(0x75b0, 9);
-  s_x = ram_peek(0x0002);
-  s_status_not_z = s_x;
-  s_status_n = (s_x & 0x80);
+  game_show_key_native(s_x, s_a);
 
   if (ret_addr)
     pop16();
 }
 
 void game_draw_side_walls(uint16_t ret_addr) {
+  // Adapter for game_draw_side_walls_native(). Costs 8 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // Both side walls, each in two segments of different ink, with the seam at
-  // a row derived from $6255. The seam is what the player aims for.
-  /*$6B3D*/ CYCLES(0x6b3d, 6);
-  game_rand_byte(0x6b3f);
-
-  /*$6B40*/ CYCLES(0x6b40, 26);
-  ram_poke(0x0000, 0x15); // shape
-  ram_poke(0x0001, 0x02); // ink of the upper segment
-  ram_poke(0x0002, 0x00); // left wall
-  ram_poke(0x0003, 0x01);
-  const uint8_t seed = ram_peek(0x6255);
-  s_a = seed;
-  if (seed & 0x80) {
-    // A negative seed is clamped, and $6255 is reset so the next call starts
-    // from a known place.
-    /*$6B55*/ CYCLES(0x6b55, 8);
-    ram_poke(0x6255, 0xff);
-    s_a = 0x70;
-  } else {
-    /*$6B53*/ CYCLES_EDGE(0x6b53, 1);
-  }
-
-  /*$6B5C*/ CYCLES(0x6b5c, 18);
-  const uint8_t v = s_a;
-  s_status_c = ((v >> 0x01) & 0x01); // LSR, then LSR again into $08
-  ram_poke(0x0008, (uint8_t)(v >> 0x02));
-  ram_poke(0x0008, (uint8_t)(ram_peek(0x0008) + 0x01));
-  game_plot_vline(0x6b64);
-
-  /*$6B65*/ CYCLES(0x6b65, 16);
-  ram_poke(0x0002, 0x27); // right wall, same rows
-  ram_poke(0x0003, 0x01);
-  game_plot_vline(0x6b6f);
-
-  /*$6B70*/ CYCLES(0x6b70, 30);
-  ram_poke(0x0008, (uint8_t)(ram_peek(0x0008) + 0x01));
-  const uint8_t seam = ram_peek(0x0008);
-  push8(seam);
-  ram_poke(0x0003, seam);
-  ram_poke(0x0001, 0x0d); // ink of the lower segment
-  ram_poke(0x0008, 0x27);
-  game_plot_vline(0x6b81);
-
-  /*$6B82*/ CYCLES(0x6b82, 18);
-  ram_poke(0x0003, pop8());
-  ram_poke(0x0002, 0x00);
-  game_plot_vline(0x6b8b);
-
-  // Tail call: SCRN of the bottom-centre cell, whose result the caller reads.
-  /*$6B8C*/ CYCLES(0x6b8c, 7);
-  s_a = 0x27;
-  s_y = 0x14;
-  rom_scrn(0x0000);
+  game_draw_side_walls_native();
 
   if (ret_addr)
     pop16();

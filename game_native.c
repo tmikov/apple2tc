@@ -1944,12 +1944,6 @@ void game_sound_sweep_native(void) {
 
     // The click, at whichever port $6C2C last chose. Neither the Y it loads
     // nor the byte it reads outlives the next pass.
-    //
-    // Nothing checks the port. Reading $C001+port instead of $C000+port
-    // passes every oracle -- correctly, as it happens, since $C020-$C02F all
-    // mirror the cassette toggle and $C030-$C03F the speaker. But hardcoding
-    // $30 here would pass too, and that would be a real bug: the mute would
-    // stop working and no oracle in this repo looks at sound.
     GAME_CYCLES(0x64b0, 12);
     peek((uint16_t)(0xc000 + ram_peek(0x6c49)));
     if (--x)

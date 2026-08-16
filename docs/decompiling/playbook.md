@@ -390,6 +390,15 @@ replays cycle-stamped keys, does not notice at all. Give those sites their own
 spelling (`GAME_CYCLES_COORD`), assert the set of addresses using it equals the
 coordinate's, and the same mistake is one line naming the address.
 
+**`[process]` Do not convert code no recording runs.** The conversion of a
+routine to real C is checked by exactly one thing: the recordings executing it
+and the oracles agreeing. For a routine nothing executes there is no check at
+all -- and converting it also takes its addresses off the site list, removing
+the unverified-block accounting that was the only remaining statement about it.
+Snake Byte's pause/mute handler at $69A9 is six blocks, entirely straightforward
+and entirely unexercised, and it stays in the emulator-shaped file with a note
+saying why. Convert it when a recording presses ESC.
+
 **`[process]` A fixture built to reach new code also deepens the code you
 already had.** Snake Byte's `easy` build exists to make the display list
 reachable -- the apple quota lowered so levels change. It turns out to be the

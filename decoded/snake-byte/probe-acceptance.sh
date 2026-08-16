@@ -457,7 +457,7 @@ for keyfile in ${KEYS:-"$here/play.pkeys" "$here/play-hires.pkeys"}; do
 check_backend trace "$bin/decoded/snake-byte/snake-bytec1-run" "$here/trace.probe" \
   "$here/blocks.txt" 1694 "$here/snake-bytec1.c"
 check_backend trace-ext "$bin/decoded/snake-byte/snake-bytec1-ext-run" "$here/trace-ext.probe" \
-  "$here/blocks-ext.txt" 1428 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c" \
+  "$here/blocks-ext.txt" 1396 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c" \
   "$here/game_native.c"
 
 if diff -q "$here/blocks.txt" "$here/blocks-ext.txt" > /dev/null; then
@@ -565,7 +565,7 @@ frames=${EASY_FRAMES:-3000}
 set_scenario "$here/play-hires.pkeys"
 echo "    (against snake-byte-easy.b33, $frames frames)"
 check_backend trace-easy "$bin/decoded/snake-byte/snake-byte-easyc1-ext-run" \
-  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1428 \
+  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1396 \
   "$here/snake-byte-easyc1-ext.c" "$here/a2rom.c" "$here/game.c" "$here/game_native.c"
 
 # The fixture's block heads are the same set as the stock extern build's, and
@@ -594,6 +594,9 @@ coverage_report trace "$here/blocks.txt" 0
 #   the ROM (20)        in a2rom.c, mostly paths for arguments the game never
 #       passes to PLOT, HLINE and SCRN.
 #   pause and mute (6)  all of $69A9. Neither recording presses ESC or Ctrl-S.
+#       Deliberately *not* converted to real C while that is true: a conversion
+#       is checked by the recordings running it, and this one would be an
+#       unchecked rewrite that also removed the last accounting of itself.
 #   (was: arrow keys (3), $7623 $7627 $762B -- the redefinition screen's arrow
 #   cases, which play-hires never reaches because it assigns W A D X Q E, all
 #   above $A1. Off the list with game_edit_key's conversion, and unverified

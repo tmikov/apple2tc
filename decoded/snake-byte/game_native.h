@@ -264,3 +264,24 @@ void game_place_apple_native(void);
 
 /// $71CD -- recompute what one apple is worth for the current level.
 void game_set_apple_value_native(void);
+
+/// $6BEF -- plot the head on the occupancy map and flag it as newly there.
+void game_mark_head_native(void);
+
+/// $6BDA -- draw a cell, merging the head shape over it if the head is on it.
+void game_draw_head_native(void);
+
+/// $7633 -- count one apple eaten, and make the noise for it.
+void game_eat_apple_native(void);
+
+/// $60E4 -- load a shape and draw it into the current cell.
+void game_plot_shape_native(void);
+
+/// $64A9 -- the rising-then-falling sweep an eaten apple makes.
+void game_sound_sweep_native(void);
+
+/// $7590 -- show \p key as slot \p slot's binding on the redefinition screen.
+void game_show_key_native(uint8_t slot, uint8_t key);
+
+/// $6B3D -- draw both side walls, and leave SCRN of the bottom-centre cell.
+void game_draw_side_walls_native(void);
