@@ -503,6 +503,21 @@ void a2host_init_emulation(void) {
   }
 }
 
+/// A run that must be reproducible -- replay, hashing, tracing -- always gets
+/// exactly a frame's worth of emulated time, so that the cycle count at any
+/// point in it depends on the program and not on the host. So does a front end
+/// that installed no clock, which is every console one.
+///
+/// This says only how *much* time a frame is, never how often frames happen.
+/// Getting those two confused is what made --trace-keys unusable interactively
+/// for four years: the windowed front end ran one frame per repaint, so on a
+/// monitor that is not 60 Hz the machine ran at the monitor's speed. The
+/// budget below is right; pacing the calls is the front end's job.
+bool a2host_fixed_step(void) {
+  return !elapsed_fn_ || trace_keys_ || key_presses_ || hash_file_ ||
+         (g_debug & (DebugASM | DebugMem)) != 0;
+}
+
 void a2host_simulate_frame(void) {
   if (firstFrame_) {
     firstFrame_ = false;
@@ -517,11 +532,7 @@ void a2host_simulate_frame(void) {
       drain_buffered_keys();
 
     unsigned runCycles;
-    // A run that must be reproducible -- replay, hashing, tracing -- always
-    // gets exactly a frame's worth of emulated time. So does a front end that
-    // installed no clock, which is every console one.
-    if (!elapsed_fn_ || trace_keys_ || key_presses_ || hash_file_ ||
-        (g_debug & (DebugASM | DebugMem)) != 0) {
+    if (a2host_fixed_step()) {
       runCycles = (unsigned)((1.0 / 60.0) * clock_freq_);
     } else {
       double elapsed = elapsed_fn_();

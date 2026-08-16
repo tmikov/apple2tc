@@ -57,6 +57,17 @@ a2_iostate_t *a2host_io(void);
 /// cycles, and let the front end finish up.
 void a2host_simulate_frame(void);
 
+/// True when a2host_simulate_frame() advances the machine by a fixed 1/60 s of
+/// emulated time rather than by however much wall clock has passed.
+///
+/// A windowed front end must consult this. In the wall-clock mode, calling
+/// simulate once per rendered frame is self-correcting: a faster monitor means
+/// smaller slices. In fixed mode it is not — one quantum per rendered frame
+/// runs the machine at the monitor's rate, so a 144 Hz display runs it at
+/// 2.4x. Pace the calls off a clock instead, running whole quanta only when
+/// they are due. See a2host_gui.c's frame_cb.
+bool a2host_fixed_step(void);
+
 /// Emit this frame's hash if asked, and advance the frame counter. Returns true
 /// when the frame limit is reached.
 bool a2host_record_frame(void);

@@ -187,21 +187,75 @@ static void update_screen_image(void) {
   sg_update_image(bind_.fs_images[SLOT_tex], &imgData);
 }
 
+/// Emulated time owed but not yet run, in seconds. Only used in fixed-step
+/// mode; see run_due_frames().
+static double stepDebt_ = 0.0;
+
+/// How many emulated frames to run for this repaint.
+///
+/// In wall-clock mode the answer is always one: a2host_simulate_frame() sizes
+/// the frame by however long the repaint took, so a faster monitor just means
+/// smaller slices and the machine keeps real time by itself.
+///
+/// In fixed-step mode -- replay, frame hashing, --trace-keys -- it does not.
+/// Every call advances the machine by exactly 1/60 s no matter how long the
+/// repaint took, so one call per repaint ties the machine's speed to the
+/// monitor's refresh rate: 2.4x on a 144 Hz display, and unbounded if the
+/// front end ever free-runs. That is what made --trace-keys unusable for the
+/// thing it exists for, which is capturing a session someone is playing.
+///
+/// So run whole 1/60 s quanta, and only when the clock says they are due. The
+/// quantum stays exactly what it was -- this changes when frames happen, never
+/// how big they are, so nothing about a run's reproducibility moves.
+static unsigned run_due_frames(void) {
+  if (!a2host_fixed_step())
+    return 1;
+
+  stepDebt_ += stm_sec(stm_diff(curFrameTick_, lastRunTick_));
+  // After a stall -- a breakpoint, a dragged window -- catch up a little and
+  // then give up on the rest, rather than run a minute of emulation in one
+  // repaint and stall again submitting the audio for it.
+  const double kMaxDebt = 4.0 / 60.0;
+  if (stepDebt_ > kMaxDebt)
+    stepDebt_ = kMaxDebt;
+
+  unsigned frames = (unsigned)(stepDebt_ * 60.0);
+  stepDebt_ -= frames / 60.0;
+  // The subtraction is exact in intent but not in binary: a rounding error of
+  // one ulp the wrong way leaves a debt just below zero, and converting a
+  // negative double to unsigned next time round is undefined behaviour.
+  if (stepDebt_ < 0.0)
+    stepDebt_ = 0.0;
+  return frames;
+}
+
 static void frame_cb(void) {
   curFrameTick_ = stm_now();
   if (!haveFirstTick_) {
     haveFirstTick_ = true;
     firstFrameTick_ = curFrameTick_;
+    // Or the first repaint's debt is measured from tick zero and the machine
+    // opens by running the catch-up cap.
+    lastRunTick_ = curFrameTick_;
   }
 
-  a2host_simulate_frame();
+  unsigned due = run_due_frames();
   lastRunTick_ = curFrameTick_;
 
-  // probe_stop_requested(): see the matching check in a2host_run_headless
-  // (a2host.c) for why a probe's `stop` shows up as a flag polled here rather
-  // than as an early return from a2host_simulate_frame() itself.
-  if (a2host_record_frame() || a2host_engine_stopped() || probe_stop_requested())
-    sapp_request_quit();
+  for (unsigned i = 0; i != due; ++i) {
+    a2host_simulate_frame();
+
+    // Inside the loop, and paired with the simulate above it: the frame limit
+    // and the frame hashes count emulated frames, not repaints.
+    //
+    // probe_stop_requested(): see the matching check in a2host_run_headless
+    // (a2host.c) for why a probe's `stop` shows up as a flag polled here
+    // rather than as an early return from a2host_simulate_frame() itself.
+    if (a2host_record_frame() || a2host_engine_stopped() || probe_stop_requested()) {
+      sapp_request_quit();
+      break;
+    }
+  }
 
   update_screen();
   update_screen_image();
