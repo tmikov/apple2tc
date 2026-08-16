@@ -457,7 +457,7 @@ for keyfile in ${KEYS:-"$here/play.pkeys" "$here/play-hires.pkeys"}; do
 check_backend trace "$bin/decoded/snake-byte/snake-bytec1-run" "$here/trace.probe" \
   "$here/blocks.txt" 1694 "$here/snake-bytec1.c"
 check_backend trace-ext "$bin/decoded/snake-byte/snake-bytec1-ext-run" "$here/trace-ext.probe" \
-  "$here/blocks-ext.txt" 1454 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c" \
+  "$here/blocks-ext.txt" 1444 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c" \
   "$here/game_native.c"
 
 if diff -q "$here/blocks.txt" "$here/blocks-ext.txt" > /dev/null; then
@@ -565,7 +565,7 @@ frames=${EASY_FRAMES:-3000}
 set_scenario "$here/play-hires.pkeys"
 echo "    (against snake-byte-easy.b33, $frames frames)"
 check_backend trace-easy "$bin/decoded/snake-byte/snake-byte-easyc1-ext-run" \
-  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1454 \
+  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1444 \
   "$here/snake-byte-easyc1-ext.c" "$here/a2rom.c" "$here/game.c" "$here/game_native.c"
 
 # The fixture's block heads are the same set as the stock extern build's, and
@@ -610,10 +610,12 @@ coverage_report trace "$here/blocks.txt" 0
 #   it being counted rather than makes it verified.)
 #   level 30 (1)        $7132, the 'E' opcode that wraps back to level 1.
 #   unrecognised (1)    $71C4. Every byte in every script is a valid opcode.
-#   page crossing (1)   $7021, game_next_byte's carry into the high byte.
+#   (was: page crossing (1), $7021 -- game_next_byte's carry into the high
+#   byte, never taken because no script straddles a page. Off the list with
+#   that routine's conversion, and unverified still.)
 #
 # The number exists to stop that set growing quietly, and to be ratcheted down
 # whenever a scenario reaches one of them -- as happened at 22 -> 21 when the
 # `easy` fixture covered $6C4F. It is not a target to be satisfied.
-coverage_report trace-ext "$here/blocks-ext.txt" 27 "$here/a2rom.c" "$here/game.c" \
+coverage_report trace-ext "$here/blocks-ext.txt" 26 "$here/a2rom.c" "$here/game.c" \
   "$here/game_native.c"

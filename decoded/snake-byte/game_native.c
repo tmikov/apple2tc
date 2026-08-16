@@ -1566,6 +1566,8 @@ static void note_digit(uint8_t digit) {
   ram_poke(0x002c, digit);
 }
 
+enum { kCharZero = 0xb0 };
+
 /// `CLC / ADC #$B0`, which is what turns 0-9 into the character for it.
 ///
 /// The original's ADC honours the D flag; this addition does not. Digits are
@@ -1578,7 +1580,7 @@ static void cout_digit(uint8_t digit, uint16_t ret) {
     error_handler(0x71f3);
     abort();
   }
-  s_a = (uint8_t)(0xb0 + digit);
+  s_a = (uint8_t)(kCharZero + digit);
   rom_cout(ret);
 }
 
@@ -1622,4 +1624,106 @@ void game_print_bcd_native(uint8_t byte) {
   } else {
     GAME_CYCLES_SHARED(0x721c, 10);
   }
+}
+
+/// $7226 -- called after the last byte of a number: if nothing significant was
+/// printed, the number was zero, and one "0" is printed for the whole of it.
+void game_print_zero_if_blank_native(void) {
+  GAME_CYCLES(0x7226, 5);
+  if (digit_seen()) {
+    GAME_CYCLES(0x7228, 1);
+    GAME_CYCLES(0x722f, 6);
+    return;
+  }
+
+  GAME_CYCLES(0x722a, 5);
+  s_a = kCharZero;
+  rom_cout(0x0000); // JMP $FDED -- a tail call, so no return address.
+}
+
+/* ========================================================================== */
+/* $7267 -- add to the score                                                  */
+/* ========================================================================== */
+
+void game_add_score_native(void) {
+  GAME_CYCLES(0x7267, 56);
+
+  // Decimal mode for the whole run, and adc_dec16 rather than a second
+  // hand-written BCD adder: it is the one the emulator and the generated code
+  // both use, so it cannot disagree with them about the undefined corners of
+  // BCD ADC. It returns the sum in the low byte and the flags in the high one.
+  s_status_d = 0x01;
+
+  // Four bytes at $7252, least significant first, plus a two-byte value at
+  // $71CB. The original adds the value into the low half and then propagates
+  // the carry through the top half with `ADC #$00`, which flips the operand
+  // order halfway -- kept, because adc_dec16 need not be symmetric over BCD
+  // that is not valid BCD.
+  unsigned carry = 0;
+  uint8_t flags = 0;
+  for (int i = 0; i < 4; ++i) {
+    const uint8_t a = i < 2 ? ram_peek(0x71cb + i) : ram_peek(0x7252 + i);
+    const uint8_t m = i < 2 ? ram_peek(0x7252 + i) : 0x00;
+    const uint16_t r = adc_dec16(a, m, carry);
+    ram_poke(0x7252 + i, (uint8_t)r);
+    flags = (uint8_t)(r >> 8);
+    carry = flags & 0x01;
+  }
+
+  // Only the `easy` fixture checks the carry. Breaking the propagation between
+  // bytes -- so the score never carries past $99 -- passes verify.sh 4/4, both
+  // 1300-frame traces, memory and screen, and fails only the 3000-frame run
+  // against snake-byte-easy.b33. Neither committed recording ever scores
+  // enough to cross a byte boundary.
+  //
+  // C and V are live out of $7267 and N and Z are not, so only these are put
+  // back -- `apple2tc --ir`, which also explains the D: it is live out too,
+  // and the original's CLD is what makes it false.
+  s_status_c = carry;
+  s_status_v = ((flags & 0x40) != 0);
+  s_status_d = 0x00;
+}
+
+/* ========================================================================== */
+/* $7024, $7019 -- two small ones                                             */
+/* ========================================================================== */
+
+/// $7024 -- tell the ROM's lo-res plotter which colour to draw the occupancy
+/// map in. Zero erases, anything else draws, so the map only ever holds colour
+/// 0 or colour 5: it is a two-state map, not a picture.
+///
+/// The original takes its argument in the Z flag rather than in A, because
+/// every caller reaches it with `LDA $01 / JSR $7024` and $01 is the same ink
+/// byte the hi-res plotter takes. Here it is the byte, and the adapter asserts
+/// that the flag agreed with it.
+void game_set_ink_native(uint8_t ink) {
+  GAME_CYCLES(0x7024, 2);
+  if (!ink) {
+    GAME_CYCLES(0x7024, 1);
+  } else {
+    GAME_CYCLES(0x7026, 2);
+  }
+
+  GAME_CYCLES(0x7028, 3);
+  s_a = ink ? 0x05 : 0x00;
+  rom_setcol(0x0000); // JMP $F864 -- a tail call.
+}
+
+/// $7019 -- read the byte the $000A pointer addresses and advance it. The
+/// display-list interpreter's only way of reading its script.
+void game_next_byte_native(void) {
+  GAME_CYCLES(0x7019, 14);
+  s_y = 0x00;
+  s_a = peek(ram_peek16al(0x000a));
+
+  const uint8_t lo = (uint8_t)(ram_peek(0x000a) + 1);
+  ram_poke(0x000a, lo);
+  if (lo) {
+    GAME_CYCLES(0x701f, 1);
+  } else {
+    GAME_CYCLES(0x7021, 5);
+    ram_poke(0x000b, (uint8_t)(ram_peek(0x000b) + 1));
+  }
+  GAME_CYCLES(0x7023, 6);
+  // A and Y are live out; N and Z are not.
 }

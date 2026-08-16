@@ -242,3 +242,16 @@ void game_tick_sound_native(void);
 
 /// $71F3 -- print \p byte as two decimal digits, dropping leading zeros.
 void game_print_bcd_native(uint8_t byte);
+
+/// $7226 -- print a single "0" if the number just printed was all zeros.
+void game_print_zero_if_blank_native(void);
+
+/// $7267 -- add the two-byte BCD value at $71CB to the four-byte score.
+void game_add_score_native(void);
+
+/// $7024 -- set the lo-res plot colour from an ink byte: 0 erases, anything
+/// else draws.
+void game_set_ink_native(uint8_t ink);
+
+/// $7019 -- read the byte at the $000A pointer into A and advance it.
+void game_next_byte_native(void);

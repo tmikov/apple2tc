@@ -390,6 +390,16 @@ replays cycle-stamped keys, does not notice at all. Give those sites their own
 spelling (`GAME_CYCLES_COORD`), assert the set of addresses using it equals the
 coordinate's, and the same mistake is one line naming the address.
 
+**`[process]` A fixture built to reach new code also deepens the code you
+already had.** Snake Byte's `easy` build exists to make the display list
+reachable -- the apple quota lowered so levels change. It turns out to be the
+only oracle that checks the score's BCD carry: breaking the propagation between
+score bytes passes verify.sh 4/4, both 1300-frame block-head traces, memory and
+screen, and fails only the 3000-frame run against the fixture. Neither
+committed recording scores enough to cross a byte boundary. A fixture that
+plays *longer* is worth as much as one that plays *elsewhere*, and the second
+benefit is the one nobody plans for.
+
 **`[process]` A block that runs is not a behaviour that was tested.** Snake
 Byte's key table maps a *binding* to a *command* through two parallel arrays,
 and both blocks that do the mapping execute constantly -- play.pkeys presses

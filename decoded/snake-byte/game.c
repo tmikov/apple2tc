@@ -344,57 +344,30 @@ void game_plot_vline(uint16_t ret_addr) {
 /* ========================================================================== */
 
 void game_next_byte(uint16_t ret_addr) {
+  // Adapter for game_next_byte_native(). Costs 3 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  /*$7019*/ CYCLES(0x7019, 14);
-  s_y = 0x00;
-  s_a = peek(ram_peek16al(0x000a));
-
-  const uint8_t lo = (uint8_t)(ram_peek(0x000a) + 0x01);
-  ram_poke(0x000a, lo);
-  s_status_not_z = lo;
-  s_status_n = (lo & 0x80);
-
-  if (lo) {
-    /*$701F*/ CYCLES_EDGE(0x701f, 1);
-  } else {
-    /*$7021*/ CYCLES(0x7021, 5);
-    const uint8_t hi = (uint8_t)(ram_peek(0x000b) + 0x01);
-    ram_poke(0x000b, hi);
-    s_status_not_z = hi;
-    s_status_n = (hi & 0x80);
-  }
-
-  /*$7023*/ CYCLES(0x7023, 6);
+  game_next_byte_native();
 
   if (ret_addr)
     pop16();
 }
 
 void game_set_ink(uint16_t ret_addr) {
+  // Adapter for game_set_ink_native(). Costs 3 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // The argument arrives in the Z flag, not in A: every caller does
-  // `LDA $01 / JSR $7024`, and $01 is the same ink byte the hi-res plotter
-  // takes. Zero erases, anything else draws -- so the lo-res map gets colour
-  // 0 or colour 5 and nothing in between. It is a two-state map, not a
-  // picture.
-  /*$7024*/ CYCLES(0x7024, 2);
-  if (!s_status_not_z) {
-    /*$7024*/ CYCLES_EDGE(0x7024, 1);
-  } else {
-    /*$7026*/ CYCLES(0x7026, 2);
-    s_a = 0x05;
-  }
-
-  /*$7028*/ CYCLES(0x7028, 3);
-  rom_setcol(0x0000); // JMP $F864 -- a tail call, so no return address.
+  // The original branches on Z and the native takes the byte. That is the same
+  // question only because every caller sets both with one `LDA`, which is an
+  // assumption worth stating out loud rather than relying on quietly.
+  assert(!s_a == !s_status_not_z);
+  game_set_ink_native(s_a);
 
   if (ret_addr)
     pop16();
@@ -462,68 +435,26 @@ void game_print_bcd(uint16_t ret_addr) {
 }
 
 void game_print_zero_if_blank(uint16_t ret_addr) {
+  // Adapter for game_print_zero_if_blank_native(). Costs 3 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  /*$7226*/ CYCLES(0x7226, 5);
-  const uint8_t seen = ram_peek(0x002c);
-  s_a = seen;
-  s_status_not_z = seen;
-  s_status_n = (seen & 0x80);
-
-  if (seen) {
-    /*$7228*/ CYCLES_EDGE(0x7228, 1);
-    /*$722F*/ CYCLES(0x722f, 6);
-  } else {
-    /*$722A*/ CYCLES(0x722a, 5);
-    s_a = 0xb0;
-    s_status_not_z = 0xb0;
-    s_status_n = 0x80;
-    rom_cout(0x0000); // JMP $FDED -- a tail call.
-  }
+  game_print_zero_if_blank_native();
 
   if (ret_addr)
     pop16();
 }
 
 void game_add_score(uint16_t ret_addr) {
+  // Adapter for game_add_score_native(). Costs 1 trace site.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // score += $71CC:$71CB, in BCD. adc_dec16 is the same decimal-mode adder
-  // the emulator and the generated code use, rather than a second
-  // hand-written one that could disagree with them about the undefined
-  // corners of BCD ADC. Its result is the sum in the low byte and the flags
-  // packed into the high byte.
-  /*$7267*/ CYCLES(0x7267, 56);
-  s_status_d = 0x01;
-
-  uint16_t r = adc_dec16(ram_peek(0x71cb), ram_peek(0x7252), 0x00);
-  s_status_c = ((uint8_t)(r >> 8) & 0x01);
-  ram_poke(0x7252, (uint8_t)r);
-
-  r = adc_dec16(ram_peek(0x71cc), ram_peek(0x7253), s_status_c);
-  s_status_c = ((uint8_t)(r >> 8) & 0x01);
-  ram_poke(0x7253, (uint8_t)r);
-
-  r = adc_dec16(ram_peek(0x7254), 0x00, s_status_c);
-  s_status_c = ((uint8_t)(r >> 8) & 0x01);
-  ram_poke(0x7254, (uint8_t)r);
-
-  r = adc_dec16(ram_peek(0x7255), 0x00, s_status_c);
-  s_a = (uint8_t)r;
-  const uint8_t flags = (uint8_t)(r >> 8);
-  s_status_c = (flags & 0x01);
-  s_status_not_z = (~flags & 2);
-  s_status_v = ((flags & 0x40) != 0);
-  s_status_n = (flags & 0x80);
-  ram_poke(0x7255, s_a);
-
-  s_status_d = 0x00;
+  game_add_score_native();
 
   if (ret_addr)
     pop16();
