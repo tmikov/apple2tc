@@ -2163,3 +2163,107 @@ block coverage, because no recording varies the value that would expose them.
 - `func_t001` and the switch dispatch are the remaining generated code.
 - A joystick recording and a difficulty-2 recording would together retire ~18
   of the 60.
+
+## 2026-08-15 (later still) — The conversion to real C, and what it needed
+
+`game.c` 2,509 lines and `game_native.c` 488 at the start of this stretch;
+1,090 and 2,215 at the end. Every game routine that has a body now has it in
+real C except one, and the exception is deliberate.
+
+The trace site list went 1,694 → 1,390 for the extern build, every step of it
+pinned exactly and written down in the same commit that spent it. The pin
+earned its place several times over: it is the only thing that makes "this
+conversion cost 17 sites" a number in a diff rather than an observation nobody
+makes.
+
+### The tool already answered the question I kept guessing at
+
+Every adapter has to decide which registers the original left behind that its
+caller actually reads. I traced that by hand once — four routines deep past a
+`JSR`, inconclusive — before noticing that `apple2tc --ir` prints
+`LiveIn`/`LiveOut` above every function, computed over the whole call graph.
+
+    // LiveIn : Y, STATUS_D, STATUS_I
+    // LiveOut: A, Y, STATUS_N, STATUS_D, STATUS_I
+    function func_6c72
+
+No X. So `$6C72`'s converted form does not write one, and `$6594`'s does,
+because that one's `LiveOut` says `A, X`. It decided the flag sets for six more
+routines the same way, and in each case the emulator-shaped version had been
+writing three or four registers that nothing reads.
+
+This sits against the older rule — *match what the 6502 sets, not what DCE
+kept* — and the resolution is cost. A status flag is one line and always right,
+so write it. A register write inside real C costs the abstraction the whole
+exercise is buying, so it is worth asking, and now the asking is a command.
+
+### Three spellings, because there are three reasons
+
+Converted code charges its cycles with `GAME_CYCLES`, which does not probe. That
+is right only when nothing else probes the address either, and twice it was not:
+
+- **`$6216`** is an `RTS` two routines share. One converted, one did not, and
+  the interpreter kept reporting an address the generated build had stopped
+  emitting. Three divergences in 400,000 hits.
+- **`$720E`** is stranger. The low half of `$71F3` survives in the generated C
+  as an orphan — its only predecessors were in the extern-replaced region, so
+  nothing can reach it — but it is still text in the file, so it is still on the
+  site list.
+
+And a third reason with a different shape: **`$760F` and `$6217`** are two of the
+seven addresses the replay coordinate counts. Dropping their probes does not
+make the engines disagree about the program, it makes them disagree about *when
+the keys arrived*. Measured: converting `$760F` fails the trace at line 640,983
+of the diff, naming four addresses on a screen that is not the problem, and
+`verify.sh` does not notice at all.
+
+So `GAME_CYCLES_SHARED` and `GAME_CYCLES_COORD` keep their probes, and
+probe-acceptance.sh checks all three spellings mechanically: plain must appear
+in no other source, `_SHARED` must, `_COORD` must be on the coordinate. One
+exemption, recognised by the zero — `CYCLES(addr, 0)` in an adapter, which
+probes without charging while the native charges without probing. Turning the
+lint on immediately named six addresses; all six were that pattern, which is how
+the exemption came to be written. Four failure modes mutation-tested.
+
+### What the mutation tests found that the conversions did not
+
+Three gaps, all in code with full block coverage:
+
+- **The key table's indirection.** Six bindings map to six commands through two
+  parallel arrays. Reading the wrong array passes everything — `play.pkeys`
+  presses the *default* bindings, where the arrays are byte-identical, and
+  `play-hires.pkeys` rebinds and then ends without playing.
+- **The score's BCD carry.** Breaking the propagation between score bytes passes
+  verify.sh 4/4, both 1300-frame traces, memory and screen. Only the 3,000-frame
+  `easy` run fails: neither committed recording scores enough to cross a byte
+  boundary. The fixture built to make the display list reachable turns out to be
+  the only thing checking carry at all.
+- **The key ring's `$0F`.** Still open, still unreachable: no recording presses
+  sixteen keys faster than the game reads them.
+
+Each is noted at the line, because each now looks like something a reader would
+tidy.
+
+### One routine deliberately not converted
+
+`$69A9`, pause and mute, is six blocks and all six are on the unverified list —
+no recording presses ESC or Ctrl-S. Converting it would be a rewrite nothing
+checks, which also removed the last accounting of itself. It stays in the
+emulator-shaped file until a recording reaches it.
+
+### And one gate that was not gating
+
+`verify.sh` read `$BIN` and ignored its arguments, so
+`./verify.sh ../../cmake-build-release` — exactly how the sibling
+probe-acceptance.sh is invoked — tested `cmake-build-debug` instead. A mutation
+run came back four false PASSes before that surfaced. It now takes a build
+directory and rejects arguments it does not understand.
+
+### Left open
+
+- `$69A9`, above, waiting on a recording.
+- A recording that rebinds the keys **and then plays** would close the key-table
+  gap.
+- The unverified baseline is down to 26 from 60, and almost none of that is
+  progress: the blocks left the site list with their routines. The pinned site
+  count is the honest number.
