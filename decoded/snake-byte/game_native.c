@@ -2080,3 +2080,51 @@ void game_draw_side_walls_native(void) {
   s_y = 0x14;
   rom_scrn(0x0000);
 }
+
+/* ========================================================================== */
+/* $6217 -- the keyboard, into the ring                                       */
+/* ========================================================================== */
+
+/// A 16-entry ring at $623C, with $624D the write index and $624C the read
+/// index; dequeue_key above is the other end of it.
+///
+/// If advancing the write index would land on the read index the buffer is
+/// full and the key is dropped -- but note it has already been *stored* by
+/// then. The byte is written and then disowned by not committing the index,
+/// which is a byte of work saved and a slot of the ring left holding a key
+/// nobody will read until it is overwritten.
+void game_read_key_native(void) {
+  // $6217 is on the replay coordinate, and is also where ram.probe and
+  // screen.probe take their samples. It keeps its probe for both reasons.
+  GAME_CYCLES_COORD(0x6217, 10);
+  const uint8_t at = ram_peek(0x624d);
+  const uint8_t key = io_peek(0xc000);
+  s_a = key;
+  s_x = at;
+
+  if (key & 0x80) {
+    GAME_CYCLES(0x621f, 21);
+    io_poke(0xc010, key); // clear the strobe
+    ram_poke(0x623c + at, key);
+
+    // The $0F is the ring's size and nothing checks it: widening it to $1F
+    // passes every oracle, because no recording ever presses sixteen keys
+    // faster than the game reads them. Do not tidy it.
+    const uint8_t next = (uint8_t)((at + 1) & 0x0f);
+    s_x = (uint8_t)(at + 1);
+    s_a = next;
+    if (next != ram_peek(0x624c)) {
+      GAME_CYCLES(0x622e, 10);
+      ram_poke(0x624d, next);
+      return;
+    }
+    GAME_CYCLES(0x622c, 1);
+  } else {
+    GAME_CYCLES(0x621d, 1);
+  }
+
+  // The RTS belongs to the routine before this one, and both early exits
+  // share it -- as does the key dequeue, whose adapter still emits it.
+  GAME_CYCLES_SHARED(0x6216, 6);
+  // A and X are the live-out set, and both are set above on every path.
+}

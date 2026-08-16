@@ -772,44 +772,15 @@ void game_eat_apple(uint16_t ret_addr) {
 /* ========================================================================== */
 
 void game_read_key(uint16_t ret_addr) {
+  // Adapter for game_read_key_native(). Costs 2 trace sites: $6217 keeps its
+  // probe because the replay coordinate counts it, and $6216 because the key
+  // dequeue's adapter still emits it.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // A 16-entry ring buffer at $623C: $624D is the write index, $624C the
-  // read index. If advancing the write index would land on the read index the
-  // buffer is full, and the key is dropped -- note it has already been stored
-  // by then, so the byte is written and then disowned by not committing the
-  // index. The RTS at $6216 belongs to the routine before this one; both of
-  // the early exits here share it.
-  /*$6217*/ CYCLES(0x6217, 10);
-  s_x = ram_peek(0x624d);
-  const uint8_t key = io_peek(0xc000);
-  s_a = key;
-
-  if (key & 0x80) {
-    /*$621F*/ CYCLES(0x621f, 21);
-    io_poke(0xc010, key); // clear the strobe
-    const uint8_t w = s_x;
-    ram_poke(0x623c + w, key);
-    const uint8_t next = (uint8_t)((uint8_t)(w + 0x01) & 0x0f);
-    s_x = (uint8_t)(w + 0x01);
-    s_a = next;
-
-    if (next != ram_peek(0x624c)) {
-      /*$622E*/ CYCLES(0x622e, 10);
-      ram_poke(0x624d, next);
-      if (ret_addr)
-        pop16();
-      return;
-    }
-    /*$622C*/ CYCLES_EDGE(0x622c, 1);
-  } else {
-    /*$621D*/ CYCLES_EDGE(0x621d, 1);
-  }
-
-  /*$6216*/ CYCLES(0x6216, 6);
+  game_read_key_native();
 
   if (ret_addr)
     pop16();

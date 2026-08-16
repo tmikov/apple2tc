@@ -285,3 +285,6 @@ void game_show_key_native(uint8_t slot, uint8_t key);
 
 /// $6B3D -- draw both side walls, and leave SCRN of the bottom-centre cell.
 void game_draw_side_walls_native(void);
+
+/// $6217 -- poll the keyboard and push what it finds into the ring at $623C.
+void game_read_key_native(void);
