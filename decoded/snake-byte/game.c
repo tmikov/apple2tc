@@ -68,75 +68,15 @@
 /* ========================================================================== */
 
 void game_cout_hook(uint16_t ret_addr) {
+  // Adapter for game_cout_hook_native(). Costs 4 trace sites; $664A survives,
+  // probed here with no cycles and charged for real inside.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  /*$664A*/ CYCLES(0x664a, 9);
-  const uint8_t ch = s_a; // PHA: the original char, high bit intact.
-  const uint8_t glyph = (uint8_t)(ch & 0x7f);
-
-  if (glyph >= 0x20) {
-    // $664F BCS -- the branch itself, taken here (this is the taken arm;
-    // glyph < 0x20 skips the block below without paying the extra cycle).
-    /*$664F*/ CYCLES_EDGE(0x664f, 1);
-    /*$6655*/ CYCLES(0x6655, 82);
-
-    // The original's SBC/ADC pairs honour the D flag. COUT is never reached in
-    // decimal mode -- the ROM clears D at reset and neither BASIC nor the game
-    // sets it around output -- so rather than carry dead decimal paths, fail
-    // loudly if that assumption ever breaks.
-    if (s_status_d) {
-      fprintf(stderr, "game_cout_hook: entered with decimal mode set\n");
-      error_handler(0x664a);
-      abort();
-    }
-
-    ram_poke(0x0008, glyph);
-    ram_poke(0x0002, s_x);
-    ram_poke(0x0003, s_y);
-    ram_poke(0x0000, 0x00);
-    ram_poke(0x0001, 0x00);
-
-    // Destination: the hi-res row matching the current text cursor.
-    // BASH - 4 + $20 == BASH + $1C maps $04xx (text page 1) to $20xx (hi-res 1).
-    ram_poke(0x0005, (uint8_t)(ram_peek(0x0029) - 0x04 + 0x20));
-    ram_poke(0x0004, (uint8_t)(ram_peek(0x0028) + ram_peek(0x0024)));
-
-    // Source: font at $66A9, 8 bytes per glyph, first glyph is $20.
-    const uint16_t src = (uint16_t)(0x66a9 + (uint16_t)(glyph - 0x20) * 8);
-    ram_poke(0x0000, (uint8_t)src);
-    ram_poke(0x0001, (uint8_t)(src >> 8));
-    s_x = 0x00;
-
-    for (unsigned row = 0; row < 8; ++row) {
-      /*$668B*/ CYCLES(0x668b, 33);
-      s_a = (uint8_t)row; // TXA
-      s_y = (uint8_t)row; // TAY
-      const uint8_t bits = peek((uint16_t)(ram_peek16al(0x0000) + row));
-      s_y = 0x00;
-      poke(ram_peek16al(0x0004), bits);
-      // Advance one hi-res scanline within the character cell: +$400.
-      s_a = (uint8_t)(ram_peek(0x0005) + 0x04);
-      ram_poke(0x0005, s_a);
-      s_x = (uint8_t)(row + 1);
-      // $669D BNE -- the branch itself, taken on every iteration but the
-      // last (the loop test is `INX; CPX #8; BNE $668B`; row==7 is the one
-      // iteration where it falls through instead of looping).
-      if (row != 7) {
-        /*$669D*/ CYCLES_EDGE(0x669d, 1);
-      }
-    }
-
-    /*$669F*/ CYCLES(0x669f, 9);
-    s_x = ram_peek(0x0002);
-    s_y = ram_peek(0x0003);
-  }
-
-  /*$6651*/ CYCLES(0x6651, 7);
-  s_a = ch; // PLA
-  rom_cout1(0xfffe); // JMP $FDF0
+  /*$664A*/ CYCLES(0x664a, 0);
+  game_cout_hook_native(s_a);
 
   if (ret_addr)
     pop16();

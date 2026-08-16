@@ -2128,3 +2128,88 @@ void game_read_key_native(void) {
   GAME_CYCLES_SHARED(0x6216, 6);
   // A and X are the live-out set, and both are set above on every path.
 }
+
+/* ========================================================================== */
+/* $664A -- the hi-res COUT hook                                              */
+/*                                                                            */
+/* Installed by $6641 over the ROM's character-output vector, so that every    */
+/* COUT in the game and in the ROM draws through the game's own 8x8 font at    */
+/* $66A9 instead of the text screen. Control characters are passed straight    */
+/* on to $FDF0, which is what keeps the cursor, scrolling and the rest of      */
+/* COUT's behaviour working underneath.                                       */
+/*                                                                            */
+/* Everything below $0009 is scratch, and stays in zero page: ram.probe        */
+/* hashes $0000-$00FF, so the residue this leaves has to be the residue the    */
+/* original left, down to the loop counter's last value. They become locals    */
+/* when that oracle goes.                                                     */
+/* ========================================================================== */
+
+/// Where glyph \p glyph's eight rows live. The font starts at $66A9 and the
+/// first glyph in it is the space, $20.
+static uint16_t glyph_rows(uint8_t glyph) {
+  return (uint16_t)(0x66a9 + (uint16_t)(glyph - 0x20) * 8);
+}
+
+/// The hi-res address matching the text cursor. BASL/BASH at $28 point at the
+/// text line, CH at $24 is the column; `- 4 + $20` on the high byte is
+/// `+ $1C`, which maps $04xx (text page 1) onto $20xx (hi-res page 1).
+static uint16_t hires_cursor(void) {
+  const uint8_t hi = (uint8_t)(ram_peek(0x0029) - 0x04 + 0x20);
+  const uint8_t lo = (uint8_t)(ram_peek(0x0028) + ram_peek(0x0024));
+  return (uint16_t)(lo | (hi << 8));
+}
+
+void game_cout_hook_native(uint8_t ch) {
+  GAME_CYCLES(0x664a, 9);
+  const uint8_t glyph = (uint8_t)(ch & 0x7f);
+
+  if (glyph >= 0x20) {
+    GAME_CYCLES(0x664f, 1);
+    GAME_CYCLES(0x6655, 82);
+
+    // The original's SBC/ADC pairs honour the D flag. COUT is never reached in
+    // decimal mode -- the ROM clears D at reset and neither BASIC nor the game
+    // sets it around output -- so rather than carry dead decimal paths, fail
+    // loudly if that assumption ever breaks.
+    if (s_status_d) {
+      fprintf(stderr, "game_cout_hook: entered with decimal mode set\n");
+      error_handler(0x664a);
+      abort();
+    }
+
+    ram_poke(0x0008, glyph);
+    ram_poke(0x0002, s_x); // X and Y are the caller's, and are put back below
+    ram_poke(0x0003, s_y);
+    ram_poke(0x0000, 0x00);
+    ram_poke(0x0001, 0x00);
+
+    ram_poke(0x0005, (uint8_t)(hires_cursor() >> 8));
+    ram_poke(0x0004, (uint8_t)hires_cursor());
+
+    const uint16_t src = glyph_rows(glyph);
+    ram_poke(0x0000, (uint8_t)src);
+    ram_poke(0x0001, (uint8_t)(src >> 8));
+    s_x = 0x00;
+
+    for (unsigned row = 0; row < 8; ++row) {
+      GAME_CYCLES(0x668b, 33);
+      poke(ram_peek16al(0x0004), peek((uint16_t)(ram_peek16al(0x0000) + row)));
+
+      // One hi-res scanline down within the character cell, which is +$400.
+      ram_poke(0x0005, (uint8_t)(ram_peek(0x0005) + 0x04));
+      s_x = (uint8_t)(row + 1);
+
+      // `INX / CPX #8 / BNE`: the branch is taken on every pass but the last.
+      if (row != 7)
+        GAME_CYCLES(0x669d, 1);
+    }
+
+    GAME_CYCLES(0x669f, 9);
+    s_x = ram_peek(0x0002);
+    s_y = ram_peek(0x0003);
+  }
+
+  GAME_CYCLES(0x6651, 7);
+  s_a = ch; // PLA -- the high bit is still on it
+  rom_cout1(0xfffe); // JMP $FDF0
+}

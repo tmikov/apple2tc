@@ -288,3 +288,7 @@ void game_draw_side_walls_native(void);
 
 /// $6217 -- poll the keyboard and push what it finds into the ring at $623C.
 void game_read_key_native(void);
+
+/// $664A -- draw \p ch through the game's own hi-res font, then hand it on to
+/// the ROM's COUT1 so the cursor still moves.
+void game_cout_hook_native(uint8_t ch);
