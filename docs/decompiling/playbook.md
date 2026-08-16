@@ -378,6 +378,18 @@ A register write inside real C costs the abstraction the conversion exists to
 buy, so it is worth checking whether anything reads it -- and the check is a
 command, re-runnable whenever the decompilation changes.
 
+**`[process]` A few addresses are load-bearing for *input*, not just for
+comparison.** Probe-stamped replay counts hits at seven named addresses, and
+keystrokes are stamped on that counter. Two of the seven sit inside game
+routines. Converting one -- charging its cycles but dropping its probe -- stops
+the counter advancing there, and every key recorded after that point arrives at
+a different instant. It is caught, because only the generated side drifts (the
+interpreter always runs the original binary), but caught as a 640,983-line
+block-head diff naming four addresses in an unrelated screen; verify.sh, which
+replays cycle-stamped keys, does not notice at all. Give those sites their own
+spelling (`GAME_CYCLES_COORD`), assert the set of addresses using it equals the
+coordinate's, and the same mistake is one line naming the address.
+
 **`[process]` A block that runs is not a behaviour that was tested.** Snake
 Byte's key table maps a *binding* to a *command* through two parallel arrays,
 and both blocks that do the mapping execute constantly -- play.pkeys presses
@@ -484,4 +496,6 @@ the whole point of it — see the step itself.
 | Coverage reported as a list of addresses | Group by feature. "The joystick" is actionable; forty hex numbers are not. |
 | Guessing whether a register is live after a call | `apple2tc --ir` prints per-function `LiveIn`/`LiveOut`. Reading the caller by hand is four routines of tracing for a fact the tool already computed. |
 | A block covered by a recording that never varies its inputs | Coverage says entered, not tested. Two identical lookup tables make reading the wrong one free. |
+| Converting a routine that contains an input-coordinate address | The replay counter stops advancing there and every later keystroke lands elsewhere. Keep the probe, and lint that only coordinate addresses do. |
+| `$(cmd | grep ...)` under `set -e` with `pipefail` | No match exits 1 and kills the script with no message. A check that legitimately finds nothing needs `|| true`. |
 | A verification script that ignores its arguments | `./verify.sh <build-dir>` read `$BIN` only and silently tested a stale directory -- four false PASSes. Scripts that gate anything must reject arguments they do not understand. |

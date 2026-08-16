@@ -1656,133 +1656,19 @@ void game_pause_or_toggle_sound(uint16_t ret_addr) {
 }
 
 void game_edit_key(uint16_t ret_addr) {
+  // Adapter for game_edit_key_native(). Costs 17 trace sites -- one short of
+  // the 18 blocks, because $760F stays a probe: it is one of the seven
+  // addresses the replay coordinate counts (see GAME_CYCLES_COORD).
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // Blink slot X of the key-redefinition screen and wait for a replacement.
-  // The blink is two halves: print a space, spin, print the current key from
-  // $75CB, spin again while polling the keyboard. Only the second half reads
-  // input, so a key pressed during the first half waits for the second.
-  //
-  // Accepted: anything from $A1 up, plus the two arrow keys. $75BF/$75C5 are
-  // the cursor position tables, indexed by slot.
-  for (;;) {
-    /*$75D1*/ CYCLES(0x75d1, 23);
-    const uint8_t slot = s_x;
-    ram_poke(0x0002, slot);
-    ram_poke(0x0024, ram_peek(0x75bf + slot));
-    ram_poke(0x0025, ram_peek(0x75c5 + slot));
-    rom_fc68(0x75df);
-
-    /*$75E0*/ CYCLES(0x75e0, 11);
-    s_x = ram_peek(0x0002);
-    s_a = 0xa0; // space
-    s_status_not_z = 0xa0;
-    s_status_n = 0x80;
-    rom_cout(0x75e6);
-
-    /*$75E7*/ CYCLES(0x75e7, 2);
-    s_y = 0x00;
-
-    for (;;) { // blank half: X inner, Y outer, no polling
-      /*$75E9*/ CYCLES(0x75e9, 4);
-      s_x = (uint8_t)(s_x - 0x01);
-      if (s_x) {
-        /*$75EA*/ CYCLES_EDGE(0x75ea, 1);
-        continue;
-      }
-      /*$75EC*/ CYCLES(0x75ec, 4);
-      /*$75F0*/ CYCLES(0x75f0, 4);
-      s_y = (uint8_t)(s_y - 0x01);
-      if (!s_y)
-        break;
-      /*$75F1*/ CYCLES_EDGE(0x75f1, 1);
-    }
-
-    /*$75F3*/ CYCLES(0x75f3, 23);
-    const uint8_t s2 = ram_peek(0x0002);
-    s_x = s2;
-    ram_poke(0x0024, ram_peek(0x75bf + s2));
-    ram_poke(0x0025, ram_peek(0x75c5 + s2));
-    rom_fc68(0x7601);
-
-    /*$7602*/ CYCLES(0x7602, 13);
-    const uint8_t s3 = ram_peek(0x0002);
-    s_x = s3;
-    s_a = ram_peek(0x75cb + s3);
-    s_status_not_z = s_a;
-    s_status_n = (s_a & 0x80);
-    rom_cout(0x7609);
-
-    /*$760A*/ CYCLES(0x760a, 2);
-    s_y = 0x00;
-
-    bool accepted = false, restart = false;
-    for (;;) { // visible half, polling as it goes
-      /*$760C*/ CYCLES(0x760c, 4);
-      s_x = (uint8_t)(s_x - 0x01);
-      if (s_x) {
-        /*$760D*/ CYCLES_EDGE(0x760d, 1);
-        continue;
-      }
-
-      /*$760F*/ CYCLES(0x760f, 6);
-      s_a = io_peek(0xc000);
-      if (s_a & 0x80) {
-        /*$7612*/ CYCLES_EDGE(0x7612, 1);
-        /*$761C*/ CYCLES(0x761c, 8);
-        const uint8_t key = s_a;
-        io_poke(0xc010, key);
-        s_status_c = (key >= 0xa1);
-        if (key >= 0xa1) {
-          /*$7621*/ CYCLES_EDGE(0x7621, 1);
-          accepted = true;
-          break;
-        }
-        /*$7623*/ CYCLES(0x7623, 4);
-        s_status_c = (key >= 0x88);
-        if (key == 0x88) { // left arrow
-          /*$7625*/ CYCLES_EDGE(0x7625, 1);
-          accepted = true;
-          break;
-        }
-        /*$7627*/ CYCLES(0x7627, 4);
-        s_status_c = (key >= 0x95);
-        if (key == 0x95) { // right arrow
-          /*$7629*/ CYCLES_EDGE(0x7629, 1);
-          accepted = true;
-          break;
-        }
-        /*$762B*/ CYCLES(0x762b, 6);
-        s_x = ram_peek(0x0002);
-        restart = true;
-        break;
-      }
-
-      /*$7614*/ CYCLES(0x7614, 4);
-      s_y = (uint8_t)(s_y - 0x01);
-      if (s_y) {
-        /*$7615*/ CYCLES_EDGE(0x7615, 1);
-        continue;
-      }
-      /*$7617*/ CYCLES(0x7617, 6);
-      s_x = ram_peek(0x0002);
-      restart = true;
-      break;
-    }
-
-    if (accepted)
-      break;
-    (void)restart;
-  }
-
-  /*$7630*/ CYCLES(0x7630, 9);
-  const uint8_t slot = ram_peek(0x0002);
+  const uint8_t slot = s_x;
+  s_a = game_edit_key_native(slot);
+  s_x = slot;
   s_status_not_z = slot;
   s_status_n = (slot & 0x80);
-  s_x = slot;
 
   if (ret_addr)
     pop16();

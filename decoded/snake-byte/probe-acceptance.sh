@@ -107,6 +107,20 @@ set_scenario() {
   echo "--- scenario $(basename "$keys"): $expected_keys keys ---"
 }
 
+# Every probe site a set of sources defines, one hex address per line, sorted.
+#
+# Two spellings count. A bare `CYCLES(0x...` is a block head in generated or
+# hand-written emulator-shaped C. `GAME_CYCLES_COORD(0x...` is the exception
+# converted real C is allowed: a site that keeps its probe because the replay
+# coordinate counts it. The plain `GAME_CYCLES` of converted code is neither --
+# it charges cycles and is deliberately unprobed -- and the leading
+# `[^_A-Za-z]` is what keeps it out, since `CYCLES(0x` is a substring of
+# `GAME_CYCLES(0x`.
+site_addrs() {
+  grep -ohE '(^|[^_A-Za-z])CYCLES\(0x[0-9a-f]+|GAME_CYCLES_COORD\(0x[0-9a-f]+' "$@" \
+    | sed 's/.*0x//' | sort -u
+}
+
 # Compare one generated build against the interpreter on that build's own
 # block heads. $1: label, $2: generated binary, $3: probe script, $4: where to
 # keep the site list, $5: the exact expected site count, $6..: the C
@@ -124,7 +138,7 @@ check_backend() {
   # committed so a failure is bisectable without regenerating the C first, but
   # it is still rebuilt here so it never goes stale relative to the C actually
   # being tested.
-  grep -ohE 'CYCLES\(0x[0-9a-f]+' "${srcs[@]}" | sed 's/CYCLES(0x//' | sort -u > "$sites"
+  site_addrs "${srcs[@]}" > "$sites"
   local nsites
   nsites=$(wc -l < "$sites")
   echo "[$label] site list: $nsites block heads"
@@ -212,7 +226,7 @@ coverage_report() {
 
   [ ${#hand[@]} -gt 0 ] || return 0
   local handsites="/tmp/pkeys-cover-hand-$label.txt"
-  grep -ohE 'CYCLES\(0x[0-9a-f]+' "${hand[@]}" | sed 's/CYCLES(0x//' | sort -u > "$handsites"
+  site_addrs "${hand[@]}" > "$handsites"
   local dead ndead
   dead=$(comm -23 "$handsites" "$hit")
   ndead=$(printf '%s\n' "$dead" | grep -c . || true)
@@ -278,6 +292,37 @@ if strip_comments "$here/game_native.c" | grep -qE '(^|[^_A-Za-z])CYCLES\([^)]';
   echo "FAIL: game_native.c uses CYCLES; converted code must use GAME_CYCLES" >&2
   strip_comments "$here/game_native.c" | grep -nE '(^|[^_A-Za-z])CYCLES\([^)]' >&2
   exit 1
+fi
+
+# ...with one spelled exception, and it is bounded here.
+#
+# Replay stamps keys on the probe counter, not on cycles, and that counter is
+# incremented at the seven addresses $coord names. Two of them sit inside
+# routines being converted. If one silently became a CYCLES_EDGE the counter
+# would stop advancing there and every stamp recorded after it would land at a
+# different instant -- the recordings would replay wrong rather than fail, and
+# no comparison in this script would say so, because both engines would be
+# reading the same shifted input.
+#
+# So GAME_CYCLES_COORD keeps the probe, and the set of addresses allowed to use
+# it is exactly the coordinate's. Anything else spelled that way is a site
+# claiming an exemption it has no reason to hold.
+#
+# `|| true` on the grep: having no such sites at all is perfectly legitimate,
+# but grep exits 1 on no match and pipefail hands that to `set -e`, which
+# aborted the whole script with no message the first time it was true.
+coord_addrs=$(echo "${coord#install kb at }" | tr -d ' ' | tr ',' '\n' | tr -d '$' \
+  | tr 'A-F' 'a-f' | sort -u)
+used_coord=$(strip_comments "$here/game_native.c" \
+  | grep -ohE 'GAME_CYCLES_COORD\(0x[0-9a-f]+' | sed 's/.*0x//' | sort -u || true)
+if [ -n "$used_coord" ]; then
+  notcoord=$(comm -23 <(echo "$used_coord") <(echo "$coord_addrs"))
+  if [ -n "$notcoord" ]; then
+    echo "FAIL: GAME_CYCLES_COORD used at addresses that are not on the coordinate:" >&2
+    echo "$notcoord" >&2
+    exit 1
+  fi
+  echo "coordinate sites kept in game_native.c: $(echo $used_coord)"
 fi
 
 # The built program must start on its own, with no key file at all.
@@ -348,7 +393,8 @@ for keyfile in ${KEYS:-"$here/play.pkeys" "$here/play-hires.pkeys"}; do
 check_backend trace "$bin/decoded/snake-byte/snake-bytec1-run" "$here/trace.probe" \
   "$here/blocks.txt" 1694 "$here/snake-bytec1.c"
 check_backend trace-ext "$bin/decoded/snake-byte/snake-bytec1-ext-run" "$here/trace-ext.probe" \
-  "$here/blocks-ext.txt" 1488 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c"
+  "$here/blocks-ext.txt" 1471 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c" \
+  "$here/game_native.c"
 
 if diff -q "$here/blocks.txt" "$here/blocks-ext.txt" > /dev/null; then
   echo "the two back ends agree on the block-head set"
@@ -455,8 +501,8 @@ frames=${EASY_FRAMES:-3000}
 set_scenario "$here/play-hires.pkeys"
 echo "    (against snake-byte-easy.b33, $frames frames)"
 check_backend trace-easy "$bin/decoded/snake-byte/snake-byte-easyc1-ext-run" \
-  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1488 \
-  "$here/snake-byte-easyc1-ext.c" "$here/a2rom.c" "$here/game.c"
+  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1471 \
+  "$here/snake-byte-easyc1-ext.c" "$here/a2rom.c" "$here/game.c" "$here/game_native.c"
 
 # The fixture's block heads are the same set as the stock extern build's, and
 # the hand-written sources are literally the same files, so what this scenario
@@ -484,8 +530,10 @@ coverage_report trace "$here/blocks.txt" 0
 #   the ROM (20)        in a2rom.c, mostly paths for arguments the game never
 #       passes to PLOT, HLINE and SCRN.
 #   pause and mute (6)  all of $69A9. Neither recording presses ESC or Ctrl-S.
-#   arrow keys (3)      $7623 $7627 $762B, the redefinition screen's arrow
-#       cases. play-hires assigns W A D X Q E, all above $A1.
+#   (was: arrow keys (3), $7623 $7627 $762B -- the redefinition screen's arrow
+#   cases, which play-hires never reaches because it assigns W A D X Q E, all
+#   above $A1. Off the list with game_edit_key's conversion, and unverified
+#   still.)
 #   difficulty 2 (3)    $65D9 $65F4 for the second bouncer and $70A5 for its
 #       wall gap. Both recordings play at difficulty 1.
 #   (was: off the board (2), $64D2 $6572 -- those two left the site list
@@ -503,4 +551,5 @@ coverage_report trace "$here/blocks.txt" 0
 # The number exists to stop that set growing quietly, and to be ratcheted down
 # whenever a scenario reaches one of them -- as happened at 22 -> 21 when the
 # `easy` fixture covered $6C4F. It is not a target to be satisfied.
-coverage_report trace-ext "$here/blocks-ext.txt" 30 "$here/a2rom.c" "$here/game.c"
+coverage_report trace-ext "$here/blocks-ext.txt" 27 "$here/a2rom.c" "$here/game.c" \
+  "$here/game_native.c"

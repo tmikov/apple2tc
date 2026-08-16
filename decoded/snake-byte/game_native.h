@@ -80,6 +80,42 @@ typedef struct {
 /// than a declared trade.
 #define GAME_CYCLES(addr, n) CYCLES_EDGE((addr), (n))
 
+/// Charge the cycles and *keep* the probe, for the handful of addresses that
+/// carry the input coordinate.
+///
+/// Replay does not stamp keystrokes on cycles -- it stamps them on a counter
+/// the probe language increments at seven named addresses (see rec.probe).
+/// Two of those, $6217 and $760F, sit inside routines this file is converting.
+/// A converted site charges its cycles and drops its probe, so spelling one of
+/// those GAME_CYCLES would stop the counter advancing there, and every key
+/// stamped after that point would arrive at a different instant.
+///
+/// That is caught, but badly. The interpreter side of the comparison always
+/// runs the original binary, so its counter never drifts; only the generated
+/// side does, and the block-head trace then diverges. Measured: converting
+/// $760F fails trace-ext on the play-hires scenario at line 640,983 of the
+/// diff, with four addresses in the redefinition screen appearing on one side
+/// and not the other. Nothing about that output says "the input coordinate
+/// moved". verify.sh does not notice at all -- it replays the cycle-stamped
+/// .keys files, which do not use the counter.
+///
+/// So the site keeps its probe, and the spelling says why at the call site.
+/// probe-acceptance.sh asserts that every address written this way is one of
+/// the coordinate's, which turns a 640,983-line diff into one line naming the
+/// address.
+///
+/// The local is the emulator's assembly-trace plumbing: `CYCLES` consults a
+/// `branchTarget` flag the generated dispatch keeps, to print one line per
+/// block rather than one per instruction. Converted code has no block
+/// structure for that question to be about, and a site spelled this way is a
+/// block head by construction, so it answers yes and moves on.
+#define GAME_CYCLES_COORD(addr, n) \
+  do {                             \
+    bool branchTarget = true;      \
+    CYCLES((addr), (n));           \
+    (void)branchTarget;            \
+  } while (0)
+
 /* --- The bouncers --------------------------------------------------------- */
 
 /// One of the two objects that ricochet around the playfield. The original
@@ -175,3 +211,7 @@ void game_find_nearest_apple(void);
 /// for nothing. Reads the joystick itself when one is selected and the key
 /// was not a direction.
 uint8_t game_read_direction_native(uint8_t key);
+
+/// $75D1 -- blink slot \p slot on the key-redefinition screen until the player
+/// presses something it will accept, and return that key.
+uint8_t game_edit_key_native(uint8_t slot);

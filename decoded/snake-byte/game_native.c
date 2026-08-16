@@ -1295,3 +1295,150 @@ uint8_t game_read_direction_native(uint8_t key) {
   GAME_CYCLES(0x6cf1, 10);
   return input_code(chosen);
 }
+
+/* ========================================================================== */
+/* $75D1 -- read a replacement key for one slot                               */
+/* ========================================================================== */
+
+/// Where slot \p slot sits on the redefinition screen, and what blinks there.
+///
+/// $75CB is not the slot's current binding, which is the obvious reading. Its
+/// six bytes are $E2 $E4 $E5 $E3 $E4 $E5, and the repeats settle it: six
+/// distinct keys cannot have four distinct glyphs. It is the *direction* the
+/// slot stands for -- up, left, right, down, left, right -- drawn through the
+/// game's own hi-res COUT, which is why the player knows which key is being
+/// asked for.
+static uint8_t slot_col(int slot) {
+  return ram_peek(0x75bf + slot);
+}
+
+static uint8_t slot_row(int slot) {
+  return ram_peek(0x75c5 + slot);
+}
+
+static uint8_t slot_glyph(int slot) {
+  return ram_peek(0x75cb + slot);
+}
+
+/// Both halves of the blink count X down to zero 256 times, and the X they
+/// start from is whatever COUT left behind -- the original never initialises
+/// it. So the first pass is a different length from the other 255, by an
+/// amount that depends on the ROM. Transcribed rather than tidied: it is the
+/// delay's actual duration.
+static uint8_t cout_left_x(void) {
+  return s_x;
+}
+
+/// $75D1 -- the dark half: erase the glyph and wait, polling nothing.
+static void edit_key_blank(uint8_t slot) {
+  // The slot is parked at $0002 for the whole routine because COUT clobbers X
+  // and every step below needs it again.
+  GAME_CYCLES(0x75d1, 23);
+  ram_poke(0x0002, slot);
+  ram_poke(0x0024, slot_col(slot));
+  ram_poke(0x0025, slot_row(slot));
+  rom_fc68(0x75df);
+
+  GAME_CYCLES(0x75e0, 11);
+  s_x = slot;
+  s_a = 0xa0; // space
+  s_status_not_z = 0xa0;
+  s_status_n = 0x80;
+  rom_cout(0x75e6);
+
+  GAME_CYCLES(0x75e7, 2);
+  uint8_t x = cout_left_x();
+  uint8_t y = 0;
+  for (;;) {
+    GAME_CYCLES(0x75e9, 4);
+    if (--x) {
+      GAME_CYCLES(0x75ea, 1);
+      continue;
+    }
+    // $75EC is `LDA #$41 / BEQ`, a branch that cannot be taken and a value
+    // nothing reads. Four cycles of the delay and nothing else.
+    GAME_CYCLES(0x75ec, 4);
+    GAME_CYCLES(0x75f0, 4);
+    if (!--y)
+      break;
+    GAME_CYCLES(0x75f1, 1);
+  }
+}
+
+/// $75F3 -- the lit half: draw the glyph and wait, reading the keyboard each
+/// time the inner counter wraps. Returns the accepted key, or 0 if the wait
+/// ran out or the key was rejected -- either way the blink starts again, and
+/// no acceptable key is 0.
+static uint8_t edit_key_prompt(uint8_t slot) {
+  GAME_CYCLES(0x75f3, 23);
+  s_x = slot;
+  ram_poke(0x0024, slot_col(slot));
+  ram_poke(0x0025, slot_row(slot));
+  rom_fc68(0x7601);
+
+  GAME_CYCLES(0x7602, 13);
+  s_x = slot;
+  const uint8_t glyph = slot_glyph(slot);
+  s_a = glyph;
+  s_status_not_z = glyph;
+  s_status_n = (glyph & 0x80);
+  rom_cout(0x7609);
+
+  GAME_CYCLES(0x760a, 2);
+  uint8_t x = cout_left_x();
+  uint8_t y = 0;
+  for (;;) {
+    GAME_CYCLES(0x760c, 4);
+    if (--x) {
+      GAME_CYCLES(0x760d, 1);
+      continue;
+    }
+
+    GAME_CYCLES_COORD(0x760f, 6);
+    const uint8_t key = io_peek(0xc000);
+    if (key & 0x80) {
+      GAME_CYCLES(0x7612, 1);
+      GAME_CYCLES(0x761c, 8);
+      io_poke(0xc010, key); // clear the strobe
+
+      // Anything from $A1 up -- every printable key -- plus the two arrows.
+      // The carry the three compares leave is not written back: the caller's
+      // next act on it is $7582's `CPX #$06`, which sets it.
+      if (key >= 0xa1) {
+        GAME_CYCLES(0x7621, 1);
+        return key;
+      }
+      GAME_CYCLES(0x7623, 4);
+      if (key == 0x88) { // left arrow
+        GAME_CYCLES(0x7625, 1);
+        return key;
+      }
+      GAME_CYCLES(0x7627, 4);
+      if (key == 0x95) { // right arrow
+        GAME_CYCLES(0x7629, 1);
+        return key;
+      }
+      GAME_CYCLES(0x762b, 6);
+      return 0;
+    }
+
+    GAME_CYCLES(0x7614, 4);
+    if (--y) {
+      GAME_CYCLES(0x7615, 1);
+      continue;
+    }
+    GAME_CYCLES(0x7617, 6);
+    return 0;
+  }
+}
+
+uint8_t game_edit_key_native(uint8_t slot) {
+  uint8_t key;
+  do {
+    edit_key_blank(slot);
+    key = edit_key_prompt(slot);
+  } while (!key);
+
+  GAME_CYCLES(0x7630, 9);
+  return key;
+}
