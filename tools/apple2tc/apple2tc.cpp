@@ -67,6 +67,7 @@ static void printHelp() {
   fprintf(stderr, "  --routines-report=f Write routine candidate analysis to file\n");
   fprintf(stderr, "  --extern-routines=f Declare the routines listed in the file external\n");
   fprintf(stderr, "  --code-at=f         Add hand-asserted 'origin target' branch edges\n");
+  fprintf(stderr, "  --inline-str=f      Routines taking a NUL-terminated string after the JSR\n");
   fprintf(stderr, "  --coverage=f        Write a code/data coverage report to file\n");
   fprintf(stderr, "  --known-data=f      Declare 'from to name' data ranges for --coverage\n");
   fprintf(stderr, "  --no-gen            Ignore runtime generations\n");
@@ -92,6 +93,7 @@ int main(int argc, char **argv) {
   std::string routinesReportPath;
   std::string externRoutinesPath;
   std::string codeAtPath;
+  std::string inlineStrPath;
   std::string coveragePath;
   std::string knownDataPath;
   bool rom = false;
@@ -148,6 +150,10 @@ int main(int argc, char **argv) {
       externRoutinesPath = argv[i] + 18;
       continue;
     }
+    if (strncmp(argv[i], "--inline-str=", 13) == 0) {
+      inlineStrPath = argv[i] + 13;
+      continue;
+    }
     if (strncmp(argv[i], "--code-at=", 10) == 0) {
       codeAtPath = argv[i] + 10;
       continue;
@@ -188,6 +194,21 @@ int main(int argc, char **argv) {
     auto dis = std::make_shared<Disas>(runDataPath);
     if (!codeAtPath.empty())
       dis->setCodeAt(loadCodeAt(codeAtPath));
+    if (!inlineStrPath.empty()) {
+      // Refused rather than warned about, because the failure is invisible.
+      // A declared routine whose body is still generated pops its return
+      // address off the emulated stack -- and that address has just been moved
+      // past the string, so it prints from whatever follows and every check
+      // downstream compares two engines doing the same wrong thing.
+      if (externRoutinesPath.empty()) {
+        fprintf(
+            stderr,
+            "--inline-str requires --extern-routines: a declared routine must be replaced,\n"
+            "not generated, or it will read its argument from the wrong place.\n");
+        return 2;
+      }
+      dis->setInlineStr(loadInlineStr(inlineStrPath));
+    }
     if (rom) {
       dis->loadROM(binary.data(), binary.size());
       dis->setStart(dis->peek16(0xFFFC));
@@ -227,8 +248,26 @@ int main(int argc, char **argv) {
       }
       // Externalizing must happen before routine identification: a routine that
       // calls an unidentifiable ROM entry point is itself rejected.
-      if (!externRoutinesPath.empty())
-        externRoutines(mod, loadExternRoutines(mod, externRoutinesPath));
+      if (!externRoutinesPath.empty()) {
+        auto externs = loadExternRoutines(mod, externRoutinesPath);
+        // Every --inline-str routine must be among them; see the check at
+        // parse time for why this is fatal rather than advisory.
+        for (uint16_t addr : dis->getInlineStr()) {
+          bool found = false;
+          for (auto &[externAddr, name] : externs)
+            found = found || externAddr == addr;
+          if (!found) {
+            fprintf(
+                stderr,
+                "--inline-str: $%04X is not in %s. A declared routine must be replaced by a\n"
+                "hand-written one, which receives the string's address as its ret_addr.\n",
+                addr,
+                externRoutinesPath.c_str());
+            return 2;
+          }
+        }
+        externRoutines(mod, externs);
+      }
       if (optLevel > 1) {
         FILE *report = nullptr;
         if (!routinesReportPath.empty()) {

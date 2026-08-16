@@ -12,6 +12,11 @@
 # --------------------------------------------------------------------------
 # $7251: the RTS of $7230 print_inline_str.
 #
+# Still needed, but only by the builds that do not pass --inline-str: the
+# self-contained snake-bytec1.c and the coverage run. In the extern build the
+# continuation is derived from each call site's own terminator, so these two
+# edges are computed rather than asserted there. See inline-str.txt.
+#
 # $7230 is the Apple II "inline string after JSR" idiom. It pops its own return
 # address into $0C/$0D, walks the $00-terminated bytes that follow the JSR
 # printing each through COUT, then pushes the address of the terminator and

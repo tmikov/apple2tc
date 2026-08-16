@@ -67,6 +67,64 @@
 /* scroll -- the game draws the glyph and lets the ROM keep the bookkeeping.   */
 /* ========================================================================== */
 
+/// $7230 -- print the NUL-terminated string that follows the call.
+///
+/// The original takes its argument by popping its own return address, walking
+/// the bytes after the JSR, and then pushing the address of the terminator so
+/// that its RTS lands past them. Declaring it in inline-str.txt is what lets
+/// apple2tc point each call site's fall-through past the string instead; the
+/// call still passes the *original* return address, because ExternRoutines
+/// derives that from the call site and not from the fall-through. So \p
+/// ret_addr is the same pointer the original popped, and this reads its
+/// argument from the same place for the same reason.
+///
+/// Nothing is pushed or popped. The original's PLA/PLA and PHA/PHA cancel, so
+/// the emulated stack pointer ends where the caller left it either way, and
+/// ram.probe compares only the live stack.
+///
+/// $0C/$0D are still written at every step. They are scratch, but they are in
+/// the range ram.probe hashes, so the residue has to be the residue the
+/// original left.
+void game_print_inline_str(uint16_t ret_addr) {
+  bool branchTarget = true;
+
+  /*$7230*/ CYCLES(0x7230, 20);
+  ram_poke(0x000c, (uint8_t)ret_addr);
+  ram_poke(0x000d, (uint8_t)(ret_addr >> 8));
+  rom_fc68(0x7239); // VTAB to the current CV
+
+  for (;;) {
+    // The pointer is stepped before the read, which is why the caller passes
+    // the address of the JSR's last byte rather than of the string.
+    /*$7239*/ CYCLES(0x7239, 7);
+    const uint8_t lo = (uint8_t)(ram_peek(0x000c) + 1);
+    ram_poke(0x000c, lo);
+    if (!lo) {
+      /*$723D*/ CYCLES(0x723d, 5);
+      ram_poke(0x000d, (uint8_t)(ram_peek(0x000d) + 1));
+    } else {
+      /*$723B*/ CYCLES_EDGE(0x723b, 1);
+    }
+
+    /*$723F*/ CYCLES(0x723f, 9);
+    const uint8_t ch = peek(ram_peek16al(0x000c));
+    s_y = 0x00;
+    s_a = ch;
+    s_status_not_z = ch;
+    s_status_n = (ch & 0x80);
+    if (!ch) {
+      /*$7243*/ CYCLES_EDGE(0x7243, 1);
+      break;
+    }
+
+    /*$7245*/ CYCLES(0x7245, 6);
+    rom_cout(0x7247);
+    /*$7248*/ CYCLES(0x7248, 3);
+  }
+
+  /*$724B*/ CYCLES(0x724b, 18);
+}
+
 void game_cout_hook(uint16_t ret_addr) {
   // Adapter for game_cout_hook_native(). Costs 4 trace sites; $664A survives,
   // probed here with no cycles and charged for real inside.

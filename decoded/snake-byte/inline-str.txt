@@ -1,0 +1,19 @@
+# Routines that take their argument as NUL-terminated bytes placed after the
+# JSR that calls them, for apple2tc's --inline-str. One hexadecimal address per
+# line; '$' optional, '#' starts a comment.
+#
+# See Disas.h's loadInlineStr() for what declaring one changes, and CodeAtEdge
+# for the idiom itself.
+
+# $7230 print_inline_str. Ten call sites.
+#
+#     7230: PLA / STA $0C / PLA / STA $0D    ; the return address
+#     7236: JSR $FC68                        ; VTAB to the current CV
+#     7239: INC $0C / BNE $723F / INC $0D    ; step past the JSR's last byte
+#     723F: LDY #$00 / LDA ($0C),Y / BEQ $724B / JSR COUT / JMP $7239
+#     724B: LDA $0D / PHA / LDA $0C / PHA / RTS
+#
+# The final PHA/PHA/RTS lands on the byte after the terminator, which is why
+# the call's fall-through is not the instruction after the JSR. $7230 is
+# replaced by hand in game.c, which is required: see the check in apple2tc.cpp.
+7230

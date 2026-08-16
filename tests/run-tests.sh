@@ -70,6 +70,47 @@ $apple2tc codeat.b33 -O3 --ir > codeat-noedges-test.ir
 diff -q codeat-noedges.ir codeat-noedges-test.ir
 rm codeat-test.ir codeat-noedges-test.ir
 
+# --inline-str: routines taking a NUL-terminated string after the JSR. Two
+# baselines again, and for the same reason -- without the option the tracer
+# follows the fall-through into the text, and $C8 $C9 $00 decodes as
+# INY / CMP #$00. That is a wrong decompilation the disassembler cannot notice,
+# so the baseline pair is what pins the behaviour rather than an absence of
+# warnings.
+$a6502 inlinestr.s inlinestr.b33 && $apple2tc inlinestr.b33 -O3 --ir --ret-addr \
+  --extern-routines=inlinestr.externs --inline-str=inlinestr.txt > inlinestr-test.ir
+diff -q inlinestr.ir inlinestr-test.ir
+$apple2tc inlinestr.b33 -O3 --ir --ret-addr --extern-routines=inlinestr.externs \
+  > inlinestr-noinline-test.ir
+diff -q inlinestr-noinline.ir inlinestr-noinline-test.ir
+rm inlinestr-test.ir inlinestr-noinline-test.ir
+
+# A declared routine that is still *generated* would pop a return address the
+# option has just moved past the string, and print from whatever follows --
+# with nothing in the output looking wrong. Both ways of arriving there are
+# refused, and both refusals are watched failing here.
+expect_inline_reject() {
+  # $1: what is wrong with it, $2: expected substring, $3...: extra arguments
+  local desc=$1 want=$2
+  shift 2
+  if $apple2tc inlinestr.b33 -O3 --ir --inline-str=inlinestr.txt "$@" \
+      >/dev/null 2>inlinestr-bad.err; then
+    echo "FAIL: --inline-str accepted $desc" >&2
+    exit 1
+  fi
+  if ! grep -q "$want" inlinestr-bad.err; then
+    echo "FAIL: --inline-str rejected $desc, but not with '$want':" >&2
+    cat inlinestr-bad.err >&2
+    exit 1
+  fi
+  rm -f inlinestr-bad.err
+}
+
+expect_inline_reject "no --extern-routines at all" "requires --extern-routines"
+printf '# empty\n' > inlinestr-bad.externs
+expect_inline_reject "a routine missing from the extern list" "is not in" \
+  --extern-routines=inlinestr-bad.externs
+rm -f inlinestr-bad.externs inlinestr.b33
+
 # Each --code-at rejection, asserted to actually reject. A check nobody has
 # watched fail is not a check.
 expect_reject() {

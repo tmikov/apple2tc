@@ -1,0 +1,3 @@
+# The inline-string routine in inlinestr.s. One address per line; the '$'
+# prefix is optional and is exercised here on purpose.
+$320

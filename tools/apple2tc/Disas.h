@@ -329,6 +329,28 @@ struct CodeAtEdge {
 /// hexadecimal with an optional '$' prefix; '#' starts a comment.
 std::vector<CodeAtEdge> loadCodeAt(const std::string &path);
 
+/// Parse an `--inline-str` file: one routine address per line, hexadecimal with
+/// an optional '$' prefix, '#' starts a comment.
+///
+/// Each address names a routine that takes its argument as NUL-terminated bytes
+/// placed immediately after the `JSR` that calls it, and returns *past* them --
+/// the Apple II inline-string idiom, described at CodeAtEdge above.
+///
+/// Declaring one changes two things. The bytes stop being traced as code, which
+/// is where a listing's "ERROR: Invalid instruction" at the head of a string
+/// comes from; and the call's fall-through becomes the byte after the
+/// terminator, which is the address control actually resumes at.
+///
+/// The routine must also be externalized with `--extern-routines`, and
+/// apple2tc refuses the combination otherwise. A generated body would still
+/// pop its return address off the emulated stack, and that address has just
+/// been moved past the string -- so it would print from the wrong place, and
+/// nothing about the output would look wrong. The hand-written replacement
+/// receives the original address as its `ret_addr` argument, because
+/// ExternRoutines derives that from the call site rather than from the
+/// fall-through.
+std::vector<uint16_t> loadInlineStr(const std::string &path);
+
 /// A region identified as something other than code: an asset, a table, a
 /// buffer. Declared by hand, because deciding that bytes are data is a
 /// conclusion about the program, not something the disassembler can derive.
@@ -370,6 +392,15 @@ public:
   /// runtime data at the start of run(). See CodeAtEdge and loadCodeAt().
   void setCodeAt(std::vector<CodeAtEdge> edges) {
     codeAt_ = std::move(edges);
+  }
+
+  /// Record the inline-string routines declared with `--inline-str`.
+  void setInlineStr(std::vector<uint16_t> addrs) {
+    inlineStr_ = std::set<uint16_t>(addrs.begin(), addrs.end());
+  }
+
+  const std::set<uint16_t> &getInlineStr() const {
+    return inlineStr_;
   }
 
   auto asmBlocks() const {
@@ -496,6 +527,13 @@ private:
   /// Hand-asserted dynamic control-flow edges from `--code-at`, merged into
   /// runData_ by applyCodeAt().
   std::vector<CodeAtEdge> codeAt_{};
+
+  /// Routines declared with `--inline-str`. See loadInlineStr().
+  std::set<uint16_t> inlineStr_{};
+
+  /// Where control resumes after a call to an inline-string routine whose
+  /// argument starts at \p strAddr: the byte after the first $00.
+  uint16_t inlineStrContinuation(uint16_t strAddr) const;
 
   /// Whether to name labels by their address or their order of definition.
   bool labelsByAddr_ = true;

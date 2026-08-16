@@ -1,0 +1,3 @@
+# --inline-str requires the routine to be replaced rather than generated, so
+# the test supplies the extern it insists on.
+0320 print_str

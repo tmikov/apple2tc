@@ -57,3 +57,4 @@ FE93 rom_setvid
 69A9 game_pause_or_toggle_sound
 75D1 game_edit_key
 6C72 game_read_direction
+7230 game_print_inline_str

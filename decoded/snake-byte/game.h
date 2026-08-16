@@ -17,6 +17,9 @@
 /// unit and is never compiled on its own.
 
 /// $664A -- the game's own COUT handler, a hi-res text renderer.
+/// $7230 -- print the NUL-terminated string that follows the call.
+void game_print_inline_str(uint16_t ret_addr);
+
 void game_cout_hook(uint16_t ret_addr);
 
 /* --- $60E4/$60E7/$6127: the hi-res cell plotter -------------------------- */

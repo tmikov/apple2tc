@@ -1,0 +1,38 @@
+// Loaded binary at [$0300..$033E]
+// code labels: 11
+// data labels: 3
+// Gen    :
+// Kill   :
+// Mod    : X, STATUS_V, STATUS_B, STATUS_D, STATUS_I, STATUS_C
+// LiveIn : A, Y, STATUS_N, STATUS_NotZ
+// LiveOut: X, STATUS_V, STATUS_B, STATUS_D, STATUS_I, STATUS_C
+function func1
+%bb1:  // Pred() Succ(%bb_0310)
+                StoreR8       X, 0x00
+                StoreSP       0xff
+                StoreR8       STATUS_V, 0x00
+                StoreR8       STATUS_B, 0x00
+                StoreR8       STATUS_D, 0x00
+                StoreR8       STATUS_I, 0x00
+                StoreR8       STATUS_C, 0x00
+/*$0300*/       AddCycles     6
+                Call          print_str, 0x0302
+/*$0306*/       AddCycles     12
+/*$0308*/       RamPoke8      0x1000, 0x01
+/*$030B*/       Call          print_str, 0x030d
+                Jmp           %bb_0310
+%bb_0310:  // [$0310] Pred(%bb_0310, %bb1) Succ(%bb_0310)
+/*$0310*/       AddCycles     3
+                Jmp           %bb_0310
+%bb2:  // Pred() Succ()
+                Exit
+end func1
+
+// Gen    : A, X, Y, STATUS_N, STATUS_V, STATUS_B, STATUS_D, STATUS_I, STATUS_NotZ, STATUS_C
+// Kill   :
+// Mod    : A, X, Y, STATUS_N, STATUS_V, STATUS_B, STATUS_D, STATUS_I, STATUS_NotZ, STATUS_C
+// LiveIn :
+// LiveOut:
+function print_str
+end print_str
+

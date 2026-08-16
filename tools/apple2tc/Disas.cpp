@@ -209,7 +209,12 @@ void Disas::identifyAsmBlocks() {
         break;
       } else if (inst.kind == CPUInstKind::JSR) {
         block->setEndAddress(addr);
-        AsmBlock *fall = addWork(addr, nullptr);
+        // A routine declared with --inline-str consumes the NUL-terminated
+        // bytes that follow the call and returns past them, so control resumes
+        // after the terminator rather than at `addr`. Tracing `addr` instead is
+        // what decodes the first byte of a string as an instruction.
+        AsmBlock *fall = addWork(
+            inlineStr_.count(inst.operand) ? inlineStrContinuation(addr) : addr, nullptr);
         AsmBlock *branch = addWork(inst.operand, &block);
         block->finish(fall, branch);
         break;
@@ -241,6 +246,20 @@ void Disas::identifyAsmBlocks() {
       }
     }
   }
+}
+
+uint16_t Disas::inlineStrContinuation(uint16_t strAddr) const {
+  // The string cannot run past the end of memory, and a routine declared by
+  // mistake would otherwise walk the whole address space looking for a byte
+  // that is not there. Stopping at the wrap point turns that into a decode
+  // error at a nameable address instead of a silent scan.
+  for (uint32_t a = strAddr; a < 0x10000; ++a) {
+    if (peek((uint16_t)a) == 0)
+      return (uint16_t)(a + 1);
+  }
+  throw std::runtime_error(format(
+      "--inline-str: the string at $%04X has no $00 terminator before the end of memory",
+      (unsigned)strAddr));
 }
 
 void Disas::applyCodeAt() {
