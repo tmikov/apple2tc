@@ -50,8 +50,15 @@ $apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --
 # snake-bytec1-ext.c emits the ROM entry points listed in rom.externs as
 # declarations only; the bodies are hand-written in a2rom.c. It does NOT link on
 # its own -- snake-byte-ext.c is what actually gets compiled.
+#
+# --alt-exit is on this line and not the two above it. It identifies routines
+# that return by discarding their return address and jumping into the caller --
+# $6A32 does that at $6AB3 -- and turns them into C functions returning which
+# exit they took. The reference build stays without it so that the two variants
+# differ by more than one flag in only one direction, and so the control this
+# is checked against is not itself carrying the new transform.
 $apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --irc1 --ret-addr -v1 \
-  --extern-routines=rom.externs --inline-str=inline-str.txt > snake-bytec1-ext.c
+  --extern-routines=rom.externs --inline-str=inline-str.txt --alt-exit > snake-bytec1-ext.c
 
 # The `easy` fixture. snake-byte-easy.b33 is snake-byte.b33 with the per-level
 # apple quota lowered from 16 to 2 (see make-easy.sh for the two bytes and why
@@ -70,4 +77,4 @@ $apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --
 # it is. The generated C differs from the stock build in exactly the three
 # places those two bytes appear.
 $apple2tc snake-byte-easy.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --irc1 --ret-addr -v1 \
-  --extern-routines=rom.externs --inline-str=inline-str.txt > snake-byte-easyc1-ext.c
+  --extern-routines=rom.externs --inline-str=inline-str.txt --alt-exit > snake-byte-easyc1-ext.c

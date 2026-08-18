@@ -94,6 +94,9 @@ void game_print_inline_str(uint16_t ret_addr);
 void FUNC_BCC(uint16_t ret_addr);
 void FUNC_CHRGET(uint16_t ret_addr);
 void FUNC_CHRGOT(uint16_t ret_addr);
+void func_6256(uint16_t ret_addr);
+void func_6288(uint16_t ret_addr);
+uint8_t func_6a32(uint16_t ret_addr);
 void func_72ce(uint16_t ret_addr);
 void func_78b3(uint16_t ret_addr);
 void func_7980(uint16_t ret_addr);
@@ -331,6 +334,844 @@ bb_12:
 bb_13:
   /*$00C8*/ CYCLES(0x00c8, 6);
             if (ret_addr) pop16(); return;
+}
+
+
+void func_6256(uint16_t ret_addr) {
+  bool branchTarget = true;
+  uint8_t tmp1_U8;
+  uint8_t tmp2_U8;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+bb_0:
+  /*$6256*/ CYCLES(0x6256, 8);
+            s_a = 0x14;
+  /*$6258*/ game_start_life_adapter(0x625a);
+  /*$625B*/ CYCLES(0x625b, 36);
+            ram_poke(0x6251, s_a);
+  /*$6260*/ ram_poke(0x6250, 0x27);
+  /*$6263*/ ram_poke(0x6252, 0x27);
+  /*$6268*/ ram_poke(0x624e, 0x02);
+  /*$626D*/ ram_poke(0x6254, 0x0a);
+  /*$6272*/ ram_poke(0x6255, 0x64);
+  /*$6275*/ s_x = 0x0f;
+  /*$6277*/ s_a = 0x00;
+bb_1:
+  /*$6279*/ CYCLES(0x6279, 9);
+            tmp1_U8 = s_x;
+            ram_poke((0x623c + tmp1_U8), s_a);
+  /*$627C*/ tmp1_U8 = (uint8_t)(tmp1_U8 - 0x01);
+            tmp2_U8 = tmp1_U8 & 0x80;
+            s_status_n = tmp2_U8;
+            s_x = tmp1_U8;
+            branchTarget = true;
+            if (tmp2_U8)
+              goto bb_3;
+bb_2:
+  /*$627D*/ CYCLES_EDGE(0x627d, 1);
+            branchTarget = true;
+            goto bb_1;
+bb_3:
+  /*$627F*/ CYCLES(0x627f, 11);
+            tmp2_U8 = s_a;
+            ram_poke(0x624c, tmp2_U8);
+  /*$6282*/ ram_poke(0x624d, tmp2_U8);
+  /*$6285*/ func_6288(0x0000);
+            if (ret_addr) pop16(); return;
+}
+
+
+void func_6288(uint16_t ret_addr) {
+  bool branchTarget = true;
+  uint8_t tmp1_U8;
+  uint16_t tmp2_U16;
+  uint16_t tmp3_U16;
+  uint16_t tmp4_U16;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+bb_0:
+  /*$6288*/ CYCLES(0x6288, 6);
+            game_find_apple(0x628a);
+            branchTarget = true;
+bb_1:
+  /*$628B*/ CYCLES(0x628b, 6);
+            game_read_key(0x628d);
+  /*$628E*/ CYCLES(0x628e, 6);
+            game_read_direction(0x6290);
+            branchTarget = true;
+bb_2:
+  /*$6291*/ CYCLES(0x6291, 2);
+            branchTarget = true;
+            if (s_status_n)
+              goto bb_4;
+bb_3:
+  /*$6291*/ CYCLES_EDGE(0x6291, 1);
+            branchTarget = true;
+            goto bb_18;
+bb_4:
+  /*$6293*/ CYCLES(0x6293, 10);
+            s_x = 0x10;
+  /*$6295*/ ram_poke(0x6473, 0x10);
+  /*$6298*/ tmp1_U8 = s_a != 0x95;
+            s_status_not_z = tmp1_U8;
+            branchTarget = true;
+            if (!tmp1_U8)
+              goto bb_6;
+bb_5:
+  /*$629A*/ CYCLES_EDGE(0x629a, 1);
+  /*$6306*/ CYCLES(0x6306, 2);
+            branchTarget = true;
+            if (s_status_not_z)
+              goto bb_17;
+            else
+              goto bb_18;
+bb_6:
+  /*$629C*/ CYCLES(0x629c, 14);
+            s_a = ram_peek(0x624e);
+  /*$629F*/ ram_poke(0x624e, (uint8_t)(ram_peek(0x624e) - 0x01));
+  /*$62A2*/ s_status_c = 0x00;
+            if (s_status_d)
+              goto bb_8;
+bb_7:
+  /*$62A3*/ tmp2_U16 = s_a;
+            tmp3_U16 = (tmp2_U16 + 0x0010) + s_status_c;
+            s_status_c = (uint8_t)(tmp3_U16 >> 8);
+            s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp2_U16, (uint8_t)0x0010);
+            s_a = ((uint8_t)tmp3_U16);
+            goto bb_9;
+bb_8:
+  /*$62A3*/ tmp2_U16 = adc_dec16(s_a, 0x10, s_status_c);
+            s_a = ((uint8_t)tmp2_U16);
+            tmp1_U8 = (uint8_t)(tmp2_U16 >> 8);
+            s_status_c = (tmp1_U8 & 0x01);
+            s_status_v = ((tmp1_U8 & 0x40) != 0);
+bb_9:
+bb_10:
+  /*$62A5*/ CYCLES(0x62a5, 28);
+            ram_poke(0x0000, s_a);
+  /*$62A9*/ ram_poke(0x0001, 0x0c);
+  /*$62AE*/ ram_poke(0x0002, ram_peek(0x624f));
+  /*$62B3*/ ram_poke(0x0003, ram_peek(0x6250));
+  /*$62B5*/ game_draw_head(0x62b7);
+  /*$62B8*/ CYCLES(0x62b8, 26);
+  /*$62C0*/ tmp1_U8 = (uint8_t)(((uint8_t)(ram_peek(0x624e) - 0x01) & 0x03) + 0x01);
+            s_x = tmp1_U8;
+  /*$62C1*/ ram_poke(0x624e, tmp1_U8);
+  /*$62C4*/ s_a = tmp1_U8;
+  /*$62C5*/ rom_setcol(0x62c7);
+  /*$62C8*/ CYCLES(0x62c8, 14);
+            s_y = ram_peek(0x624f);
+  /*$62CB*/ s_a = ram_peek(0x6250);
+  /*$62CE*/ rom_plot(0x62d0);
+  /*$62D1*/ CYCLES(0x62d1, 42);
+            s_x = ram_peek(0x624e);
+  /*$62D4*/ s_a = ram_peek(0x624f);
+  /*$62D7*/ s_status_c = 0x00;
+            if (s_status_d)
+              goto bb_12;
+bb_11:
+  /*$62D8*/ s_a = (uint8_t)((s_a + ram_peek((0x6232 + s_x))) + s_status_c);
+            goto bb_13;
+bb_12:
+  /*$62D8*/ s_a = ((uint8_t)adc_dec16(s_a, ram_peek((0x6232 + s_x)), s_status_c));
+bb_13:
+  /*$62DB*/ ram_poke(0x624f, s_a);
+  /*$62DE*/ s_a = ram_peek(0x6250);
+  /*$62E1*/ s_status_c = 0x00;
+            if (s_status_d)
+              goto bb_15;
+bb_14:
+  /*$62E2*/ tmp3_U16 = s_a;
+            tmp2_U16 = ram_peek((0x6237 + s_x));
+            tmp4_U16 = (tmp3_U16 + tmp2_U16) + s_status_c;
+            s_status_c = (uint8_t)(tmp4_U16 >> 8);
+            s_status_v = ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)tmp2_U16);
+            s_a = ((uint8_t)tmp4_U16);
+            goto bb_16;
+bb_15:
+  /*$62E2*/ tmp2_U16 = adc_dec16(s_a, ram_peek((0x6237 + s_x)), s_status_c);
+            s_a = ((uint8_t)tmp2_U16);
+            tmp1_U8 = (uint8_t)(tmp2_U16 >> 8);
+            s_status_c = (tmp1_U8 & 0x01);
+            s_status_v = ((tmp1_U8 & 0x40) != 0);
+bb_16:
+  /*$62E5*/ ram_poke(0x6250, s_a);
+  /*$62E8*/ s_y = ram_peek(0x624f);
+  /*$62EB*/ rom_scrn(0x62ed);
+  /*$62EE*/ CYCLES(0x62ee, 25);
+            ram_poke(0x6253, s_a);
+  /*$62F4*/ ram_poke(0x0002, ram_peek(0x624f));
+  /*$62F9*/ ram_poke(0x0003, ram_peek(0x6250));
+  /*$62FE*/ ram_poke(0x0000, ram_peek(0x624e));
+  /*$6300*/ CYCLES(0x6300, 6);
+            game_plot_shape(0x6302);
+  /*$6303*/ CYCLES(0x6303, 3);
+  /*$6474*/ CYCLES(0x6474, 6);
+            tmp1_U8 = ram_peek(0x6253);
+            s_a = tmp1_U8;
+            branchTarget = true;
+            if (tmp1_U8)
+              goto bb_71;
+            else
+              goto bb_72;
+bb_17:
+  /*$6306*/ CYCLES_EDGE(0x6306, 1);
+  /*$631E*/ CYCLES(0x631e, 4);
+            branchTarget = true;
+            if ((s_a != 0x88))
+              goto bb_28;
+            else
+              goto bb_29;
+bb_18:
+  /*$6308*/ CYCLES(0x6308, 6);
+            tmp1_U8 = ram_peek(0x0302);
+            s_status_n = (tmp1_U8 & 0x80);
+            s_a = tmp1_U8;
+            branchTarget = true;
+            if (tmp1_U8)
+              goto bb_20;
+bb_19:
+  /*$630B*/ CYCLES_EDGE(0x630b, 1);
+            branchTarget = true;
+            goto bb_24;
+bb_20:
+  /*$630D*/ CYCLES(0x630d, 6);
+  /*$630D*/ switch (func_6a32(0x630f)) {
+  case 1: goto bb_24;
+  default: goto bb_21;
+  }
+bb_21:
+  /*$6310*/ CYCLES(0x6310, 2);
+            branchTarget = true;
+            if (s_status_n)
+              goto bb_23;
+bb_22:
+  /*$6310*/ CYCLES_EDGE(0x6310, 1);
+            branchTarget = true;
+            goto bb_24;
+bb_23:
+  /*$6312*/ CYCLES(0x6312, 3);
+            branchTarget = true;
+            goto bb_4;
+bb_24:
+  /*$6315*/ CYCLES(0x6315, 11);
+            s_a = ram_peek(0x624e);
+  /*$6318*/ s_status_c = 0x00;
+            if (s_status_d)
+              goto bb_26;
+bb_25:
+  /*$6319*/ tmp2_U16 = s_a;
+            tmp3_U16 = (tmp2_U16 + 0x0008) + s_status_c;
+            s_status_c = (uint8_t)(tmp3_U16 >> 8);
+            s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp2_U16, (uint8_t)0x0008);
+            s_a = ((uint8_t)tmp3_U16);
+            goto bb_27;
+bb_26:
+  /*$6319*/ tmp3_U16 = adc_dec16(s_a, 0x08, s_status_c);
+            s_a = ((uint8_t)tmp3_U16);
+            tmp1_U8 = (uint8_t)(tmp3_U16 >> 8);
+            s_status_c = (tmp1_U8 & 0x01);
+            s_status_v = ((tmp1_U8 & 0x40) != 0);
+bb_27:
+            branchTarget = true;
+            goto bb_10;
+bb_28:
+  /*$6320*/ CYCLES_EDGE(0x6320, 1);
+  /*$6349*/ CYCLES(0x6349, 4);
+            tmp1_U8 = s_a;
+            s_status_c = (tmp1_U8 >= 0x92);
+            branchTarget = true;
+            if ((tmp1_U8 != 0x92))
+              goto bb_37;
+            else
+              goto bb_38;
+bb_29:
+  /*$6322*/ CYCLES(0x6322, 17);
+            s_a = ram_peek(0x624e);
+  /*$6325*/ ram_poke(0x624e, (uint8_t)(ram_peek(0x624e) + 0x01));
+  /*$6328*/ s_status_c = 0x00;
+            if (s_status_d)
+              goto bb_31;
+bb_30:
+  /*$6329*/ tmp3_U16 = s_a;
+            tmp2_U16 = (tmp3_U16 + 0x0004) + s_status_c;
+            s_status_c = (uint8_t)(tmp2_U16 >> 8);
+            s_status_v = ovf8((uint8_t)tmp2_U16, (uint8_t)tmp3_U16, (uint8_t)0x0004);
+            s_a = ((uint8_t)tmp2_U16);
+            goto bb_32;
+bb_31:
+  /*$6329*/ tmp2_U16 = adc_dec16(s_a, 0x04, s_status_c);
+            s_a = ((uint8_t)tmp2_U16);
+            tmp1_U8 = (uint8_t)(tmp2_U16 >> 8);
+            s_status_c = (tmp1_U8 & 0x01);
+            s_status_v = ((tmp1_U8 & 0x40) != 0);
+bb_32:
+            branchTarget = true;
+            goto bb_10;
+bb_33:
+  /*$6341*/ CYCLES_EDGE(0x6341, 1);
+            branchTarget = true;
+            goto bb_47;
+bb_34:
+  /*$6343*/ CYCLES(0x6343, 6);
+            tmp1_U8 = ram_peek(0x6250);
+            s_status_not_z = tmp1_U8;
+            s_status_n = (tmp1_U8 & 0x80);
+            s_a = tmp1_U8;
+            branchTarget = true;
+            if (!tmp1_U8)
+              goto bb_36;
+bb_35:
+  /*$6346*/ CYCLES_EDGE(0x6346, 1);
+            branchTarget = true;
+            goto bb_47;
+bb_36:
+  /*$6348*/ CYCLES(0x6348, 6);
+            if (ret_addr) pop16(); return;
+bb_37:
+  /*$634B*/ CYCLES_EDGE(0x634b, 1);
+  /*$6353*/ CYCLES(0x6353, 4);
+            branchTarget = true;
+            if ((s_a != 0xc9))
+              goto bb_39;
+            else
+              goto bb_40;
+bb_38:
+  /*$634D*/ CYCLES(0x634d, 12);
+            s_status_not_z = 0xff;
+            s_status_n = 0x80;
+            s_a = 0xff;
+  /*$634F*/ ram_poke(0x6253, 0xff);
+  /*$6352*/ if (ret_addr) pop16(); return;
+bb_39:
+  /*$6355*/ CYCLES_EDGE(0x6355, 1);
+  /*$6360*/ CYCLES(0x6360, 4);
+            branchTarget = true;
+            if ((s_a != 0xca))
+              goto bb_41;
+            else
+              goto bb_42;
+bb_40:
+  /*$6357*/ CYCLES(0x6357, 11);
+            tmp1_U8 = ram_peek(0x624e);
+            s_x = tmp1_U8;
+  /*$635A*/ tmp1_U8 = ram_peek((0x6387 + tmp1_U8));
+            s_status_n = (tmp1_U8 & 0x80);
+            s_a = tmp1_U8;
+            branchTarget = true;
+            goto bb_2;
+bb_41:
+  /*$6362*/ CYCLES_EDGE(0x6362, 1);
+  /*$636D*/ CYCLES(0x636d, 4);
+            branchTarget = true;
+            if ((s_a != 0xcb))
+              goto bb_43;
+            else
+              goto bb_44;
+bb_42:
+  /*$6364*/ CYCLES(0x6364, 11);
+            tmp1_U8 = ram_peek(0x624e);
+            s_x = tmp1_U8;
+  /*$6367*/ tmp1_U8 = ram_peek((0x638c + tmp1_U8));
+            s_status_n = (tmp1_U8 & 0x80);
+            s_a = tmp1_U8;
+            branchTarget = true;
+            goto bb_2;
+bb_43:
+  /*$636F*/ CYCLES_EDGE(0x636f, 1);
+  /*$637A*/ CYCLES(0x637a, 4);
+            tmp1_U8 = s_a;
+            s_status_c = (tmp1_U8 >= 0xcd);
+            branchTarget = true;
+            if ((tmp1_U8 != 0xcd))
+              goto bb_45;
+            else
+              goto bb_46;
+bb_44:
+  /*$6371*/ CYCLES(0x6371, 11);
+            tmp1_U8 = ram_peek(0x624e);
+            s_x = tmp1_U8;
+  /*$6374*/ tmp1_U8 = ram_peek((0x6391 + tmp1_U8));
+            s_status_n = (tmp1_U8 & 0x80);
+            s_a = tmp1_U8;
+            branchTarget = true;
+            goto bb_2;
+bb_45:
+  /*$637C*/ CYCLES_EDGE(0x637c, 1);
+  /*$639B*/ CYCLES(0x639b, 6);
+            game_pause_or_toggle_sound(0x639d);
+  /*$639E*/ CYCLES(0x639e, 3);
+            branchTarget = true;
+            goto bb_59;
+bb_46:
+  /*$637E*/ CYCLES(0x637e, 11);
+            tmp1_U8 = ram_peek(0x624e);
+            s_x = tmp1_U8;
+  /*$6381*/ tmp1_U8 = ram_peek((0x6396 + tmp1_U8));
+            s_status_n = (tmp1_U8 & 0x80);
+            s_a = tmp1_U8;
+            branchTarget = true;
+            goto bb_2;
+bb_47:
+  /*$63A1*/ CYCLES(0x63a1, 6);
+            branchTarget = true;
+            if (ram_peek(0x6254))
+              goto bb_49;
+bb_48:
+  /*$63A4*/ CYCLES_EDGE(0x63a4, 1);
+  /*$63B1*/ CYCLES(0x63b1, 14);
+            s_a = ram_peek(0x6252);
+  /*$63B4*/ s_y = ram_peek(0x6251);
+  /*$63B7*/ rom_scrn(0x63b9);
+  /*$63BA*/ CYCLES(0x63ba, 11);
+            push8(s_a);
+  /*$63BB*/ s_a = 0x00;
+  /*$63BD*/ rom_setcol(0x63bf);
+  /*$63C0*/ CYCLES(0x63c0, 14);
+            s_a = ram_peek(0x6252);
+  /*$63C3*/ s_y = ram_peek(0x6251);
+  /*$63C6*/ rom_plot(0x63c8);
+  /*$63C9*/ CYCLES(0x63c9, 25);
+  /*$63CB*/ ram_poke(0x0001, 0x00);
+  /*$63D0*/ ram_poke(0x0003, ram_peek(0x6252));
+  /*$63D5*/ ram_poke(0x0002, ram_peek(0x6251));
+  /*$63D7*/ game_plot_shape(0x63d9);
+  /*$63DA*/ CYCLES(0x63da, 44);
+            tmp1_U8 = pop8();
+  /*$63DB*/ s_x = tmp1_U8;
+  /*$63DC*/ s_a = ram_peek(0x6251);
+  /*$63DF*/ s_status_c = 0x00;
+            if (s_status_d)
+              goto bb_51;
+            else
+              goto bb_50;
+bb_49:
+  /*$63A6*/ CYCLES(0x63a6, 15);
+            ram_poke(0x6254, (uint8_t)(ram_peek(0x6254) - 0x01));
+  /*$63A9*/ s_x = 0x07;
+  /*$63AB*/ ram_poke(0x6473, 0x07);
+            branchTarget = true;
+            goto bb_59;
+bb_50:
+  /*$63E0*/ s_a = (uint8_t)((s_a + ram_peek((0x6232 + s_x))) + s_status_c);
+            goto bb_52;
+bb_51:
+  /*$63E0*/ s_a = ((uint8_t)adc_dec16(s_a, ram_peek((0x6232 + s_x)), s_status_c));
+bb_52:
+  /*$63E3*/ ram_poke(0x6251, s_a);
+  /*$63E6*/ s_a = ram_peek(0x6252);
+  /*$63E9*/ s_status_c = 0x00;
+            if (s_status_d)
+              goto bb_54;
+bb_53:
+  /*$63EA*/ tmp4_U16 = s_a;
+            tmp2_U16 = ram_peek((0x6237 + s_x));
+            tmp3_U16 = (tmp4_U16 + tmp2_U16) + s_status_c;
+            s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)tmp2_U16);
+            s_a = ((uint8_t)tmp3_U16);
+            goto bb_55;
+bb_54:
+  /*$63EA*/ tmp2_U16 = adc_dec16(s_a, ram_peek((0x6237 + s_x)), s_status_c);
+            s_a = ((uint8_t)tmp2_U16);
+            s_status_v = (((uint8_t)(tmp2_U16 >> 8) & 0x40) != 0);
+bb_55:
+  /*$63ED*/ ram_poke(0x6252, s_a);
+  /*$63F0*/ s_y = ram_peek(0x6251);
+  /*$63F3*/ rom_scrn(0x63f5);
+  /*$63F6*/ CYCLES(0x63f6, 32);
+            s_status_c = 0x00;
+            if (s_status_d)
+              goto bb_57;
+bb_56:
+  /*$63F7*/ tmp3_U16 = s_a;
+            tmp2_U16 = (tmp3_U16 + 0x000c) + s_status_c;
+            s_status_c = (uint8_t)(tmp2_U16 >> 8);
+            s_status_v = ovf8((uint8_t)tmp2_U16, (uint8_t)tmp3_U16, (uint8_t)0x000c);
+            s_a = ((uint8_t)tmp2_U16);
+            goto bb_58;
+bb_57:
+  /*$63F7*/ tmp2_U16 = adc_dec16(s_a, 0x0c, s_status_c);
+            s_a = ((uint8_t)tmp2_U16);
+            tmp1_U8 = (uint8_t)(tmp2_U16 >> 8);
+            s_status_c = (tmp1_U8 & 0x01);
+            s_status_v = ((tmp1_U8 & 0x40) != 0);
+bb_58:
+  /*$63F9*/ ram_poke(0x0000, s_a);
+  /*$63FD*/ ram_poke(0x0001, 0x0c);
+  /*$6402*/ ram_poke(0x0002, ram_peek(0x6251));
+  /*$6407*/ ram_poke(0x0003, ram_peek(0x6252));
+  /*$6409*/ game_plot_shape(0x640b);
+  /*$640C*/ CYCLES(0x640c, 3);
+            branchTarget = true;
+bb_59:
+  /*$640F*/ CYCLES(0x640f, 20);
+            tmp1_U8 = ram_peek(0x6c49);
+            s_y = tmp1_U8;
+  /*$6412*/ tmp1_U8 = peek((0xc000 + tmp1_U8));
+  /*$6417*/ tmp1_U8 = (uint8_t)(ram_peek(0x6255) - 0x01);
+            ram_poke(0x6255, tmp1_U8);
+            branchTarget = true;
+            if (!tmp1_U8)
+              goto bb_61;
+bb_60:
+  /*$641A*/ CYCLES_EDGE(0x641a, 1);
+  /*$6422*/ CYCLES(0x6422, 10);
+            s_a = 0x27;
+  /*$6424*/ s_y = 0x14;
+  /*$6426*/ game_draw_side_walls(0x6428);
+  /*$6429*/ CYCLES(0x6429, 4);
+            tmp1_U8 = s_a;
+            s_status_c = (tmp1_U8 >= 0x00);
+            branchTarget = true;
+            if ((tmp1_U8 != 0x00))
+              goto bb_62;
+            else
+              goto bb_63;
+bb_61:
+  /*$641C*/ CYCLES(0x641c, 12);
+            s_status_not_z = 0xfe;
+            s_status_n = 0x80;
+            s_a = 0xfe;
+  /*$641E*/ ram_poke(0x6253, 0xfe);
+  /*$6421*/ if (ret_addr) pop16(); return;
+bb_62:
+  /*$642B*/ CYCLES_EDGE(0x642b, 1);
+            branchTarget = true;
+            goto bb_64;
+bb_63:
+  /*$642D*/ CYCLES(0x642d, 31);
+  /*$642F*/ ram_poke(0x0000, 0x15);
+  /*$6433*/ ram_poke(0x0001, 0x0d);
+  /*$6437*/ ram_poke(0x0003, 0x27);
+  /*$643B*/ ram_poke(0x0002, 0x12);
+  /*$643F*/ ram_poke(0x0008, 0x16);
+  /*$6441*/ game_plot_hline(0x6443);
+  /*$6444*/ CYCLES(0x6444, 8);
+            s_a = 0x0d;
+  /*$6446*/ rom_setcol(0x6448);
+  /*$6449*/ CYCLES(0x6449, 10);
+            s_a = 0x27;
+  /*$644B*/ s_y = 0x14;
+  /*$644D*/ rom_plot(0x644f);
+            branchTarget = true;
+bb_64:
+  /*$6450*/ CYCLES(0x6450, 4);
+            s_x = ram_peek(0x0300);
+bb_65:
+  /*$6453*/ CYCLES(0x6453, 6);
+            game_tick_sound(0x6455);
+  /*$6456*/ CYCLES(0x6456, 11);
+  /*$6457*/ push8(s_x);
+  /*$6458*/ game_read_key(0x645a);
+  /*$645B*/ CYCLES(0x645b, 6);
+            branchTarget = true;
+            if (ram_peek(0x6473))
+              goto bb_67;
+bb_66:
+  /*$645E*/ CYCLES_EDGE(0x645e, 1);
+            branchTarget = true;
+            goto bb_68;
+bb_67:
+  /*$6460*/ CYCLES(0x6460, 18);
+            tmp1_U8 = ram_peek(0x6c49);
+            s_y = tmp1_U8;
+  /*$6463*/ tmp1_U8 = peek((0xc000 + tmp1_U8));
+  /*$6468*/ ram_poke(0x6473, (uint8_t)(ram_peek(0x6473) - 0x01));
+bb_68:
+  /*$646B*/ CYCLES(0x646b, 10);
+            tmp1_U8 = pop8();
+            s_a = tmp1_U8;
+  /*$646D*/ tmp1_U8 = (uint8_t)(tmp1_U8 - 0x01);
+            s_status_n = (tmp1_U8 & 0x80);
+            s_x = tmp1_U8;
+            branchTarget = true;
+            if (!tmp1_U8)
+              goto bb_70;
+bb_69:
+  /*$646E*/ CYCLES_EDGE(0x646e, 1);
+            branchTarget = true;
+            goto bb_65;
+bb_70:
+  /*$6470*/ CYCLES(0x6470, 3);
+            branchTarget = true;
+            goto bb_1;
+bb_71:
+  /*$6477*/ CYCLES_EDGE(0x6477, 1);
+  /*$647C*/ CYCLES(0x647c, 4);
+            tmp1_U8 = s_a;
+            s_status_c = (tmp1_U8 >= 0x0f);
+            branchTarget = true;
+            if ((tmp1_U8 != 0x0f))
+              goto bb_73;
+            else
+              goto bb_74;
+bb_72:
+  /*$6479*/ CYCLES(0x6479, 3);
+  /*$632E*/ CYCLES(0x632e, 8);
+            s_a = 0x07;
+  /*$6330*/ rom_setcol(0x6332);
+  /*$6333*/ CYCLES(0x6333, 14);
+            s_a = ram_peek(0x6250);
+  /*$6336*/ s_y = ram_peek(0x624f);
+  /*$6339*/ rom_plot(0x633b);
+  /*$633C*/ CYCLES(0x633c, 8);
+            tmp1_U8 = ram_peek(0x624f);
+  /*$633F*/ s_status_c = (tmp1_U8 >= 0x14);
+            branchTarget = true;
+            if ((tmp1_U8 != 0x14))
+              goto bb_33;
+            else
+              goto bb_34;
+bb_73:
+  /*$647E*/ CYCLES_EDGE(0x647e, 1);
+  /*$6494*/ CYCLES(0x6494, 6);
+  /*$6496*/ s_x = 0xff;
+            goto bb_75;
+bb_74:
+  /*$6480*/ CYCLES(0x6480, 14);
+            s_x = 0x20;
+  /*$6482*/ ram_poke(0x6473, 0x20);
+  /*$6485*/ s_a = 0x07;
+  /*$6487*/ rom_setcol(0x6489);
+  /*$648A*/ CYCLES(0x648a, 14);
+            s_a = ram_peek(0x6250);
+  /*$648D*/ tmp1_U8 = ram_peek(0x624f);
+            s_status_not_z = tmp1_U8;
+            s_status_n = (tmp1_U8 & 0x80);
+            s_y = tmp1_U8;
+  /*$6490*/ game_mark_head(0x6492);
+  /*$6493*/ CYCLES(0x6493, 6);
+            if (ret_addr) pop16(); return;
+bb_75:
+  /*$6498*/ CYCLES(0x6498, 6);
+  /*$649B*/ s_y = ram_peek((0xe000 + s_x));
+bb_76:
+  /*$649C*/ CYCLES(0x649c, 4);
+            tmp1_U8 = (uint8_t)(s_y - 0x01);
+            s_y = tmp1_U8;
+            branchTarget = true;
+            if (!tmp1_U8)
+              goto bb_78;
+bb_77:
+  /*$649D*/ CYCLES_EDGE(0x649d, 1);
+            branchTarget = true;
+            goto bb_76;
+bb_78:
+  /*$649F*/ CYCLES(0x649f, 12);
+            tmp1_U8 = ram_peek(0x6c49);
+            s_y = tmp1_U8;
+  /*$64A2*/ tmp1_U8 = peek((0xc000 + tmp1_U8));
+            s_a = tmp1_U8;
+  /*$64A5*/ tmp1_U8 = (uint8_t)(s_x - 0x01);
+            s_status_not_z = tmp1_U8;
+            s_status_n = (tmp1_U8 & 0x80);
+            s_x = tmp1_U8;
+            branchTarget = true;
+            if (!tmp1_U8)
+              goto bb_80;
+bb_79:
+  /*$64A6*/ CYCLES_EDGE(0x64a6, 1);
+            branchTarget = true;
+            goto bb_75;
+bb_80:
+  /*$64A8*/ CYCLES(0x64a8, 6);
+            if (ret_addr) pop16(); return;
+}
+
+
+uint8_t func_6a32(uint16_t ret_addr) {
+  bool branchTarget = true;
+  uint8_t tmp1_U8;
+  uint8_t tmp2_U8;
+  uint8_t tmp3_U8;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+bb_0:
+  /*$6A32*/ CYCLES(0x6a32, 10);
+            tmp1_U8 = ram_peek(0x6b3c);
+  /*$6A35*/ tmp2_U8 = ram_peek(0x6250);
+            s_status_c = (tmp1_U8 >= tmp2_U8);
+            branchTarget = true;
+            if ((tmp1_U8 != tmp2_U8))
+              goto bb_2;
+bb_1:
+  /*$6A38*/ CYCLES_EDGE(0x6a38, 1);
+            branchTarget = true;
+            goto bb_11;
+bb_2:
+  /*$6A3A*/ CYCLES(0x6a3a, 4);
+            s_status_not_z = 0x04;
+            s_a = 0x04;
+            branchTarget = true;
+            if (!s_status_c)
+              goto bb_4;
+bb_3:
+  /*$6A3C*/ CYCLES_EDGE(0x6a3c, 1);
+            branchTarget = true;
+            goto bb_5;
+bb_4:
+  /*$6A3E*/ CYCLES(0x6a3e, 2);
+            s_status_not_z = 0x02;
+            s_a = 0x02;
+bb_5:
+  /*$6A40*/ CYCLES(0x6a40, 10);
+            ram_poke(0x6b38, s_a);
+  /*$6A43*/ game_move_ok(0x6a45);
+  /*$6A46*/ CYCLES(0x6a46, 2);
+            branchTarget = true;
+            if (!s_status_not_z)
+              goto bb_7;
+bb_6:
+  /*$6A46*/ CYCLES_EDGE(0x6a46, 1);
+            branchTarget = true;
+            goto bb_11;
+bb_7:
+  /*$6A48*/ CYCLES(0x6a48, 10);
+            tmp2_U8 = ram_peek(0x6b38);
+            s_a = tmp2_U8;
+  /*$6A4B*/ tmp1_U8 = ram_peek(0x624e);
+            tmp3_U8 = tmp2_U8 != tmp1_U8;
+            s_status_not_z = tmp3_U8;
+            s_status_n = ((uint8_t)(tmp2_U8 - tmp1_U8) & 0x80);
+            branchTarget = true;
+            if (tmp3_U8)
+              goto bb_9;
+bb_8:
+  /*$6A4E*/ CYCLES_EDGE(0x6a4e, 1);
+            branchTarget = true;
+            goto bb_10;
+bb_9:
+  /*$6A50*/ CYCLES(0x6a50, 6);
+            tmp3_U8 = s_a;
+            s_x = tmp3_U8;
+  /*$6A51*/ tmp3_U8 = ram_peek((0x6a55 + tmp3_U8));
+            s_status_not_z = tmp3_U8;
+            s_status_n = (tmp3_U8 & 0x80);
+            s_a = tmp3_U8;
+bb_10:
+  /*$6A54*/ CYCLES(0x6a54, 6);
+            if (ret_addr) pop16(); return 0;
+bb_11:
+  /*$6A5A*/ CYCLES(0x6a5a, 10);
+            branchTarget = true;
+            if ((ram_peek(0x6b3b) >= ram_peek(0x624f)))
+              goto bb_13;
+bb_12:
+  /*$6A60*/ CYCLES_EDGE(0x6a60, 1);
+  /*$6A79*/ CYCLES(0x6a79, 12);
+            s_status_not_z = 0x03;
+  /*$6A7B*/ ram_poke(0x6b38, 0x03);
+  /*$6A7E*/ game_move_ok(0x6a80);
+  /*$6A81*/ CYCLES(0x6a81, 2);
+            branchTarget = true;
+            if (!s_status_not_z)
+              goto bb_18;
+            else
+              goto bb_19;
+bb_13:
+  /*$6A62*/ CYCLES(0x6a62, 12);
+            s_status_not_z = 0x01;
+  /*$6A64*/ ram_poke(0x6b38, 0x01);
+  /*$6A67*/ game_move_ok(0x6a69);
+  /*$6A6A*/ CYCLES(0x6a6a, 2);
+            branchTarget = true;
+            if (s_status_not_z)
+              goto bb_15;
+bb_14:
+  /*$6A6A*/ CYCLES_EDGE(0x6a6a, 1);
+            branchTarget = true;
+            goto bb_7;
+bb_15:
+  /*$6A6C*/ CYCLES(0x6a6c, 12);
+            s_status_not_z = 0x03;
+  /*$6A6E*/ ram_poke(0x6b38, 0x03);
+  /*$6A71*/ game_move_ok(0x6a73);
+  /*$6A74*/ CYCLES(0x6a74, 2);
+            branchTarget = true;
+            if (s_status_not_z)
+              goto bb_17;
+bb_16:
+  /*$6A74*/ CYCLES_EDGE(0x6a74, 1);
+            branchTarget = true;
+            goto bb_7;
+bb_17:
+  /*$6A76*/ CYCLES(0x6a76, 3);
+            branchTarget = true;
+            goto bb_21;
+bb_18:
+  /*$6A81*/ CYCLES_EDGE(0x6a81, 1);
+            branchTarget = true;
+            goto bb_7;
+bb_19:
+  /*$6A83*/ CYCLES(0x6a83, 12);
+            s_status_not_z = 0x01;
+  /*$6A85*/ ram_poke(0x6b38, 0x01);
+  /*$6A88*/ game_move_ok(0x6a8a);
+  /*$6A8B*/ CYCLES(0x6a8b, 2);
+            branchTarget = true;
+            if (s_status_not_z)
+              goto bb_21;
+bb_20:
+  /*$6A8B*/ CYCLES_EDGE(0x6a8b, 1);
+            branchTarget = true;
+            goto bb_7;
+bb_21:
+  /*$6A8D*/ CYCLES(0x6a8d, 10);
+            branchTarget = true;
+            if ((ram_peek(0x6b3c) >= ram_peek(0x6250)))
+              goto bb_23;
+bb_22:
+  /*$6A93*/ CYCLES_EDGE(0x6a93, 1);
+            branchTarget = true;
+            goto bb_25;
+bb_23:
+  /*$6A95*/ CYCLES(0x6a95, 12);
+            s_status_not_z = 0x04;
+  /*$6A97*/ ram_poke(0x6b38, 0x04);
+  /*$6A9A*/ game_move_ok(0x6a9c);
+  /*$6A9D*/ CYCLES(0x6a9d, 2);
+            branchTarget = true;
+            if (s_status_not_z)
+              goto bb_25;
+bb_24:
+  /*$6A9D*/ CYCLES_EDGE(0x6a9d, 1);
+            branchTarget = true;
+            goto bb_7;
+bb_25:
+  /*$6A9F*/ CYCLES(0x6a9f, 12);
+            s_status_not_z = 0x02;
+  /*$6AA1*/ ram_poke(0x6b38, 0x02);
+  /*$6AA4*/ game_move_ok(0x6aa6);
+  /*$6AA7*/ CYCLES(0x6aa7, 2);
+            branchTarget = true;
+            if (s_status_not_z)
+              goto bb_27;
+bb_26:
+  /*$6AA7*/ CYCLES_EDGE(0x6aa7, 1);
+            branchTarget = true;
+            goto bb_7;
+bb_27:
+  /*$6AA9*/ CYCLES(0x6aa9, 12);
+            s_status_not_z = 0x04;
+  /*$6AAB*/ ram_poke(0x6b38, 0x04);
+  /*$6AAE*/ game_move_ok(0x6ab0);
+  /*$6AB1*/ CYCLES(0x6ab1, 2);
+            branchTarget = true;
+            if (s_status_not_z)
+              goto bb_29;
+bb_28:
+  /*$6AB1*/ CYCLES_EDGE(0x6ab1, 1);
+            branchTarget = true;
+            goto bb_7;
+bb_29:
+  /*$6AB3*/ CYCLES(0x6ab3, 11);
+  /*$6AB5*/ if (ret_addr) pop16(); return 0x01;
 }
 
 
@@ -4083,7 +4924,8 @@ void func_t001(uint16_t ret_addr) {
                 tmp1_U8 = s_a;
                 ram_poke(0x624c, tmp1_U8);
       /*$6282*/ ram_poke(0x624d, tmp1_U8);
-      /*$6285*/ branchTarget = true; block_id = 26;
+      /*$6285*/ func_6288(0x0000);
+                branchTarget = true; block_id = find_block_id_func_t001(0x6285, pop16() + 1);;
       break;
     case 26:  // $6288
       /*$6288*/ CYCLES(0x6288, 6);
@@ -4233,7 +5075,10 @@ void func_t001(uint16_t ret_addr) {
       break;
     case 46:  // $630D
       /*$630D*/ CYCLES(0x630d, 6);
-                branchTarget = true; push16(0x630f); block_id = 107;
+      /*$630D*/ switch (func_6a32(0x630f)) {
+      case 1: block_id = 50; break;
+      default: block_id = 47; break;
+      }
       break;
     case 47:  // $6310
       /*$6310*/ CYCLES(0x6310, 2);
@@ -5444,7 +6289,8 @@ void func_t001(uint16_t ret_addr) {
       break;
     case 224:  // $7713
       /*$7713*/ CYCLES(0x7713, 6);
-                branchTarget = true; push16(0x7715); block_id = 22;
+                func_6256(0x7715);
+                branchTarget = true; block_id = 225;
       break;
     case 225:  // $7716
       /*$7716*/ CYCLES(0x7716, 3);
@@ -5505,7 +6351,8 @@ void func_t001(uint16_t ret_addr) {
       break;
     case 234:  // $7736
       /*$7736*/ CYCLES(0x7736, 6);
-                branchTarget = true; push16(0x7738); block_id = 26;
+                func_6288(0x7738);
+                branchTarget = true; block_id = 235;
       break;
     case 235:  // $7739
       /*$7739*/ CYCLES(0x7739, 8);
@@ -16222,43 +17069,42 @@ void func_t001(uint16_t ret_addr) {
 }
 
 static const unsigned s_block_map_func_t001[] = {
-    0x3750,   16, 0x6310,   47, 0x720e,  137, 0x7225,  146, 0x7239,  147,
-    0x7248,  153, 0x72e2,  155, 0x72ec,  156, 0x72f2,  157, 0x72f8,  158,
-    0x72fe,  159, 0x7301,  160, 0x7314,  161, 0x731e,  162, 0x7324,  163,
-    0x732a,  164, 0x7330,  165, 0x7333,  166, 0x734d,  167, 0x7357,  168,
-    0x735d,  169, 0x7365,  170, 0x7375,  171, 0x737f,  172, 0x7385,  173,
-    0x73a2,  174, 0x73a9,  175, 0x73af,  176, 0x73c2,  177, 0x73cc,  178,
-    0x73d6,  179, 0x7414,  182, 0x7541,  211, 0x7694,  219, 0x7710,  223,
-    0x7713,  224, 0x7716,  225, 0x7726,  227, 0x7729,  228, 0x7739,  235,
-    0x7886,  297, 0x794d,  311, 0xd396,  328, 0xd42d,  391, 0xd434,  393,
-    0xd43c,  396, 0xd43f,  397, 0xd444,  398, 0xd44d,  399, 0xd459,  404,
-    0xd467,  405, 0xd46a,  406, 0xd4d6,  445, 0xd4f5,  449, 0xd533,  465,
-    0xd556,  474, 0xd569,  478, 0xd668,  573, 0xd683,  574, 0xd7d8,  583,
-    0xd81a,  601, 0xd820,  603, 0xd823,  604, 0xd863,  629, 0xd941,  644,
-    0xd944,  645, 0xda06,  680, 0xda49,  705, 0xda52,  706, 0xda5b,  707,
-    0xda60,  708, 0xda68,  713, 0xda6b,  714, 0xdaa8,  728, 0xdb00,  732,
-    0xdb3d,  735, 0xdb67,  747, 0xdb6f,  748, 0xdd6a,  750, 0xdd8e,  763,
-    0xdd91,  764, 0xdd98,  766, 0xddd6,  800, 0xddda,  802, 0xde08,  816,
-    0xde23,  818, 0xde41,  825, 0xde67,  830, 0xde8d,  849, 0xdeb5,  857,
-    0xdeb8,  858, 0xded8,  866, 0xdeff,  871, 0xdf09,  872, 0xdf1d,  877,
-    0xdf20,  878, 0xdf23,  879, 0xdf26,  880, 0xdf33,  881, 0xdf3d,  882,
-    0xe0b9,  952, 0xe108,  971, 0xe137,  982, 0xe15f,  985, 0xe1c7, 1014,
-    0xe201, 1031, 0xe21d, 1046, 0xe27a, 1073, 0xe29f, 1089, 0xe346, 1117,
-    0xe34d, 1118, 0xe357, 1119, 0xe360, 1120, 0xe363, 1121, 0xe383, 1127,
-    0xe39b, 1128, 0xe3e0, 1132, 0xe423, 1154, 0xe5a0, 1258, 0xe5a3, 1259,
-    0xe5ba, 1265, 0xe5d1, 1266, 0xe6fb, 1308, 0xe6fe, 1309, 0xe75b, 1315,
-    0xe7bc, 1317, 0xe7fa, 1339, 0xe98a, 1441, 0xea3c, 1485, 0xea4b, 1493,
-    0xea58, 1497, 0xea6e, 1500, 0xea78, 1504, 0xeb2e, 1545, 0xeb66, 1550,
-    0xec0f, 1603, 0xec64, 1616, 0xecac, 1654, 0xecb5, 1659, 0xeccb, 1667,
-    0xecd2, 1671, 0xecd9, 1673, 0xecdd, 1674, 0xed20, 1690, 0xed2e, 1692,
-    0xed31, 1693, 0xed5e, 1704, 0xed7b, 1715, 0xed82, 1718, 0xed89, 1721,
-    0xf13e, 1808, 0xf16b, 1812, 0xf1bf, 1821, 0xf1c2, 1822, 0xf1d5, 1823,
-    0xf1d8, 1824, 0xf1db, 1825, 0xf1ef, 1827, 0xf1fa, 1830, 0xf1fd, 1831,
-    0xf315, 1837, 0xfa66, 1838, 0xfa69, 1839, 0xfa85, 1840, 0xfaa9, 1848,
-    0xfb63, 1862, 0xfba5, 1867, 0xfbe2, 1883, 0xfbe9, 1885, 0xfc27, 1897,
-    0xfc4a, 1926, 0xfc4d, 1927, 0xfd1b, 1954, 0xfd32, 1960, 0xfd35, 1961,
-    0xfd38, 1962, 0xfd4a, 1965, 0xfd6f, 1977, 0xfd78, 1982, 0xfd8e, 1992,
-    0xfdfc, 1993
+    0x3750,   16, 0x720e,  137, 0x7225,  146, 0x7239,  147, 0x7248,  153,
+    0x72e2,  155, 0x72ec,  156, 0x72f2,  157, 0x72f8,  158, 0x72fe,  159,
+    0x7301,  160, 0x7314,  161, 0x731e,  162, 0x7324,  163, 0x732a,  164,
+    0x7330,  165, 0x7333,  166, 0x734d,  167, 0x7357,  168, 0x735d,  169,
+    0x7365,  170, 0x7375,  171, 0x737f,  172, 0x7385,  173, 0x73a2,  174,
+    0x73a9,  175, 0x73af,  176, 0x73c2,  177, 0x73cc,  178, 0x73d6,  179,
+    0x7414,  182, 0x7541,  211, 0x7694,  219, 0x7710,  223, 0x7713,  224,
+    0x7716,  225, 0x7726,  227, 0x7729,  228, 0x7739,  235, 0x7886,  297,
+    0x794d,  311, 0xd396,  328, 0xd42d,  391, 0xd434,  393, 0xd43c,  396,
+    0xd43f,  397, 0xd444,  398, 0xd44d,  399, 0xd459,  404, 0xd467,  405,
+    0xd46a,  406, 0xd4d6,  445, 0xd4f5,  449, 0xd533,  465, 0xd556,  474,
+    0xd569,  478, 0xd668,  573, 0xd683,  574, 0xd7d8,  583, 0xd81a,  601,
+    0xd820,  603, 0xd823,  604, 0xd863,  629, 0xd941,  644, 0xd944,  645,
+    0xda06,  680, 0xda49,  705, 0xda52,  706, 0xda5b,  707, 0xda60,  708,
+    0xda68,  713, 0xda6b,  714, 0xdaa8,  728, 0xdb00,  732, 0xdb3d,  735,
+    0xdb67,  747, 0xdb6f,  748, 0xdd6a,  750, 0xdd8e,  763, 0xdd91,  764,
+    0xdd98,  766, 0xddd6,  800, 0xddda,  802, 0xde08,  816, 0xde23,  818,
+    0xde41,  825, 0xde67,  830, 0xde8d,  849, 0xdeb5,  857, 0xdeb8,  858,
+    0xded8,  866, 0xdeff,  871, 0xdf09,  872, 0xdf1d,  877, 0xdf20,  878,
+    0xdf23,  879, 0xdf26,  880, 0xdf33,  881, 0xdf3d,  882, 0xe0b9,  952,
+    0xe108,  971, 0xe137,  982, 0xe15f,  985, 0xe1c7, 1014, 0xe201, 1031,
+    0xe21d, 1046, 0xe27a, 1073, 0xe29f, 1089, 0xe346, 1117, 0xe34d, 1118,
+    0xe357, 1119, 0xe360, 1120, 0xe363, 1121, 0xe383, 1127, 0xe39b, 1128,
+    0xe3e0, 1132, 0xe423, 1154, 0xe5a0, 1258, 0xe5a3, 1259, 0xe5ba, 1265,
+    0xe5d1, 1266, 0xe6fb, 1308, 0xe6fe, 1309, 0xe75b, 1315, 0xe7bc, 1317,
+    0xe7fa, 1339, 0xe98a, 1441, 0xea3c, 1485, 0xea4b, 1493, 0xea58, 1497,
+    0xea6e, 1500, 0xea78, 1504, 0xeb2e, 1545, 0xeb66, 1550, 0xec0f, 1603,
+    0xec64, 1616, 0xecac, 1654, 0xecb5, 1659, 0xeccb, 1667, 0xecd2, 1671,
+    0xecd9, 1673, 0xecdd, 1674, 0xed20, 1690, 0xed2e, 1692, 0xed31, 1693,
+    0xed5e, 1704, 0xed7b, 1715, 0xed82, 1718, 0xed89, 1721, 0xf13e, 1808,
+    0xf16b, 1812, 0xf1bf, 1821, 0xf1c2, 1822, 0xf1d5, 1823, 0xf1d8, 1824,
+    0xf1db, 1825, 0xf1ef, 1827, 0xf1fa, 1830, 0xf1fd, 1831, 0xf315, 1837,
+    0xfa66, 1838, 0xfa69, 1839, 0xfa85, 1840, 0xfaa9, 1848, 0xfb63, 1862,
+    0xfba5, 1867, 0xfbe2, 1883, 0xfbe9, 1885, 0xfc27, 1897, 0xfc4a, 1926,
+    0xfc4d, 1927, 0xfd1b, 1954, 0xfd32, 1960, 0xfd35, 1961, 0xfd38, 1962,
+    0xfd4a, 1965, 0xfd6f, 1977, 0xfd78, 1982, 0xfd8e, 1992, 0xfdfc, 1993
 };
 
 static unsigned find_block_id_func_t001(uint16_t from_pc, uint16_t addr) {
