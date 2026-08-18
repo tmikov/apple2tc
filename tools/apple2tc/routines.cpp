@@ -351,7 +351,10 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
           break;
         }
       } else if (iRef.modifiesSP()) {
-        reject(entry, format("%s", getValueKindName(iRef.getKind())));
+        reject(
+            entry,
+            format(
+                "%s block $%04x", getValueKindName(iRef.getKind()), bb->getAddress().value_or(0)));
         return;
       }
     }

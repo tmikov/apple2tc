@@ -344,30 +344,50 @@ void IRBuilder::insert(Instruction *inst) {
 }
 
 Instruction *IRBuilder::createInst(ValueKind kind, ArrayRef<Value *> operands) {
-#define IR_INST0(name, type)      \
-  case ValueKind::name:           \
-    assert(operands.size() == 0); \
-    return create##name();
+  // The declared arity is a minimum, not a count: RTS, CPUAddr2BB and CallAlt
+  // all grow their operand list after construction. This function is what
+  // clones instructions, so it has to reproduce the extras too -- see the loop
+  // below. Getting that wrong is quiet: without the loop a release build simply
+  // drops them, and only the assertions here catch it.
+  Instruction *res = nullptr;
+  size_t arity = 0;
+#define IR_INST0(name, type) \
+  case ValueKind::name:      \
+    arity = 0;               \
+    res = create##name();    \
+    break;
 #define IR_INST1(name, type, op1type) \
   case ValueKind::name:               \
-    assert(operands.size() == 1);     \
-    return create##name(operands[0]);
-#define IR_INST2(name, type, op1type, op2type) \
-  case ValueKind::name:                        \
-    assert(operands.size() == 2);              \
-    return create##name(operands[0], operands[1]);
-#define IR_INST3(name, type, op1type, op2type, op3type) \
-  case ValueKind::name:                                 \
-    assert(operands.size() == 3);                       \
-    return create##name(operands[0], operands[1], operands[2]);
-#define IR_INST_N(name, type, opcount, optype) \
-  case ValueKind::name:                        \
-    return create##name##_##opcount##op(operands);
+    arity = 1;                        \
+    assert(operands.size() >= arity); \
+    res = create##name(operands[0]);  \
+    break;
+#define IR_INST2(name, type, op1type, op2type)    \
+  case ValueKind::name:                           \
+    arity = 2;                                    \
+    assert(operands.size() >= arity);             \
+    res = create##name(operands[0], operands[1]); \
+    break;
+#define IR_INST3(name, type, op1type, op2type, op3type)        \
+  case ValueKind::name:                                        \
+    arity = 3;                                                 \
+    assert(operands.size() >= arity);                          \
+    res = create##name(operands[0], operands[1], operands[2]); \
+    break;
+#define IR_INST_N(name, type, opcount, optype)    \
+  case ValueKind::name:                           \
+    arity = operands.size();                      \
+    res = create##name##_##opcount##op(operands); \
+    break;
   switch (kind) {
 #include "Values.def"
   default:
     PANIC_ABORT("Invalid instruction kind");
   }
+
+  for (size_t i = arity, e = operands.size(); i != e; ++i)
+    res->pushOperand(operands[i]);
+  return res;
 }
 
 #define IR_INST0(name, type)                                                       \

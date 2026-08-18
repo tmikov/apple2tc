@@ -15,6 +15,7 @@ start:
         jsr     sub
         jsr     sub2
         jsr     sub3
+        jsr     outer4
         lda     $1009
         beq     jumpin
 end:
@@ -72,3 +73,31 @@ alt3:
         pla
         pla
         jmp     out3
+
+; The caller's side of the same problem. `outer4` reaches `unwound4` only by
+; calling sub4 and taking its alternate exit, so unwound4 is part of outer4 --
+; and it reloads the stack pointer, which no routine may do. Only the
+; rescan in run() walks it: on the first pass sub4's exits are not known yet,
+; so outer4 looks clean. Without the rescan outer4 is accepted here and then
+; extractRoutine() pulls unwound4 in anyway, following the CallAlt -- a block
+; that entered a routine without ever being checked.
+        org     $390
+outer4:
+        lda     $100B
+        jsr     sub4
+        rts
+unwound4:
+        lda     #$00
+        ldx     #$FF
+        txs
+        rts
+
+        org     $3A0
+sub4:
+        lda     $100C
+        beq     alt4
+        rts
+alt4:
+        pla
+        pla
+        jmp     unwound4

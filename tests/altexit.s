@@ -10,26 +10,39 @@
 ; Two exits rather than one, because the point of the transform is that the
 ; number of exits is not fixed. A one-exit routine could be a bool.
 ;
+; The caller is itself a routine rather than the top-level code, and that is
+; load-bearing twice over. `outer` only becomes a candidate at all if its block
+; set picks up unwound1 and unwound2 -- they are continuations of the call, and
+; nothing else reaches them -- which is the rescan in run(). And extracting
+; `outer` means cloning its CallAlt, which is the first instruction in this IR
+; whose operand list is longer than its declared arity. A release build used to
+; drop those operands silently; the alternate exits simply vanished.
+;
 ; Two baselines, as with codeat.s and inlinestr.s: the diff between them is
 ; what the option does.
 
         org     $300
 start:
+        jsr     outer
+end:
+        jmp     end
+
+        org     $310
+outer:
         lda     $1000
         jsr     sub
 ; The ordinary return lands here.
         lda     #$01
         sta     $1002
-        jmp     end
+        rts
 unwound1:
         lda     #$02
         sta     $1002
-        jmp     end
+        rts
 unwound2:
         lda     #$03
         sta     $1002
-end:
-        jmp     end
+        rts
 
         org     $330
 sub:

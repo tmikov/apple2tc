@@ -151,10 +151,27 @@ if ! grep -q 'alternate exits, but not entered by a JSR alone' altexit-bad.err; 
   cat altexit-bad.err >&2
   exit 1
 fi
-if grep -q 'CallAlt' altexit-bad.ir; then
-  echo "FAIL: --alt-exit rejected the routine but still emitted a CallAlt" >&2
+# The fourth is the caller's side: outer4 reaches unwound4 only through sub4's
+# alternate exit, and unwound4 reloads the stack pointer. Only the rescan in
+# run() ever walks it -- on the first pass sub4's exits are not known yet, so
+# outer4 looks clean and gets extracted with a block nothing checked.
+if ! grep -q 'StoreSP block \$0397' altexit-bad.err; then
+  echo "FAIL: --alt-exit did not check a block reached through an alternate exit:" >&2
+  cat altexit-bad.err >&2
   exit 1
 fi
+# sub4 itself is fine and must still be extracted, otherwise the case above is
+# passing for the wrong reason.
+if ! grep -q '^function func_03a0' altexit-bad.ir; then
+  echo "FAIL: sub4 was not extracted, so the rescan check proves nothing" >&2
+  exit 1
+fi
+for rejected in func_0330 func_0350 func_0370 func_0390; do
+  if grep -q "^function $rejected" altexit-bad.ir; then
+    echo "FAIL: --alt-exit rejected $rejected but extracted it anyway" >&2
+    exit 1
+  fi
+done
 rm -f altexit-bad.ir altexit-bad.err altexit-bad.b33
 
 # Each --code-at rejection, asserted to actually reject. A check nobody has
