@@ -411,6 +411,27 @@ function now call itself, and does a routine's block set contain an address
 that belongs to its caller. Both are one grep. Run them on any change that
 makes the decompiler accept something it used to reject.
 
+The right shape turned out to be a calling convention rather than a relaxed
+check, and it is `--alt-exit` (`routines.cpp`, `CallAlt`/`ReturnAlt`): the walk
+*stops* at the unwinding block instead of following it, the routine returns
+which exit it took, and the caller switches on that. `func_6a32` is then 50
+blocks spanning `$6A32..$6AB5` and the three structural checks come back clean.
+The lesson generalises past this one idiom -- when the classifier rejects
+something, the question is what shape would let it be expressed, not which
+check to disable.
+
+**`[process]` A check that no test can make fail is not a check.** Six
+conditions went into `--alt-exit`, and mutation-testing each one -- delete it,
+confirm a test fails -- found three that nothing covered. One was genuinely
+unreachable (the pops cannot have users given they are adjacent to the
+terminator) and became an assertion. The other two were real holes: the fixture
+called the alt-exit routine from top-level code, so nothing ever *cloned* the
+`CallAlt`, which is where a release build was silently dropping its alternate
+targets; and nothing reached a block that only exists as a callee's alternate
+exit, which is the case that has to be re-walked and validated. Both needed the
+fixture widened, not the code changed. Do this before the commit, not after:
+the two holes were in the parts of the design that felt most obviously correct.
+
 **`[process]` Do not convert code no recording runs.** The conversion of a
 routine to real C is checked by exactly one thing: the recordings executing it
 and the oracles agreeing. For a routine nothing executes there is no check at
