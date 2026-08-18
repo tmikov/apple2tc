@@ -111,6 +111,52 @@ expect_inline_reject "a routine missing from the extern list" "is not in" \
   --extern-routines=inlinestr-bad.externs
 rm -f inlinestr-bad.externs inlinestr.b33
 
+# --alt-exit: routines that return by discarding their return address and
+# jumping into the caller. Two baselines, since what the option does is turn a
+# JSR into a CallAlt and pull the routine out of the caller's switch -- without
+# it the routine is rejected for stack underflow and stays inlined.
+$a6502 altexit.s altexit.b33 && $apple2tc altexit.b33 -O3 --ir --ret-addr --alt-exit \
+  > altexit-test.ir
+diff -q altexit.ir altexit-test.ir
+$apple2tc altexit.b33 -O3 --ir --ret-addr > altexit-noalt-test.ir
+diff -q altexit-noalt.ir altexit-noalt-test.ir
+rm altexit-test.ir altexit-noalt-test.ir altexit.b33
+
+# The rejection that matters: an "alternate exit" landing back inside its own
+# routine. Accepting it would make the routine swallow the target and become
+# self-recursive, and nothing about the generated code would look wrong -- so
+# this is asserted on the reason, not just on the absence of a CallAlt.
+$a6502 altexit-bad.s altexit-bad.b33 >/dev/null
+$apple2tc altexit-bad.b33 -O3 --ir --ret-addr --alt-exit -v2 \
+  >altexit-bad.ir 2>altexit-bad.err
+if ! grep -q 'alternate exit to \$0335 is inside the routine' altexit-bad.err; then
+  echo "FAIL: --alt-exit did not reject an exit into its own routine:" >&2
+  cat altexit-bad.err >&2
+  exit 1
+fi
+# The second routine in the fixture unwinds and then does more work before
+# jumping. There is nowhere to put that work once the routine is cut in two, so
+# it must be refused as well.
+if ! grep -q 'block \$0356 stack level underflow' altexit-bad.err; then
+  echo "FAIL: --alt-exit did not reject work between the pops and the jump:" >&2
+  cat altexit-bad.err >&2
+  exit 1
+fi
+# The third is JSR'd from one place and jumped into from another. Every entry
+# path other than a plain JSR is converted into a block that calls the routine
+# and dispatches on the return address, and such a block cannot take an
+# alternate exit -- it would be dropped without a trace.
+if ! grep -q 'alternate exits, but not entered by a JSR alone' altexit-bad.err; then
+  echo "FAIL: --alt-exit accepted a routine that is also jumped into:" >&2
+  cat altexit-bad.err >&2
+  exit 1
+fi
+if grep -q 'CallAlt' altexit-bad.ir; then
+  echo "FAIL: --alt-exit rejected the routine but still emitted a CallAlt" >&2
+  exit 1
+fi
+rm -f altexit-bad.ir altexit-bad.err altexit-bad.b33
+
 # Each --code-at rejection, asserted to actually reject. A check nobody has
 # watched fail is not a check.
 expect_reject() {

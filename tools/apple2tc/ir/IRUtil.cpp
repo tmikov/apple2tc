@@ -40,6 +40,7 @@ Range32 classifyMemoryAddr(Value *addr, unsigned width) {
   // Treat implicit stack instruction specially.
   switch (addr->getKind()) {
   case ValueKind::Call:
+  case ValueKind::CallAlt:
     return {0, 0x10000};
   case ValueKind::Pop8:
   case ValueKind::Push8:
@@ -157,7 +158,7 @@ void markExpressionTrees(BasicBlock *bb, InstSet &validTrees) {
         invalidateTreesIf([cpuReg = inst->getOperand(0)](Instruction *tInst) {
           return tInst->getKind() == ValueKind::LoadR8 && tInst->getOperand(0) == cpuReg;
         });
-      } else if (inst->getKind() == ValueKind::Call) {
+      } else if (inst->isCall()) {
         // TODO: we might use liveness information here for calls, to invalidate only
         //    changed registers. But ultimately, we don't care too much about global
         //    registers.

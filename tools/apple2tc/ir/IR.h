@@ -238,6 +238,12 @@ public:
   bool modifiesSP() const;
   bool readsMemory() const;
   bool writesMemory() const;
+  /// Both call kinds, which share operand 0 (the callee) and operand 1 (the
+  /// return address). Anything reasoning about what a call does to registers or
+  /// memory wants this rather than a comparison against ValueKind::Call.
+  bool isCall() const {
+    return getKind() == ValueKind::Call || getKind() == ValueKind::CallAlt;
+  }
   /// Return the memory address and width accessed by the specified instruction or nullptr.
   std::pair<Value *, unsigned> memoryAddress();
 
@@ -629,6 +635,17 @@ public:
     externAddress_ = address;
   }
 
+  /// How many alternate exits this routine has, beyond the ordinary return.
+  /// Zero for almost every routine; see CallAlt in Values.def. A routine with
+  /// alternate exits returns the index of the exit it took, so its C signature
+  /// returns uint8_t rather than void.
+  unsigned getNumAltExits() const {
+    return numAltExits_;
+  }
+  void setNumAltExits(unsigned numAltExits) {
+    numAltExits_ = numAltExits;
+  }
+
   const std::optional<uint32_t> &getAddress() const {
     if (external_)
       return externAddress_;
@@ -677,6 +694,8 @@ private:
   DecompileLevel decompileLevel_ = DecompileLevel::Low;
   /// Whether this function is an external declaration without a body.
   bool external_ = false;
+  /// See getNumAltExits().
+  unsigned numAltExits_ = 0;
   /// The address of an external function. Regular functions derive their
   /// address from their entry block, which an external function doesn't have.
   std::optional<uint32_t> externAddress_{};
@@ -805,6 +824,13 @@ public:
     preserveReturnAddress_ = preserveReturnAddress;
   }
 
+  bool getAltExits() const {
+    return altExits_;
+  }
+  void setAltExits(bool altExits) {
+    altExits_ = altExits;
+  }
+
 private:
   CircularList<Module> moduleList_{};
   std::vector<Type> types_{};
@@ -816,6 +842,9 @@ private:
   unsigned verbosity_ = 0;
   /// Whether to preserve the routine return address on the stack.
   bool preserveReturnAddress_ = false;
+  /// Whether identifySimpleRoutines() may accept routines with alternate
+  /// exits. See CallAlt in Values.def.
+  bool altExits_ = false;
 };
 
 class IRBuilder {

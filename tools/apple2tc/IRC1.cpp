@@ -108,7 +108,11 @@ void IRC1Mod::run() {
 
   fprintf(os_, "\n");
   for (auto &func : mod_->functions())
-    fprintf(os_, "void %s(uint16_t ret_addr);\n", getName(&func));
+    fprintf(
+        os_,
+        "%s %s(uint16_t ret_addr);\n",
+        func.getNumAltExits() ? "uint8_t" : "void",
+        getName(&func));
 
   fprintf(os_, "\n");
   fprintf(os_, "static void emulated_entry_point(void) {\n");
@@ -417,7 +421,7 @@ void IRC1::runFunc() {
 
   regAlloc();
 
-  fprintf(os_, "void %s(uint16_t ret_addr) {\n", name_);
+  fprintf(os_, "%s %s(uint16_t ret_addr) {\n", func_->getNumAltExits() ? "uint8_t" : "void", name_);
   if (needDynamicBlocks())
     fprintf(os_, "  unsigned block_id = 0;\n");
   fprintf(os_, "  bool branchTarget = true;\n");
@@ -504,7 +508,10 @@ void IRC1::printBB(BasicBlock *bb) {
     // A little hack. Let the instruction print its own line, but only in
     // a couple of places.
     bool printOwnLine = false;
-    if (!needDynamicBlocks()) {
+    if (inst->getKind() == ValueKind::CallAlt) {
+      // A multi-way branch on the callee's result, in either mode.
+      printOwnLine = true;
+    } else if (!needDynamicBlocks()) {
       switch (inst->getKind()) {
       case ValueKind::Jmp:
       case ValueKind::JTrue:
@@ -1040,6 +1047,44 @@ void IRC1::printCall(Instruction *inst) {
 }
 void IRC1::printReturn(Instruction *inst) {
   bprintf(obuf_, "if (ret_addr) pop16(); return");
+  // In a routine with alternate exits every return reports which one it took,
+  // and the ordinary return is exit 0.
+  if (func_->getNumAltExits())
+    bprintf(obuf_, " 0");
+}
+void IRC1::printReturnAlt(Instruction *inst) {
+  // Identical to Return but for the value. The two Pop8 that the 6502 used to
+  // discard the return address are gone -- identifySimpleRoutines() removed
+  // them along with the address they were discarding -- so this pops exactly
+  // what the prologue pushed, the same as an ordinary return does.
+  bprintf(obuf_, "if (ret_addr) pop16(); return %s", formatOperand(inst->getOperand(1)).c_str());
+}
+void IRC1::printCallAlt(Instruction *inst) {
+  // Operand 2 is the ordinary return's continuation, operands 3.. the
+  // alternate exits in index order. Printed as a switch, on its own lines,
+  // because unlike every other call this one also branches.
+  const char *indent = needDynamicBlocks() ? "      " : "  ";
+  bprintf(obuf_, "%s", indent);
+  if (inst->getAddress() && *inst->getAddress() <= 0xFFFF)
+    bprintf(obuf_, "/*$%04X*/ ", *inst->getAddress());
+  bprintf(
+      obuf_,
+      "switch (%s(%s)) {\n",
+      c1mod_->getName(cast<Function>(inst->getOperand(0))),
+      formatOperand(inst->getOperand(1)).c_str());
+
+  auto printTarget = [this, indent](const char *label, Value *target) {
+    if (needDynamicBlocks()) {
+      bprintf(obuf_, "%s%s block_id = %s; break;\n", indent, label, formatOperand(target).c_str());
+    } else {
+      bprintf(obuf_, "%s%s goto bb_%s;\n", indent, label, formatOperand(target).c_str());
+    }
+  };
+  for (unsigned i = 3, count = inst->getNumOperands(); i != count; ++i)
+    printTarget(format("case %u:", i - 2).c_str(), inst->getOperand(i));
+  // Exit 0 is the ordinary return. Spelled `default` so the switch is total.
+  printTarget("default:", inst->getOperand(2));
+  bprintf(obuf_, "%s}\n", indent);
 }
 void IRC1::printExit(Instruction *inst) {}
 void IRC1::printJmp(Instruction *inst) {

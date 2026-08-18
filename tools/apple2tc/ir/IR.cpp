@@ -102,6 +102,7 @@ bool Instruction::hasSideEffects() const {
   // Check for side effects;
   switch (getKind()) {
   case ValueKind::Call:
+  case ValueKind::CallAlt:
   case ValueKind::Peek8:
   case ValueKind::Peek16al:
   case ValueKind::Peek16un:
@@ -130,6 +131,7 @@ bool Instruction::modifiesSP() const {
 bool Instruction::readsMemory() const {
   switch (getKind()) {
   case ValueKind::Call:
+  case ValueKind::CallAlt:
   case ValueKind::Peek8:
   case ValueKind::RamPeek8:
   case ValueKind::Peek16al:
@@ -147,6 +149,7 @@ bool Instruction::readsMemory() const {
 bool Instruction::writesMemory() const {
   switch (getKind()) {
   case ValueKind::Call:
+  case ValueKind::CallAlt:
   case ValueKind::Poke8:
   case ValueKind::RamPoke8:
   case ValueKind::Push8:
@@ -183,6 +186,7 @@ std::pair<Value *, unsigned> Instruction::memoryAddress() {
     return {this, 2};
 
   case ValueKind::Call:
+  case ValueKind::CallAlt:
     return {this, 1};
 
   default:

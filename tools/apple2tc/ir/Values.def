@@ -192,11 +192,20 @@ IR_INST2(DecodeFlag, U8, U8, U8)
 /// Extra operands represent discovered BasicBlocks.
 IR_INST1(CPUAddr2BB, IndBasicBlock, U16)
 
-/// void call(Function, bool adjust_sp)
+/// call(Function callee, U16 ret_addr)
+///
+/// `ret_addr` is the return address the callee pushes on entry, not a flag:
+/// the real address under --ret-addr, the 0xFFFE sentinel without it, and 0
+/// to push nothing at all.
 IR_INST2(Call, Void, Function, U16)
 
 /// "Return" is a branch to the Exit block.
 IR_INST1(Return, Void, BasicBlock)
+/// Return from a routine through one of its alternate exits.
+/// ReturnAlt(BasicBlock exit, U8 index)
+///
+/// `index` is 1-based; index 0 is an ordinary Return. See CallAlt.
+IR_INST2(ReturnAlt, Void, BasicBlock, U8)
 /// Every function contains exactly one exit block. It can't be eliminated or
 /// merged with other blocks.
 IR_INST0(Exit, Void)
@@ -204,6 +213,23 @@ IR_INST1(Jmp, Void, BasicBlock)
 IR_INST3(JTrue, Void, U8, BasicBlock, BasicBlock)
 IR_INST3(JFalse, Void, U8, BasicBlock, BasicBlock)
 IR_INST2(JSR, Void, BasicBlock, BasicBlock)
+
+/// Call a routine that can return through more than one exit.
+/// CallAlt(Function callee, U16 ret_addr, BasicBlock normal, BasicBlock alt...)
+///
+/// Operands 0 and 1 are Call's, and mean the same thing. The result is the
+/// index of the exit the callee returned through: 0 for an ordinary RTS,
+/// continuing at operand 2, and N for the Nth alternate exit, continuing at
+/// operand 2+N. Alternate exits are the 6502 idiom of discarding the return
+/// address and jumping somewhere in the caller; see identifySimpleRoutines().
+///
+/// Unlike Call this is a terminator, because which block runs next is not
+/// known until the callee returns. It is not an IndirectBranch: every target
+/// is a listed operand.
+///
+/// Like RTS, the extra operands are pushed on after construction, so the
+/// declared arity is only the minimum.
+IR_INST3(CallAlt, U8, Function, U16, BasicBlock)
 
 IR_INST1(JmpInd, Void, IndBasicBlock)
 IR_INST2(JSRInd, Void, IndBasicBlock, BasicBlock)

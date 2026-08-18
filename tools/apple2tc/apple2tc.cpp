@@ -62,6 +62,8 @@ static void printHelp() {
   fprintf(stderr, "  --irc1              Generate C1 representation of the IR\n");
   fprintf(stderr, "  --no-ir-trees       Do not reconstruct trees in IR dump\n");
   fprintf(stderr, "  --ret-addr          Preserve subroutines return address on the stack\n");
+  fprintf(stderr, "  --alt-exit          Identify routines that exit by discarding their return\n");
+  fprintf(stderr, "                      address and jumping into the caller\n");
   fprintf(stderr, "  -O<number>          Optimization level (default 0)\n");
   fprintf(stderr, "  --run-data=d.json   Load runtime data from specified file\n");
   fprintf(stderr, "  --routines-report=f Write routine candidate analysis to file\n");
@@ -82,6 +84,7 @@ int main(int argc, char **argv) {
   };
   bool noGenerations = false;
   bool preserveRetAddr = false;
+  bool altExits = false;
   Action action = Action::GenAsm;
   unsigned verbosity = 0;
   unsigned optLevel = 0;
@@ -128,6 +131,10 @@ int main(int argc, char **argv) {
     }
     if (strcmp(argv[i], "--ret-addr") == 0) {
       preserveRetAddr = true;
+      continue;
+    }
+    if (strcmp(argv[i], "--alt-exit") == 0) {
+      altExits = true;
       continue;
     }
     if (strncmp(argv[i], "-O", 2) == 0 && strlen(argv[i]) == 3 && isdigit(argv[i][2])) {
@@ -236,7 +243,7 @@ int main(int argc, char **argv) {
       break;
     case Action::GenIR:
     case Action::GenIRC1: {
-      auto irCtx = newIRContext(verbosity, preserveRetAddr);
+      auto irCtx = newIRContext(verbosity, preserveRetAddr, altExits);
       auto *mod = genIR(dis, *irCtx);
       if (optLevel > 0)
         localCPURegSSA(mod);

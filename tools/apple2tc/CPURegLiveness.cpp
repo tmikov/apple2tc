@@ -98,7 +98,7 @@ void CPURegLiveness::calcLiveness() {
       SetType liveOut = 0;
       for (auto &user : func->users()) {
         Instruction *inst = user.owner();
-        if (inst->getKind() != ValueKind::Call)
+        if (!inst->isCall())
           continue;
 
         liveOut |= deriveInstLiveOut(inst);
@@ -237,7 +237,7 @@ inline auto CPURegLiveness::instGenKill(Instruction *inst) const -> std::pair<Se
     return {m(inst->getOperand(0)), 0};
   else if (inst->getKind() == ValueKind::StoreR8)
     return {0, m(inst->getOperand(0))};
-  else if (inst->getKind() == ValueKind::Call) {
+  else if (inst->isCall()) {
     const auto &fData = getFuncData(cast<Function>(inst->getOperand(0)));
     return {fData.sets.gen, fData.sets.kill};
   } else {

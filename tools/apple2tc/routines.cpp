@@ -29,17 +29,35 @@ class IdentifySimpleRoutines {
     std::unordered_set<BasicBlock *> blocks;
     std::unordered_set<BasicBlock *> jsrTargets;
     std::unordered_set<Instruction *> rts;
+    /// Where each alternate exit resumes, in index order: altExits[0] is exit
+    /// 1. Empty for almost every routine. See CallAlt in Values.def.
+    std::vector<BasicBlock *> altExits;
+    /// The blocks that leave through an alternate exit, mapped to its 1-based
+    /// index. These belong to the routine; their Jmp is what does not.
+    std::unordered_map<BasicBlock *, unsigned> altExitBlocks;
     Function *func = nullptr;
 
     Candidate(
         std::unordered_set<BasicBlock *> &&blocks,
         std::unordered_set<BasicBlock *> &&jsrTargets,
-        std::unordered_set<Instruction *> &&rts)
-        : blocks(std::move(blocks)), jsrTargets(std::move(jsrTargets)), rts(std::move(rts)) {}
+        std::unordered_set<Instruction *> &&rts,
+        std::vector<BasicBlock *> &&altExits,
+        std::unordered_map<BasicBlock *, unsigned> &&altExitBlocks)
+        : blocks(std::move(blocks)),
+          jsrTargets(std::move(jsrTargets)),
+          rts(std::move(rts)),
+          altExits(std::move(altExits)),
+          altExitBlocks(std::move(altExitBlocks)) {}
   };
 
   std::unordered_map<BasicBlock *, Candidate> candidates_{};
   std::multimap<BasicBlock *, Candidate *> blocks_{};
+  /// Alternate exits discovered for a routine entry, surviving across scan
+  /// rounds. A candidate that calls one of these routines continues at its
+  /// alternate targets as well as at the fall block, and the callee may be
+  /// scanned after the caller -- so run() rescans until this stops growing.
+  /// It only ever grows, which is what makes that terminate.
+  std::unordered_map<BasicBlock *, std::vector<BasicBlock *>> altExitsOf_{};
   /// Entry blocks that were considered and rejected, with the reason. A multimap
   /// because distinct blocks can share a source address, and each rejection is
   /// worth reporting.
@@ -61,6 +79,14 @@ private:
 
   /// Collect the basic block of the candidate.
   void scanCandidate(BasicBlock *entry);
+  /// Scan every JSR target in the function, once.
+  void scanAllCandidates();
+  /// Recognize the alternate-exit idiom at \p firstPop, which is a Pop8 that
+  /// would take the stack below the routine's own frame: two dead Pop8 that
+  /// discard exactly the return address, followed by an unconditional Jmp out
+  /// of the routine. Returns the Jmp target, or null if the block is doing
+  /// something else with its return address.
+  static BasicBlock *matchAltExit(BasicBlock *bb, Instruction *firstPop);
   /// Remove candidates that JSR into a non-candidate. Return true if anything
   /// changed.
   bool removeInvalidJSRs();
@@ -88,7 +114,7 @@ private:
   static void extractRoutine(IRBuilder &builder, BasicBlock *entry, Candidate &cand);
 };
 
-bool IdentifySimpleRoutines::run() {
+void IdentifySimpleRoutines::scanAllCandidates() {
   // Instead of scanning every instruction to see whether it is JSR, we scan
   // every basic block to see whether any of its predecessors are JSR.
   for (auto &bb : func_->basicBlocks()) {
@@ -102,6 +128,23 @@ bool IdentifySimpleRoutines::run() {
     }
     if (jsr)
       scanCandidate(&bb);
+  }
+}
+
+bool IdentifySimpleRoutines::run() {
+  // One pass is enough unless some routine turns out to have alternate exits:
+  // then every caller has to be rescanned, because the call continues at those
+  // targets too and the callee may have been scanned after the caller.
+  // altExitsOf_ only grows, so this terminates.
+  for (;;) {
+    size_t before = altExitsOf_.size();
+    candidates_.clear();
+    rejected_.clear();
+    scanAllCandidates();
+    if (altExitsOf_.size() == before)
+      break;
+    if (ctx_->getVerbosity() > 1)
+      fprintf(stderr, "rescanning: %zu routines with alternate exits\n", altExitsOf_.size());
   }
 
   // Make sure that candidates only JSR into other candidates.
@@ -207,12 +250,41 @@ void IdentifySimpleRoutines::reject(BasicBlock *entry, const std::string &reason
     fprintf(stderr, "fail: %s\n", reason.c_str());
 }
 
+BasicBlock *IdentifySimpleRoutines::matchAltExit(BasicBlock *bb, Instruction *firstPop) {
+  // The caller has already established that the stack was at the routine's own
+  // frame before `firstPop`, so these two pops take exactly the return address
+  // and nothing else.
+  auto it = bb->instructionToIterator(firstPop);
+  auto end = bb->instructions().end();
+
+  if (it->getKind() != ValueKind::Pop8)
+    return nullptr;
+  Instruction *secondPop = ++it != end ? &*it : nullptr;
+  if (!secondPop || secondPop->getKind() != ValueKind::Pop8)
+    return nullptr;
+  // The Jmp must follow immediately. Anything in between would run after the
+  // return address is gone but before control leaves, and the extracted
+  // routine has nowhere to put it. That adjacency is also what makes the
+  // discarded address unobservable: a use of either Pop8 would have to come
+  // after it and before the terminator, and there is nothing there. PLA leaves
+  // its byte in A, so in practice the two stores have to have been dead for the
+  // block to look like this at all.
+  if (++it == end || it->getKind() != ValueKind::Jmp)
+    return nullptr;
+  assert(firstPop->countUsers() == 0 && secondPop->countUsers() == 0);
+
+  return cast<BasicBlock>(it->getOperand(0));
+}
+
 void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
   // Stack depth relative to routine entry, at the start of each visited block.
   std::unordered_map<BasicBlock *, int> depthAt{};
   std::unordered_set<BasicBlock *> jsrTargets{};
   std::unordered_set<Instruction *> rts{};
   std::deque<std::pair<BasicBlock *, int>> workList{};
+  /// Blocks that leave through an alternate exit, with the target each one
+  /// jumps to. Indices are assigned once the whole routine is known.
+  std::vector<std::pair<BasicBlock *, BasicBlock *>> altExitBlockTargets{};
 
   if (ctx_->getVerbosity() > 1)
     fprintf(stderr, "$%04x: scan candidate\n", entry->getAddress().value_or(0x10000));
@@ -249,6 +321,9 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
     // depth, which is tracked across the whole routine rather than per block.
     // Others are not allowed.
     int depth = entryDepth;
+    // Set when this block turns out to leave the routine through an alternate
+    // exit, in which case it has no successors within the routine.
+    BasicBlock *altTarget = nullptr;
     for (auto &iRef : bb->instructions()) {
       if (iRef.getKind() == ValueKind::JSR) {
         jsrTargets.insert(cast<BasicBlock>(iRef.getOperand(0)));
@@ -259,15 +334,21 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
       } else if (iRef.getKind() == ValueKind::Pop8) {
         --depth;
         if (depth < 0) {
-          // Popping below routine entry means the routine is manipulating its
-          // own return address.
-          reject(
-              entry,
-              format(
-                  "%s block $%04x stack level underflow",
-                  getValueKindName(iRef.getKind()),
-                  bb->getAddress().value_or(0)));
-          return;
+          // Popping below routine entry means the routine is doing something
+          // with its own return address. Either it computes a jump from it,
+          // which we cannot express, or this is the alternate-exit idiom:
+          // discard the return address and jump into the caller.
+          altTarget = ctx_->getAltExits() ? matchAltExit(bb, &iRef) : nullptr;
+          if (!altTarget) {
+            reject(
+                entry,
+                format(
+                    "%s block $%04x stack level underflow",
+                    getValueKindName(iRef.getKind()),
+                    bb->getAddress().value_or(0)));
+            return;
+          }
+          break;
         }
       } else if (iRef.modifiesSP()) {
         reject(entry, format("%s", getValueKindName(iRef.getKind())));
@@ -275,7 +356,12 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
       }
     }
 
-    if (terminator->getKind() == ValueKind::RTS) {
+    if (altTarget) {
+      // This block leaves the routine. Its Jmp is not an edge of the routine,
+      // so the target is deliberately not added to the worklist -- following
+      // it is what would drag the caller's code into the callee.
+      altExitBlockTargets.emplace_back(bb, altTarget);
+    } else if (terminator->getKind() == ValueKind::RTS) {
       // The return address must be on top of the stack when we return.
       if (depth != 0) {
         reject(
@@ -290,6 +376,14 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
       // Optimistically continue in the "fall" block. A JSR/RTS pair is
       // depth-neutral from this routine's point of view.
       workList.emplace_back(cast<BasicBlock>(terminator->getOperand(1)), depth);
+      // A callee with alternate exits resumes at those too, and they are just
+      // as much a part of this routine as the fall block is. Without this the
+      // block set would be missing them and extractRoutine() would find a
+      // CallAlt operand it never cloned.
+      auto itAlt = altExitsOf_.find(cast<BasicBlock>(terminator->getOperand(0)));
+      if (itAlt != altExitsOf_.end())
+        for (BasicBlock *target : itAlt->second)
+          workList.emplace_back(target, depth);
     } else {
       for (auto &succ : successors(*bb))
         workList.emplace_back(&succ, depth);
@@ -300,6 +394,39 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
   visited.reserve(depthAt.size());
   for (auto &p : depthAt)
     visited.insert(p.first);
+
+  // Number the alternate exits. Distinct targets get distinct indices, and
+  // several blocks unwinding to the same place share one. Sorted by address so
+  // the numbering -- and therefore the generated C -- is reproducible.
+  std::vector<BasicBlock *> altExits{};
+  std::unordered_map<BasicBlock *, unsigned> altExitBlocks{};
+  for (auto [bb, target] : altExitBlockTargets)
+    if (std::find(altExits.begin(), altExits.end(), target) == altExits.end())
+      altExits.push_back(target);
+  std::sort(altExits.begin(), altExits.end(), [](BasicBlock *a, BasicBlock *b) {
+    auto addrA = a->getAddress().value_or(0x10000);
+    auto addrB = b->getAddress().value_or(0x10000);
+    return addrA != addrB ? addrA < addrB : a->getUniqueId() < b->getUniqueId();
+  });
+  for (auto [bb, target] : altExitBlockTargets) {
+    auto index = std::find(altExits.begin(), altExits.end(), target) - altExits.begin();
+    altExitBlocks.emplace(bb, (unsigned)index + 1);
+  }
+
+  // An alternate exit has to leave. If the target is reachable inside the
+  // routine as well, then it is not the caller's code at all and the whole
+  // reading is wrong -- this is the check that keeps a routine from swallowing
+  // its own call site and calling itself.
+  for (BasicBlock *target : altExits) {
+    if (visited.count(target)) {
+      reject(
+          entry,
+          format(
+              "alternate exit to $%04x is inside the routine",
+              target->getAddress().value_or(0x10000)));
+      return;
+    }
+  }
 
   // Is this entry the "fall" block of a JSR, i.e. the address a call returns
   // to? Then the RTS edges arriving here are the return leg of that very call,
@@ -325,12 +452,19 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
   // Now check whether all predecessors are either JSR, Jmp or fall.
   // entry point.
   bool jmp = false;
+  // A JSR whose fall block is the entry itself: "JSR entry" immediately
+  // followed by entry. It is a regular JSR as far as the checks below go, but
+  // it is converted into a call block rather than a plain call.
+  bool fallsIntoEntry = false;
   for (Instruction &iRef : predecessorInsts(*entry)) {
     auto *inst = &iRef;
     assert(inst->isTerminator());
     // A regular JSR?
-    if (inst->getKind() == ValueKind::JSR && inst->getOperand(0) == entry)
+    if (inst->getKind() == ValueKind::JSR && inst->getOperand(0) == entry) {
+      if (inst->getOperand(1) == entry)
+        fallsIntoEntry = true;
       continue;
+    }
     // A jmp to the subroutine?
     switch (inst->getKind()) {
     case ValueKind::JSR:
@@ -360,7 +494,29 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
     return;
   }
 
-  candidates_.try_emplace(entry, std::move(visited), std::move(jsrTargets), std::move(rts));
+  // A routine with alternate exits must be entered only by a plain JSR. Every
+  // other entry path -- jumped into, push-jmp, returned into -- is converted by
+  // building a block that calls the routine and then dispatches dynamically,
+  // and that block has no way to take an alternate exit.
+  if (!altExits.empty() && (jmp || fallsIntoEntry)) {
+    reject(entry, "alternate exits, but not entered by a JSR alone");
+    return;
+  }
+
+  // Remember these for the next scan round, so that callers pick up the
+  // continuations. Never overwritten: a routine's alternate exits depend only
+  // on its own blocks, so the first round already has them right, and only
+  // adding keeps run()'s fixpoint monotone.
+  if (!altExits.empty())
+    altExitsOf_.try_emplace(entry, altExits);
+
+  candidates_.try_emplace(
+      entry,
+      std::move(visited),
+      std::move(jsrTargets),
+      std::move(rts),
+      std::move(altExits),
+      std::move(altExitBlocks));
 
   if (ctx_->getVerbosity() > 1) {
     fprintf(
@@ -429,6 +585,7 @@ void IdentifySimpleRoutines::convertInvocations(BasicBlock *entry, Candidate &ca
   cand.func = mod->createFunction();
   cand.func->setName(entry->getName());
   cand.func->setDecompileLevel(Function::DecompileLevel::Normal);
+  cand.func->setNumAltExits(cand.altExits.size());
 
   // Record all addresses this routine returns to as "dynamic blocks".
   PrimitiveSetVector<BasicBlock *> dynamicReturnBlocks{};
@@ -494,7 +651,9 @@ void IdentifySimpleRoutines::convertInvocations(BasicBlock *entry, Candidate &ca
 #endif
 }
 
-std::vector<BasicBlock *> dfsOrder(BasicBlock *entry) {
+std::vector<BasicBlock *> dfsOrder(
+    BasicBlock *entry,
+    const std::unordered_map<BasicBlock *, unsigned> &altExitBlocks) {
   std::vector<BasicBlock *> stack{};
   std::unordered_set<BasicBlock *> visited{};
   std::vector<BasicBlock *> order{};
@@ -507,6 +666,10 @@ std::vector<BasicBlock *> dfsOrder(BasicBlock *entry) {
       continue;
     order.push_back(bb);
     if (bb->getTerminator()->getKind() == ValueKind::RTS)
+      continue;
+    // An alternate exit leaves the routine, exactly like an RTS does. Its Jmp
+    // target belongs to the caller and must not be dragged in here.
+    if (altExitBlocks.count(bb))
       continue;
     for (auto &succ : successors(*bb))
       stack.push_back(&succ);
@@ -521,7 +684,7 @@ void IdentifySimpleRoutines::extractRoutine(
     Candidate &cand) {
   // Map from old block to new block.
   std::unordered_map<Value *, Value *> valueMap{};
-  auto order = dfsOrder(entry);
+  auto order = dfsOrder(entry, cand.altExitBlocks);
 
   assert(order[0] == entry);
   for (auto *oldBB : order) {
@@ -536,13 +699,30 @@ void IdentifySimpleRoutines::extractRoutine(
   // TODO: deal with Phi instructions when we introduce them?
 
   std::vector<Value *> operands{};
+  std::vector<Instruction *> insts{};
 
   for (auto *oldBB : order) {
     auto *newBB = cast<BasicBlock>(valueMap[oldBB]);
 
+    insts.clear();
+    for (auto &iRef : oldBB->instructions())
+      insts.push_back(&iRef);
+
+    // An alternate-exit block ends with the two Pop8 that discard the return
+    // address and the Jmp that leaves the routine -- matchAltExit() is what
+    // established that, and nothing since has touched the block. All three are
+    // replaced by a single ReturnAlt: the routine reports which exit it took
+    // and the caller's CallAlt does the branch. Dropping the pops together with
+    // the address they discard is what keeps the emulated stack balanced, so
+    // that ReturnAlt can pop exactly what the prologue pushed.
+    auto itAlt = cand.altExitBlocks.find(oldBB);
+    if (itAlt != cand.altExitBlocks.end()) {
+      assert(insts.size() >= 3 && "an alternate exit is at least pop, pop, jmp");
+      insts.resize(insts.size() - 3);
+    }
+
     builder.setInsertionBlock(newBB);
-    for (auto &iRef : oldBB->instructions()) {
-      Instruction *oldInst = &iRef;
+    for (Instruction *oldInst : insts) {
       builder.setAddress(oldInst->getAddress());
 
       if (oldInst->getKind() == ValueKind::RTS) {
@@ -564,6 +744,12 @@ void IdentifySimpleRoutines::extractRoutine(
 
       auto *newInst = builder.createInst(oldInst->getKind(), operands);
       valueMap[oldInst] = newInst;
+    }
+
+    if (itAlt != cand.altExitBlocks.end()) {
+      builder.setAddress(oldBB->getTerminator()->getAddress());
+      builder.createReturnAlt(
+          cand.func->getExitBlock(), builder.getLiteralU8((uint8_t)itAlt->second));
     }
   }
 }
@@ -646,6 +832,22 @@ bool IdentifySimpleRoutines::convertRoutineInvocation(
       // This is the "normal" case: a JSR to the subroutine.
       builder.setInsertionPointAfter(inst);
       builder.setAddress(inst->getAddress());
+      if (!cand.altExits.empty()) {
+        // The routine chooses its own continuation, so the call is the
+        // terminator and there is no Jmp after it. scanCandidate() only accepts
+        // alternate exits on a routine reached by a plain JSR, which is why
+        // this does not have to consider fallFromAnother.
+        assert(!fallFromAnother && "an alt-exit routine is never fallen into");
+        auto *call = builder.createCallAlt(
+            cand.func,
+            builder.getLiteralU16(
+                ctx_->getPreserveReturnAddress() ? inst->getAddress().value_or(0xFFFC) + 2
+                                                 : 0xFFFE),
+            inst->getOperand(1));
+        for (BasicBlock *target : cand.altExits)
+          call->pushOperand(target);
+        break;
+      }
       builder.createCall(
           cand.func,
           builder.getLiteralU16(

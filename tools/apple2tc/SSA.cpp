@@ -41,7 +41,7 @@ static bool removeRegLoads(BasicBlock *bb, const CPURegLiveness &liveness) {
         // Record the load itself as the latest value.
         entry = inst;
       }
-    } else if (inst->getKind() == ValueKind::Call) {
+    } else if (inst->isCall()) {
       // Erase all registers modified by the call.
       CPURegLiveness::forEachInSet(
           liveness.getFuncData(cast<Function>(inst->getOperand(0))).modified,
@@ -79,7 +79,7 @@ static bool removeRegStores(BasicBlock *bb, const CPURegLiveness &liveness) {
     } else if (inst->getKind() == ValueKind::LoadR8) {
       // A load "validates" any prior store.
       lastStore[inst->getOperand(0)] = nullptr;
-    } else if (inst->getKind() == ValueKind::Call) {
+    } else if (inst->isCall()) {
       auto &fData = liveness.getFuncData(cast<Function>(inst->getOperand(0)));
       // The function "loads" its Gen set, so all prior stores to those registers
       // are "validated".
