@@ -219,6 +219,16 @@ ValueKind negateComparison(ValueKind kind);
 /// JSR idiom. Return the two pushes in order "hi" then "lo".
 std::optional<std::tuple<Instruction *, Instruction *>> isSimplePushJmp(Instruction *inst);
 
+/// Check whether \p firstPop begins the "alternate exit" idiom: two Pop8 that
+/// discard the routine's own return address, immediately followed by an
+/// unconditional Jmp, so that control resumes somewhere in the caller rather
+/// than at the call site. Return the Jmp target, or null.
+///
+/// The caller must have established that the stack is at the routine's own
+/// frame before \p firstPop, since that is what makes the two pops the return
+/// address rather than the routine's own data.
+BasicBlock *matchAltExit(BasicBlock *bb, Instruction *firstPop);
+
 using InstSet = std::unordered_set<Instruction *>;
 
 /// For a given basic block \p bb, populate a set of instructions that are

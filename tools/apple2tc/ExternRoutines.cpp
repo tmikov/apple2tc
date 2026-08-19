@@ -12,10 +12,12 @@
 #include "apple2tc/SetVector.h"
 #include "apple2tc/support.h"
 
-#include <cerrno>
+#include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <cstring>
 #include <stdexcept>
+#include <unordered_map>
 #include <unordered_set>
 
 using namespace ir;
@@ -99,6 +101,17 @@ private:
   /// return targets we find.
   PrimitiveSetVector<BasicBlock *> dynamicReturnBlocks(BasicBlock *entry);
 
+  /// Find the alternate exits of \p entry: blocks that discard the routine's
+  /// own return address and jump into the caller. Returns their targets.
+  ///
+  /// An external routine's body is deleted and replaced by hand-written C,
+  /// which has no way to say "resume over there" -- so finding any of these is
+  /// a refusal, not a feature. Doing it here rather than leaving it to
+  /// identifySimpleRoutines() is the whole point: by the time that pass runs,
+  /// the body carrying the evidence is gone and the call site looks like an
+  /// ordinary one that simply returns.
+  std::vector<BasicBlock *> altExits(BasicBlock *entry);
+
   /// Rewrite a single invocation of \p entry into a call of \p ef. Return true
   /// if \p inst should be erased.
   bool convert(
@@ -134,6 +147,70 @@ PrimitiveSetVector<BasicBlock *> ExternRoutines::dynamicReturnBlocks(BasicBlock 
       res.erase(cast<BasicBlock>(iRef.getOperand(1)));
   }
 
+  return res;
+}
+
+std::vector<BasicBlock *> ExternRoutines::altExits(BasicBlock *entry) {
+  std::vector<BasicBlock *> res{};
+  std::unordered_map<BasicBlock *, int> depthAt{};
+  std::vector<std::pair<BasicBlock *, int>> stack{{entry, 0}};
+
+  while (!stack.empty()) {
+    auto [bb, entryDepth] = stack.back();
+    stack.pop_back();
+    if (!depthAt.try_emplace(bb, entryDepth).second)
+      continue;
+
+    auto *terminator = bb->getTerminator();
+    if (!terminator || terminator->getKind() == ValueKind::RTS)
+      continue;
+
+    // Track the stack the way identifySimpleRoutines() does, but give up on a
+    // path rather than complaining about it. A declared routine is not required
+    // to be a well-behaved one -- most of the ROM is not -- and this walk exists
+    // only to find the one idiom, so anything it cannot model is a path that
+    // simply does not report an alternate exit.
+    int depth = entryDepth;
+    BasicBlock *altTarget = nullptr;
+    bool bail = false;
+    for (auto &iRef : bb->instructions()) {
+      if (iRef.getKind() == ValueKind::Push8) {
+        ++depth;
+      } else if (iRef.getKind() == ValueKind::Pop8) {
+        if (--depth < 0) {
+          altTarget = matchAltExit(bb, &iRef);
+          bail = true;
+          break;
+        }
+      } else if (iRef.getKind() != ValueKind::JSR && iRef.modifiesSP()) {
+        bail = true;
+        break;
+      }
+    }
+
+    if (altTarget) {
+      res.push_back(altTarget);
+      continue;
+    }
+    if (bail)
+      continue;
+
+    if (terminator->getKind() == ValueKind::JSR) {
+      // A JSR/RTS pair is depth-neutral, so continue in the fall block only.
+      stack.emplace_back(cast<BasicBlock>(terminator->getOperand(1)), depth);
+    } else {
+      for (auto &succ : successors(*bb))
+        stack.emplace_back(&succ, depth);
+    }
+  }
+
+  // Discovery order depends on the walk; the message should not.
+  std::sort(res.begin(), res.end(), [](BasicBlock *a, BasicBlock *b) {
+    auto addrA = a->getAddress().value_or(0x10000);
+    auto addrB = b->getAddress().value_or(0x10000);
+    return addrA != addrB ? addrA < addrB : a->getUniqueId() < b->getUniqueId();
+  });
+  res.erase(std::unique(res.begin(), res.end()), res.end());
   return res;
 }
 
@@ -265,6 +342,19 @@ bool ExternRoutines::run(const std::vector<std::pair<uint16_t, std::string>> &ex
     BasicBlock *entry = start_->findBasicBlock(addr);
     if (!entry)
       throw std::runtime_error(format("extern routine $%04X: no basic block at this address", addr));
+
+    if (auto alt = altExits(entry); !alt.empty()) {
+      std::string targets{};
+      for (BasicBlock *bb : alt)
+        targets += format(" $%04X", bb->getAddress().value_or(0x10000));
+      throw std::runtime_error(format(
+          "extern routine $%04X '%s' returns into its caller, at%s.\n"
+          "A hand-written body cannot express that: it returns to its call site or\n"
+          "not at all, and declaring it here would silently drop the other exit.",
+          addr,
+          name.c_str(),
+          targets.c_str()));
+    }
 
     auto dynRet = dynamicReturnBlocks(entry);
 

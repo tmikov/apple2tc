@@ -1,0 +1,6 @@
+# Declaring the alternate-exit routine as hand-written, which must be refused:
+# a C body returns to its call site or not at all, and $0330 also returns to
+# $031C. Externalizing happens before routines are identified, so by the time
+# anything could notice, the body carrying the evidence is gone -- the check has
+# to live in the externalizing pass itself.
+0330 test_sub

@@ -122,6 +122,23 @@ $apple2tc altexit.b33 -O3 --ir --ret-addr > altexit-noalt-test.ir
 diff -q altexit-noalt.ir altexit-noalt-test.ir
 rm altexit-test.ir altexit-noalt-test.ir altexit.b33
 
+# An alternate-exit routine cannot also be hand-written. The refusal has to come
+# from the externalizing pass, which runs first and deletes the body: after that
+# the call site looks like an ordinary call that simply returns, and the exit is
+# gone with nothing to notice it.
+$a6502 altexit.s altexit.b33 >/dev/null
+if $apple2tc altexit.b33 -O3 --ir --ret-addr --alt-exit \
+    --extern-routines=altexit.externs >/dev/null 2>altexit-ext.err; then
+  echo "FAIL: an alternate-exit routine was accepted as an extern" >&2
+  exit 1
+fi
+if ! grep -q 'returns into its caller, at \$031C \$0322' altexit-ext.err; then
+  echo "FAIL: refused the extern, but not for returning into its caller:" >&2
+  cat altexit-ext.err >&2
+  exit 1
+fi
+rm -f altexit-ext.err altexit.b33
+
 # The rejection that matters: an "alternate exit" landing back inside its own
 # routine. Accepting it would make the routine swallow the target and become
 # self-recursive, and nothing about the generated code would look wrong -- so

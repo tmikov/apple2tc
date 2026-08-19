@@ -81,12 +81,6 @@ private:
   void scanCandidate(BasicBlock *entry);
   /// Scan every JSR target in the function, once.
   void scanAllCandidates();
-  /// Recognize the alternate-exit idiom at \p firstPop, which is a Pop8 that
-  /// would take the stack below the routine's own frame: two dead Pop8 that
-  /// discard exactly the return address, followed by an unconditional Jmp out
-  /// of the routine. Returns the Jmp target, or null if the block is doing
-  /// something else with its return address.
-  static BasicBlock *matchAltExit(BasicBlock *bb, Instruction *firstPop);
   /// Remove candidates that JSR into a non-candidate. Return true if anything
   /// changed.
   bool removeInvalidJSRs();
@@ -248,32 +242,6 @@ void IdentifySimpleRoutines::reject(BasicBlock *entry, const std::string &reason
   rejected_.emplace(entry->getAddress().value_or(0x10000), reason);
   if (ctx_->getVerbosity() > 1)
     fprintf(stderr, "fail: %s\n", reason.c_str());
-}
-
-BasicBlock *IdentifySimpleRoutines::matchAltExit(BasicBlock *bb, Instruction *firstPop) {
-  // The caller has already established that the stack was at the routine's own
-  // frame before `firstPop`, so these two pops take exactly the return address
-  // and nothing else.
-  auto it = bb->instructionToIterator(firstPop);
-  auto end = bb->instructions().end();
-
-  if (it->getKind() != ValueKind::Pop8)
-    return nullptr;
-  Instruction *secondPop = ++it != end ? &*it : nullptr;
-  if (!secondPop || secondPop->getKind() != ValueKind::Pop8)
-    return nullptr;
-  // The Jmp must follow immediately. Anything in between would run after the
-  // return address is gone but before control leaves, and the extracted
-  // routine has nowhere to put it. That adjacency is also what makes the
-  // discarded address unobservable: a use of either Pop8 would have to come
-  // after it and before the terminator, and there is nothing there. PLA leaves
-  // its byte in A, so in practice the two stores have to have been dead for the
-  // block to look like this at all.
-  if (++it == end || it->getKind() != ValueKind::Jmp)
-    return nullptr;
-  assert(firstPop->countUsers() == 0 && secondPop->countUsers() == 0);
-
-  return cast<BasicBlock>(it->getOperand(0));
 }
 
 void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
