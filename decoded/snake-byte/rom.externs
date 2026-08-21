@@ -27,6 +27,7 @@ FE93 rom_setvid
 60E4 game_plot_shape
 6148 game_plot_hline
 615A game_plot_vline
+6256 game_start_round
 6288 game_play_loop
 72CE game_draw_status
 78B3 game_bonus

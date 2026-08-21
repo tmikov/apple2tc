@@ -3103,3 +3103,51 @@ void game_bonus_screen(void) {
   } while (ram_peek(0x0002) != 0);
   GAME_CYCLES_SHARED(0x797d, 6);
 }
+
+/* ========================================================================== */
+/* $6256 -- start a life                                                      */
+/*                                                                            */
+/* Head and tail both at row $27 column $14 -- the snake begins as one cell,   */
+/* in the gate at the bottom centre, facing up. $6254 owes it ten segments of  */
+/* growth, which is what makes it appear to emerge from the gate rather than   */
+/* start full length.                                                          */
+/*                                                                            */
+/* $6258 supplies the tail column rather than it being written here: the       */
+/* original loads $14 into A, and game_start_life hands back $14 from its own  */
+/* constant at $6630. The two are unrelated and happen to agree.               */
+/*                                                                            */
+/* Ends by falling into the main loop, which the original does with a JSR and  */
+/* an RTS it never reaches -- the generated call passes a return address of 0  */
+/* for the same reason.                                                        */
+/* ========================================================================== */
+
+void game_begin_life(void) {
+  GAME_CYCLES(0x6256, 8);
+  s_a = 0x14;
+  game_start_life_adapter(0x625a);
+
+  GAME_CYCLES(0x625b, 36);
+  ram_poke(0x6251, s_a); // tail column, from $6630 by way of $660F
+  ram_poke(0x6250, 0x27); // head row: the bottom edge
+  ram_poke(0x6252, 0x27); // tail row, the same cell
+  ram_poke(0x624e, DIR_UP);
+  ram_poke(0x6254, 0x0a); // ten segments still to grow
+  ram_poke(0x6255, 0x64); // the level timer
+
+  // $6279 -- empty the sixteen-entry key ring at $623C. DEX/BPL, so it runs
+  // down through 0 and stops when X wraps negative, one more pass than a
+  // count of $0F suggests.
+  uint8_t x = 0x0f;
+  do {
+    GAME_CYCLES(0x6279, 9);
+    ram_poke(0x623c + x, 0x00);
+    --x;
+    if (!(x & 0x80))
+      GAME_CYCLES(0x627d, 1);
+  } while (!(x & 0x80));
+
+  GAME_CYCLES(0x627f, 11);
+  ram_poke(0x624c, 0x00);
+  ram_poke(0x624d, 0x00);
+  game_play_loop(0x0000);
+}

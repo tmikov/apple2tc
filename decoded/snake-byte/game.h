@@ -169,3 +169,6 @@ void game_draw_status(uint16_t ret_addr);
 /// $78B3 -- the bonus screen. Adapter for game_bonus_screen(). Entered with
 /// decimal mode set.
 void game_bonus(uint16_t ret_addr);
+
+/// $6256 -- start a life and run it. Adapter for game_begin_life().
+void game_start_round(uint16_t ret_addr);

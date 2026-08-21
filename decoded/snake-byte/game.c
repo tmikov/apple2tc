@@ -1244,3 +1244,26 @@ void game_bonus(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $6256 -- start a life. See game_native.c.                                  */
+/* ========================================================================== */
+
+void game_start_round(uint16_t ret_addr) {
+  // Adapter for game_begin_life(). Costs 4 trace sites.
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  if (s_status_d) {
+    fprintf(stderr, "game_start_round: entered with decimal mode set\n");
+    error_handler(0x6256);
+    abort();
+  }
+
+  game_begin_life();
+
+  if (ret_addr)
+    pop16();
+}

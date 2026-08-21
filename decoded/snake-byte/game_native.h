@@ -342,3 +342,8 @@ void game_status_panel(void);
 /// $78B3 -- the bonus screen: award twice the apple's value, draw a box over
 /// the playfield, print BONUS and the amount, and hold it there.
 void game_bonus_screen(void);
+
+/// $6256 -- set up a life and hand over to the main loop: the snake as a
+/// single cell at the bottom centre facing up, ten segments of growth owed,
+/// the timer full, and the key ring empty.
+void game_begin_life(void);
