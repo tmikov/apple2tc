@@ -28,6 +28,7 @@ FE93 rom_setvid
 6148 game_plot_hline
 615A game_plot_vline
 6288 game_play_loop
+72CE game_draw_status
 7019 game_next_byte
 7024 game_set_ink
 7000 game_lores_vline

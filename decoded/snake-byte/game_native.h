@@ -334,3 +334,7 @@ typedef enum {
 /// in order of usefulness and taking the first that snake_move_verdict()
 /// allows. Leaves the direction it settled on in $6B38, as the original does.
 SteerChoice game_auto_steer(uint8_t *key_out);
+
+/// $72CE -- draw the status panel: six labelled BCD fields in a 2x3 grid
+/// across the bottom three text rows, then home the cursor.
+void game_status_panel(void);

@@ -2809,3 +2809,157 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
   *key_out = key_for_direction(dir);
   return STEER_TURN;
 }
+
+/* ========================================================================== */
+/* $72CE -- the status panel                                                  */
+/*                                                                            */
+/* Six labelled numbers in a 2x3 grid on text rows $14-$16:                   */
+/*                                                                            */
+/*     SCORE:  ....        HI SCORE:  ....                                    */
+/*     APPLES LEFT:  ..    VALUE:  ..                                         */
+/*     SNAKES LEFT:  ..    LEVEL:  .                                          */
+/*                                                                            */
+/* Every field is the same four moves: place the cursor, print a label, clear  */
+/* the leading-zero flag, then print BCD bytes most significant first and a    */
+/* '0' if suppression ate all of them. The labels are inline strings after the */
+/* JSR -- see game_print_inline_str -- so the "argument" each call passes is   */
+/* the address the original pushed, and the text follows it.                   */
+/*                                                                            */
+/* $24 and $25 are the ROM's CH and CV. Only the last write to CV is followed  */
+/* by VTAB, because COUT recomputes the line base itself on the way past.      */
+/* Twenty-nine of the thirty block heads here keep their probes, spelled            */
+/* GAME_CYCLES_SHARED. game_print_inline_str returns to an address it computes */
+/* at run time, so every one of its return points is a dynamic block -- and    */
+/* the generated C therefore still carries this routine's tail as cases        */
+/* nothing can reach but that are still text in the file, and still on the     */
+/* site list. The interpreter reports those addresses; so must this. Only      */
+/* $72CE itself leaves, because that is the one the call now replaces.         */
+/*                                                                            */
+/* Every charge below is written out with a literal address rather than passed */
+/* to a helper. A helper reads better and is wrong: the site-list lint finds   */
+/* these by grepping for the literal, so an address reaching GAME_CYCLES       */
+/* through a parameter is invisible to it, and nine of these were.            */
+/* ========================================================================== */
+
+/// $002C -- the flag game_print_bcd raises when it prints a digit, so that
+/// game_print_zero_if_blank knows whether the field came out empty.
+static void clear_leading_zero_flag(void) {
+  ram_poke(0x002c, 0x00);
+}
+
+void game_status_panel(void) {
+  // SCORE, row $14 column $00. Four BCD bytes at $7252, little-endian.
+  GAME_CYCLES(0x72ce, 16);
+  ram_poke(0x0025, 0x14);
+  ram_poke(0x0024, 0x00);
+  game_print_inline_str(0x72d8);
+  GAME_CYCLES_SHARED(0x72e2, 15);
+  clear_leading_zero_flag();
+  s_a = ram_peek(0x7255);
+  game_print_bcd(0x72eb);
+  GAME_CYCLES_SHARED(0x72ec, 10);
+  s_a = ram_peek(0x7254);
+  game_print_bcd(0x72f1);
+  GAME_CYCLES_SHARED(0x72f2, 10);
+  s_a = ram_peek(0x7253);
+  game_print_bcd(0x72f7);
+  GAME_CYCLES_SHARED(0x72f8, 10);
+  s_a = ram_peek(0x7252);
+  game_print_bcd(0x72fd);
+  GAME_CYCLES_SHARED(0x72fe, 6);
+  game_print_zero_if_blank(0x7300);
+
+  // HI SCORE, same row, column $14. Four bytes at $7256.
+  GAME_CYCLES_SHARED(0x7301, 11);
+  ram_poke(0x0024, 0x14);
+  game_print_inline_str(0x7307);
+  GAME_CYCLES_SHARED(0x7314, 15);
+  clear_leading_zero_flag();
+  s_a = ram_peek(0x7259);
+  game_print_bcd(0x731d);
+  GAME_CYCLES_SHARED(0x731e, 10);
+  s_a = ram_peek(0x7258);
+  game_print_bcd(0x7323);
+  GAME_CYCLES_SHARED(0x7324, 10);
+  s_a = ram_peek(0x7257);
+  game_print_bcd(0x7329);
+  GAME_CYCLES_SHARED(0x732a, 10);
+  s_a = ram_peek(0x7256);
+  game_print_bcd(0x732f);
+  GAME_CYCLES_SHARED(0x7330, 6);
+  game_print_zero_if_blank(0x7332);
+
+  // APPLES LEFT, row $15 column $00. Two bytes at $725A.
+  GAME_CYCLES_SHARED(0x7333, 16);
+  ram_poke(0x0024, 0x00);
+  ram_poke(0x0025, 0x15);
+  game_print_inline_str(0x733d);
+  GAME_CYCLES_SHARED(0x734d, 15);
+  clear_leading_zero_flag();
+  s_a = ram_peek(0x725b);
+  game_print_bcd(0x7356);
+  GAME_CYCLES_SHARED(0x7357, 10);
+  s_a = ram_peek(0x725a);
+  game_print_bcd(0x735c);
+  GAME_CYCLES_SHARED(0x735d, 6);
+  game_print_zero_if_blank(0x735f);
+
+  // A space, which the next field's cursor move immediately overrides. It is
+  // there to wipe the character one place past this field, left over from a
+  // longer count earlier in the game.
+  GAME_CYCLES_SHARED(0x7360, 8);
+  s_a = 0xa0;
+  rom_cout(0x7364);
+
+  // VALUE, same row, column $14. Two bytes at $71CB -- the current worth of an
+  // apple, which game_set_apple_value computes per level.
+  GAME_CYCLES_SHARED(0x7365, 11);
+  ram_poke(0x0024, 0x14);
+  game_print_inline_str(0x736b);
+  GAME_CYCLES_SHARED(0x7375, 15);
+  clear_leading_zero_flag();
+  s_a = ram_peek(0x71cc);
+  game_print_bcd(0x737e);
+  GAME_CYCLES_SHARED(0x737f, 10);
+  s_a = ram_peek(0x71cb);
+  game_print_bcd(0x7384);
+  GAME_CYCLES_SHARED(0x7385, 6);
+  game_print_zero_if_blank(0x7387);
+
+  // SNAKES LEFT, row $16 column $00. One byte at $725E, printed as though it
+  // were the low half of a two-byte field: the high half is the literal 0
+  // below, which prints nothing at all once leading zeros are suppressed. It
+  // costs a call to keep the shape of every other field.
+  GAME_CYCLES_SHARED(0x7388, 16);
+  ram_poke(0x0025, 0x16);
+  ram_poke(0x0024, 0x00);
+  game_print_inline_str(0x7392);
+  GAME_CYCLES_SHARED(0x73a2, 11);
+  s_a = 0x00;
+  clear_leading_zero_flag();
+  game_print_bcd(0x73a8);
+  GAME_CYCLES_SHARED(0x73a9, 10);
+  s_a = ram_peek(0x725e);
+  game_print_bcd(0x73ae);
+  GAME_CYCLES_SHARED(0x73af, 6);
+  game_print_zero_if_blank(0x73b1);
+
+  // LEVEL, same row, column $14. One byte at $7265.
+  GAME_CYCLES_SHARED(0x73b2, 11);
+  ram_poke(0x0024, 0x14);
+  game_print_inline_str(0x73b8);
+  GAME_CYCLES_SHARED(0x73c2, 15);
+  clear_leading_zero_flag();
+  s_a = ram_peek(0x7265);
+  game_print_bcd(0x73cb);
+  GAME_CYCLES_SHARED(0x73cc, 6);
+  game_print_zero_if_blank(0x73ce);
+
+  // Home the cursor. This CV write is the one that needs VTAB, because nothing
+  // prints after it to recompute the line base.
+  GAME_CYCLES_SHARED(0x73cf, 11);
+  s_a = 0x00;
+  ram_poke(0x0025, 0x00);
+  rom_fc68(0x73d5);
+  GAME_CYCLES_SHARED(0x73d6, 6);
+}

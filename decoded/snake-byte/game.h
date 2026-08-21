@@ -162,3 +162,6 @@ void game_read_direction(uint16_t ret_addr);
 /// $6288 -- one life. Adapter for game_play_loop_native(); leaves the reason
 /// it ended in $6253, which is what the caller at $7739 reads.
 void game_play_loop(uint16_t ret_addr);
+
+/// $72CE -- draw the status panel. Adapter for game_status_panel().
+void game_draw_status(uint16_t ret_addr);

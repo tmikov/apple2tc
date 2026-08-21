@@ -1205,3 +1205,21 @@ void game_play_loop(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $72CE -- the status panel. See game_native.c.                              */
+/* ========================================================================== */
+
+void game_draw_status(uint16_t ret_addr) {
+  // Adapter for game_status_panel(). Costs 30 trace sites; the routine is
+  // straight-line, so all of them are its own and none is shared.
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  game_status_panel();
+
+  if (ret_addr)
+    pop16();
+}
