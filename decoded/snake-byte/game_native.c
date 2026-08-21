@@ -2963,3 +2963,143 @@ void game_status_panel(void) {
   rom_fc68(0x73d5);
   GAME_CYCLES_SHARED(0x73d6, 6);
 }
+
+/* ========================================================================== */
+/* $78B3 -- the bonus screen                                                  */
+/*                                                                            */
+/* Awarded when a level is finished. The bonus is twice whatever an apple was  */
+/* worth on that level, which the original says twice over: once as BCD        */
+/* arithmetic into $78B0/$78B1 so the number can be printed, and once as two   */
+/* consecutive calls to game_add_score, which adds $71CB/$71CC each time.      */
+/* Neither reads the other's answer.                                          */
+/*                                                                            */
+/* This routine is *entered with decimal mode set* -- unusual here, and the    */
+/* reason the adapter cannot assert against it the way the others do. The      */
+/* generated C makes the same claim: its binary-mode path is dead, folded away */
+/* because D is known set on entry. $78C7 clears it before anything else runs. */
+/*                                                                            */
+/* Then a box: a frame in ink 9 and its interior wiped in ink 0, four rows at  */
+/* a time. The text goes through the game's own hi-res font, which is what     */
+/* $6641 installs and what the two pokes at $795F take back out again.         */
+/* ========================================================================== */
+
+void game_bonus_screen(void) {
+  // $78B3 -- double the apple's value into $78B0/$78B1, in BCD.
+  GAME_CYCLES(0x78b3, 36);
+  const uint16_t lo = adc_dec16(ram_peek(0x71cb), ram_peek(0x71cb), 0x00);
+  ram_poke(0x78b0, (uint8_t)lo);
+  const uint16_t hi = adc_dec16(ram_peek(0x71cc), ram_peek(0x71cc), (uint8_t)(lo >> 8) & 0x01);
+  ram_poke(0x78b1, (uint8_t)hi);
+  s_a = (uint8_t)hi;
+  s_status_c = (uint8_t)(hi >> 8) & 0x01;
+  s_status_v = ((uint8_t)(hi >> 8) & 0x40) != 0;
+  s_status_d = 0x00; // $78C7 CLD
+
+  // Twice, because the bonus is twice the apple value and game_add_score adds
+  // it once.
+  game_add_score(0x78ca);
+  GAME_CYCLES(0x78cb, 6);
+  game_add_score(0x78cd);
+  GAME_CYCLES(0x78ce, 6);
+  game_draw_status(0x78d0);
+
+  // $78D1 -- the frame, in ink 9: top and bottom edges, then both sides.
+  GAME_CYCLES(0x78d1, 31);
+  ram_poke(0x0000, 0x01);
+  ram_poke(0x0001, 0x09);
+  ram_poke(0x0002, 0x0d);
+  ram_poke(0x0003, 0x10);
+  ram_poke(0x0008, 0x1a);
+  game_plot_hline(0x78e7);
+  GAME_CYCLES(0x78e8, 16);
+  ram_poke(0x0002, 0x0d);
+  ram_poke(0x0003, 0x15);
+  game_plot_hline(0x78f2);
+  GAME_CYCLES(0x78f3, 16);
+  ram_poke(0x0003, 0x10);
+  ram_poke(0x0008, 0x15);
+  game_plot_vline(0x78fd);
+  GAME_CYCLES(0x78fe, 16);
+  ram_poke(0x0002, 0x0d);
+  ram_poke(0x0003, 0x10);
+  game_plot_vline(0x7908);
+
+  // $7909 -- the interior, in ink 0, one row at a time from $11 to $14. The
+  // original re-loads $02 each time and increments $03 in place, which is why
+  // the rows are not written out as constants.
+  GAME_CYCLES(0x7909, 26);
+  ram_poke(0x0001, 0x00);
+  ram_poke(0x0008, 0x19);
+  ram_poke(0x0003, 0x11);
+  ram_poke(0x0002, 0x0e);
+  game_plot_hline(0x791b);
+  GAME_CYCLES(0x791c, 16);
+  ram_poke(0x0002, 0x0e);
+  ram_poke(0x0003, (uint8_t)(ram_peek(0x0003) + 1));
+  game_plot_hline(0x7924);
+  GAME_CYCLES(0x7925, 16);
+  ram_poke(0x0002, 0x0e);
+  ram_poke(0x0003, (uint8_t)(ram_peek(0x0003) + 1));
+  game_plot_hline(0x792d);
+  GAME_CYCLES(0x792e, 16);
+  ram_poke(0x0002, 0x0e);
+  ram_poke(0x0003, (uint8_t)(ram_peek(0x0003) + 1));
+  game_plot_hline(0x7936);
+
+  // $7937 -- "BONUS: " and the amount, through the hi-res font.
+  GAME_CYCLES(0x7937, 16);
+  ram_poke(0x0024, 0x0f);
+  ram_poke(0x0025, 0x09);
+  game_install_cout_hook(0x7941);
+  GAME_CYCLES(0x7942, 6);
+  game_print_inline_str(0x7944);
+  GAME_CYCLES_SHARED(0x794d, 15);
+  ram_poke(0x002c, 0x00);
+  s_a = ram_peek(0x78b1);
+  game_print_bcd(0x7956);
+  GAME_CYCLES_SHARED(0x7957, 10);
+  s_a = ram_peek(0x78b0);
+  game_print_bcd(0x795c);
+
+  // $795D -- COUT back to the ROM's, and $02 becomes the outermost counter of
+  // the pause below.
+  GAME_CYCLES_SHARED(0x795d, 15);
+  ram_poke(0x0036, 0xf0);
+  ram_poke(0x0037, 0xfd);
+  ram_poke(0x0002, 0x20);
+
+  // $7969 -- hold the screen. Everything from $794D on keeps its probe: the
+  // inline-string printer returns to an address it computes, so this whole tail
+  // survives in the generated C as dynamic blocks nothing reaches, and stays on
+  // the site list. The edges are exempt -- edges are never probed.
+  // Three nested counters, the innermost taking its
+  // length from the middle one, so the delay shortens as it goes; the keyboard
+  // is read and discarded each time round to keep the strobe clear. All three
+  // are DEX/DEY loops, which test after decrementing -- a count of zero would
+  // mean 256, and none of these start at zero.
+  do {
+    GAME_CYCLES_SHARED(0x7969, 2);
+    uint8_t x = 0x80;
+    do {
+      GAME_CYCLES_SHARED(0x796b, 4);
+      uint8_t y = x;
+      do {
+        GAME_CYCLES_SHARED(0x796d, 4);
+        --y;
+        if (y != 0)
+          GAME_CYCLES(0x796e, 1);
+      } while (y != 0);
+      GAME_CYCLES_SHARED(0x7970, 12);
+      poll_and_discard();
+      --x;
+      if (x != 0)
+        GAME_CYCLES(0x7977, 1);
+    } while (x != 0);
+    GAME_CYCLES_SHARED(0x7979, 7);
+    const uint8_t left = (uint8_t)(ram_peek(0x0002) - 1);
+    ram_poke(0x0002, left);
+    if (left != 0)
+      GAME_CYCLES(0x797b, 1);
+  } while (ram_peek(0x0002) != 0);
+  GAME_CYCLES_SHARED(0x797d, 6);
+}

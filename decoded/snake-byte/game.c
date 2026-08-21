@@ -1223,3 +1223,24 @@ void game_draw_status(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $78B3 -- the bonus screen. See game_native.c.                              */
+/* ========================================================================== */
+
+void game_bonus(uint16_t ret_addr) {
+  // Adapter for game_bonus_screen(). Costs 22 trace sites.
+  //
+  // No decimal-mode assertion here, unlike the other adapters: this routine is
+  // *supposed* to be entered with D set, does its BCD arithmetic, and clears it
+  // at $78C7.
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  game_bonus_screen();
+
+  if (ret_addr)
+    pop16();
+}

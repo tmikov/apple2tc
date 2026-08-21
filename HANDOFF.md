@@ -4,7 +4,7 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
-**Last commit:** `2e3bc22`. 449 commits on `snake-byte`, nothing pushed, tree
+**Last commit:** `9ffec7c`. 450 commits on `snake-byte`, nothing pushed, tree
 clean. The most recent work is two decompiler capabilities — `--inline-str` and
 `--alt-exit` — and the conversion they unblocked: **the main loop and the
 auto-steer are now C** (`game_play_loop_native`, `game_auto_steer`). Before
@@ -330,12 +330,15 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
    `--inline-str=<file>` (`tools/apple2tc/Disas.cpp`). One declaration file per
    game; the routine must also be in `--extern-routines`, which is enforced.
 
-2a. **`$6288`, `$6A32` and `$72CE` are converted** (2026-08-21) — the main loop,
-   the auto-steer and the status panel. The pinned site count is now **1274**.
-   What remains generated in the game range is `$78B3` and `$7980` (the setup
-   and score screens), both fully covered by the recordings, plus `$6256`, which
-   is four blocks of prologue in front of `$6288` and should go with whichever
-   converts next.
+2a. **`$6288`, `$6A32`, `$72CE` and `$78B3` are converted** (2026-08-21) — the
+   main loop, the auto-steer, the status panel and the bonus screen. The pinned
+   site count is now **1261**. What remains generated in the game range is
+   `$7980` (the setup screen, 38 block heads of which 9 never run) plus `$6256`,
+   four blocks of prologue in front of `$6288` that should go with it.
+
+   `$78B3` is the one routine here entered with **decimal mode set** — it does
+   its BCD arithmetic and clears D itself at $78C7 — so its adapter deliberately
+   omits the decimal-mode assertion the others carry.
 
    `$72CE` cost one site rather than thirty, because `game_print_inline_str`
    returns to a computed address: every one of its return points is a dynamic

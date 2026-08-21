@@ -165,3 +165,7 @@ void game_play_loop(uint16_t ret_addr);
 
 /// $72CE -- draw the status panel. Adapter for game_status_panel().
 void game_draw_status(uint16_t ret_addr);
+
+/// $78B3 -- the bonus screen. Adapter for game_bonus_screen(). Entered with
+/// decimal mode set.
+void game_bonus(uint16_t ret_addr);

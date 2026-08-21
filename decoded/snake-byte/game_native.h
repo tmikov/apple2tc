@@ -338,3 +338,7 @@ SteerChoice game_auto_steer(uint8_t *key_out);
 /// $72CE -- draw the status panel: six labelled BCD fields in a 2x3 grid
 /// across the bottom three text rows, then home the cursor.
 void game_status_panel(void);
+
+/// $78B3 -- the bonus screen: award twice the apple's value, draw a box over
+/// the playfield, print BONUS and the amount, and hold it there.
+void game_bonus_screen(void);
