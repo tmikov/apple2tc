@@ -1,0 +1,6 @@
+# The same routine, declared together with the caller it returns into. Now
+# nothing generated calls $0330 -- the only call site was inside $0310, whose
+# body is gone too -- so there is no exit for anything to drop, and how the two
+# hand-written bodies relate is their author's business.
+0310 test_outer
+0330 test_sub

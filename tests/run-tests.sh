@@ -137,7 +137,24 @@ if ! grep -q 'returns into its caller, at \$031C \$0322' altexit-ext.err; then
   cat altexit-ext.err >&2
   exit 1
 fi
-rm -f altexit-ext.err altexit.b33
+if ! grep -q 'called by generated code at \$0313' altexit-ext.err; then
+  echo "FAIL: refused the extern without naming the call site that loses the exit:" >&2
+  cat altexit-ext.err >&2
+  exit 1
+fi
+
+# The other half of that rule, which is what makes it a rule about call sites
+# and not about the routine's shape: declared together with the caller it
+# returns into, there is no generated call left to lose anything, and it is
+# accepted. Without this the end state -- every routine hand-written -- would be
+# unreachable, since the last conversion would always be refused.
+if ! $apple2tc altexit.b33 -O3 --ir --ret-addr --alt-exit \
+    --extern-routines=altexit-both.externs >/dev/null 2>altexit-both.err; then
+  echo "FAIL: refused an alternate-exit routine whose only caller is also extern:" >&2
+  cat altexit-both.err >&2
+  exit 1
+fi
+rm -f altexit-ext.err altexit-both.err altexit.b33
 
 # The rejection that matters: an "alternate exit" landing back inside its own
 # routine. Accepting it would make the routine swallow the target and become

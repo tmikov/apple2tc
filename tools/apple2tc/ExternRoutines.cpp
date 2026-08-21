@@ -337,31 +337,28 @@ bool ExternRoutines::convert(
 
 bool ExternRoutines::run(const std::vector<std::pair<uint16_t, std::string>> &externs) {
   bool changed = false;
+  /// Declared routines that return into their caller, recorded here while
+  /// their bodies still exist. Whether that is fatal is not knowable yet: it
+  /// depends on whether any *generated* call site survives, and a call site
+  /// inside another routine being declared here disappears along with it. So
+  /// the decision waits until the dead blocks are gone -- see the end of this
+  /// function.
+  std::vector<std::pair<Function *, std::vector<BasicBlock *>>> returnIntoCaller{};
 
   for (auto &[addr, name] : externs) {
     BasicBlock *entry = start_->findBasicBlock(addr);
     if (!entry)
       throw std::runtime_error(format("extern routine $%04X: no basic block at this address", addr));
 
-    if (auto alt = altExits(entry); !alt.empty()) {
-      std::string targets{};
-      for (BasicBlock *bb : alt)
-        targets += format(" $%04X", bb->getAddress().value_or(0x10000));
-      throw std::runtime_error(format(
-          "extern routine $%04X '%s' returns into its caller, at%s.\n"
-          "A hand-written body cannot express that: it returns to its call site or\n"
-          "not at all, and declaring it here would silently drop the other exit.",
-          addr,
-          name.c_str(),
-          targets.c_str()));
-    }
-
+    auto alt = altExits(entry);
     auto dynRet = dynamicReturnBlocks(entry);
 
     Function *ef = mod_->createFunction();
     ef->setName(name);
     ef->setDecompileLevel(Function::DecompileLevel::Normal);
     ef->setExternal(addr);
+    if (!alt.empty())
+      returnIntoCaller.emplace_back(ef, std::move(alt));
 
     // A predecessor can be present twice (JSR func, func), so use a set.
     PrimitiveSetVector<Instruction *> preds{};
@@ -394,6 +391,39 @@ bool ExternRoutines::run(const std::vector<std::pair<uint16_t, std::string>> &ex
   size_t removed = removeUnreachableBlocks(start_);
   if (ctx_->getVerbosity() > 0)
     fprintf(stderr, "extern: removed %zu unreachable blocks\n", removed);
+
+  // Now the dead blocks are gone, so a call that is still here is one that will
+  // be generated. A routine that returns into its caller cannot be written by
+  // hand -- C returns to the call site or not at all -- so a generated caller
+  // would silently lose that exit. If every caller is being hand-written too,
+  // there is no such call left and nothing to lose: the relationship between
+  // the two bodies is then the author's to express in whatever way reads best.
+  for (auto &[ef, targets] : returnIntoCaller) {
+    PrimitiveSetVector<uint32_t> sites{};
+    for (auto &user : ef->users()) {
+      Instruction *inst = user.owner();
+      if (inst->isCall())
+        sites.insert(inst->getAddress().value_or(0x10000));
+    }
+    if (sites.empty())
+      continue;
+
+    std::string targetList{};
+    for (BasicBlock *bb : targets)
+      targetList += format(" $%04X", bb->getAddress().value_or(0x10000));
+    std::string siteList{};
+    for (uint32_t a : sites)
+      siteList += format(" $%04X", a);
+    throw std::runtime_error(format(
+        "extern routine $%04X '%s' returns into its caller, at%s, and is still\n"
+        "called by generated code at%s. A hand-written body returns to its call site\n"
+        "or not at all, so that exit would be dropped with nothing to notice it.\n"
+        "Declare those callers here as well, or leave this routine generated.",
+        ef->getAddress().value_or(0x10000),
+        ef->getName().c_str(),
+        targetList.c_str(),
+        siteList.c_str()));
+  }
 
   return true;
 }
