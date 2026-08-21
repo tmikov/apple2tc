@@ -158,3 +158,7 @@ void game_edit_key(uint16_t ret_addr);
 
 /// $6C72 -- turn the next key, or the joystick, into a direction.
 void game_read_direction(uint16_t ret_addr);
+
+/// $6288 -- one life. Adapter for game_play_loop_native(); leaves the reason
+/// it ended in $6253, which is what the caller at $7739 reads.
+void game_play_loop(uint16_t ret_addr);

@@ -292,3 +292,45 @@ void game_read_key_native(void);
 /// $664A -- draw \p ch through the game's own hi-res font, then hand it on to
 /// the ROM's COUT1 so the cursor still moves.
 void game_cout_hook_native(uint8_t ch);
+
+/// Why a life ended. The original says all of this in one byte at $6253, which
+/// its caller at $7739 reads the moment the routine returns; game_play_loop's
+/// adapter is what puts the byte back.
+typedef enum {
+  /// Reached the gate: column $14 of row 0. $6253 stays 0.
+  LIFE_GATE,
+  /// Moved onto an apple. $6253 is $0F.
+  LIFE_APPLE,
+  /// The quit key. $6253 is $FF.
+  LIFE_QUIT,
+  /// The level timer at $6255 ran out. $6253 is $FE.
+  LIFE_TIMEOUT,
+  /// Moved onto something solid. $6253 is that cell, which is what
+  /// \p cell_out receives -- the caller distinguishes the cases by it.
+  LIFE_CRASH,
+} LifeEnd;
+
+/// $6288 -- play one life: steer, move, draw and pace the snake until
+/// something ends it. \p cell_out receives the occupancy byte the head landed
+/// on, which is only meaningful for LIFE_CRASH.
+LifeEnd game_play_loop_native(uint8_t *cell_out);
+
+/// What the auto-steer decided. $6A32 answers in A, and $6288 re-examines the
+/// answer as though it had been typed, so the two spellings are a key and a
+/// direction number -- telling them apart is the high bit.
+typedef enum {
+  /// Carry on in the direction the snake is already going.
+  STEER_STRAIGHT,
+  /// Turn. \p key_out holds the absolute-direction key that achieves it.
+  STEER_TURN,
+  /// Nothing is safe. The original says this by discarding its own return
+  /// address and jumping to $6315 in its caller, which is "carry on" reached
+  /// without the caller's consent; see the alternate-exit transform in
+  /// tools/apple2tc/routines.cpp.
+  STEER_BOXED_IN,
+} SteerChoice;
+
+/// $6A32 -- steer toward the apple at $6B3B/$6B3C, trying candidate directions
+/// in order of usefulness and taking the first that snake_move_verdict()
+/// allows. Leaves the direction it settled on in $6B38, as the original does.
+SteerChoice game_auto_steer(uint8_t *key_out);

@@ -2216,3 +2216,596 @@ void game_cout_hook_native(uint8_t ch) {
   s_a = ch; // PLA -- the high bit is still on it
   rom_cout1(0xfffe); // JMP $FDF0
 }
+
+/* ========================================================================== */
+/* $6288 -- one life                                                          */
+/*                                                                            */
+/* The game's main loop: steer the snake, move it one cell, redraw the head    */
+/* and the tail, and pace the whole thing with a delay loop that also ticks    */
+/* the sound and polls the keyboard. It returns when the life ends, and the    */
+/* five ways that can happen are LifeEnd.                                      */
+/*                                                                            */
+/* The direction lives at $624E and is 1..4. It is a cycle, so a turn is       */
+/* ±1 and a wrap: $6232 and $6237 are the column and row deltas indexed by     */
+/* it, and they read right, up, left, down -- decrementing turns clockwise.    */
+/*                                                                            */
+/* The shape drawn for a step is the direction plus $10, $08 or $04 depending  */
+/* on which way the snake turned to get there, which is how the corner pieces  */
+/* pick themselves. The original computes it before normalising the direction  */
+/* back into range, so it is the *old* direction that selects the shape.       */
+/*                                                                            */
+/* Steering has two spellings. The arrow keys are relative -- $95 turns        */
+/* clockwise, $88 anticlockwise -- and I/J/K/M are absolute, translated into   */
+/* whichever turn would achieve them from where the snake is already going by  */
+/* the four tables at $6387. Asking for the direction it is already going, or  */
+/* for a reversal, yields $00 from those tables and is ignored.                */
+/*                                                                            */
+/* What is still in emulated RAM, and why: $624E-$6255 are read by the         */
+/* generated caller at $7739 and by the routines this calls, and $6473 is read */
+/* by nothing here but is hashed by ram.probe. The zero-page block $00-$03 is  */
+/* the plotter's argument list. All of it goes when the storage does.          */
+/* ========================================================================== */
+
+/// The four directions, as $624E numbers them.
+enum { DIR_RIGHT = 1, DIR_UP = 2, DIR_LEFT = 3, DIR_DOWN = 4 };
+
+/// What the player can press, after game_read_direction_native() has had its
+/// say. The arrows turn; the letters are the I/J/K/M diamond; $92 quits.
+enum {
+  KEY_TURN_CW = 0x95,
+  KEY_TURN_CCW = 0x88,
+  KEY_QUIT = 0x92,
+  KEY_UP = 0xc9,
+  KEY_LEFT = 0xca,
+  KEY_RIGHT = 0xcb,
+  KEY_DOWN = 0xcd,
+};
+
+/// $6387/$638C/$6391/$6396 -- turn an absolute-direction key into the relative
+/// turn that achieves it from \p dir, or $00 for "nothing to do", which covers
+/// both "already going that way" and "that would be a reversal".
+static uint8_t turn_for_key(uint8_t key, uint8_t dir) {
+  uint16_t table;
+  switch (key) {
+  case KEY_UP:
+    table = 0x6387;
+    break;
+  case KEY_LEFT:
+    table = 0x638c;
+    break;
+  case KEY_RIGHT:
+    table = 0x6391;
+    break;
+  case KEY_DOWN:
+    table = 0x6396;
+    break;
+  default:
+    return 0;
+  }
+  return ram_peek(table + dir);
+}
+
+/// Draw \p shape into \p c with ink \p ink, through the plotter's zero-page
+/// argument block.
+static void plot_shape_at(uint8_t shape, uint8_t ink, Cell c, uint16_t ret) {
+  ram_poke(0x0000, shape);
+  ram_poke(0x0001, ink);
+  ram_poke(0x0002, c.col);
+  ram_poke(0x0003, c.row);
+  game_plot_shape(ret);
+}
+
+/// SCRN one cell.
+static uint8_t scrn_cell(Cell c, uint16_t ret) {
+  s_a = c.row;
+  s_y = c.col;
+  rom_scrn(ret);
+  return s_a;
+}
+
+/// $649F / $64B0 -- read the keyboard and throw the answer away. The delay
+/// loops do this to keep the strobe from latching, and $6C49 is the port
+/// offset the key-redefinition screen chose.
+static void poll_and_discard(void) {
+  peek(0xc000 + ram_peek(0x6c49));
+}
+
+LifeEnd game_play_loop_native(uint8_t *cell_out) {
+  GAME_CYCLES(0x6288, 6);
+  game_find_apple(0x628a);
+
+  for (;;) {
+    /* --- $628B: a key, and what the game makes of it -------------------- */
+    GAME_CYCLES(0x628b, 6);
+    game_read_key(0x628d);
+    GAME_CYCLES(0x628e, 6);
+    game_read_direction(0x6290);
+    uint8_t code = s_a;
+
+    uint8_t dir = ram_peek(0x624e);
+    uint8_t shape;
+
+  dispatch: /* $6291 */
+    GAME_CYCLES(0x6291, 2);
+    if (!(code & 0x80)) {
+      GAME_CYCLES(0x6291, 1);
+      goto autopilot;
+    }
+
+  steer: /* $6293 -- a key with the high bit on, so the player is steering */
+    GAME_CYCLES(0x6293, 10);
+    ram_poke(0x6473, 0x10);
+    if (code == KEY_TURN_CW) {
+      GAME_CYCLES(0x629c, 14);
+      shape = (uint8_t)(dir + 0x10);
+      // $624E is left one below range here and normalised at $62B8, which is
+      // the order the samples see; computing the wrap early would be tidier
+      // and would not match.
+      ram_poke(0x624e, (uint8_t)(dir - 1));
+      goto draw;
+    }
+
+    GAME_CYCLES(0x629a, 1);
+    GAME_CYCLES(0x6306, 2);
+    GAME_CYCLES(0x6306, 1);
+    GAME_CYCLES(0x631e, 4);
+    if (code == KEY_TURN_CCW) {
+      GAME_CYCLES(0x6322, 17);
+      shape = (uint8_t)(dir + 0x04);
+      ram_poke(0x624e, (uint8_t)(dir + 1));
+      goto draw;
+    }
+
+    GAME_CYCLES(0x6320, 1);
+    GAME_CYCLES(0x6349, 4);
+    if (code == KEY_QUIT) {
+      GAME_CYCLES(0x634d, 12);
+      return LIFE_QUIT;
+    }
+
+    // The four absolute keys, each a compare and a table lookup. Whatever the
+    // table gives is examined as if the player had pressed it, which is why
+    // this goes back to the top rather than falling through.
+    {
+      static const struct {
+        uint8_t key;
+        uint16_t cmp_addr, cmp_cycles, hit_addr, hit_cycles, edge_addr;
+      } kAbsolute[] = {
+          {KEY_UP, 0x6353, 4, 0x6357, 11, 0x634b},
+          {KEY_LEFT, 0x6360, 4, 0x6364, 11, 0x6355},
+          {KEY_RIGHT, 0x636d, 4, 0x6371, 11, 0x6362},
+          {KEY_DOWN, 0x637a, 4, 0x637e, 11, 0x636f},
+      };
+      for (unsigned i = 0; i < 4; ++i) {
+        GAME_CYCLES(kAbsolute[i].edge_addr, 1);
+        GAME_CYCLES(kAbsolute[i].cmp_addr, kAbsolute[i].cmp_cycles);
+        if (code == kAbsolute[i].key) {
+          GAME_CYCLES(kAbsolute[i].hit_addr, kAbsolute[i].hit_cycles);
+          code = turn_for_key(kAbsolute[i].key, dir);
+          goto dispatch;
+        }
+      }
+    }
+
+    // $639B -- anything else is the pause/mute key.
+    GAME_CYCLES(0x637c, 1);
+    GAME_CYCLES(0x639b, 6);
+    game_pause_or_toggle_sound(0x639d);
+    GAME_CYCLES(0x639e, 3);
+    goto pace;
+
+  autopilot: /* $6308 -- no steering this step */
+    GAME_CYCLES(0x6308, 6);
+    if (ram_peek(0x0302)) {
+      uint8_t proposal = 0;
+      GAME_CYCLES(0x630d, 6);
+      const SteerChoice choice = game_auto_steer(&proposal);
+      if (choice == STEER_BOXED_IN) {
+        // $6AB3 -- the auto-steer found nothing safe and gave up by jumping
+        // here over its own return address. From this side that is simply
+        // "carry straight on and take what comes".
+        goto straight;
+      }
+      GAME_CYCLES(0x6310, 2);
+      if (choice == STEER_TURN) {
+        // $6312 -- it proposed a turn. Act on it as though it had been typed,
+        // re-entering below the high-bit test the way $6312 does.
+        GAME_CYCLES(0x6312, 3);
+        code = proposal;
+        goto steer;
+      }
+      GAME_CYCLES(0x6310, 1);
+    } else {
+      GAME_CYCLES(0x630b, 1);
+    }
+
+  straight: /* $6315 */
+    GAME_CYCLES(0x6315, 11);
+    shape = (uint8_t)(dir + 0x08);
+
+  draw: /* $62A5 -- draw the head, then step it one cell */
+  {
+    GAME_CYCLES(0x62a5, 28);
+    const Cell head = {.col = ram_peek(0x624f), .row = ram_peek(0x6250)};
+    ram_poke(0x0000, shape);
+    ram_poke(0x0001, 0x0c);
+    ram_poke(0x0002, head.col);
+    ram_poke(0x0003, head.row);
+    game_draw_head(0x62b7);
+
+    // $62B8 -- the direction back into 1..4, and the ink is the direction.
+    GAME_CYCLES(0x62b8, 26);
+    dir = (uint8_t)((((uint8_t)(ram_peek(0x624e) - 1)) & 3) + 1);
+    ram_poke(0x624e, dir);
+    s_a = dir;
+    rom_setcol(0x62c7);
+
+    GAME_CYCLES(0x62c8, 14);
+    s_a = head.row;
+    s_y = head.col;
+    rom_plot(0x62d0);
+
+    // $62D1 -- advance the head, and see what is there.
+    GAME_CYCLES(0x62d1, 42);
+    const Cell next = {
+        .col = (uint8_t)(head.col + ram_peek(0x6232 + dir)),
+        .row = (uint8_t)(head.row + ram_peek(0x6237 + dir)),
+    };
+    ram_poke(0x624f, next.col);
+    ram_poke(0x6250, next.row);
+    const uint8_t cell = scrn_cell(next, 0x62ed);
+
+    GAME_CYCLES(0x62ee, 25);
+    ram_poke(0x6253, cell);
+    GAME_CYCLES(0x6300, 6);
+    plot_shape_at(dir, 0x0c, next, 0x6302);
+    GAME_CYCLES(0x6303, 3);
+
+    /* --- $6474: what did it move onto? ------------------------------- */
+    GAME_CYCLES(0x6474, 6);
+    if (cell == 0) {
+      GAME_CYCLES(0x6479, 3);
+      GAME_CYCLES(0x632e, 8);
+      s_a = 0x07;
+      rom_setcol(0x6332);
+      GAME_CYCLES(0x6333, 14);
+      s_a = next.row;
+      s_y = next.col;
+      rom_plot(0x633b);
+
+      // $633C -- the gate is column $14 of row 0.
+      GAME_CYCLES(0x633c, 8);
+      if (next.col == 0x14) {
+        GAME_CYCLES(0x6343, 6);
+        if (next.row == 0) {
+          GAME_CYCLES(0x6348, 6);
+          return LIFE_GATE;
+        }
+        GAME_CYCLES(0x6346, 1);
+      } else {
+        GAME_CYCLES(0x6341, 1);
+      }
+      goto tail;
+    }
+
+    GAME_CYCLES(0x6477, 1);
+    GAME_CYCLES(0x647c, 4);
+    if (cell == 0x0f) {
+      // $6480 -- an apple. Marked here; the caller does the scoring.
+      GAME_CYCLES(0x6480, 14);
+      ram_poke(0x6473, 0x20);
+      s_a = 0x07;
+      rom_setcol(0x6489);
+      GAME_CYCLES(0x648a, 14);
+      s_a = next.row;
+      s_y = next.col;
+      game_mark_head(0x6492);
+      GAME_CYCLES(0x6493, 6);
+      *cell_out = cell;
+      return LIFE_APPLE;
+    }
+
+    // $6494 -- solid. Pause, buzzing, for a length taken byte by byte out
+    // of ROM at $E000: nobody chose those numbers, they were simply there.
+    GAME_CYCLES(0x647e, 1);
+    GAME_CYCLES(0x6494, 6);
+    // Both loops are DEY/BNE and DEX/BNE, which test *after* decrementing,
+    // so a count of zero means 256 and not none. Ten of the bytes this reads
+    // out of $E000 are zero, so that is the common case here rather than a
+    // corner: getting it wrong costs 12,790 cycles of the pause, which is
+    // three quarters of a frame and shifts everything after it.
+    uint8_t x = 0xff;
+    do {
+      GAME_CYCLES(0x6498, 6);
+      uint8_t y = peek(0xe000 + x);
+      do {
+        GAME_CYCLES(0x649c, 4);
+        --y;
+        if (y != 0)
+          GAME_CYCLES(0x649d, 1);
+      } while (y != 0);
+      GAME_CYCLES(0x649f, 12);
+      poll_and_discard();
+      --x;
+      if (x != 0)
+        GAME_CYCLES(0x64a6, 1);
+    } while (x != 0);
+    GAME_CYCLES(0x64a8, 6);
+    *cell_out = cell;
+    return LIFE_CRASH;
+  }
+
+  tail: /* $63A1 -- trim the tail, unless the snake is still growing */
+    GAME_CYCLES(0x63a1, 6);
+    if (ram_peek(0x6254)) {
+      GAME_CYCLES(0x63a6, 15);
+      ram_poke(0x6254, (uint8_t)(ram_peek(0x6254) - 1));
+      ram_poke(0x6473, 0x07);
+    } else {
+      GAME_CYCLES(0x63a4, 1);
+      GAME_CYCLES(0x63b1, 14);
+      const Cell tail = {.col = ram_peek(0x6251), .row = ram_peek(0x6252)};
+      const uint8_t under = scrn_cell(tail, 0x63b9);
+
+      // The original keeps `under` on the stack across the erase. It stays on
+      // the emulated stack here too: ram.probe hashes the live stack, and a
+      // sample taken inside the plotter would otherwise see a byte on one
+      // engine and not the other.
+      GAME_CYCLES(0x63ba, 11);
+      push8(under);
+      s_a = 0x00;
+      rom_setcol(0x63bf);
+      GAME_CYCLES(0x63c0, 14);
+      s_a = tail.row;
+      s_y = tail.col;
+      rom_plot(0x63c8);
+      GAME_CYCLES(0x63c9, 25);
+      ram_poke(0x0001, 0x00);
+      ram_poke(0x0003, tail.row);
+      ram_poke(0x0002, tail.col);
+      game_plot_shape(0x63d9);
+
+      // $63DA -- the byte that was under the tail is the direction the tail
+      // must follow, so the same delta tables move it on.
+      GAME_CYCLES(0x63da, 44);
+      const uint8_t tail_dir = pop8();
+      const Cell tail_next = {
+          .col = (uint8_t)(tail.col + ram_peek(0x6232 + tail_dir)),
+          .row = (uint8_t)(tail.row + ram_peek(0x6237 + tail_dir)),
+      };
+      ram_poke(0x6251, tail_next.col);
+      ram_poke(0x6252, tail_next.row);
+      const uint8_t ahead = scrn_cell(tail_next, 0x63f5);
+
+      GAME_CYCLES(0x63f6, 32);
+      plot_shape_at((uint8_t)(ahead + 0x0c), 0x0c, tail_next, 0x640b);
+      GAME_CYCLES(0x640c, 3);
+    }
+
+  pace: /* $640F -- the timer, the walls, and the delay that sets the speed */
+    GAME_CYCLES(0x640f, 20);
+    poll_and_discard();
+    {
+      const uint8_t left = (uint8_t)(ram_peek(0x6255) - 1);
+      ram_poke(0x6255, left);
+      if (left == 0) {
+        GAME_CYCLES(0x641c, 12);
+        return LIFE_TIMEOUT;
+      }
+    }
+
+    GAME_CYCLES(0x641a, 1);
+    GAME_CYCLES(0x6422, 10);
+    s_a = 0x27;
+    s_y = 0x14;
+    game_draw_side_walls(0x6428);
+    // The walls routine ends on a SCRN of the bottom-centre cell, and leaves
+    // it in A -- that is its second result, and the original reads it here.
+    GAME_CYCLES(0x6429, 4);
+    if (s_a == 0) {
+      // $642D -- the gate at the bottom is clear, so draw it. No edge charge
+      // here: $6429's branch falls through to this and is only *taken* when
+      // the cell is occupied.
+      GAME_CYCLES(0x642d, 31);
+      ram_poke(0x0000, 0x15);
+      ram_poke(0x0001, 0x0d);
+      ram_poke(0x0003, 0x27);
+      ram_poke(0x0002, 0x12);
+      ram_poke(0x0008, 0x16);
+      game_plot_hline(0x6443);
+      GAME_CYCLES(0x6444, 8);
+      s_a = 0x0d;
+      rom_setcol(0x6448);
+      GAME_CYCLES(0x6449, 10);
+      s_a = 0x27;
+      s_y = 0x14;
+      rom_plot(0x644f);
+    } else {
+      GAME_CYCLES(0x642b, 1);
+    }
+
+    // $6450 -- the delay that sets the speed. $0300 iterations, each one
+    // ticking the falling tone and taking a key, and counting $6473 down for
+    // as long as the last move gave it something to say.
+    // DEX/BNE again: $0300 of zero would mean 256 passes, not none.
+    GAME_CYCLES(0x6450, 4);
+    uint8_t n = ram_peek(0x0300);
+    do {
+      GAME_CYCLES(0x6453, 6);
+      game_tick_sound(0x6455);
+      GAME_CYCLES(0x6456, 11);
+      push8(n);
+      game_read_key(0x645a);
+      GAME_CYCLES(0x645b, 6);
+      if (ram_peek(0x6473)) {
+        GAME_CYCLES(0x6460, 18);
+        poll_and_discard();
+        ram_poke(0x6473, (uint8_t)(ram_peek(0x6473) - 1));
+      } else {
+        GAME_CYCLES(0x645e, 1);
+      }
+      GAME_CYCLES(0x646b, 10);
+      n = pop8();
+      --n;
+      if (n != 0)
+        GAME_CYCLES(0x646e, 1);
+    } while (n != 0);
+    GAME_CYCLES(0x6470, 3);
+  }
+}
+
+/* ========================================================================== */
+/* $6A32 -- the auto-steer                                                    */
+/*                                                                            */
+/* Chase the apple that $69C3 left at $6B3B/$6B3C. Candidate directions are    */
+/* tried in order of how much they help, and the first one game_move_ok        */
+/* accepts wins: the row is closed before the column, and each axis is tried   */
+/* toward the apple before away from it.                                       */
+/*                                                                            */
+/* Two of the eight attempts repeat earlier ones, and the whole second half    */
+/* re-tries the row after the column has failed. It is a search someone        */
+/* unrolled by hand, and the order *is* the algorithm, so this keeps the order */
+/* rather than folding the repeats away.                                       */
+/*                                                                            */
+/* None of the three committed recordings reaches the last three attempts or   */
+/* the give-up. The auto-steer only runs when $0302 is set, which is a mode    */
+/* chosen at the setup screen ($73DD, $7457, $7478) that none of them picks.   */
+/* The blocks nothing exercises are $6A83, $6A8B, $6A9F, $6AA7, $6AA9, $6AB1   */
+/* and $6AB3, decoded from the binary the way $664A was, and this comment is   */
+/* now the only record of it -- converting the routine takes those addresses   */
+/* off the site list, so probe-acceptance.sh no longer counts them among the   */
+/* unverified.                                                                 */
+/* ========================================================================== */
+
+/// $6A55 -- the absolute-direction key that turns the snake to face \p dir.
+/// Index 0 is unused; the four that matter are the I/J/K/M diamond.
+static uint8_t key_for_direction(uint8_t dir) {
+  return ram_peek(0x6a55 + dir);
+}
+
+/// Propose \p dir and report whether the move is allowed.
+///
+/// $6B38 holds the proposal because snake_move_verdict() reads it there, and
+/// because the accept path at $6A48 reads it back out. The cycle charges are
+/// arguments so that they land either side of the call, as the original's
+/// STA/JSR and the BEQ after it do.
+///
+/// "Allowed" is whatever leaves Z set in the original, which is the two safe
+/// verdicts -- and also a taken cell that happens to be the apple, since
+/// eating it is the point.
+static bool steer_try(
+    uint8_t dir,
+    uint16_t before_addr,
+    unsigned before_cycles,
+    uint16_t move_ok_ret,
+    uint16_t after_addr,
+    unsigned after_cycles) {
+  GAME_CYCLES(before_addr, before_cycles);
+  ram_poke(0x6b38, dir);
+  game_move_ok(move_ok_ret);
+  GAME_CYCLES(after_addr, after_cycles);
+  // The original branches on Z, which game_move_ok leaves set for exactly the
+  // verdicts that permit the move -- including a target holding the apple.
+  return s_status_not_z == 0;
+}
+
+SteerChoice game_auto_steer(uint8_t *key_out) {
+  GAME_CYCLES(0x6a32, 10);
+  const uint8_t apple_row = ram_peek(0x6b3c);
+  const uint8_t apple_col = ram_peek(0x6b3b);
+  const uint8_t head_row = ram_peek(0x6250);
+  const uint8_t head_col = ram_peek(0x624f);
+
+  bool settled = false;
+
+  // $6A32 -- if the apple is on another row, close that first. This one test
+  // is a BNE, so its edge is charged when the move is *refused*; every later
+  // test is a BEQ to the accept path and charges its edge the other way round.
+  if (apple_row != head_row) {
+    GAME_CYCLES(0x6a3a, 4);
+    uint8_t dir;
+    if (apple_row >= head_row) {
+      GAME_CYCLES(0x6a3c, 1);
+      dir = DIR_DOWN;
+    } else {
+      GAME_CYCLES(0x6a3e, 2);
+      dir = DIR_UP;
+    }
+    settled = steer_try(dir, 0x6a40, 10, 0x6a45, 0x6a46, 2);
+    if (!settled)
+      GAME_CYCLES(0x6a46, 1);
+  } else {
+    GAME_CYCLES(0x6a38, 1);
+  }
+
+  // $6A5A -- the column, toward the apple and then away from it.
+  if (!settled) {
+    GAME_CYCLES(0x6a5a, 10);
+    if (apple_col >= head_col) {
+      settled = steer_try(DIR_RIGHT, 0x6a62, 12, 0x6a69, 0x6a6a, 2);
+      if (settled) {
+        GAME_CYCLES(0x6a6a, 1);
+      } else {
+        settled = steer_try(DIR_LEFT, 0x6a6c, 12, 0x6a73, 0x6a74, 2);
+        if (settled)
+          GAME_CYCLES(0x6a74, 1);
+        else
+          GAME_CYCLES(0x6a76, 3);
+      }
+    } else {
+      GAME_CYCLES(0x6a60, 1);
+      settled = steer_try(DIR_LEFT, 0x6a79, 12, 0x6a80, 0x6a81, 2);
+      if (settled) {
+        GAME_CYCLES(0x6a81, 1);
+      } else {
+        settled = steer_try(DIR_RIGHT, 0x6a83, 12, 0x6a8a, 0x6a8b, 2);
+        if (settled)
+          GAME_CYCLES(0x6a8b, 1);
+        // Refused: falls straight into $6A8D, where the other branch had to
+        // spend a JMP to get.
+      }
+    }
+  }
+
+  // $6A8D -- the row again, now as an escape rather than as progress.
+  if (!settled) {
+    GAME_CYCLES(0x6a8d, 10);
+    if (apple_row >= head_row) {
+      settled = steer_try(DIR_DOWN, 0x6a95, 12, 0x6a9c, 0x6a9d, 2);
+      if (settled)
+        GAME_CYCLES(0x6a9d, 1);
+    } else {
+      GAME_CYCLES(0x6a93, 1);
+    }
+    if (!settled) {
+      settled = steer_try(DIR_UP, 0x6a9f, 12, 0x6aa6, 0x6aa7, 2);
+      if (settled) {
+        GAME_CYCLES(0x6aa7, 1);
+      } else {
+        settled = steer_try(DIR_DOWN, 0x6aa9, 12, 0x6ab0, 0x6ab1, 2);
+        if (settled) {
+          GAME_CYCLES(0x6ab1, 1);
+        } else {
+          // $6AB3 -- nothing is safe.
+          GAME_CYCLES(0x6ab3, 11);
+          return STEER_BOXED_IN;
+        }
+      }
+    }
+  }
+
+  // $6A48 -- a direction was accepted. Already going that way means there is
+  // nothing to say; otherwise name the key that turns to it.
+  GAME_CYCLES(0x6a48, 10);
+  const uint8_t dir = ram_peek(0x6b38);
+  if (dir == ram_peek(0x624e)) {
+    GAME_CYCLES(0x6a4e, 1);
+    GAME_CYCLES(0x6a54, 6);
+    *key_out = dir;
+    return STEER_STRAIGHT;
+  }
+  GAME_CYCLES(0x6a50, 6);
+  GAME_CYCLES(0x6a54, 6);
+  *key_out = key_for_direction(dir);
+  return STEER_TURN;
+}

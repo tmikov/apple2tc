@@ -1146,3 +1146,62 @@ void game_read_direction(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $6288 -- one life. See game_native.c for what it does.                     */
+/* ========================================================================== */
+
+void game_play_loop(uint16_t ret_addr) {
+  // Adapter for game_play_loop_native(). Costs 72 trace sites -- the whole of
+  // the main loop's block structure, which is the largest single trade made so
+  // far and the reason this routine waited until every block head in it was
+  // covered by a recording.
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  // The native side does binary arithmetic only. The original's callers clear
+  // decimal mode before getting here and set it afterwards, around the score.
+  if (s_status_d) {
+    fprintf(stderr, "game_play_loop: entered with decimal mode set\n");
+    error_handler(0x6288);
+    abort();
+  }
+
+  uint8_t cell = 0;
+  const LifeEnd end = game_play_loop_native(&cell);
+
+  // $6253 is the interface, not residue: the caller at $7739 loads it the
+  // instant this returns and compares it against $0F. Written explicitly for
+  // all five endings, though three of them already hold the right byte from
+  // $62EE, because a reader should not have to know that to check it.
+  switch (end) {
+  case LIFE_GATE:
+    ram_poke(0x6253, 0x00);
+    break;
+  case LIFE_APPLE:
+    ram_poke(0x6253, 0x0f);
+    break;
+  case LIFE_QUIT:
+    ram_poke(0x6253, 0xff);
+    break;
+  case LIFE_TIMEOUT:
+    ram_poke(0x6253, 0xfe);
+    break;
+  case LIFE_CRASH:
+    ram_poke(0x6253, cell);
+    break;
+  }
+
+  // A is dead at both call sites -- $7716 and $7739 both load $6253 straight
+  // away -- but the original leaves the reason there on most paths, so this
+  // does too rather than leaving something arbitrary.
+  const uint8_t reason = ram_peek(0x6253);
+  s_a = reason;
+  s_status_not_z = reason;
+  s_status_n = (uint8_t)(reason & 0x80);
+
+  if (ret_addr)
+    pop16();
+}
