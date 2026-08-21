@@ -4,8 +4,11 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
-**Last commit:** `3f3990e`. 124 commits on `snake-byte`, nothing pushed, tree
-clean. The most recent 74 are infrastructure that did not touch the game at
+**Last commit:** `9a0b27f`. 447 commits on `snake-byte`, nothing pushed, tree
+clean. The most recent work is two decompiler capabilities — `--inline-str` and
+`--alt-exit` — and the conversion they unblocked: **the main loop and the
+auto-steer are now C** (`game_play_loop_native`, `game_auto_steer`). Before
+that, a long run of infrastructure that did not touch the game at
 all: the **host/engine split** (2026-08-11 log entry), the **probe compiler and
 VM** (2026-08-12, 2026-08-13), **accurate cycle costs** in both engines
 (2026-08-13), two apple2tc bug fixes (2026-08-13, 2026-08-14), and
@@ -95,6 +98,19 @@ preserves the wrong turns so they are not repeated. See "Traps" below.
 - **`--extern-routines=<file>`** — maps addresses to C function names; calls
   become calls to bodyless `Function`s and unreachable blocks are deleted.
   Note it rejects any address that is not already a known block.
+- **`--inline-str=<file>`** — routines that take a NUL-terminated string after
+  the `JSR` and return past it. Without it the tracer follows the fall-through
+  into the text and decodes it as instructions, which is a wrong decompilation
+  nothing can notice. Declared routines must also be in `--extern-routines`,
+  because a *generated* one would still pop a return address the option has
+  moved; both refusals are enforced and tested.
+- **`--alt-exit`** — routines that return by discarding their return address and
+  jumping into the caller (`PLA/PLA/JMP`). The call becomes `CallAlt`, a
+  terminator with one successor per exit, and the routine returns which exit it
+  took. Read the playbook entry before touching this: the obvious fix — relaxing
+  the stack check — passes every behavioural oracle and produces a function that
+  calls itself. Externalizing such a routine is refused unless every generated
+  call site goes away too.
 - **`--code-at=<file>`** — hand-asserted `ORIGIN TARGET` dynamic branch edges,
   merged into the runtime data before disassembly. `TARGET` is disassembled
   *and* becomes a successor of the branch at `ORIGIN`; the latter is what earns
@@ -300,24 +316,31 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
 
 ### Next
 
-1. **The two remaining rejection roots.** `$60E7` is done (2026-08-07); it took
-   six routines with it, 74 → 81. Left, both blocking 3 apiece:
-   - `$6A32` — `Pop8` block `$6AB3` stack level underflow, blocks `$6256`,
-     `$6288`. Not yet diagnosed.
-   - `$7230` — the inline-string printer. Not recovered but *rewritten*:
-     `print_str(const char *)`, with each call site's inline bytes lifted into a
-     real string literal. Blocks `$72CE`, `$78B3`, `$7980`.
+1. ~~**The two remaining rejection roots.**~~ — **both done.** `$7230` became
+   `--inline-str` (2026-08-17) and `$6A32` became `--alt-exit` (2026-08-18), the
+   latter after one wrong attempt that passed every oracle and produced a
+   self-recursive function; see the playbook entry on structural checks.
 
-   **Measure before treating any other rejection as work.** Of 74 rejections in
-   the extern build only **7 are in the game range**; the rest is ROM that Phase
-   1b deletes wholesale. Filter to `$3750-$854E` first — see the 2026-08-07 log
-   entry for the one-liner.
-2. **Teach the disassembler the inline-string idiom.** The higher-leverage
-   version of what `--code-at` now does by hand: recognise the
-   `PLA/PLA … PHA/PHA/RTS` shape, mark the bytes after the `JSR` as a string,
-   and resume disassembly past the terminator. `$7230` has 15 call sites and the
-   idiom is ubiquitous in Apple II games, so this serves the "repeatable method"
-   aim directly. Weigh against item 1 — recovering `$7230` may subsume it.
+   **No game routine is rejected any more.** The report now reads 53 accepted /
+   64 rejected, and every one of the 64 is Applesoft ROM — the dominant class
+   being `stack level 2 at RTS`, the push-address-then-`RTS` computed jump.
+   Nothing there is on the path to readable game C. Re-measure with
+   `--routines-report` before treating any rejection as work.
+2. ~~**Teach the disassembler the inline-string idiom.**~~ — **done**,
+   `--inline-str=<file>` (`tools/apple2tc/Disas.cpp`). One declaration file per
+   game; the routine must also be in `--extern-routines`, which is enforced.
+
+2a. **`$6288` and `$6A32` are converted** (2026-08-21), which is the main loop
+   and the auto-steer — 98 block heads, the largest trade so far, and the pinned
+   site count is now **1275**. What remains generated in the game range is
+   `$72CE`, `$78B3` and `$7980` (the setup and score screens), all fully covered
+   by the recordings, plus `$6256`, which is four blocks of prologue in front of
+   `$6288` and should go with whatever converts next.
+
+   The unverified list is unchanged at 23, but it now means something slightly
+   different: seven blocks of `$6A32` left the site list without ever having
+   run, and the comment above `game_auto_steer()` is the only record of that.
+   See the playbook on when the "do not convert unrun code" rule bends.
 3. ~~**`$8000-$84A4`**~~ — **answered 2026-08-07: it is data**, 29 vector
    display lists read as a byte stream by `$7019`. Nothing reaches it because
    nothing jumps into it. See the log entry for the command grammar, which

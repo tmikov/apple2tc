@@ -441,6 +441,12 @@ Snake Byte's pause/mute handler at $69A9 is six blocks, entirely straightforward
 and entirely unexercised, and it stays in the emulator-shaped file with a note
 saying why. Convert it when a recording presses ESC.
 
+The rule bends only when the choice is not yours to make -- see the next entry.
+When it does bend, put the addresses in a comment above the routine, because
+that comment becomes the only surviving record: converting takes them off the
+site list, so probe-acceptance.sh stops counting them as unverified and the
+number that used to say "these are unchecked" simply gets smaller.
+
 **`[process]` A fixture built to reach new code also deepens the code you
 already had.** Snake Byte's `easy` build exists to make the display list
 reachable -- the apple quota lowered so levels change. It turns out to be the
@@ -518,6 +524,68 @@ the whole point of it — see the step itself.
 ---
 
 ## Red flags
+
+**`[apple2tc]` Converting a routine can drag its callee in behind it.** $6A32's
+only call site is $630D, which is inside $6288. Externalize $6288 and $6A32 has
+no generated caller left, so it is removed and the link fails asking for it by
+name. The two are one conversion whether or not you planned them that way -- and
+that decided a question that had been sitting open for days, because $6288 is
+fully covered and $6A32 has seven blocks nothing runs. There was no version of
+the work that took the first without the second.
+
+Check before starting, not after: `--routines-report` prints each routine's call
+sites, and a callee whose sites are all inside the routine you are converting is
+coming with you.
+
+**`[apple2tc]` Call the adapter the generated code called, not the native
+behind it.** An adapter usually just marshals machine state, which makes it
+tempting to skip. Three of Snake Byte's eleven do real work: `game_plot_hline`
+charges 6 cycles and calls `game_load_shape`, `game_find_apple` carries the
+entry probe, and `game_read_direction` charges 6 cycles *and steps the
+bouncers*. Skipping that last one was a wrong screen and a 6-cycle offset from a
+single substitution, and the two symptoms looked like two bugs.
+
+The rule that costs nothing: whatever the generated C called at that site, call
+that, with the same return address. It is also what keeps the callee's probe
+sites firing, and the return address is what keeps the emulated stack the same
+if a probe fires inside.
+
+**`[6502]` `DEY`/`BNE` counts a zero as 256.** The loop tests after
+decrementing, so `LDY #0` is the longest loop in the instruction set, not the
+shortest. Writing it as `for (y = n; y != 0; --y)` silently runs it zero times.
+
+That is not a corner case to note and move past: Snake Byte's death pause takes
+its delay lengths from ROM bytes at $E000, and **ten of the 255 it reads are
+zero**. Getting it wrong cost 12,790 cycles -- three quarters of a frame -- on a
+path that runs once per life. Write these as `do { ... } while (--n);` and the
+question does not arise.
+
+**`[6502]` Which side of a branch pays the extra cycle depends on the branch.**
+A taken branch costs one more than an untaken one, so a converted routine has to
+charge that cycle on the same side the original does -- and *which* side that is
+flips with the condition. $6A32 tries eight directions: the first test is a
+`BNE` to the retry path, so its edge belongs to the refusal; the other seven are
+`BEQ`s to the accept path, so theirs belong to the acceptance. Writing all eight
+the same way was one decision and seven bugs.
+
+Read the polarity off the generated C rather than the mnemonic -- it says
+`if (cond) goto bb_N;` with the `CYCLES_EDGE` sitting in whichever successor
+block pays it, which cannot be misread.
+
+**`[process]` Memory agreeing before the cycles do tells you which bug is
+left.** The memory probe compares every byte the routine writes; the frame
+oracle compares when it finished. When the first passes and the second does not,
+the logic is right and what remains is cycle accounting -- so stop reading the
+algorithm and start reading branch edges. That ordering turned the last four
+bugs from a search into a checklist, and it is worth running the memory oracle
+alone, early, for exactly that reason.
+
+Related: the artifacts these oracles leave in /tmp are only as fresh as the last
+run that reached them. A suite that aborts early leaves the *previous* run's
+files in place, and reading them cost an hour of chasing a routine that the
+stale trace said never executed and the current one says runs 110 times.
+Regenerate before believing.
+
 
 | Signal | What it means |
 | --- | --- |
