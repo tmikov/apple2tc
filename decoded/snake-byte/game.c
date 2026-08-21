@@ -1267,3 +1267,28 @@ void game_start_round(uint16_t ret_addr) {
   if (ret_addr)
     pop16();
 }
+
+/* ========================================================================== */
+/* $7980 -- the setup screen. See game_native.c.                              */
+/* ========================================================================== */
+
+void game_setup(uint16_t ret_addr) {
+  // Adapter for game_setup_screen(). Costs 20 trace sites; the rest of this
+  // routine's addresses stay probed, because the inline-string printer leaves
+  // everything after its call reachable only through the dynamic block map.
+  bool branchTarget = true;
+
+  if (ret_addr)
+    push16(ret_addr); // Fake return address.
+
+  if (s_status_d) {
+    fprintf(stderr, "game_setup: entered with decimal mode set\n");
+    error_handler(0x7980);
+    abort();
+  }
+
+  game_setup_screen();
+
+  if (ret_addr)
+    pop16();
+}

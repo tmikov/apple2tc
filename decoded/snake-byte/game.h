@@ -172,3 +172,6 @@ void game_bonus(uint16_t ret_addr);
 
 /// $6256 -- start a life and run it. Adapter for game_begin_life().
 void game_start_round(uint16_t ret_addr);
+
+/// $7980 -- the setup screen. Adapter for game_setup_screen().
+void game_setup(uint16_t ret_addr);

@@ -4,7 +4,7 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
-**Last commit:** `9ffec7c`. 450 commits on `snake-byte`, nothing pushed, tree
+**Last commit:** `d2190e9`. 453 commits on `snake-byte`, nothing pushed, tree
 clean. The most recent work is two decompiler capabilities — `--inline-str` and
 `--alt-exit` — and the conversion they unblocked: **the main loop and the
 auto-steer are now C** (`game_play_loop_native`, `game_auto_steer`). Before
@@ -330,33 +330,34 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
    `--inline-str=<file>` (`tools/apple2tc/Disas.cpp`). One declaration file per
    game; the routine must also be in `--extern-routines`, which is enforced.
 
-2a. **`$6288`, `$6A32`, `$72CE` and `$78B3` are converted** (2026-08-21) — the
-   main loop, the auto-steer, the status panel and the bonus screen. The pinned
-   site count is now **1261**. What remains generated in the game range is
-   `$7980` (the setup screen, 38 block heads of which 9 never run) plus `$6256`,
-   four blocks of prologue in front of `$6288` that should go with it.
+2a. **Every identified game routine is converted** (2026-08-21). `$6256`,
+   `$6288`, `$6A32`, `$72CE`, `$78B3` and `$7980` went in this session; the
+   only generated function left in the whole translation unit is `func_t001`,
+   the top-level dispatch. The pinned site count is **1250**.
 
-   `$78B3` is the one routine here entered with **decimal mode set** — it does
-   its BCD arithmetic and clears D itself at $78C7 — so its adapter deliberately
-   omits the decimal-mode assertion the others carry.
+   Three things a new conversion should know, all of them learned here:
 
-   `$72CE` cost one site rather than thirty, because `game_print_inline_str`
-   returns to a computed address: every one of its return points is a dynamic
-   block, so the generated C still carries the routine's tail as unreachable
-   cases and those addresses stay on the list. They keep their probes in the
-   converted code too, spelled `GAME_CYCLES_SHARED`. Expect the same wherever a
-   converted routine calls it — `$78B3` and `$7980` both do.
+   - **`game_print_inline_str` leaves orphans.** It returns to an address it
+     computes, so every one of its return points is a dynamic block: the
+     generated C keeps the whole run after such a call as cases nothing can
+     reach, and those addresses stay on the site list. They must keep their
+     probes in the converted code too, spelled `GAME_CYCLES_SHARED`. This is
+     why `$72CE` cost one site out of thirty and `$7980` twenty out of
+     fifty-four. The lint names them; do not guess.
+   - **`$741F` is a coordinate address** and lives inside `$7980`. It is
+     spelled `GAME_CYCLES_COORD` there. Converting a coordinate site without
+     that spelling stops the replay counter advancing and is caught only as a
+     several-hundred-thousand-line trace diff.
+   - **`$78B3` is entered with decimal mode set**, so its adapter omits the
+     assertion every other adapter carries.
 
-   **Write new `GAME_CYCLES` with literal addresses.** `check_literal_sites()`
-   does not cover `game_native.c`, so a charge reaching it through a parameter
-   is invisible to the site-list lint; nine went missing that way in `$72CE`'s
-   first draft. Fourteen such sites already exist in the file, which is why the
-   check cannot simply be switched on. See the playbook entry.
+   Sixteen blocks are now converted without ever having been run: seven in
+   `$6A32` and nine in `$7980`, listed in the comments above
+   `game_auto_steer()` and `game_setup_screen()`. Those comments are the only
+   record, because converting takes the addresses off the site list. The
+   unverified count in probe-acceptance.sh is still 23 and now means only ROM
+   plus `$69A9`.
 
-   The unverified list is unchanged at 23, but it now means something slightly
-   different: seven blocks of `$6A32` left the site list without ever having
-   run, and the comment above `game_auto_steer()` is the only record of that.
-   See the playbook on when the "do not convert unrun code" rule bends.
 3. ~~**`$8000-$84A4`**~~ — **answered 2026-08-07: it is data**, 29 vector
    display lists read as a byte stream by `$7019`. Nothing reaches it because
    nothing jumps into it. See the log entry for the command grammar, which

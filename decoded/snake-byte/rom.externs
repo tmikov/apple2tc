@@ -31,6 +31,7 @@ FE93 rom_setvid
 6288 game_play_loop
 72CE game_draw_status
 78B3 game_bonus
+7980 game_setup
 7019 game_next_byte
 7024 game_set_ink
 7000 game_lores_vline

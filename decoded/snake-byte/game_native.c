@@ -3151,3 +3151,222 @@ void game_begin_life(void) {
   ram_poke(0x624d, 0x00);
   game_play_loop(0x0000);
 }
+
+/* ========================================================================== */
+/* $7980 -- the setup screen                                                  */
+/*                                                                            */
+/* Three jobs, in the order the original does them: clamp the pointer          */
+/* game_rand_byte reads its numbers through, offer the difficulty prompt, and  */
+/* -- if the player presses C rather than a digit -- run the key redefinition  */
+/* screen instead.                                                             */
+/*                                                                            */
+/* $0301 is the difficulty, 0 to 2. $0302 is the flag that decides whether the */
+/* game plays itself: set here when nobody answers the prompt in time, and     */
+/* cleared when they do. That is the only place it is ever set, which is why   */
+/* the auto-steer at $6A32 runs in some recordings and not others.             */
+/*                                                                            */
+/* $73D7 makes the first pass different. It starts zero, so the very first     */
+/* call sets the demo going and returns without asking anything; every call    */
+/* after that reaches the prompt.                                              */
+/*                                                                            */
+/* Nine blocks here are decoded from the binary rather than checked by a       */
+/* recording: $73DD (that first pass), $742D through $744C (the joystick, only */
+/* read when $6C71 selects it), $7455 (the prompt timing out) and $798A (one   */
+/* arm of the clamp). Converting them takes their addresses off the site list, */
+/* so this comment is the only record that they are unverified.                */
+/* ========================================================================== */
+
+void game_setup_screen(void) {
+  // $7980 -- keep $0E/$0F inside the window game_rand_byte expects.
+  GAME_CYCLES(0x7980, 7);
+  const uint8_t hi = ram_peek(0x000f);
+  bool clamp_lo = hi >= 0x1f;
+  if (!clamp_lo) {
+    GAME_CYCLES(0x7986, 4);
+    clamp_lo = hi < 0x18;
+    if (!clamp_lo)
+      GAME_CYCLES(0x7988, 1);
+  } else {
+    GAME_CYCLES(0x7984, 1);
+  }
+  if (clamp_lo) {
+    GAME_CYCLES(0x798a, 8);
+    ram_poke(0x000e, (uint8_t)(ram_peek(0x000e) & 0xde));
+  }
+  GAME_CYCLES(0x7990, 13);
+  ram_poke(0x000f, (uint8_t)((ram_peek(0x000f) & 0x1f) | 0x18));
+
+  // $73D8 -- the first call through here never asks anything.
+  GAME_CYCLES(0x73d8, 6);
+  if (!ram_peek(0x73d7)) {
+    GAME_CYCLES(0x73dd, 20);
+    ram_poke(0x0302, 0x01);
+    ram_poke(0x0301, 0x01);
+    ram_poke(0x73d7, 0x01);
+    return;
+  }
+
+  // $73E9 -- the prompt, and the two counters that time it out. $02 is the
+  // outer one and $03 the inner; both count *up* to zero.
+  GAME_CYCLES(0x73db, 1);
+  GAME_CYCLES(0x73e9, 16);
+  ram_poke(0x0025, 0x17);
+  ram_poke(0x0024, 0x00);
+  game_print_inline_str(0x73f3);
+  GAME_CYCLES_SHARED(0x7414, 10);
+  ram_poke(0x0002, 0xe8);
+  ram_poke(0x0003, 0x00);
+
+  uint8_t key;
+wait: /* $741C */
+  for (;;) {
+    // $741C -- spin Y round once, then look at the keyboard. This site keeps
+    // its probe: it is one of the addresses the replay coordinate counts.
+    do {
+      GAME_CYCLES_SHARED(0x741c, 4);
+      s_y = (uint8_t)(s_y + 1);
+      if (s_y != 0)
+        GAME_CYCLES(0x741d, 1);
+    } while (s_y != 0);
+
+    GAME_CYCLES_COORD(0x741f, 6);
+    key = io_peek(0xc000);
+    if (key & 0x80) {
+      GAME_CYCLES(0x7422, 1);
+      break;
+    }
+
+    GAME_CYCLES_SHARED(0x7424, 7);
+    const uint8_t inner = (uint8_t)(ram_peek(0x0003) + 1);
+    ram_poke(0x0003, inner);
+    if (inner != 0) {
+      GAME_CYCLES(0x7426, 1);
+      continue;
+    }
+
+    // $7428 -- once the inner counter wraps, try the joystick, if one is
+    // selected. Each button stands in for a digit.
+    GAME_CYCLES_SHARED(0x7428, 6);
+    if (ram_peek(0x6c71)) {
+      GAME_CYCLES_SHARED(0x742d, 10);
+      io_peek(0xc05b);
+      if (!(io_peek(0xc062) & 0x80)) {
+        GAME_CYCLES_SHARED(0x7435, 5);
+        key = 0xb1;
+        break;
+      }
+      GAME_CYCLES(0x7433, 1);
+      GAME_CYCLES_SHARED(0x743a, 10);
+      io_peek(0xc05a);
+      if (!(io_peek(0xc062) & 0x80)) {
+        GAME_CYCLES_SHARED(0x7442, 5);
+        key = 0xb0;
+        break;
+      }
+      GAME_CYCLES(0x7440, 1);
+      GAME_CYCLES_SHARED(0x7447, 6);
+      if (!(io_peek(0xc063) & 0x80)) {
+        GAME_CYCLES_SHARED(0x744c, 5);
+        key = 0xb2;
+        break;
+      }
+      GAME_CYCLES(0x744a, 1);
+    } else {
+      GAME_CYCLES(0x742b, 1);
+    }
+
+    // $7451 -- the outer counter. When it wraps too, nobody is answering.
+    GAME_CYCLES_SHARED(0x7451, 7);
+    const uint8_t outer = (uint8_t)(ram_peek(0x0002) + 1);
+    ram_poke(0x0002, outer);
+    if (outer == 0) {
+      GAME_CYCLES_SHARED(0x7455, 20);
+      ram_poke(0x0302, 0x01);
+      ram_poke(0x0301, 0x01);
+      io_poke(0xc010, 0x01);
+      return;
+    }
+    GAME_CYCLES(0x7453, 1);
+  }
+
+  // $7461 -- something was pressed. Clear the strobe with it still in A, the
+  // way the original does.
+  GAME_CYCLES_SHARED(0x7461, 8);
+  io_poke(0xc010, key);
+  if (key != 0xc3) {
+    GAME_CYCLES_SHARED(0x7468, 4);
+    if (key < 0xb0) {
+      GAME_CYCLES(0x746a, 1);
+      goto wait;
+    }
+    GAME_CYCLES_SHARED(0x746c, 4);
+    if (key >= 0xb3) {
+      GAME_CYCLES(0x746e, 1);
+      goto wait;
+    }
+    // $7470 -- a digit. The subtract is a plain SBC with carry set.
+    GAME_CYCLES_SHARED(0x7470, 24);
+    ram_poke(0x0301, (uint8_t)(key - 0xb0));
+    ram_poke(0x0302, 0x00);
+    io_poke(0xc010, 0x00);
+    return;
+  }
+
+  // $747F -- C, so redefine the keys instead. Show the six current bindings,
+  // draw the highlight, then walk them again asking for replacements.
+  GAME_CYCLES(0x7466, 1);
+  GAME_CYCLES_SHARED(0x747f, 6);
+  game_clear_hgr(0x7481);
+  GAME_CYCLES_SHARED(0x7482, 10);
+  io_peek(0xc052);
+  game_install_cout_hook(0x7487);
+  GAME_CYCLES_SHARED(0x7488, 11);
+  ram_poke(0x0025, 0x01);
+  game_print_inline_str(0x748e);
+
+  GAME_CYCLES_SHARED(0x7541, 2);
+  for (uint8_t i = 0; i != 6; ++i) {
+    GAME_CYCLES_SHARED(0x7543, 10);
+    s_a = ram_peek(0x6c63 + i);
+    s_x = i;
+    game_show_key(0x7548);
+    GAME_CYCLES_SHARED(0x7549, 6);
+    if (i != 5)
+      GAME_CYCLES(0x754c, 1);
+  }
+
+  GAME_CYCLES_SHARED(0x754e, 26);
+  ram_poke(0x0001, 0x0c);
+  ram_poke(0x0000, 0x02);
+  ram_poke(0x0003, 0x12);
+  ram_poke(0x0002, 0x1e);
+  game_plot_shape(0x7560);
+  GAME_CYCLES_SHARED(0x7561, 21);
+  ram_poke(0x0003, 0x13);
+  ram_poke(0x0008, 0x1d);
+  ram_poke(0x0000, 0x0a);
+  game_plot_vline(0x756f);
+  GAME_CYCLES_SHARED(0x7570, 11);
+  s_a = 0x0e;
+  ram_poke(0x0000, 0x0e);
+  game_plot_shape(0x7576);
+
+  GAME_CYCLES_SHARED(0x7577, 2);
+  for (uint8_t i = 0; i != 6; ++i) {
+    GAME_CYCLES_SHARED(0x7579, 6);
+    s_x = i;
+    game_edit_key(0x757b);
+    GAME_CYCLES_SHARED(0x757c, 11);
+    ram_poke(0x6c63 + i, s_a);
+    s_x = i;
+    game_show_key(0x7581);
+    GAME_CYCLES_SHARED(0x7582, 6);
+    if (i != 5)
+      GAME_CYCLES(0x7585, 1);
+  }
+
+  // $7587 -- COUT back to the ROM's.
+  GAME_CYCLES_SHARED(0x7587, 16);
+  ram_poke(0x0036, 0xf0);
+  ram_poke(0x0037, 0xfd);
+}

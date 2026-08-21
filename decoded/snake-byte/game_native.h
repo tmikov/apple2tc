@@ -347,3 +347,8 @@ void game_bonus_screen(void);
 /// single cell at the bottom centre facing up, ten segments of growth owed,
 /// the timer full, and the key ring empty.
 void game_begin_life(void);
+
+/// $7980 -- the setup screen: seed the random pointer, then either ask for a
+/// difficulty (falling back to the demo if nobody answers) or run the key
+/// redefinition screen.
+void game_setup_screen(void);
