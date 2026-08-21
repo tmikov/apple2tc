@@ -587,6 +587,32 @@ stale trace said never executed and the current one says runs 110 times.
 Regenerate before believing.
 
 
+**`[process]` The literal-address lint does not cover the file that needs it
+most.** `check_literal_sites()` in probe-acceptance.sh refuses a `CYCLES` whose
+address is not a hex literal, because the site lists are built by grepping for
+that literal -- an address arriving through a variable still compiles, still
+charges, and is never probed. Its own comment records the mistake being made
+once, in a draft that looped over a table of addresses and quietly dropped eight
+sites.
+
+It runs on `a2rom.c` and `game.c`. It does *not* run on `game_native.c`, which
+is where converted code lives and where every new `GAME_CYCLES` is written. A
+helper taking the address as a parameter is therefore invisible there, and
+converting $72CE hid nine addresses that way -- addresses that genuinely needed
+`GAME_CYCLES_SHARED`, so the traces would have disagreed with no line naming
+why.
+
+Extending the lint is one argument, and it fails immediately: fourteen sites in
+`game_native.c` are table-driven today, ten of them predating the routine that
+found this. Until those are written out longhand the check cannot be turned on,
+so write new conversions with literal addresses and do not introduce more.
+
+The consolation is that nothing is silently *wrong*: the trace comparison still
+catches a missing probe. It catches it as a several-hundred-thousand-line diff
+rather than as one line naming the address, which is the whole reason the
+spelling distinction exists.
+
+
 | Signal | What it means |
 | --- | --- |
 | Planning to reloop before recovering procedures | Blocked, not merely harder. The dispatch variable is the PC. |
@@ -617,7 +643,7 @@ Regenerate before believing.
 | A table's size stated rather than derived | The listing does not delimit tables. Find the next code address. A 16-byte table that is really 128 is invisible until a caller indexes past 16. |
 | Matching the generated code's flag set | That set is a DCE result for today's call graph, not what the CPU does. Set what the 6502 sets. |
 | Full block coverage of an arithmetic routine | Says nothing about the values. BCD-vs-binary on a byte the score never reaches fails no check. |
-| A `CYCLES` address that is not a hex literal | It vanishes from the site list. Compiles, runs, counts, and is never probed. Lint for it. |
+| A `CYCLES` address that is not a hex literal | It vanishes from the site list. Compiles, runs, counts, and is never probed. Lint for it -- and note the lint does not yet cover `game_native.c`. |
 | A mute or config byte read in a hot path | Hardcoding its recorded value passes every check. Whole features hide behind one byte nothing varies. |
 | Dropping `CYCLES` when code moves to real C | Frames are a cycle budget. Charge without probing (`CYCLES_EDGE`) or every later frame hash moves. |
 | Converting one path of a shared block head | The other path keeps it in the site list; the engines then disagree and the count looks fine. |

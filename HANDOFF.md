@@ -4,7 +4,7 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
-**Last commit:** `9a0b27f`. 447 commits on `snake-byte`, nothing pushed, tree
+**Last commit:** `2e3bc22`. 449 commits on `snake-byte`, nothing pushed, tree
 clean. The most recent work is two decompiler capabilities — `--inline-str` and
 `--alt-exit` — and the conversion they unblocked: **the main loop and the
 auto-steer are now C** (`game_play_loop_native`, `game_auto_steer`). Before
@@ -330,12 +330,25 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
    `--inline-str=<file>` (`tools/apple2tc/Disas.cpp`). One declaration file per
    game; the routine must also be in `--extern-routines`, which is enforced.
 
-2a. **`$6288` and `$6A32` are converted** (2026-08-21), which is the main loop
-   and the auto-steer — 98 block heads, the largest trade so far, and the pinned
-   site count is now **1275**. What remains generated in the game range is
-   `$72CE`, `$78B3` and `$7980` (the setup and score screens), all fully covered
-   by the recordings, plus `$6256`, which is four blocks of prologue in front of
-   `$6288` and should go with whatever converts next.
+2a. **`$6288`, `$6A32` and `$72CE` are converted** (2026-08-21) — the main loop,
+   the auto-steer and the status panel. The pinned site count is now **1274**.
+   What remains generated in the game range is `$78B3` and `$7980` (the setup
+   and score screens), both fully covered by the recordings, plus `$6256`, which
+   is four blocks of prologue in front of `$6288` and should go with whichever
+   converts next.
+
+   `$72CE` cost one site rather than thirty, because `game_print_inline_str`
+   returns to a computed address: every one of its return points is a dynamic
+   block, so the generated C still carries the routine's tail as unreachable
+   cases and those addresses stay on the list. They keep their probes in the
+   converted code too, spelled `GAME_CYCLES_SHARED`. Expect the same wherever a
+   converted routine calls it — `$78B3` and `$7980` both do.
+
+   **Write new `GAME_CYCLES` with literal addresses.** `check_literal_sites()`
+   does not cover `game_native.c`, so a charge reaching it through a parameter
+   is invisible to the site-list lint; nine went missing that way in `$72CE`'s
+   first draft. Fourteen such sites already exist in the file, which is why the
+   check cannot simply be switched on. See the playbook entry.
 
    The unverified list is unchanged at 23, but it now means something slightly
    different: seven blocks of `$6A32` left the site list without ever having
