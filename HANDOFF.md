@@ -4,7 +4,7 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
-**Last commit:** `d2190e9`. 453 commits on `snake-byte`, nothing pushed, tree
+**Last commit:** `32498be`. 455 commits on `snake-byte`, nothing pushed, tree
 clean. The most recent work is two decompiler capabilities — `--inline-str` and
 `--alt-exit` — and the conversion they unblocked: **the main loop and the
 auto-steer are now C** (`game_play_loop_native`, `game_auto_steer`). Before
@@ -333,17 +333,19 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
 2a. **Every identified game routine is converted** (2026-08-21). `$6256`,
    `$6288`, `$6A32`, `$72CE`, `$78B3` and `$7980` went in this session; the
    only generated function left in the whole translation unit is `func_t001`,
-   the top-level dispatch. The pinned site count is **1250**.
+   the top-level dispatch. The pinned site count is **1176**.
 
    Three things a new conversion should know, all of them learned here:
 
-   - **`game_print_inline_str` leaves orphans.** It returns to an address it
-     computes, so every one of its return points is a dynamic block: the
-     generated C keeps the whole run after such a call as cases nothing can
-     reach, and those addresses stay on the site list. They must keep their
-     probes in the converted code too, spelled `GAME_CYCLES_SHARED`. This is
-     why `$72CE` cost one site out of thirty and `$7980` twenty out of
-     fifty-four. The lint names them; do not guess.
+   - ~~**`game_print_inline_str` leaves orphans.**~~ **Fixed by
+     `--prune-returns`** (2026-08-22). The orphans were never about the
+     inline-string printer: `$7239` is where `$7230`'s own `JSR $FC68` returned,
+     `$FC68` is external, and a ROM RTS still listed `$7239` among its returns.
+     That one edge held the printer's body, its RTS, and the ten blocks its
+     callers resume at. Pruning return edges no surviving call can produce
+     removed 64 edges and 298 more blocks, and 74 `GAME_CYCLES_SHARED`
+     spellings became plain `GAME_CYCLES` -- each one named by the lint, which
+     checks the claim in both directions.
    - **`$741F` is a coordinate address** and lives inside `$7980`. It is
      spelled `GAME_CYCLES_COORD` there. Converting a coordinate site without
      that spelling stops the replay counter advancing and is caught only as a

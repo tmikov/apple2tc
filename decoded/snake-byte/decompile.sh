@@ -58,7 +58,7 @@ $apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --
 # differ by more than one flag in only one direction, and so the control this
 # is checked against is not itself carrying the new transform.
 $apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --irc1 --ret-addr -v1 \
-  --extern-routines=rom.externs --inline-str=inline-str.txt --alt-exit > snake-bytec1-ext.c
+  --extern-routines=rom.externs --inline-str=inline-str.txt --alt-exit --prune-returns > snake-bytec1-ext.c
 
 # The `easy` fixture. snake-byte-easy.b33 is snake-byte.b33 with the per-level
 # apple quota lowered from 16 to 2 (see make-easy.sh for the two bytes and why
@@ -77,4 +77,4 @@ $apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --
 # it is. The generated C differs from the stock build in exactly the three
 # places those two bytes appear.
 $apple2tc snake-byte-easy.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --irc1 --ret-addr -v1 \
-  --extern-routines=rom.externs --inline-str=inline-str.txt --alt-exit > snake-byte-easyc1-ext.c
+  --extern-routines=rom.externs --inline-str=inline-str.txt --alt-exit --prune-returns > snake-byte-easyc1-ext.c

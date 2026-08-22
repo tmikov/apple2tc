@@ -1610,22 +1610,22 @@ void game_print_bcd_native(uint8_t byte) {
 
   const uint8_t low = (uint8_t)(byte & 0x0f);
 
-  GAME_CYCLES_SHARED(0x720e, 10);
+  GAME_CYCLES(0x720e, 10);
   if (!low) {
     GAME_CYCLES(0x7213, 1);
   } else {
-    GAME_CYCLES_SHARED(0x7215, 3);
+    GAME_CYCLES(0x7215, 3);
     note_digit(low);
   }
 
-  GAME_CYCLES_SHARED(0x7217, 8);
+  GAME_CYCLES(0x7217, 8);
   if (digit_seen()) {
     GAME_CYCLES(0x721a, 1);
-    GAME_CYCLES_SHARED(0x721e, 14);
+    GAME_CYCLES(0x721e, 14);
     cout_digit(low, 0x7224);
-    GAME_CYCLES_SHARED(0x7225, 6);
+    GAME_CYCLES(0x7225, 6);
   } else {
-    GAME_CYCLES_SHARED(0x721c, 10);
+    GAME_CYCLES(0x721c, 10);
   }
 }
 
@@ -2853,115 +2853,115 @@ void game_status_panel(void) {
   ram_poke(0x0025, 0x14);
   ram_poke(0x0024, 0x00);
   game_print_inline_str(0x72d8);
-  GAME_CYCLES_SHARED(0x72e2, 15);
+  GAME_CYCLES(0x72e2, 15);
   clear_leading_zero_flag();
   s_a = ram_peek(0x7255);
   game_print_bcd(0x72eb);
-  GAME_CYCLES_SHARED(0x72ec, 10);
+  GAME_CYCLES(0x72ec, 10);
   s_a = ram_peek(0x7254);
   game_print_bcd(0x72f1);
-  GAME_CYCLES_SHARED(0x72f2, 10);
+  GAME_CYCLES(0x72f2, 10);
   s_a = ram_peek(0x7253);
   game_print_bcd(0x72f7);
-  GAME_CYCLES_SHARED(0x72f8, 10);
+  GAME_CYCLES(0x72f8, 10);
   s_a = ram_peek(0x7252);
   game_print_bcd(0x72fd);
-  GAME_CYCLES_SHARED(0x72fe, 6);
+  GAME_CYCLES(0x72fe, 6);
   game_print_zero_if_blank(0x7300);
 
   // HI SCORE, same row, column $14. Four bytes at $7256.
-  GAME_CYCLES_SHARED(0x7301, 11);
+  GAME_CYCLES(0x7301, 11);
   ram_poke(0x0024, 0x14);
   game_print_inline_str(0x7307);
-  GAME_CYCLES_SHARED(0x7314, 15);
+  GAME_CYCLES(0x7314, 15);
   clear_leading_zero_flag();
   s_a = ram_peek(0x7259);
   game_print_bcd(0x731d);
-  GAME_CYCLES_SHARED(0x731e, 10);
+  GAME_CYCLES(0x731e, 10);
   s_a = ram_peek(0x7258);
   game_print_bcd(0x7323);
-  GAME_CYCLES_SHARED(0x7324, 10);
+  GAME_CYCLES(0x7324, 10);
   s_a = ram_peek(0x7257);
   game_print_bcd(0x7329);
-  GAME_CYCLES_SHARED(0x732a, 10);
+  GAME_CYCLES(0x732a, 10);
   s_a = ram_peek(0x7256);
   game_print_bcd(0x732f);
-  GAME_CYCLES_SHARED(0x7330, 6);
+  GAME_CYCLES(0x7330, 6);
   game_print_zero_if_blank(0x7332);
 
   // APPLES LEFT, row $15 column $00. Two bytes at $725A.
-  GAME_CYCLES_SHARED(0x7333, 16);
+  GAME_CYCLES(0x7333, 16);
   ram_poke(0x0024, 0x00);
   ram_poke(0x0025, 0x15);
   game_print_inline_str(0x733d);
-  GAME_CYCLES_SHARED(0x734d, 15);
+  GAME_CYCLES(0x734d, 15);
   clear_leading_zero_flag();
   s_a = ram_peek(0x725b);
   game_print_bcd(0x7356);
-  GAME_CYCLES_SHARED(0x7357, 10);
+  GAME_CYCLES(0x7357, 10);
   s_a = ram_peek(0x725a);
   game_print_bcd(0x735c);
-  GAME_CYCLES_SHARED(0x735d, 6);
+  GAME_CYCLES(0x735d, 6);
   game_print_zero_if_blank(0x735f);
 
   // A space, which the next field's cursor move immediately overrides. It is
   // there to wipe the character one place past this field, left over from a
   // longer count earlier in the game.
-  GAME_CYCLES_SHARED(0x7360, 8);
+  GAME_CYCLES(0x7360, 8);
   s_a = 0xa0;
   rom_cout(0x7364);
 
   // VALUE, same row, column $14. Two bytes at $71CB -- the current worth of an
   // apple, which game_set_apple_value computes per level.
-  GAME_CYCLES_SHARED(0x7365, 11);
+  GAME_CYCLES(0x7365, 11);
   ram_poke(0x0024, 0x14);
   game_print_inline_str(0x736b);
-  GAME_CYCLES_SHARED(0x7375, 15);
+  GAME_CYCLES(0x7375, 15);
   clear_leading_zero_flag();
   s_a = ram_peek(0x71cc);
   game_print_bcd(0x737e);
-  GAME_CYCLES_SHARED(0x737f, 10);
+  GAME_CYCLES(0x737f, 10);
   s_a = ram_peek(0x71cb);
   game_print_bcd(0x7384);
-  GAME_CYCLES_SHARED(0x7385, 6);
+  GAME_CYCLES(0x7385, 6);
   game_print_zero_if_blank(0x7387);
 
   // SNAKES LEFT, row $16 column $00. One byte at $725E, printed as though it
   // were the low half of a two-byte field: the high half is the literal 0
   // below, which prints nothing at all once leading zeros are suppressed. It
   // costs a call to keep the shape of every other field.
-  GAME_CYCLES_SHARED(0x7388, 16);
+  GAME_CYCLES(0x7388, 16);
   ram_poke(0x0025, 0x16);
   ram_poke(0x0024, 0x00);
   game_print_inline_str(0x7392);
-  GAME_CYCLES_SHARED(0x73a2, 11);
+  GAME_CYCLES(0x73a2, 11);
   s_a = 0x00;
   clear_leading_zero_flag();
   game_print_bcd(0x73a8);
-  GAME_CYCLES_SHARED(0x73a9, 10);
+  GAME_CYCLES(0x73a9, 10);
   s_a = ram_peek(0x725e);
   game_print_bcd(0x73ae);
-  GAME_CYCLES_SHARED(0x73af, 6);
+  GAME_CYCLES(0x73af, 6);
   game_print_zero_if_blank(0x73b1);
 
   // LEVEL, same row, column $14. One byte at $7265.
-  GAME_CYCLES_SHARED(0x73b2, 11);
+  GAME_CYCLES(0x73b2, 11);
   ram_poke(0x0024, 0x14);
   game_print_inline_str(0x73b8);
-  GAME_CYCLES_SHARED(0x73c2, 15);
+  GAME_CYCLES(0x73c2, 15);
   clear_leading_zero_flag();
   s_a = ram_peek(0x7265);
   game_print_bcd(0x73cb);
-  GAME_CYCLES_SHARED(0x73cc, 6);
+  GAME_CYCLES(0x73cc, 6);
   game_print_zero_if_blank(0x73ce);
 
   // Home the cursor. This CV write is the one that needs VTAB, because nothing
   // prints after it to recompute the line base.
-  GAME_CYCLES_SHARED(0x73cf, 11);
+  GAME_CYCLES(0x73cf, 11);
   s_a = 0x00;
   ram_poke(0x0025, 0x00);
   rom_fc68(0x73d5);
-  GAME_CYCLES_SHARED(0x73d6, 6);
+  GAME_CYCLES(0x73d6, 6);
 }
 
 /* ========================================================================== */
@@ -3053,17 +3053,17 @@ void game_bonus_screen(void) {
   game_install_cout_hook(0x7941);
   GAME_CYCLES(0x7942, 6);
   game_print_inline_str(0x7944);
-  GAME_CYCLES_SHARED(0x794d, 15);
+  GAME_CYCLES(0x794d, 15);
   ram_poke(0x002c, 0x00);
   s_a = ram_peek(0x78b1);
   game_print_bcd(0x7956);
-  GAME_CYCLES_SHARED(0x7957, 10);
+  GAME_CYCLES(0x7957, 10);
   s_a = ram_peek(0x78b0);
   game_print_bcd(0x795c);
 
   // $795D -- COUT back to the ROM's, and $02 becomes the outermost counter of
   // the pause below.
-  GAME_CYCLES_SHARED(0x795d, 15);
+  GAME_CYCLES(0x795d, 15);
   ram_poke(0x0036, 0xf0);
   ram_poke(0x0037, 0xfd);
   ram_poke(0x0002, 0x20);
@@ -3078,30 +3078,30 @@ void game_bonus_screen(void) {
   // are DEX/DEY loops, which test after decrementing -- a count of zero would
   // mean 256, and none of these start at zero.
   do {
-    GAME_CYCLES_SHARED(0x7969, 2);
+    GAME_CYCLES(0x7969, 2);
     uint8_t x = 0x80;
     do {
-      GAME_CYCLES_SHARED(0x796b, 4);
+      GAME_CYCLES(0x796b, 4);
       uint8_t y = x;
       do {
-        GAME_CYCLES_SHARED(0x796d, 4);
+        GAME_CYCLES(0x796d, 4);
         --y;
         if (y != 0)
           GAME_CYCLES(0x796e, 1);
       } while (y != 0);
-      GAME_CYCLES_SHARED(0x7970, 12);
+      GAME_CYCLES(0x7970, 12);
       poll_and_discard();
       --x;
       if (x != 0)
         GAME_CYCLES(0x7977, 1);
     } while (x != 0);
-    GAME_CYCLES_SHARED(0x7979, 7);
+    GAME_CYCLES(0x7979, 7);
     const uint8_t left = (uint8_t)(ram_peek(0x0002) - 1);
     ram_poke(0x0002, left);
     if (left != 0)
       GAME_CYCLES(0x797b, 1);
   } while (ram_peek(0x0002) != 0);
-  GAME_CYCLES_SHARED(0x797d, 6);
+  GAME_CYCLES(0x797d, 6);
 }
 
 /* ========================================================================== */
@@ -3213,7 +3213,7 @@ void game_setup_screen(void) {
   ram_poke(0x0025, 0x17);
   ram_poke(0x0024, 0x00);
   game_print_inline_str(0x73f3);
-  GAME_CYCLES_SHARED(0x7414, 10);
+  GAME_CYCLES(0x7414, 10);
   ram_poke(0x0002, 0xe8);
   ram_poke(0x0003, 0x00);
 
@@ -3223,7 +3223,7 @@ wait: /* $741C */
     // $741C -- spin Y round once, then look at the keyboard. This site keeps
     // its probe: it is one of the addresses the replay coordinate counts.
     do {
-      GAME_CYCLES_SHARED(0x741c, 4);
+      GAME_CYCLES(0x741c, 4);
       s_y = (uint8_t)(s_y + 1);
       if (s_y != 0)
         GAME_CYCLES(0x741d, 1);
@@ -3236,7 +3236,7 @@ wait: /* $741C */
       break;
     }
 
-    GAME_CYCLES_SHARED(0x7424, 7);
+    GAME_CYCLES(0x7424, 7);
     const uint8_t inner = (uint8_t)(ram_peek(0x0003) + 1);
     ram_poke(0x0003, inner);
     if (inner != 0) {
@@ -3246,27 +3246,27 @@ wait: /* $741C */
 
     // $7428 -- once the inner counter wraps, try the joystick, if one is
     // selected. Each button stands in for a digit.
-    GAME_CYCLES_SHARED(0x7428, 6);
+    GAME_CYCLES(0x7428, 6);
     if (ram_peek(0x6c71)) {
-      GAME_CYCLES_SHARED(0x742d, 10);
+      GAME_CYCLES(0x742d, 10);
       io_peek(0xc05b);
       if (!(io_peek(0xc062) & 0x80)) {
-        GAME_CYCLES_SHARED(0x7435, 5);
+        GAME_CYCLES(0x7435, 5);
         key = 0xb1;
         break;
       }
       GAME_CYCLES(0x7433, 1);
-      GAME_CYCLES_SHARED(0x743a, 10);
+      GAME_CYCLES(0x743a, 10);
       io_peek(0xc05a);
       if (!(io_peek(0xc062) & 0x80)) {
-        GAME_CYCLES_SHARED(0x7442, 5);
+        GAME_CYCLES(0x7442, 5);
         key = 0xb0;
         break;
       }
       GAME_CYCLES(0x7440, 1);
-      GAME_CYCLES_SHARED(0x7447, 6);
+      GAME_CYCLES(0x7447, 6);
       if (!(io_peek(0xc063) & 0x80)) {
-        GAME_CYCLES_SHARED(0x744c, 5);
+        GAME_CYCLES(0x744c, 5);
         key = 0xb2;
         break;
       }
@@ -3276,11 +3276,11 @@ wait: /* $741C */
     }
 
     // $7451 -- the outer counter. When it wraps too, nobody is answering.
-    GAME_CYCLES_SHARED(0x7451, 7);
+    GAME_CYCLES(0x7451, 7);
     const uint8_t outer = (uint8_t)(ram_peek(0x0002) + 1);
     ram_poke(0x0002, outer);
     if (outer == 0) {
-      GAME_CYCLES_SHARED(0x7455, 20);
+      GAME_CYCLES(0x7455, 20);
       ram_poke(0x0302, 0x01);
       ram_poke(0x0301, 0x01);
       io_poke(0xc010, 0x01);
@@ -3291,21 +3291,21 @@ wait: /* $741C */
 
   // $7461 -- something was pressed. Clear the strobe with it still in A, the
   // way the original does.
-  GAME_CYCLES_SHARED(0x7461, 8);
+  GAME_CYCLES(0x7461, 8);
   io_poke(0xc010, key);
   if (key != 0xc3) {
-    GAME_CYCLES_SHARED(0x7468, 4);
+    GAME_CYCLES(0x7468, 4);
     if (key < 0xb0) {
       GAME_CYCLES(0x746a, 1);
       goto wait;
     }
-    GAME_CYCLES_SHARED(0x746c, 4);
+    GAME_CYCLES(0x746c, 4);
     if (key >= 0xb3) {
       GAME_CYCLES(0x746e, 1);
       goto wait;
     }
     // $7470 -- a digit. The subtract is a plain SBC with carry set.
-    GAME_CYCLES_SHARED(0x7470, 24);
+    GAME_CYCLES(0x7470, 24);
     ram_poke(0x0301, (uint8_t)(key - 0xb0));
     ram_poke(0x0302, 0x00);
     io_poke(0xc010, 0x00);
@@ -3315,58 +3315,58 @@ wait: /* $741C */
   // $747F -- C, so redefine the keys instead. Show the six current bindings,
   // draw the highlight, then walk them again asking for replacements.
   GAME_CYCLES(0x7466, 1);
-  GAME_CYCLES_SHARED(0x747f, 6);
+  GAME_CYCLES(0x747f, 6);
   game_clear_hgr(0x7481);
-  GAME_CYCLES_SHARED(0x7482, 10);
+  GAME_CYCLES(0x7482, 10);
   io_peek(0xc052);
   game_install_cout_hook(0x7487);
-  GAME_CYCLES_SHARED(0x7488, 11);
+  GAME_CYCLES(0x7488, 11);
   ram_poke(0x0025, 0x01);
   game_print_inline_str(0x748e);
 
-  GAME_CYCLES_SHARED(0x7541, 2);
+  GAME_CYCLES(0x7541, 2);
   for (uint8_t i = 0; i != 6; ++i) {
-    GAME_CYCLES_SHARED(0x7543, 10);
+    GAME_CYCLES(0x7543, 10);
     s_a = ram_peek(0x6c63 + i);
     s_x = i;
     game_show_key(0x7548);
-    GAME_CYCLES_SHARED(0x7549, 6);
+    GAME_CYCLES(0x7549, 6);
     if (i != 5)
       GAME_CYCLES(0x754c, 1);
   }
 
-  GAME_CYCLES_SHARED(0x754e, 26);
+  GAME_CYCLES(0x754e, 26);
   ram_poke(0x0001, 0x0c);
   ram_poke(0x0000, 0x02);
   ram_poke(0x0003, 0x12);
   ram_poke(0x0002, 0x1e);
   game_plot_shape(0x7560);
-  GAME_CYCLES_SHARED(0x7561, 21);
+  GAME_CYCLES(0x7561, 21);
   ram_poke(0x0003, 0x13);
   ram_poke(0x0008, 0x1d);
   ram_poke(0x0000, 0x0a);
   game_plot_vline(0x756f);
-  GAME_CYCLES_SHARED(0x7570, 11);
+  GAME_CYCLES(0x7570, 11);
   s_a = 0x0e;
   ram_poke(0x0000, 0x0e);
   game_plot_shape(0x7576);
 
-  GAME_CYCLES_SHARED(0x7577, 2);
+  GAME_CYCLES(0x7577, 2);
   for (uint8_t i = 0; i != 6; ++i) {
-    GAME_CYCLES_SHARED(0x7579, 6);
+    GAME_CYCLES(0x7579, 6);
     s_x = i;
     game_edit_key(0x757b);
-    GAME_CYCLES_SHARED(0x757c, 11);
+    GAME_CYCLES(0x757c, 11);
     ram_poke(0x6c63 + i, s_a);
     s_x = i;
     game_show_key(0x7581);
-    GAME_CYCLES_SHARED(0x7582, 6);
+    GAME_CYCLES(0x7582, 6);
     if (i != 5)
       GAME_CYCLES(0x7585, 1);
   }
 
   // $7587 -- COUT back to the ROM's.
-  GAME_CYCLES_SHARED(0x7587, 16);
+  GAME_CYCLES(0x7587, 16);
   ram_poke(0x0036, 0xf0);
   ram_poke(0x0037, 0xfd);
 }

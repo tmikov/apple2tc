@@ -613,6 +613,30 @@ rather than as one line naming the address, which is the whole reason the
 spelling distinction exists.
 
 
+**`[apple2tc]` An RTS keeps alive everything the recording ever saw it return
+to.** Externalizing a routine erases the JSRs that called it -- and with them the
+only instructions that pushed those return addresses. The edges remain, because
+an RTS carries its whole observed return set as successors, and each surviving
+edge keeps its target reachable and everything reachable from the target with it.
+
+Snake Byte's inline-string printer at $7230 survived externalization completely
+for this reason, and it took two wrong diagnoses to see why. $7239 is where its
+own `JSR $FC68` came back to; $FC68 is external, so nothing pushes $7239 any
+more, yet a ROM RTS still listed it. That one edge held the printer's body, its
+RTS, and through that RTS the ten blocks its ten callers resume at -- which
+presented as "the inline-string idiom leaves orphans" and is nothing of the kind.
+
+`--prune-returns` drops them: the fall block of every erased JSR is a candidate,
+and any RTS still naming one loses it. On Snake Byte, 64 edges and 298 further
+blocks.
+
+The reason to reach for this before anything cleverer is that it checks itself.
+Deleting unreachable text cannot move a frame hash, a memory sample or a trace,
+so every oracle must stay exactly where it was -- and every `GAME_CYCLES_SHARED`
+that existed only because of an orphan becomes wrong, which probe-acceptance.sh
+already tests for from the other side. 74 spellings flipped, each one named.
+
+
 | Signal | What it means |
 | --- | --- |
 | Planning to reloop before recovering procedures | Blocked, not merely harder. The dispatch variable is the PC. |
