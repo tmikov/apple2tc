@@ -122,6 +122,30 @@ $apple2tc altexit.b33 -O3 --ir --ret-addr > altexit-noalt-test.ir
 diff -q altexit-noalt.ir altexit-noalt-test.ir
 rm altexit-test.ir altexit-noalt-test.ir altexit.b33
 
+# --prune-returns: an RTS carries every address the recording saw it return to,
+# and externalizing a routine erases the JSR that pushed one of them. The edge
+# survives regardless and keeps its target -- and everything reachable from it --
+# alive. Two baselines: without the flag `sub` survives externalization entirely,
+# because `other`'s recorded return to `inner` still reaches into it.
+$a6502 pruneret.s pruneret.b33 >/dev/null
+$apple2tc pruneret.b33 --run-data=pruneret.json -O3 --ir \
+  --extern-routines=pruneret.externs --prune-returns > pruneret-test.ir
+diff -q pruneret.ir pruneret-test.ir
+$apple2tc pruneret.b33 --run-data=pruneret.json -O3 --ir \
+  --extern-routines=pruneret.externs > pruneret-keep-test.ir
+diff -q pruneret-keep.ir pruneret-keep-test.ir
+# The point of the flag, asserted rather than left to the diff: the block only
+# that erased JSR could return to is gone, and without the flag it is not.
+if grep -q '0325' pruneret-test.ir; then
+  echo "FAIL: --prune-returns kept a return edge nothing can produce" >&2
+  exit 1
+fi
+if ! grep -q '0325' pruneret-keep-test.ir; then
+  echo "FAIL: the pruneret fixture proves nothing -- \$0325 is gone either way" >&2
+  exit 1
+fi
+rm -f pruneret-test.ir pruneret-keep-test.ir pruneret.b33
+
 # An alternate-exit routine cannot also be hand-written. The refusal has to come
 # from the externalizing pass, which runs first and deletes the body: after that
 # the call site looks like an ordinary call that simply returns, and the exit is

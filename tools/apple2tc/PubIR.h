@@ -23,7 +23,7 @@ class Disas;
 class CPURegLiveness;
 
 std::shared_ptr<ir::IRContext>
-newIRContext(unsigned verbosity, bool preserveRetAddr, bool altExits);
+newIRContext(unsigned verbosity, bool preserveRetAddr, bool altExits, bool pruneReturns);
 ir::Module *genIR(const std::shared_ptr<Disas> &disas, ir::IRContext &ctx);
 void dumpModule(ir::Module *mod, bool irTrees, CPURegLiveness *liveness);
 

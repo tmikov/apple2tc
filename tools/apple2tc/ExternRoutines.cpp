@@ -101,6 +101,31 @@ private:
   /// return targets we find.
   PrimitiveSetVector<BasicBlock *> dynamicReturnBlocks(BasicBlock *entry);
 
+  /// Addresses that no surviving call can push any more.
+  ///
+  /// Converting `JSR X` into a call of an external routine erases the JSR, and
+  /// with it the only instruction that ever pushed the address of its fall
+  /// block. Recorded here as addresses rather than pointers because the blocks
+  /// themselves are erased along the way.
+  std::unordered_set<uint32_t> erasedFalls_{};
+
+  /// Drop return targets that nothing can produce, and report how many.
+  ///
+  /// An RTS carries every address the recording saw it return to. When the JSR
+  /// that pushed one of them is replaced by a call to hand-written C, that
+  /// return can no longer happen -- but the edge remains, and it keeps its
+  /// target reachable. Snake Byte's $7230 survives externalization entirely
+  /// because of one of these: $7239 is where its own `JSR $FC68` came back to,
+  /// and $FC68 is external now, yet a ROM RTS still lists $7239 among its
+  /// possible returns. That single edge holds the printer's body, its RTS, and
+  /// through that RTS the ten blocks its callers resume at.
+  ///
+  /// Only the fall blocks of JSRs this pass erased are candidates, and only
+  /// when no surviving JSR or JSRInd falls to the same block. An address put on
+  /// the stack by hand -- PHA/PHA/RTS with a computed value -- is not modelled,
+  /// which is the one way this could prune an edge that is real.
+  size_t pruneDeadReturns();
+
   /// Find the alternate exits of \p entry: blocks that discard the routine's
   /// own return address and jump into the caller. Returns their targets.
   ///
@@ -243,6 +268,8 @@ bool ExternRoutines::convert(
           ef,
           builder_.getLiteralU16(
               ctx_->getPreserveReturnAddress() ? inst->getAddress().value_or(0xFFFC) + 2 : 0xFFFE));
+      if (auto fallAddr = cast<BasicBlock>(inst->getOperand(1))->getAddress())
+        erasedFalls_.insert(*fallAddr);
       builder_.createJmp(inst->getOperand(1));
     } else {
       // A JSR to somewhere else, whose fall block is the extern entry point.
@@ -335,6 +362,59 @@ bool ExternRoutines::convert(
   return true;
 }
 
+size_t ExternRoutines::pruneDeadReturns() {
+  if (erasedFalls_.empty())
+    return 0;
+
+  // What a surviving call can still leave on the stack.
+  //
+  // No test covers this, and none can as things stand: a fall block is the
+  // instruction after its JSR, so two JSRs cannot share one, and this pass runs
+  // before anything duplicates blocks. It is here against the day one of those
+  // stops being true, and mutating it away breaks nothing today.
+  std::unordered_set<uint32_t> stillPushed{};
+  for (auto &bb : start_->basicBlocks()) {
+    for (auto &inst : bb.instructions()) {
+      if (inst.getKind() != ValueKind::JSR && inst.getKind() != ValueKind::JSRInd)
+        continue;
+      if (auto addr = cast<BasicBlock>(inst.getOperand(1))->getAddress())
+        stillPushed.insert(*addr);
+    }
+  }
+
+  std::vector<Instruction *> rtsList{};
+  for (auto &bb : start_->basicBlocks())
+    if (auto *t = bb.getTerminator(); t && t->getKind() == ValueKind::RTS)
+      rtsList.push_back(t);
+
+  size_t dropped = 0;
+  std::vector<Value *> keep{};
+  for (auto *rts : rtsList) {
+    keep.clear();
+    keep.push_back(rts->getOperand(0));
+    size_t here = 0;
+    for (unsigned i = 1, count = rts->getNumOperands(); i != count; ++i) {
+      auto *target = cast<BasicBlock>(rts->getOperand(i));
+      auto addr = target->getAddress();
+      if (addr && erasedFalls_.count(*addr) && !stillPushed.count(*addr)) {
+        ++here;
+        continue;
+      }
+      keep.push_back(target);
+    }
+    if (!here)
+      continue;
+
+    // There is no way to remove one operand, so the instruction is rebuilt.
+    builder_.setInsertionPointAfter(rts);
+    builder_.setAddress(rts->getAddress());
+    builder_.createInst(ValueKind::RTS, keep);
+    rts->eraseFromBasicBlock();
+    dropped += here;
+  }
+  return dropped;
+}
+
 bool ExternRoutines::run(const std::vector<std::pair<uint16_t, std::string>> &externs) {
   bool changed = false;
   /// Declared routines that return into their caller, recorded here while
@@ -389,6 +469,23 @@ bool ExternRoutines::run(const std::vector<std::pair<uint16_t, std::string>> &ex
         inst->pushOperand(bb);
 
   size_t removed = removeUnreachableBlocks(start_);
+
+  // Pruning frees blocks, and freeing blocks erases the JSRs inside them, which
+  // makes more returns unreachable. Alternate until neither finds anything.
+  if (ctx_->getPruneReturns()) {
+    for (;;) {
+      size_t dropped = pruneDeadReturns();
+      if (!dropped)
+        break;
+      if (ctx_->getVerbosity() > 0)
+        fprintf(stderr, "extern: pruned %zu unreachable return edges\n", dropped);
+      size_t more = removeUnreachableBlocks(start_);
+      removed += more;
+      if (!more)
+        break;
+    }
+  }
+
   if (ctx_->getVerbosity() > 0)
     fprintf(stderr, "extern: removed %zu unreachable blocks\n", removed);
 

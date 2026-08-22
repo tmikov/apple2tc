@@ -1,0 +1,65 @@
+// Loaded binary at [$0300..$0351]
+// code labels: 7
+// data labels: 1
+// Gen    :
+// Kill   :
+// Mod    : A, X, Y, STATUS_N, STATUS_V, STATUS_B, STATUS_D, STATUS_I, STATUS_NotZ, STATUS_C
+// LiveIn :
+// LiveOut: A, X, Y, STATUS_N, STATUS_V, STATUS_B, STATUS_D, STATUS_I, STATUS_NotZ, STATUS_C
+function func1
+%bb1:  // Pred() Succ(%bb_0306)
+                StoreR8       A, 0x00
+                StoreR8       X, 0x00
+                StoreR8       Y, 0x00
+                StoreSP       0xff
+                StoreR8       STATUS_N, 0x00
+                StoreR8       STATUS_V, 0x00
+                StoreR8       STATUS_B, 0x00
+                StoreR8       STATUS_D, 0x00
+                StoreR8       STATUS_I, 0x00
+                StoreR8       STATUS_NotZ, 0x01
+                StoreR8       STATUS_C, 0x00
+/*$0300*/       AddCycles     6
+                Call          test_sub, 0xfffe
+/*$0303*/       AddCycles     6
+                Call          func_0350, 0xfffe
+                Jmp           %bb_0306
+%bb_0306:  // [$0306] Pred(%bb_0306, %bb1) Succ(%bb_0306)
+/*$0306*/       AddCycles     3
+                Jmp           %bb_0306
+%bb_0350:  // [$0350] Pred() Succ()
+/*$0350*/       AddCycles     8
+/*$0351*/       RTS           0x00
+%bb2:  // Pred() Succ()
+                Exit
+end func1
+
+// Gen    : A, X, Y, STATUS_N, STATUS_V, STATUS_B, STATUS_D, STATUS_I, STATUS_NotZ, STATUS_C
+// Kill   :
+// Mod    : A, X, Y, STATUS_N, STATUS_V, STATUS_B, STATUS_D, STATUS_I, STATUS_NotZ, STATUS_C
+// LiveIn :
+// LiveOut:
+function test_sub
+end test_sub
+
+// Gen    : A, X, Y, STATUS_N, STATUS_V, STATUS_B, STATUS_D, STATUS_I, STATUS_NotZ, STATUS_C
+// Kill   :
+// Mod    : A, X, Y, STATUS_N, STATUS_V, STATUS_B, STATUS_D, STATUS_I, STATUS_NotZ, STATUS_C
+// LiveIn :
+// LiveOut:
+function test_helper
+end test_helper
+
+// Gen    :
+// Kill   :
+// Mod    :
+// LiveIn :
+// LiveOut:
+function func_0350
+%bb_0350_1:  // [$0350] Pred() Succ(%bb3)
+/*$0350*/       AddCycles     8
+/*$0351*/       Return        %bb3
+%bb3:  // Pred(%bb_0350_1) Succ()
+                Exit
+end func_0350
+

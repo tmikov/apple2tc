@@ -824,6 +824,13 @@ public:
     preserveReturnAddress_ = preserveReturnAddress;
   }
 
+  bool getPruneReturns() const {
+    return pruneReturns_;
+  }
+  void setPruneReturns(bool pruneReturns) {
+    pruneReturns_ = pruneReturns;
+  }
+
   bool getAltExits() const {
     return altExits_;
   }
@@ -845,6 +852,8 @@ private:
   /// Whether identifySimpleRoutines() may accept routines with alternate
   /// exits. See CallAlt in Values.def.
   bool altExits_ = false;
+  /// Whether externRoutines() may drop return edges that nothing can produce.
+  bool pruneReturns_ = false;
 };
 
 class IRBuilder {

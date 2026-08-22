@@ -982,11 +982,12 @@ bool GenIR::isAddrNonIO(Value *addr, unsigned width) {
 }
 
 std::shared_ptr<ir::IRContext>
-newIRContext(unsigned verbosity, bool preserveRetAddr, bool altExits) {
+newIRContext(unsigned verbosity, bool preserveRetAddr, bool altExits, bool pruneReturns) {
   auto res = std::make_shared<IRContext>();
   res->setVerbosity(verbosity);
   res->setPreserveReturnAddress(preserveRetAddr);
   res->setAltExits(altExits);
+  res->setPruneReturns(pruneReturns);
   return res;
 }
 
