@@ -72,7 +72,6 @@ void game_print_bcd(uint16_t ret_addr);
 void game_print_zero_if_blank(uint16_t ret_addr);
 void game_add_score(uint16_t ret_addr);
 void game_clear_hgr(uint16_t ret_addr);
-void game_rand_byte(uint16_t ret_addr);
 void game_plot_shape_merge(uint16_t ret_addr);
 void game_draw_playfield(uint16_t ret_addr);
 void game_install_cout_hook(uint16_t ret_addr);

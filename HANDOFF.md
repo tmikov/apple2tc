@@ -240,8 +240,14 @@ not delete them one at a time before then; the site count is the thing that
 notices.
 
 One was fully dead and is gone: `game_rand_byte` had no caller anywhere and no
-`CYCLES` site. Its `$6C4B` line stays in `rom.externs` for now — see the note
-there, and `decompile.sh`'s header for why removing it is not free today.
+`CYCLES` site. Its `$6C4B` mapping went with it — a mapping for a routine no
+generated code calls buys nothing, and is not how a routine gets deleted.
+
+**`./decompile.sh` reproduces the committed generated C**, as of 2026-08-23; run
+it at a clean HEAD and `git status` comes back empty. It had not been true for
+some time, which made every regeneration a ~12,000-line reformat with the real
+change buried inside. If that recurs, `decompile.sh`'s header carries the
+one-line check that tells layout drift from an actual change in output.
 
 `a2rom.c` and `game.c` are **`#include`d, never compiled separately**.
 `system2-inc.h` defines the machine state (`s_ram`, `s_a`, the `CYCLES` macro)

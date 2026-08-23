@@ -1,20 +1,20 @@
 #!/bin/bash
 #
-# KNOWN WART, measured 2026-08-23: this script does not reproduce the committed
-# generated C. Running it at a clean HEAD, with no source change at all,
-# rewrites snake-bytec1-ext.c and snake-byte-easyc1-ext.c by ~12,000 lines
-# each.
+# This script reproduces the committed generated C: run it at a clean HEAD and
+# `git status` comes back empty. Keep it that way -- regenerate in the same
+# commit as whatever input you changed.
 #
-# The difference is line breaking only. Strip whitespace from both and they are
-# byte-identical, so the committed files are semantically current -- what is
-# stale is their layout, against an emitter whose line breaking has moved since
-# they were last written. Nothing is wrong with the checked-in C.
+# It was not true until 2026-08-23. The committed ext files had been written by
+# an emitter whose line breaking had since moved, so regenerating rewrote both
+# by ~12,000 lines and every real change arrived buried in that. If it drifts
+# again, the check that tells a reformat from a real change is whether the two
+# are byte-identical with whitespace removed:
 #
-# It matters because it makes any real regeneration unreadable: a one-line
-# change arrives buried in a 12,000-line reformat. Until someone regenerates
-# and commits the reformat on its own, prefer not to regenerate for cosmetic
-# reasons, and check `git diff -w` plus a whitespace-stripped `cmp` before
-# believing a large diff means a large change.
+#   tr -d " \t\n" < old.c > a; tr -d " \t\n" < new.c > b; cmp a b
+#
+# Identical means layout only, and the fix is to commit the regeneration on its
+# own. Different means the decompiler's output actually changed, and that is a
+# real diff to read.
 
 bin=../../cmake-build-debug
 apple2tc=$bin/tools/apple2tc/apple2tc
