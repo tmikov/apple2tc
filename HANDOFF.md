@@ -333,7 +333,10 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
 2a. **Every identified game routine is converted** (2026-08-21). `$6256`,
    `$6288`, `$6A32`, `$72CE`, `$78B3` and `$7980` went in this session; the
    only generated function left in the whole translation unit is `func_t001`,
-   the top-level dispatch. The pinned site count is **1176**.
+   the top-level dispatch. The pinned site count is **1176** -- and **1067 of those are Applesoft ROM**,
+   against 96 in the game range. The remaining cost is almost entirely ROM, which
+   is what makes retargeting the entry (item 4) the dominant item rather than a
+   someday one.
 
    Three things a new conversion should know, all of them learned here:
 
