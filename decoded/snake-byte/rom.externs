@@ -39,6 +39,17 @@ FE93 rom_setvid
 7226 game_print_zero_if_blank
 7267 game_add_score
 702B game_clear_hgr
+# $6C4B is mapped but has no definition, and that is deliberate. Every caller
+# is hand-written C calling game_rand_byte_native() directly, so the adapter
+# was dead and has been removed; apple2tc still emits a declaration here, which
+# nothing references and the linker never needs.
+#
+# The line could go too -- measured: generating with and without it produces
+# output differing by exactly 37 bytes, the declaration and nothing else, and
+# no func_6c4b appears, because nothing generated calls $6C4B either. It stays
+# only because removing it means regenerating, and regeneration currently
+# rewrites both generated files' line breaks wholesale (see decompile.sh).
+# Delete it in whatever commit fixes that, not before.
 6C4B game_rand_byte
 6B93 game_plot_shape_merge
 7045 game_draw_playfield

@@ -220,6 +220,29 @@ Two builds, both verified — do not collapse them into one:
 | `snake-bytec1` | `snake-bytec1.c` | Self-contained reference. ROM decompiled alongside the game; links alone. `play.frames` was recorded from it. |
 | `snake-bytec1-ext` | `snake-byte-ext.c` | ROM entry points supplied by hand-written `a2rom.c` + `game.c`. |
 
+**The adapters in `game.c` are now mostly scaffolding, not an interface.**
+Measured 2026-08-23: of the 42, only **14 still have a generated caller**
+(`game_place_apple` has 5, `game_draw_status` and `game_plot_shape` 2 each, the
+rest 1). For the other 28 every caller is hand-written C that could call the
+`_native` function directly. What they still buy is verification, not
+structure:
+
+- `CYCLES(addr, 0)` keeps the entry address on the block-head list, so the
+  cross-engine trace still compares it. Delete the adapter and that comparison
+  point disappears silently.
+- `push16(ret)`/`pop16()` keeps the emulated stack matching the 6502's, which
+  `ram.probe` compares and which the inline-string idiom actually *reads*.
+- Three do real work rather than marshalling — see the playbook's red flag.
+
+So they are exactly what a shipped artifact sheds (`ret_addr == 0`, no emulated
+stack, no probe sites), and exactly what Phase 1b makes redundant in bulk. Do
+not delete them one at a time before then; the site count is the thing that
+notices.
+
+One was fully dead and is gone: `game_rand_byte` had no caller anywhere and no
+`CYCLES` site. Its `$6C4B` line stays in `rom.externs` for now — see the note
+there, and `decompile.sh`'s header for why removing it is not free today.
+
 `a2rom.c` and `game.c` are **`#include`d, never compiled separately**.
 `system2-inc.h` defines the machine state (`s_ram`, `s_a`, the `CYCLES` macro)
 with internal linkage, so a second translation unit would get its *own* copy of

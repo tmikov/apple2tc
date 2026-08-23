@@ -1,4 +1,20 @@
 #!/bin/bash
+#
+# KNOWN WART, measured 2026-08-23: this script does not reproduce the committed
+# generated C. Running it at a clean HEAD, with no source change at all,
+# rewrites snake-bytec1-ext.c and snake-byte-easyc1-ext.c by ~12,000 lines
+# each.
+#
+# The difference is line breaking only. Strip whitespace from both and they are
+# byte-identical, so the committed files are semantically current -- what is
+# stale is their layout, against an emitter whose line breaking has moved since
+# they were last written. Nothing is wrong with the checked-in C.
+#
+# It matters because it makes any real regeneration unreadable: a one-line
+# change arrives buried in a 12,000-line reformat. Until someone regenerates
+# and commits the reformat on its own, prefer not to regenerate for cosmetic
+# reasons, and check `git diff -w` plus a whitespace-stripped `cmp` before
+# believing a large diff means a large change.
 
 bin=../../cmake-build-debug
 apple2tc=$bin/tools/apple2tc/apple2tc

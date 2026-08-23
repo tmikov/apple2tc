@@ -474,33 +474,6 @@ void game_clear_hgr(uint16_t ret_addr) {
 }
 
 /* ========================================================================== */
-/* $6C4B -- the next pseudo-random byte.                                      */
-/*                                                                            */
-/* There is no generator here at all: the game walks a pointer ($0E/$0F)      */
-/* through its own memory and hands back whatever byte it lands on, skipping  */
-/* any with the high bit set and restarting the walk at $1800 when it finds   */
-/* one. Program text and data are the entropy. The result is therefore always */
-/* $00-$7F, which is what makes it usable directly as a coordinate.           */
-/*                                                                            */
-/* The restart does not advance the pointer -- it stores $1800 and jumps      */
-/* straight back to the load -- so a byte at $1800 with bit 7 set would hang  */
-/* the game. Nothing enforces that; the original simply relies on it.         */
-/* ========================================================================== */
-
-void game_rand_byte(uint16_t ret_addr) {
-  // Adapter for game_rand_byte_native(). Costs 5 trace sites.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  s_a = game_rand_byte_native();
-
-  if (ret_addr)
-    pop16();
-}
-
-/* ========================================================================== */
 /* $6B93 -- the merging cell plotter.                                         */
 /*                                                                            */
 /* Same shape as $60E4: load the shape's masks, then walk the cell's four     */

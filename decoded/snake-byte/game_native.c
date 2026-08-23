@@ -1746,6 +1746,14 @@ void game_next_byte_native(void) {
 /// $1800 upward and the first byte with bit 7 clear is the answer; the pointer
 /// is reset to $1800 whenever it finds one that is not. Not random, but
 /// unpredictable enough to place an apple and it costs nothing to keep.
+///
+/// There is no generator at all: program text and data are the entropy. The
+/// result is therefore always $00-$7F, which is what makes it usable directly
+/// as a coordinate.
+///
+/// The restart does not advance the pointer -- it stores $1800 and jumps
+/// straight back to the load -- so a byte at $1800 with bit 7 set would hang
+/// the game. Nothing enforces that; the original simply relies on it.
 uint8_t game_rand_byte_native(void) {
   GAME_CYCLES(0x6c4b, 7);
   const uint8_t lo = (uint8_t)(ram_peek(0x000e) + 1);
