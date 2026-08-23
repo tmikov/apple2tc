@@ -417,27 +417,38 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
    whoever picks it up is designing it from scratch, not using something
    already built.
 
-   **Settle this before designing anything: does a re-based trace need a
-   human?** "Re-based trace" is two different jobs and only one of them is
-   mechanical.
+   **The re-based trace does not need a human — measured 2026-08-23.** This
+   was the obvious way for Phase 1b to collide with the no-new-recordings
+   agreement, so it was checked before any design work. It does not.
 
-   - The `.frames` files are mechanical. `verify.sh --record` re-runs the
-     reference build twice and refuses to write unless the two agree; nobody
-     plays anything. Cold-starting changes what they contain, not how they
-     are made.
-   - The **key files are not obviously mechanical**, and this is the risk. A
-     cold start skips the 168 boot frames, and the replay coordinate counts
-     keyboard reads at seven addresses — three of which (`$FD1B`, `$FD26`,
-     `$FB7C`) are in the ROM boot path that would no longer run. Every stamp
-     in `play.pkeys` is an offset on that counter, so skipping boot shifts
-     the whole schedule. Re-stamping means replaying keys whose timing was
-     defined by a coordinate the new build does not have.
+   Both halves are mechanical:
 
-   If that turns out to need a fresh capture, **Phase 1b collides with the
-   standing "no new recordings" agreement** and the collision is the design
-   problem, not a detail of it. Check it first, on paper, against `rec.probe`
-   and the seven addresses — before writing a snapshot format that may be
-   solving the wrong half.
+   - The `.frames` files always were. `verify.sh --record` re-runs the
+     reference build twice and refuses to write unless the two agree.
+   - The **key files re-stamp by a constant**. Instrument the coordinate
+     (`rec.probe`'s seven sites) with a `printf` alongside its `key n`, add a
+     probe at `$3750`, and replay each scenario: the first `$3750` entry lands
+     at **n=181,207** for `play` and `play-hires` and **n=217,543** for
+     `play-rebind`, and no coordinate site fires between the end of boot and
+     that entry. `$FB7C` is the one ROM site that also fires *after* the game
+     starts — 17 times, in the two hi-res scenarios — and it fires from
+     `a2rom.c`, which a retargeted build still has, so the post-entry sequence
+     is unchanged.
+
+   So re-stamping is: **drop the keys stamped below the entry constant, and
+   subtract it from the rest.** The dropped keys are the same 11 in all three
+   scenarios and they are literally `CALL 14160` + CR — 14160 is `$3750`, so
+   they exist only to reach the address the retargeted build starts at. What
+   is left is 12 / 8 / 34 keys.
+
+   Two things this does *not* say. The snapshot format is still the real work
+   and still unbuilt. And `$3750` is entered **8 times** in a single play run
+   — the game restarts through it — so a cold start there is something the
+   game already does to itself; what has to be captured is the state at the
+   *first* entry, which is the one arriving from BASIC.
+
+   The probe used is five lines; reproduce it rather than trusting these
+   numbers if anything upstream has moved.
 5. **Frame 623 is resolved; a narrower divergence remains, not yet
    root-caused.** Frame 623 was the old cycle-stamped-input artefact: `play.keys`
    was recorded from the generated build, so its stamps were that engine's own
