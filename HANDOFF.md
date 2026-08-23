@@ -345,13 +345,28 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
    `--inline-str=<file>` (`tools/apple2tc/Disas.cpp`). One declaration file per
    game; the routine must also be in `--extern-routines`, which is enforced.
 
-2a. **Every identified game routine is converted** (2026-08-21). `$6256`,
-   `$6288`, `$6A32`, `$72CE`, `$78B3` and `$7980` went in this session; the
-   only generated function left in the whole translation unit is `func_t001`,
-   the top-level dispatch. The pinned site count is **1176** -- and **1067 of those are Applesoft ROM**,
-   against 96 in the game range. The remaining cost is almost entirely ROM, which
-   is what makes retargeting the entry (item 4) the dominant item rather than a
-   someday one.
+2a. ~~**Every identified game routine is converted.**~~ — **done, and now
+   complete.** `$6256`, `$6288`, `$6A32`, `$72CE`, `$78B3` and `$7980` went on
+   2026-08-21; `$69A9`, the last emulator-shaped one, on 2026-08-22. `game.c`
+   is adapters only, and the sole generated function left in the whole
+   translation unit is `func_t001`, the top-level dispatch.
+
+   The pinned site count is **1171**, of which **97 are in the game range
+   ($3750-$854E) and 1074 are Applesoft ROM** — measured against
+   `blocks-ext.txt`, so it is re-derivable:
+
+   ```bash
+   python3 -c "
+   import io
+   a=[int(l,16) for l in io.open('decoded/snake-byte/blocks-ext.txt') if l.strip()]
+   g=[x for x in a if 0x3750<=x<=0x854e]
+   print(len(a), len(g), len(a)-len(g))"
+   ```
+
+   **92% of what is left is ROM**, and no amount of further game work touches
+   it. That is what makes retargeting the entry (item 4) the dominant item
+   rather than a someday one — and it is why "convert another routine" is no
+   longer available as the next step.
 
    Three things a new conversion should know, all of them learned here:
 
@@ -397,8 +412,32 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
 
    **There is no `--snapshot-at`, and no format for one.** Stage 7 of the
    host/engine split design was never started; the option does not exist
-   anywhere in the tree. Phase 1b is still blocked on it, and whoever picks it
-   up is designing it from scratch, not using something already built.
+   anywhere in the tree — re-confirmed 2026-08-23, `grep -rn 'snapshot-at'
+   lib/ tools/ include/` returns nothing. Phase 1b is still blocked on it, and
+   whoever picks it up is designing it from scratch, not using something
+   already built.
+
+   **Settle this before designing anything: does a re-based trace need a
+   human?** "Re-based trace" is two different jobs and only one of them is
+   mechanical.
+
+   - The `.frames` files are mechanical. `verify.sh --record` re-runs the
+     reference build twice and refuses to write unless the two agree; nobody
+     plays anything. Cold-starting changes what they contain, not how they
+     are made.
+   - The **key files are not obviously mechanical**, and this is the risk. A
+     cold start skips the 168 boot frames, and the replay coordinate counts
+     keyboard reads at seven addresses — three of which (`$FD1B`, `$FD26`,
+     `$FB7C`) are in the ROM boot path that would no longer run. Every stamp
+     in `play.pkeys` is an offset on that counter, so skipping boot shifts
+     the whole schedule. Re-stamping means replaying keys whose timing was
+     defined by a coordinate the new build does not have.
+
+   If that turns out to need a fresh capture, **Phase 1b collides with the
+   standing "no new recordings" agreement** and the collision is the design
+   problem, not a detail of it. Check it first, on paper, against `rec.probe`
+   and the seven addresses — before writing a snapshot format that may be
+   solving the wrong half.
 5. **Frame 623 is resolved; a narrower divergence remains, not yet
    root-caused.** Frame 623 was the old cycle-stamped-input artefact: `play.keys`
    was recorded from the generated build, so its stamps were that engine's own
