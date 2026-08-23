@@ -432,20 +432,63 @@ exit, which is the case that has to be re-walked and validated. Both needed the
 fixture widened, not the code changed. Do this before the commit, not after:
 the two holes were in the parts of the design that felt most obviously correct.
 
-**`[process]` Do not convert code no recording runs.** The conversion of a
-routine to real C is checked by exactly one thing: the recordings executing it
-and the oracles agreeing. For a routine nothing executes there is no check at
-all -- and converting it also takes its addresses off the site list, removing
-the unverified-block accounting that was the only remaining statement about it.
-Snake Byte's pause/mute handler at $69A9 is six blocks, entirely straightforward
-and entirely unexercised, and it stays in the emulator-shaped file with a note
-saying why. Convert it when a recording presses ESC.
+**`[process]` "Convert it when a recording reaches it" is a hold, not a plan.**
+*(revised 2026-08-22; this entry used to say the opposite, and the reasoning it
+was built on is kept below because the reasoning was not the part that was
+wrong.)*
 
-The rule bends only when the choice is not yours to make -- see the next entry.
+The original rule: a conversion is checked by exactly one thing, the recordings
+executing it and the oracles agreeing; for a routine nothing executes there is
+no check at all, and converting it also takes its addresses off the site list,
+removing the unverified-block accounting that was the only remaining statement
+about it. So Snake Byte's pause/mute handler at $69A9 -- six blocks, entirely
+straightforward, entirely unexercised -- stayed in the emulator-shaped file
+with a note saying why, to be converted when a recording pressed ESC.
+
+Both halves of that are true and it was still the wrong call, because it
+priced the waiting at zero. No recording was going to arrive: making one is a
+deliberate act that nobody had a reason to perform, so "later" meant never, and
+the routine sat as the last emulator-shaped thing in the file for its own sake.
+Against that, what deferral actually buys is small. The decode is checkable
+against the binary whether or not anything runs it -- `id` disassembles it, the
+opcode timings give the cycle charges, and `--ir` gives the liveness -- and
+that is the same evidence the conversion of any *reached* routine rests on for
+the branches its recording happens not to take.
+
+So: convert it, and pay the two real costs deliberately rather than avoid them
+indefinitely. Name the unexercised blocks in a comment above the routine, which
+is the only surviving record once they leave the site list. And find out by
+mutation which of the *exercised* blocks are actually covered, because that is
+usually less than the coverage number implies -- see the next entry.
+
+What survives of the original rule is narrower and still worth obeying: do not
+convert unexercised code *and* let the unverified count fall silently, and do
+not describe the result as verified. Converting is a decision about where the
+code should live. It is not evidence.
 When it does bend, put the addresses in a comment above the routine, because
 that comment becomes the only surviving record: converting takes them off the
 site list, so probe-acceptance.sh stops counting them as unverified and the
 number that used to say "these are unchecked" simply gets smaller.
+
+**`[process]` An oracle built to ignore cycles cannot check cycles, and the
+one that checks them may not run the code.** Snake Byte has two cross-engine
+gates and neither covers $69A9's cycle charges. verify.sh compares per-frame
+cycle counts, but its two scenarios never press an unrecognised key, so they
+never enter the routine. probe-acceptance.sh does enter it, via play-rebind --
+and stamps its input on a probe counter rather than on cycles, deliberately, so
+that the two engines' cycle phase cannot perturb replay. Being cycle-independent
+is exactly what makes it useless here.
+
+Measured: 4 cycles written as 5 passes verify.sh 4/4, all three block-head
+traces, memory and screen. Written as 4000 it fails, on frame-boundary drift.
+So the check that does exist has a resolution of roughly a frame, and a
+plausible arithmetic slip lands far inside it.
+
+The lesson is not "add a cycle oracle" -- the probe counter's independence is
+load-bearing. It is that a routine's coverage has to be read per *property*,
+not as one number: this one's control flow is checked (inverting the Ctrl-S
+test fails trace-ext on play-rebind) and its timing is not, and the same
+"84/104 hand-written blocks run" reports both.
 
 **`[process]` A fixture built to reach new code also deepens the code you
 already had.** Snake Byte's `easy` build exists to make the display list

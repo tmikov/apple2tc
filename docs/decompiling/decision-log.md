@@ -2267,3 +2267,89 @@ directory and rejects arguments it does not understand.
 - The unverified baseline is down to 26 from 60, and almost none of that is
   progress: the blocks left the site list with their routines. The pinned site
   count is the honest number.
+
+## 2026-08-22 — `$69A9` converted; waiting on a recording is not a plan
+
+**Superseding note first.** The "Left open" list closing the 2026-08-15 entry
+above is stale and was already stale when this was written. It says `$69A9` is
+waiting on a recording and that a rebind-then-play recording would close the
+key-table gap; both were done on 2026-08-16 (`3648097`, `play-rebind.pkeys`).
+Between 08-16 and 08-22 the lessons went into `playbook.md` and this file got
+no entries, so its tail reads as the current state and is six days behind. It
+is left in place per the append-only rule. Read the playbook and
+`probe-acceptance.sh`'s baseline comment for where things actually stand.
+
+### The decision
+
+`$69A9`, pause and mute, was hand-decoded into `game.c` but deliberately not
+converted to real C, on the rule recorded in the playbook: a conversion is
+checked by the recordings running it, and no recording presses ESC or Ctrl-S.
+`play-rebind` later reached `$69A9` itself and both its fall-through blocks,
+which made the routine half-covered and the rule half-applicable, and it stayed
+unconverted on that basis.
+
+That is now overruled as a project decision, not a routine-level one: **no
+further recordings will be made**. The rule priced waiting at zero, and with
+nobody going to record an ESC press, "convert it later" meant "never". The
+decode is checkable against the binary regardless — `id` for the instructions,
+the opcode table for the cycle charges, `--ir` for the liveness — which is the
+same evidence every converted routine already rests on for the branches its
+recording did not take.
+
+So `game_pause_or_toggle_sound_native()` is in `game_native.c`, with a five-line
+adapter left in `game.c`. Cost: 5 of the 6 block heads, 1176 → 1171 pinned
+sites, exactly as predicted from the block count.
+
+### What the binary settled that reading the C could not
+
+Two questions came up, and both were answered by enumeration rather than by
+argument:
+
+**The caller's key.** `game_play_loop_native` tracks the key in a local `code`
+while the old adapter read `s_a`, and those are written independently — the
+auto-steer path sets `code = proposal` and leaves `s_a` stale. If `$639B` were
+reachable that way the adapter was already wrong. It is not: the substitution
+tables at `$6387`-`$6396` hold only `$00`, `$88` and `$95`, and `$00` fails the
+high-bit test at `$6291` while `$88`/`$95` match at `$6293`; the auto-steer's
+proposals come from `tbl_6A55` = `00 CB C9 CA CD` with the direction always
+1..4, and all four of those match earlier in the chain. Nothing substituted
+survives to `$639B`, so `code == s_a` there and the parameter is exact.
+
+**What to write back.** `--ir` gives `func_69a9` `LiveOut: STATUS_C` and nothing
+else. A is dead — which incidentally disposes of a divergence in the old hand
+decode, where the Ctrl-S path left the key in A and the original leaves the
+toggled flag there. Nothing ever read it. The adapter now writes the flags and
+not A, and says so at the line.
+
+### What mutation found, and it is about the oracles
+
+Inverting the Ctrl-S test is caught: `trace-ext` fails on the play-rebind
+scenario. Mis-charging the entry block is **not**. 4 cycles written as 5 passes
+verify.sh 4/4 and every probe scenario; written as 4000 it fails on
+frame-boundary drift.
+
+The reason is structural and worth keeping. verify.sh is the gate that compares
+cycles, and its two scenarios never press an unrecognised key, so they never
+enter the routine. probe-acceptance.sh does enter it, and stamps input on a
+probe counter rather than on cycles — deliberately, since that independence is
+what made the two engines comparable at all (2026-08-14). Being cycle-blind is
+the property that makes it useless for this. The cycle charges here therefore
+rest on the opcode timings and not on a passing test, which is written above the
+routine.
+
+Nothing to fix: the counter's independence is load-bearing and a third gate is
+not worth its weight for one routine. What changes is how the coverage number is
+read. "84/104 hand-written blocks run" reports control flow and timing as one
+figure, and for this routine one of the two is checked.
+
+### Also corrected here
+
+`probe-acceptance.sh`'s baseline comment had drifted badly. Its arithmetic cited
+1,519 and 1,669, neither of which the file has produced since `--prune-returns`,
+and four of its six named groups of unverified blocks — the `'P'` opcode,
+difficulty 2, level 30 and the unrecognised opcode — had left the site list with
+their routines' conversions without being marked. With `$69A9` converted the
+baseline is **20, all of it ROM in `a2rom.c`**, and the number can no longer say
+anything about the game at all. The per-routine comments took over that job, and
+they are prose that nothing checks. That is now stated in the file rather than
+implied by it.

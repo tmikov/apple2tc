@@ -4,8 +4,15 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
-**Last commit:** `32498be`. 455 commits on `snake-byte`, nothing pushed, tree
-clean. The most recent work is two decompiler capabilities — `--inline-str` and
+**Last commit:** run `git log -1`; this line has been stale before. As of
+2026-08-22 the tree is clean and nothing is pushed. The most recent work is
+`$69A9` — the last emulator-shaped game routine — becoming real C, on a
+**standing decision that no further recordings will be made**: unexercised code
+is decoded from the binary rather than held until something runs it. See the
+2026-08-22 log entry, and note that it supersedes a playbook rule that said the
+opposite.
+
+Before that, two decompiler capabilities — `--inline-str` and
 `--alt-exit` — and the conversion they unblocked: **the main loop and the
 auto-steer are now C** (`game_play_loop_native`, `game_auto_steer`). Before
 that, a long run of infrastructure that did not touch the game at
@@ -46,6 +53,14 @@ and its code/data classifications are evidence, not verdicts.
   reach — but note there is no general way to *call* hand-written code at an
   untraced address. `$664A` works only because `$FDED` is an externalised ROM
   vector that `rom_cout` dispatches on.
+- **No new recordings.** The committed set (`play`, `play-hires`, `play-rebind`,
+  and the `easy` fixture) is what there is. Code no recording reaches is decoded
+  from the binary — `id` for the instructions, the opcode table for the cycle
+  charges, `--ir` for the liveness — and never held back waiting for something
+  to run it. Name the unexercised blocks in a comment above the routine, since
+  converting takes them off the site list, and do not call the result verified.
+  See the 2026-08-22 log entry; this supersedes the playbook rule that said to
+  wait.
 - **`tests/` is decompiler regression only** — hand-written `.s` assembled by
   `a6502`, decompiled, diffed against `.ir` baselines. Game data lives in
   `decoded/<game>/`.
@@ -57,7 +72,7 @@ and its code/data classifications are evidence, not verdicts.
 | File | What it holds |
 | --- | --- |
 | `docs/decompiling/playbook.md` | The transferable method: findings, procedure, red-flag table. Maturity is honestly marked — steps 1-4 have been executed, 5-6 have not. |
-| `docs/decompiling/decision-log.md` | Append-only rationale. **Never edit existing entries**; add new ones and mark old ones `superseded`. Ends with the coverage measurement and the ordered next steps. |
+| `docs/decompiling/decision-log.md` | Append-only rationale. **Never edit existing entries**; add new ones and mark old ones `superseded`. Read it from the end: the 2026-08-15 entry's "Left open" list went stale for six days before anyone noticed, so trust the newest entry over any earlier one's forward-looking notes. |
 | `decoded/snake-byte/labels.txt` | Established names, each with its evidence in a comment. |
 | `decoded/snake-byte/code-at.txt` | The two hand-asserted reachability claims, each with its argument. Read before adding a third. |
 | `docs/superpowers/specs/2026-08-02-snake-byte-proper-c-design.md` | The original design. Parts are superseded — the log says which. |
@@ -356,12 +371,20 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
    - **`$78B3` is entered with decimal mode set**, so its adapter omits the
      assertion every other adapter carries.
 
-   Sixteen blocks are now converted without ever having been run: seven in
-   `$6A32` and nine in `$7980`, listed in the comments above
-   `game_auto_steer()` and `game_setup_screen()`. Those comments are the only
-   record, because converting takes the addresses off the site list. The
-   unverified count in probe-acceptance.sh is still 23 and now means only ROM
-   plus `$69A9`.
+   Nineteen blocks are now converted without ever having been run: seven in
+   `$6A32`, nine in `$7980` and three in `$69A9`, listed in the comments above
+   `game_auto_steer()`, `game_setup_screen()` and
+   `game_pause_or_toggle_sound_native()`. Those comments are the only record,
+   because converting takes the addresses off the site list. The unverified
+   count in probe-acceptance.sh is **20, and every one of them is ROM** — the
+   number can no longer say anything about the game.
+
+   **Read a routine's coverage per property, not as one figure.** `$69A9`
+   measured it: inverting its Ctrl-S test fails `trace-ext`, but mis-charging
+   its cycles by one passes every gate, because verify.sh compares cycles and
+   never enters the routine while probe-acceptance.sh enters it and is
+   deliberately cycle-blind. Control flow checked, timing not, one number for
+   both.
 
 3. ~~**`$8000-$84A4`**~~ — **answered 2026-08-07: it is data**, 29 vector
    display lists read as a byte stream by `$7019`. Nothing reaches it because
