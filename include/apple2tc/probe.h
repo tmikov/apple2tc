@@ -70,6 +70,25 @@ bool probe_uses_record(void);
 /// The overwhelmingly common case is no site at this address.
 void probe_dispatch(uint16_t pc);
 
+/// Arm a one-shot machine-state capture the first time the program reaches
+/// \p addr: 64KB of RAM to \p ram_path, and the registers to \p regs_path.
+///
+/// This is not a probe -- it runs no script and reads no probe state -- but it
+/// hangs off `probe_dispatch` because that is already the per-block-head
+/// observation point, gated by the one test `CYCLES` makes anyway. Arming a
+/// snapshot therefore turns that gate on even with no script loaded, which is
+/// why `probe_dispatch` checks for a script separately.
+///
+/// One shot by design: the interesting address is usually entered more than
+/// once (Snake Byte re-enters $3750 on every restart) and the state wanted is
+/// the *first* arrival, before the program has been anywhere.
+void probe_snapshot_at(uint16_t addr, const char *ram_path, const char *regs_path);
+
+/// True if a snapshot was armed and never fired -- the address was never
+/// reached. The caller reports it; a snapshot that silently did not happen
+/// would otherwise look like a successful run that wrote no file.
+bool probe_snapshot_missed(void);
+
 /// Report probes that never fired, to stderr, one line per probe -- never to
 /// the report file, so a diff of two reports cannot be perturbed by this
 /// diagnostic. Prints nothing at all when every probe fired at least once

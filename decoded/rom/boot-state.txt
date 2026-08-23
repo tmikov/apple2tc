@@ -1,0 +1,188 @@
+# Apple II+ machine state at the BASIC prompt, after boot, with no program
+# loaded. Game-independent: this is the floor any program started from the
+# prompt begins on.
+#
+# WHY IT EXISTS
+#
+# A decompiled game starts at the reset vector and boots through the ROM,
+# because that is what the recording did -- which makes every byte of ROM the
+# boot path touches reachable code the decompiler must emit. For Snake Byte
+# that is 1074 of 1171 tracked sites, against 97 for the game itself.
+#
+# Retargeting the entry to the start address of the program itself deletes all
+# of it (measured for Snake Byte: 1,530 blocks deleted, leaving 4). The obstacle
+# is that the program does not start on a blank machine: boot set up the text
+# window, the output vector, the stack and part of zero page, and the program
+# reads all of that without ever writing it.
+#
+# This is that state, recorded once.
+#
+# REGENERATE WITH
+#
+#   decoded/rom/make-boot-state.sh [build-dir]
+#
+# which captures with:
+#
+#   a2run --frames=200 --snapshot-at=FD1B --snapshot-out=boot.bin
+#
+# $FD1B is the KEYIN wait loop: the first time the machine asks for a keystroke
+# is the moment boot has finished and nothing else has happened. The snapshot
+# is one-shot and fires on first arrival; it also writes boot.bin.regs.
+#
+# WHAT IS DELIBERATELY NOT LISTED
+#
+#   Unwritten memory. RAM comes up as $FF and the text screen as $A0. Only
+#   departures from those fills are below. The rest is not state, it is what
+#   unwritten memory happens to read as.
+#
+#   $D000-$FFFF, ROM. Identical by construction.
+#
+# CAVEAT
+#
+# This is the state at the prompt, before anything is typed. A program reached
+# by typing a command has had it echoed and parsed, which edits the input
+# buffer and moves the cursor. Those deltas are per-program; this is the common
+# floor underneath them.
+
+REGISTERS at $FD1B
+  A=A0  X=00  Y=01  SP=F0  STATUS=A0   (cycles since reset: 141504)
+
+SOFT SWITCHES
+-------------
+  These are not memory -- they live in the host IO emulation, so no RAM
+  image carries them. A rebased entry point must set them explicitly.
+
+  vid_control = $01   text, page 1, not mixed
+  keyboard      last key read $00, 0 queued
+
+  Text, page 1, not mixed is the power-on state: the ROM never touches the
+  graphics switches on a boot that reaches the prompt.
+
+ZERO PAGE -- $FF except these 82 bytes
+------------------------------------------------------
+  $00 = $4C   LOC0
+  $01 = $3C   LOC1
+  $02 = $D4   LOC2
+  $03 = $4C   LOC3
+  $04 = $3A   LOC4
+  $05 = $DB   
+  $0A = $4C   BAS_USRVEC
+  $0B = $99   BAS_USRPTR
+  $0C = $E1   
+  $14 = $00   SUBFLG
+  $20 = $00   WNDLFT
+  $21 = $28   WNDWDTH
+  $22 = $00   WNDTOP
+  $23 = $18   WNDBTM
+  $24 = $01   BIT_ZP
+  $25 = $02   CV
+  $28 = $00   BASL
+  $29 = $05   BASH
+  $33 = $DD   PROMPT
+  $35 = $D4   YSAV1
+  $36 = $F0   CSWL
+  $37 = $FD   
+  $38 = $1B   KSWL
+  $39 = $FD   
+  $3E = $00   A2L
+  $48 = $00   STATUS
+  $50 = $00   LINNUM
+  $51 = $C0   
+  $52 = $55   TEMPPT
+  $54 = $00   
+  $67 = $01   TXTTAB
+  $68 = $08   
+  $69 = $03   VARTAB
+  $6A = $08   
+  $6B = $03   ARYTAB
+  $6C = $08   
+  $6D = $03   STREND
+  $6E = $08   
+  $6F = $00   FRETOP
+  $70 = $C0   
+  $73 = $00   MEMSIZ
+  $74 = $C0   
+  $7A = $00   
+  $7D = $00   P_PWR
+  $7E = $08   
+  $8F = $03   DSCLEN
+  $90 = $4C   BCC
+  $A4 = $00   SHFTSGNX
+  $AF = $03   PRGEND
+  $B0 = $08   TOK_GOSUB
+  $B1 = $E6   CHRGET
+  $B2 = $B8   TOK_REM
+  $B3 = $D0   
+  $B4 = $02   
+  $B5 = $E6   
+  $B6 = $B9   
+  $B7 = $AD   CHRGOT
+  $B8 = $00   TXTPTR
+  $B9 = $08   
+  $BA = $C9   TOK_PRINT
+  $BB = $3A   
+  $BC = $B0   
+  $BD = $0A   
+  $BE = $C9   
+  $BF = $20   ERR_FRMCPX
+  $C0 = $F0   HGRHIGH
+  $C1 = $EF   TOK_TO
+  $C2 = $38   TOK_FN
+  $C3 = $E9   TOK_SPC
+  $C4 = $30   TOK_THEN
+  $C5 = $38   TOK_AT
+  $C6 = $E9   TOK_NOT
+  $C7 = $D0   TOK_STEP
+  $C8 = $60   TOK_PLUS
+  $C9 = $80   TOK_MINUS
+  $CA = $4F   
+  $CB = $C7   
+  $CC = $52   
+  $D6 = $00   AUTORUN
+  $F1 = $01   SPDBYT
+  $F2 = $00   TRCFLG
+  $F3 = $00   FLASHBIT
+
+STACK -- SP=$F0, so $01F1-$01FF is live (15 bytes). Below SP is dead:
+popped and never read again, and its residue differs between engines.
+------------------------------------------------------
+  37 FD 77 FD 32 D5 43 D4 C1 F1 00 01 01 A8 FA
+
+$0200-$03FF -- $FF except these 5 bytes
+------------------------------------------------------
+  $03F0 = $59   BRKV
+  $03F1 = $FA   
+  $03F2 = $03   SOFTEV
+  $03F3 = $E0   
+  $03F4 = $45   PWREDUP
+
+TEXT SCREEN $0400-$07FF -- $A0 (space) except the banner, 73 bytes.
+Shown as the 24 rows it displays; every character is ASCII with bit 7 set.
+Row r starts at $400 + (r%8)*$80 + (r/8)*$28.
+------------------------------------------------------
+   0 $0400 |               APPLE ][                 |
+   1 $0480 |                                        |
+   2 $0500 |]`                                      |
+   3 $0580 |                                        |
+   4 $0600 |                                        |
+   5 $0680 |                                        |
+   6 $0700 |                                        |
+   7 $0780 |                                        |
+   8 $0428 |                                        |
+   9 $04A8 |                                        |
+  10 $0528 |                                        |
+  11 $05A8 |                                        |
+  12 $0628 |                                        |
+  13 $06A8 |                                        |
+  14 $0728 |                                        |
+  15 $07A8 |                                        |
+  16 $0450 |                                        |
+  17 $04D0 |                                        |
+  18 $0550 |                                        |
+  19 $05D0 |                                        |
+  20 $0650 |                                        |
+  21 $06D0 |                                        |
+  22 $0750 |                                        |
+  23 $07D0 |                                        |
+
+$0800-$0802 -- $00 $00 $00. From $0803 to $BFFF every byte is $FF.

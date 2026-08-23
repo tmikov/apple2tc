@@ -5,6 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "apple2tc/a2engine.h"
+#include "apple2tc/a2host_api.h"
+#include "apple2tc/a2io.h"
 #include "apple2tc/probe.h"
 
 #include "probe_internal.h"
@@ -68,6 +71,80 @@ static bool probe_code_has_op(const script_t *sc, const probe_t *pr, opcode_t ta
 /// probe_load_script(), once probe_build_sites() has run, and cleared in
 /// free_script_resources() before the table it points at is freed.
 const void *g_probe_sites = NULL;
+
+/* --- One-shot state capture ---------------------------------------------- */
+
+static bool s_snap_armed = false;
+static bool s_snap_fired = false;
+static uint16_t s_snap_addr = 0;
+static const char *s_snap_ram_path = NULL;
+static const char *s_snap_regs_path = NULL;
+
+/// What `g_probe_sites` is set to when a snapshot is armed but no script is
+/// loaded. Any non-NULL address will do -- `probe_dispatch` never dereferences
+/// it, it only tests it -- and pointing it at our own state makes that obvious
+/// to anyone who prints it.
+#define SNAP_SENTINEL ((const void *)&s_snap_addr)
+
+void probe_snapshot_at(uint16_t addr, const char *ram_path, const char *regs_path) {
+  s_snap_armed = true;
+  s_snap_addr = addr;
+  s_snap_ram_path = ram_path;
+  s_snap_regs_path = regs_path;
+  if (!g_probe_sites)
+    g_probe_sites = SNAP_SENTINEL;
+}
+
+bool probe_snapshot_missed(void) {
+  return s_snap_armed && !s_snap_fired;
+}
+
+static void probe_take_snapshot(uint16_t pc) {
+  s_snap_fired = true;
+
+  FILE *f = fopen(s_snap_ram_path, "wb");
+  if (!f)
+    probe_fatal_open("cannot open snapshot output", s_snap_ram_path);
+  if (fwrite(get_ram(), 1, 0x10000, f) != 0x10000)
+    probe_fatal_open("short write to snapshot output", s_snap_ram_path);
+  fclose(f);
+
+  regs_t r = get_regs();
+  FILE *g = fopen(s_snap_regs_path, "wt");
+  if (!g)
+    probe_fatal_open("cannot open snapshot registers output", s_snap_regs_path);
+  // pc comes from the dispatch argument, not from get_regs(): the generated
+  // engine sets s_pc at the top of CYCLES, so both agree here, but the
+  // argument is the address that was actually matched and cannot drift.
+  fprintf(
+      g,
+      "pc %04X\na %02X\nx %02X\ny %02X\nsp %02X\nstatus %02X\ncycles %u\n",
+      pc,
+      r.a,
+      r.x,
+      r.y,
+      r.sp,
+      r.status,
+      get_cycles());
+
+  // The soft switches, which are the half of the machine a RAM image cannot
+  // carry: they are not memory, they are host IO state. Recorded raw *and*
+  // decoded -- raw is what a restore would write back, decoded is what makes
+  // the file readable without the header for A2_VC_* in front of you.
+  const a2_iostate_t *io = a2host_io();
+  static const char *const kVidmode[] = {"text", "gr", "hgr"};
+  fprintf(
+      g,
+      "vid_control %02X\nvidmode %s\nmixed %d\nvidpage %d\n",
+      io->vid_control,
+      kVidmode[a2_io_get_vidmode(io)],
+      (int)a2_io_is_vidmode_mixed(io),
+      (int)a2_io_get_vidpage_index(io) + 1);
+  // The keyboard latch is state too: a key still sitting in it at the capture
+  // point would be read by whatever runs next.
+  fprintf(g, "kbd_last_key %02X\nkbd_queued %u\n", io->last_key, a2_io_keys_count(io));
+  fclose(g);
+}
 
 static char *read_file(const char *path) {
   FILE *f = fopen(path, "rb");
@@ -551,6 +628,12 @@ void probe_dispatch(uint16_t pc) {
   // g_probe_sites is the inline gate callers test; re-checked here because
   // debugCB calls unconditionally.
   if (!g_probe_sites)
+    return;
+  if (s_snap_armed && !s_snap_fired && pc == s_snap_addr)
+    probe_take_snapshot(pc);
+  // Separate from the gate above: an armed snapshot turns that gate on with no
+  // script behind it, and everything below dereferences s_script.
+  if (!s_script)
     return;
   uint32_t slot = probe_find_slot(s_script, pc);
   if (!s_script->slots[slot].used)

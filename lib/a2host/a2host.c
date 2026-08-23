@@ -53,6 +53,13 @@ static bool probe_dump_ = false;
 /// If set, path from --probe-out=, not yet opened -- opening happens after
 /// the argument loop, once we know a script was loaded to write about.
 static const char *probe_out_path_ = NULL;
+/// If set, --snapshot-at= gave an address to capture machine state at.
+static bool snapshot_armed_ = false;
+/// The address from --snapshot-at=.
+static uint16_t snapshot_at_ = 0;
+/// Path from --snapshot-out=. The RAM image goes here and the registers to
+/// the same name with ".regs" appended.
+static const char *snapshot_out_ = NULL;
 /// Assumed clock frequency. Can be used for "overclocking".
 static unsigned clock_freq_ = A2_CLOCK_FREQ;
 /// If true, dump key presses with cycle stamps.
@@ -610,6 +617,13 @@ void a2host_shutdown(void) {
   // are the only record left of what ran, and stderr (never the report file
   // itself -- see probe_report_unfired's comment) is where they belong.
   probe_report_unfired();
+  // A snapshot that never fired wrote no file, which is indistinguishable from
+  // a run that wrote one and then had it deleted. Say so, and fail: the
+  // address was wrong, or the run was too short to reach it.
+  if (probe_snapshot_missed()) {
+    fprintf(stderr, "snapshot: $%04X was never reached; no snapshot written\n", snapshot_at_);
+    exit(1);
+  }
   probe_close_output();
   if (record_keys_file_) {
     // Keys taken from the input source but never released by a `record`
@@ -654,6 +668,8 @@ static void print_help(void) {
   printf(" --count-bt       Count branch targets\n");
   printf(" --probe=path     Load a probe script\n");
   printf(" --probe-out=p    Write probe output to the given file\n");
+  printf(" --snapshot-at=a  Dump machine state the first time PC reaches a (hex)\n");
+  printf(" --snapshot-out=p Where the snapshot goes; p and p.regs\n");
   printf(" --probe-dump     Print the compiled probe script and exit\n");
   engine_print_help();
 }
@@ -751,6 +767,24 @@ void a2host_parse_args(int argc, char *argv[]) {
       probe_out_path_ = arg + 12;
       continue;
     }
+    if (strncmp(arg, "--snapshot-at=", 14) == 0) {
+      const char *s = arg + 14;
+      if (*s == '$')
+        ++s;
+      char *end;
+      unsigned long v = strtoul(s, &end, 16);
+      if (*s == 0 || *end != 0 || v > 0xFFFF) {
+        fprintf(stderr, "--snapshot-at: expected a hex address, got \"%s\"\n", arg + 14);
+        exit(2);
+      }
+      snapshot_at_ = (uint16_t)v;
+      snapshot_armed_ = true;
+      continue;
+    }
+    if (strncmp(arg, "--snapshot-out=", 15) == 0) {
+      snapshot_out_ = arg + 15;
+      continue;
+    }
     if (strcmp(arg, "--probe-dump") == 0) {
       probe_dump_ = true;
       continue;
@@ -799,6 +833,19 @@ void a2host_parse_args(int argc, char *argv[]) {
   if (record_keys_file_)
     fprintf(
         record_keys_file_, "# probe-stamped keys; coordinate defined by %s\n", probe_script_path_);
+
+  // Each half of the snapshot is useless without the other, so neither is
+  // allowed to be implied. An address with nowhere to write it would run the
+  // whole program and silently produce nothing.
+  if (snapshot_armed_ != (snapshot_out_ != NULL))
+    probe_fatal("--snapshot-at and --snapshot-out must be given together");
+  if (snapshot_armed_) {
+    static char regs_path[1024];
+    if ((size_t)snprintf(regs_path, sizeof(regs_path), "%s.regs", snapshot_out_) >=
+        sizeof(regs_path))
+      probe_fatal("--snapshot-out path is too long");
+    probe_snapshot_at(snapshot_at_, snapshot_out_, regs_path);
+  }
 
   // Before opening --probe-out=: a dump exits immediately and never runs, so
   // it must not truncate an existing report on its way out.

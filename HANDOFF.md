@@ -86,6 +86,7 @@ Infrastructure, only if you are touching how things run or are verified:
 | `docs/plans/2026-08-07-host-engine-split-design.md` | Why `a2run` exists. Leads with an outcome section that retracts part of its own reasoning — read that first, not the design below it. |
 | `docs/plans/2026-08-11-probes-design.md` | Why probes exist: every other way of comparing the two engines failed, and all of them failed the same way. |
 | `docs/probes.md` | The probe language reference. The design doc is the rationale; this is the *what*. |
+| `decoded/rom/boot-state.txt` | The Apple II's boot state at the BASIC prompt, with nothing loaded — the floor any retargeted entry point starts from. Game-independent; captured with `--snapshot-at`. |
 | `docs/plans/2026-08-11-probes-plan-1-compiler.md` | The executed plan. Its closing self-review is the most useful part — it names what part 2 inherits. |
 
 **Read the log before acting on anything that seems obvious.** It deliberately
@@ -445,12 +446,28 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
    snapshot and a re-based trace, because a cold start skips the 168 boot frames
    `play.frames` opens with.
 
-   **There is no `--snapshot-at`, and no format for one.** Stage 7 of the
-   host/engine split design was never started; the option does not exist
-   anywhere in the tree — re-confirmed 2026-08-23, `grep -rn 'snapshot-at'
-   lib/ tools/ include/` returns nothing. Phase 1b is still blocked on it, and
-   whoever picks it up is designing it from scratch, not using something
-   already built.
+   **`--snapshot-at` now exists, as capture only** (2026-08-23). Every front
+   end takes `--snapshot-at=<hex> --snapshot-out=<path>` and writes 64KB of RAM
+   plus a `.regs` sidecar the first time the PC reaches that address — one shot,
+   because the interesting address is usually re-entered (Snake Byte reaches
+   `$3750` eight times a run) and what is wanted is the first arrival. It fails
+   loudly if the address is never reached.
+
+   That is the measuring half. **The restoring half does not exist**: nothing
+   consumes a snapshot, and the generated engine still starts at the reset
+   vector. That is what Phase 1b still needs.
+
+   The soft switches are captured too, into the `.regs` sidecar, because they
+   are the half of the machine a RAM image cannot carry — they are host IO
+   state, not memory. At the prompt they are the power-on values: text, page 1,
+   not mixed, `vid_control = $01`. A rebased entry has to set them explicitly.
+
+   What the capture already settled is the size of the problem, which was being
+   guessed at. See `decoded/rom/boot-state.txt`: the machine's entire
+   boot-created RAM state is **`$0000-$0802`** — zero page, the stack, the input
+   buffer, and the text screen. Everything from `$0803` to `$BFFF` is `$FF`,
+   i.e. uninitialised and not boot's doing at all. It is two kilobytes, recorded
+   once, and game-independent.
 
    **The re-based trace does not need a human — measured 2026-08-23.** This
    was the obvious way for Phase 1b to collide with the no-new-recordings
