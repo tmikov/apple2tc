@@ -59,6 +59,47 @@ here=$(dirname "$0")
 
 [ -x "$a2run" ] || { echo "Error: not found: $a2run" >&2; exit 1; }
 
+# ---------------------------------------------------------------------------
+# Before anything else: is the committed generated C what decompile.sh
+# produces?
+#
+# Everything below this point runs the *committed* .c files. If they have
+# drifted from the decompiler that supposedly generated them, every check in
+# this script still passes -- it is comparing an interpreter against a build of
+# a stale artifact, and agreeing about it. The site counts do not notice
+# either, because they are grepped from the same stale text.
+#
+# That is not hypothetical. Until 2026-08-23 the two ext files had been written
+# by an emitter whose line breaking had since moved, so `./decompile.sh`
+# rewrote them by ~12,000 lines apiece; the drift was cosmetic that time, and
+# nothing here would have said so had it not been.
+#
+# Regenerating into a temporary directory costs a couple of seconds and is the
+# only check in this file that looks at the artifacts rather than through them.
+# It is deliberately first: a stale artifact makes every later PASS a statement
+# about the wrong file.
+regen=$(mktemp -d)
+trap 'rm -rf "$regen"' EXIT
+"$here/decompile.sh" "$bin" "$regen" > /dev/null 2>&1 || {
+  echo "FAIL [regen]: decompile.sh failed against $bin" >&2
+  exit 1
+}
+for f in snake-bytec1.c snake-bytec1-ext.c snake-byte-easyc1-ext.c coverage.txt; do
+  if ! cmp -s "$regen/$f" "$here/$f"; then
+    echo "FAIL [regen]: $f is not what decompile.sh produces" >&2
+    echo "  Regenerate and commit it with whatever input changed." >&2
+    # Layout drift and a real change in the decompiler's output look the same
+    # in `git diff` and are not the same thing, so say which this is.
+    if [ "$(tr -d " \t\n" < "$regen/$f" | cksum)" = "$(tr -d " \t\n" < "$here/$f" | cksum)" ]; then
+      echo "  Whitespace-stripped the two are identical: layout only, no change in output." >&2
+    else
+      echo "  The tokens differ: the decompiler's output really has changed. Read the diff." >&2
+    fi
+    exit 1
+  fi
+done
+echo "[regen] the committed generated C is what decompile.sh produces"
+
 frames=${FRAMES:-1300}
 b33="$here/snake-byte.b33"
 keys="${KEYS:-$here/play.pkeys}"

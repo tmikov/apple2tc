@@ -243,11 +243,17 @@ One was fully dead and is gone: `game_rand_byte` had no caller anywhere and no
 `CYCLES` site. Its `$6C4B` mapping went with it — a mapping for a routine no
 generated code calls buys nothing, and is not how a routine gets deleted.
 
-**`./decompile.sh` reproduces the committed generated C**, as of 2026-08-23; run
-it at a clean HEAD and `git status` comes back empty. It had not been true for
-some time, which made every regeneration a ~12,000-line reformat with the real
-change buried inside. If that recurs, `decompile.sh`'s header carries the
-one-line check that tells layout drift from an actual change in output.
+**`./decompile.sh` reproduces the committed generated C, and this is now
+gated.** `probe-acceptance.sh` regenerates into a temporary directory and
+compares, before it runs anything else — because everything else in that script
+runs the *committed* `.c` files, so a stale artifact would leave every PASS a
+statement about the wrong file, site counts included. When it fails it says
+which kind of drift it is: whitespace-stripped identical means layout only,
+differing tokens mean the decompiler's output really changed.
+
+It takes a build directory and an optional output directory
+(`decompile.sh [build-dir] [out-dir]`), reads its inputs relative to the script
+rather than the caller's cwd, and defaults to regenerating in place.
 
 `a2rom.c` and `game.c` are **`#include`d, never compiled separately**.
 `system2-inc.h` defines the machine state (`s_ram`, `s_a`, the `CYCLES` macro)

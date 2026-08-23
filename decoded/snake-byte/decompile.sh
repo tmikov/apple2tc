@@ -15,9 +15,40 @@
 # Identical means layout only, and the fix is to commit the regeneration on its
 # own. Different means the decompiler's output actually changed, and that is a
 # real diff to read.
+#
+# That property is now checked rather than remembered: probe-acceptance.sh
+# regenerates into a temporary directory and compares, which is what the
+# optional second argument is for.
+#
+# Usage: decompile.sh [build-dir] [out-dir]
+#
+#   build-dir  where apple2tc was built. Default ../../cmake-build-debug,
+#              resolved against this script rather than the caller's cwd, so
+#              the script works from anywhere.
+#   out-dir    where to write the generated C and coverage.txt. Default is this
+#              script's own directory, i.e. regenerate in place. Inputs are
+#              always read from the script's directory.
 
-bin=../../cmake-build-debug
+set -u
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+if [ $# -gt 2 ]; then
+  echo "usage: $0 [build-dir] [out-dir]" >&2
+  exit 1
+fi
+
+bin=${1:-$here/../../cmake-build-debug}
+out=${2:-$here}
+
 apple2tc=$bin/tools/apple2tc/apple2tc
+if [ ! -x "$apple2tc" ]; then
+  echo "$0: no apple2tc at $apple2tc -- build it, or pass a build directory" >&2
+  exit 1
+fi
+if [ ! -d "$out" ]; then
+  echo "$0: output directory $out does not exist" >&2
+  exit 1
+fi
 
 #$apple2tc snake-byte.b33 --run-data=snake-byte.json --asm > snake-byte.lst
 #$apple2tc snake-byte.b33 --run-data=snake-byte.json --simple-c > snake-byte.c
@@ -51,8 +82,8 @@ apple2tc=$bin/tools/apple2tc/apple2tc
 # maintenance at all, since native C does not need it. That is a separate
 # setting from this one, and this comment exists so the distinction is not lost
 # the next time someone regenerates.
-$apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt \
-  --known-data=known-data.txt -O3 --irc1 --ret-addr --coverage=coverage.txt > /dev/null
+$apple2tc "$here/snake-byte.b33" --run-data="$here/snake-byte.json" --code-at="$here/code-at.txt" \
+  --known-data="$here/known-data.txt" -O3 --irc1 --ret-addr --coverage="$out/coverage.txt" > /dev/null
 
 # Two variants are generated, and both are built.
 #
@@ -60,8 +91,8 @@ $apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt \
 # the game, so it compiles and links on its own. It is the reference build --
 # play.frames was recorded from it, and it is the control that the extern
 # variant is checked against.
-$apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --irc1 --ret-addr -v1 \
-  > snake-bytec1.c
+$apple2tc "$here/snake-byte.b33" --run-data="$here/snake-byte.json" --code-at="$here/code-at.txt" \
+  -O3 --irc1 --ret-addr -v1 > "$out/snake-bytec1.c"
 
 # snake-bytec1-ext.c emits the ROM entry points listed in rom.externs as
 # declarations only; the bodies are hand-written in a2rom.c. It does NOT link on
@@ -73,8 +104,9 @@ $apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --
 # exit they took. The reference build stays without it so that the two variants
 # differ by more than one flag in only one direction, and so the control this
 # is checked against is not itself carrying the new transform.
-$apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --irc1 --ret-addr -v1 \
-  --extern-routines=rom.externs --inline-str=inline-str.txt --alt-exit --prune-returns > snake-bytec1-ext.c
+$apple2tc "$here/snake-byte.b33" --run-data="$here/snake-byte.json" --code-at="$here/code-at.txt" \
+  -O3 --irc1 --ret-addr -v1 --extern-routines="$here/rom.externs" --inline-str="$here/inline-str.txt" \
+  --alt-exit --prune-returns > "$out/snake-bytec1-ext.c"
 
 # The `easy` fixture. snake-byte-easy.b33 is snake-byte.b33 with the per-level
 # apple quota lowered from 16 to 2 (see make-easy.sh for the two bytes and why
@@ -92,5 +124,6 @@ $apple2tc snake-byte.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --
 # operand and one data byte, so every code address is where the recording says
 # it is. The generated C differs from the stock build in exactly the three
 # places those two bytes appear.
-$apple2tc snake-byte-easy.b33 --run-data=snake-byte.json --code-at=code-at.txt -O3 --irc1 --ret-addr -v1 \
-  --extern-routines=rom.externs --inline-str=inline-str.txt --alt-exit --prune-returns > snake-byte-easyc1-ext.c
+$apple2tc "$here/snake-byte-easy.b33" --run-data="$here/snake-byte.json" --code-at="$here/code-at.txt" \
+  -O3 --irc1 --ret-addr -v1 --extern-routines="$here/rom.externs" --inline-str="$here/inline-str.txt" \
+  --alt-exit --prune-returns > "$out/snake-byte-easyc1-ext.c"
