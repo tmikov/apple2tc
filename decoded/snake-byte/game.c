@@ -1051,53 +1051,40 @@ void game_find_apple(uint16_t ret_addr) {
 /* ========================================================================== */
 /* $69A9, $75D1, $6C72 -- the rest of the input path.                         */
 /*                                                                            */
-/* These three carry most of what neither recording exercises: ESC and        */
-/* Ctrl-S, the arrow keys on the redefinition screen, and the whole joystick  */
-/* branch. See probe-acceptance.sh's baseline list -- the decodes here are    */
-/* from the binary alone, with no cross-engine check behind them.             */
+/* All three are adapters now; the decodes live in game_native.c. They carry  */
+/* most of what no recording exercises -- ESC and Ctrl-S, the arrow keys on   */
+/* the redefinition screen, and the whole joystick branch -- so the comments  */
+/* above the native routines, rather than probe-acceptance.sh's baseline      */
+/* list, are what now record which blocks rest on the binary alone.           */
 /* ========================================================================== */
 
 void game_pause_or_toggle_sound(uint16_t ret_addr) {
+  // Adapter for game_pause_or_toggle_sound_native(). Costs 5 trace sites;
+  // $69A9 itself survives, charged zero here and for real inside -- see
+  // game_find_apple below for why that works.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  // ESC pauses by spinning on the keyboard until anything is pressed; that
-  // key then falls through to the Ctrl-S test, so ESC followed by Ctrl-S both
-  // unpauses and toggles the sound. $69C2 is the flag $6C2C reads when
-  // deciding whether to point the click at the speaker.
-  /*$69A9*/ CYCLES(0x69a9, 4);
-  if (s_a == 0x9b) { // ESC
-    for (;;) {
-      /*$69AD*/ CYCLES(0x69ad, 6);
-      s_a = io_peek(0xc000);
-      if (s_a & 0x80)
-        break;
-      /*$69B0*/ CYCLES_EDGE(0x69b0, 1);
-    }
-    /*$69B2*/ CYCLES(0x69b2, 4);
-    io_poke(0xc010, s_a);
-  } else {
-    /*$69AB*/ CYCLES_EDGE(0x69ab, 1);
-  }
+  /*$69A9*/ CYCLES(0x69a9, 0);
+  const uint8_t k = game_pause_or_toggle_sound_native(s_a);
 
-  /*$69B5*/ CYCLES(0x69b5, 4);
-  const uint8_t k = s_a;
-  s_status_not_z = (k != 0x93);
+  // A is not written back. On the Ctrl-S path the original returns with the
+  // toggled flag in A rather than the key, and nothing reads it either way:
+  // `apple2tc --ir` gives func_69a9 `LiveOut: STATUS_C` and nothing else.
+  // The flags are written anyway -- C because it is the one the caller does
+  // read, N and Z because they follow from k and cost nothing.
   s_status_c = (k >= 0x93);
-  s_status_n = ((uint8_t)(k - 0x93) & 0x80);
-  if (k == 0x93) { // Ctrl-S
-    /*$69B9*/ CYCLES(0x69b9, 10);
-    const uint8_t f = (uint8_t)(ram_peek(0x69c2) ^ 0x01);
+  if (k == 0x93) {
+    // $69B9 ended on the EOR, so N and Z describe the new flag, not the key.
+    const uint8_t f = ram_peek(0x69c2);
     s_status_not_z = f;
     s_status_n = (f & 0x80);
-    ram_poke(0x69c2, f);
   } else {
-    /*$69B7*/ CYCLES_EDGE(0x69b7, 1);
+    s_status_not_z = (k != 0x93);
+    s_status_n = ((uint8_t)(k - 0x93) & 0x80);
   }
-
-  /*$69C1*/ CYCLES(0x69c1, 6);
 
   if (ret_addr)
     pop16();

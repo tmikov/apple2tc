@@ -149,7 +149,8 @@ void game_step_bouncers(uint16_t ret_addr);
 /// the result at $6B3B/$6B3C.
 void game_find_apple(uint16_t ret_addr);
 
-/// $69A9 -- ESC pauses until a key; Ctrl-S toggles the sound flag at $69C2.
+/// $69A9 -- adapter for game_pause_or_toggle_sound_native(): ESC pauses until
+/// a key, Ctrl-S toggles the sound flag at $69C2.
 void game_pause_or_toggle_sound(uint16_t ret_addr);
 
 /// $75D1 -- blink slot X of the key-redefinition screen and wait for a

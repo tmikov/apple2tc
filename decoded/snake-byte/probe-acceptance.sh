@@ -439,11 +439,17 @@ for other in trace-ext trace-easy; do
   fi
 done
 
-# The three expected counts. 1,694 for the reference build, which is pure
-# decompiler output and moves only if the decompiler does. 1,519 for the two
-# extern builds, which is 1,669 minus the 150 block heads given up so far to
-# game_native.c -- see that file's header for what each conversion cost and
-# why.
+# The two expected counts. 1,694 for the reference build, which is pure
+# decompiler output and moves only if the decompiler does. 1,171 for the two
+# extern builds, which is the same figure less the ROM bodies a2rom.c supplies,
+# the return edges --prune-returns removes, and every block head given up so
+# far to game_native.c -- see that file's header for what each conversion cost
+# and why.
+#
+# Only the last of those three moves in ordinary work, and it only ever falls.
+# Write the new number here in the same commit as the conversion that lowers
+# it; a count that drifts on its own is the one thing this check exists to
+# catch.
 # The scenarios, as `<keys>:<frames>`. The frame count is per scenario because
 # they are not the same length: a recording is only worth replaying for as long
 # as it has keys left to deliver.
@@ -472,7 +478,7 @@ for scenario in ${KEYS:-"$here/play.pkeys:1300" "$here/play-hires.pkeys:1300" \
 check_backend trace "$bin/decoded/snake-byte/snake-bytec1-run" "$here/trace.probe" \
   "$here/blocks.txt" 1694 "$here/snake-bytec1.c"
 check_backend trace-ext "$bin/decoded/snake-byte/snake-bytec1-ext-run" "$here/trace-ext.probe" \
-  "$here/blocks-ext.txt" 1176 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c" \
+  "$here/blocks-ext.txt" 1171 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c" \
   "$here/game_native.c"
 
 if diff -q "$here/blocks.txt" "$here/blocks-ext.txt" > /dev/null; then
@@ -580,7 +586,7 @@ frames=${EASY_FRAMES:-3000}
 set_scenario "$here/play-hires.pkeys"
 echo "    (against snake-byte-easy.b33, $frames frames)"
 check_backend trace-easy "$bin/decoded/snake-byte/snake-byte-easyc1-ext-run" \
-  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1176 \
+  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1171 \
   "$here/snake-byte-easyc1-ext.c" "$here/a2rom.c" "$here/game.c" "$here/game_native.c"
 
 # The fixture's block heads are the same set as the stock extern build's, and
@@ -593,7 +599,7 @@ cat "/tmp/pkeys-cover-trace-easy.txt" >> "/tmp/pkeys-cover-trace-ext.txt"
 
 echo "--- coverage over all scenarios ---"
 coverage_report trace "$here/blocks.txt" 0
-# Baseline 57, and the number is a statement about the recordings rather than
+# Baseline 20, and the number is a statement about the recordings rather than
 # about the decode. Every entry is a hand-written block that no scenario
 # executes, so its decode rests on the binary alone with no cross-engine check
 # behind it. They cluster into whole features, not scattered branches:
@@ -605,22 +611,25 @@ coverage_report trace "$here/blocks.txt" 0
 #   Seventeen at once is the largest such drop so far and the clearest case
 #   for reading this number carefully: nothing about that code became better
 #   understood, it merely stopped being asked about.)
-#   the 'P' opcode (7)  $7192-$71B0. None of the 29 level scripts uses it.
+#   (was: the 'P' opcode (7), $7192-$71B0 -- none of the 29 level scripts
+#   uses it. Off the list with the display-list interpreter's conversion.)
 #   the ROM (20)        in a2rom.c, mostly paths for arguments the game never
 #       passes to PLOT, HLINE and SCRN.
-#   pause and mute (3)  $69AD $69B2, the ESC spin, and $69B9, the Ctrl-S
-#       toggle. play-rebind reaches $69A9 itself and both its fall-through
-#       blocks, so this group is half covered; what is left needs a recording
-#       that actually presses those two keys. Still deliberately *not*
-#       converted to real C while that is true: a conversion is checked by the
-#       recordings running it, and half a routine's worth of check is not
-#       enough to rewrite the other half under.
+#   (was: pause and mute (3), $69AD $69B2 -- the ESC spin -- and $69B9, the
+#   Ctrl-S toggle. Off the list with game_pause_or_toggle_sound_native's
+#   conversion, and unverified still; the comment above that routine is now
+#   the only record of them. This entry used to say the routine was
+#   deliberately *not* converted while no recording pressed those keys. That
+#   was set aside as a project decision: waiting on a recording that nobody
+#   was going to make left the routine in the emulator-shaped file
+#   indefinitely, and the decode is checkable against the binary either way.)
 #   (was: arrow keys (3), $7623 $7627 $762B -- the redefinition screen's arrow
 #   cases, which play-hires never reaches because it assigns W A D X Q E, all
 #   above $A1. Off the list with game_edit_key's conversion, and unverified
 #   still.)
-#   difficulty 2 (3)    $65D9 $65F4 for the second bouncer and $70A5 for its
-#       wall gap. Both recordings play at difficulty 1.
+#   (was: difficulty 2 (3), $65D9 $65F4 for the second bouncer and $70A5 for
+#   its wall gap -- both recordings play at difficulty 1. Off the list with
+#   game_step_bouncers_native and the display-list interpreter.)
 #   (was: off the board (2), $64D2 $6572 -- those two left the site list
 #   entirely when game_move_bouncer converted to real C, so they are no longer
 #   counted here. Unexercised code that stops being probed stops being
@@ -629,14 +638,23 @@ coverage_report trace "$here/blocks.txt" 0
 #   (was: dead end (1), $6B35 -- gone from the list with game_move_ok's
 #   conversion, like $64D2/$6572 before it. Converting unexercised code stops
 #   it being counted rather than makes it verified.)
-#   level 30 (1)        $7132, the 'E' opcode that wraps back to level 1.
-#   unrecognised (1)    $71C4. Every byte in every script is a valid opcode.
+#   (was: level 30 (1), $7132 -- the 'E' opcode that wraps back to level 1.)
+#   (was: unrecognised (1), $71C4 -- every byte in every script is a valid
+#   opcode.)
 #   (was: page crossing (1), $7021 -- game_next_byte's carry into the high
 #   byte, never taken because no script straddles a page. Off the list with
 #   that routine's conversion, and unverified still.)
 #
-# The number exists to stop that set growing quietly, and to be ratcheted down
-# whenever a scenario reaches one of them -- as happened at 22 -> 21 when the
-# `easy` fixture covered $6C4F. It is not a target to be satisfied.
-coverage_report trace-ext "$here/blocks-ext.txt" 23 "$here/a2rom.c" "$here/game.c" \
+# What remains is the ROM group alone, and every other group above is now a
+# "(was:". That is worth reading carefully rather than as progress: with the
+# game fully converted, the only hand-written blocks still *probed* are the
+# ones in a2rom.c, so this number has stopped being able to say anything about
+# the game at all. The comments above each converted routine took over that
+# job, and they are prose -- nothing checks them.
+#
+# The number still exists to stop the ROM set growing quietly, and to be
+# ratcheted down whenever a scenario reaches one of them -- as happened at
+# 22 -> 21 when the `easy` fixture covered $6C4F. It is not a target to be
+# satisfied.
+coverage_report trace-ext "$here/blocks-ext.txt" 20 "$here/a2rom.c" "$here/game.c" \
   "$here/game_native.c"

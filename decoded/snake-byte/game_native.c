@@ -1484,6 +1484,13 @@ static bool sound_muted(void) {
   return ram_peek(0x69c2) != 0;
 }
 
+/// $69B9 -- flip it. The storage stays in emulated RAM rather than becoming a
+/// C variable because ram.probe hashes $6000-$BFFF, so moving it would read as
+/// a divergence rather than as a refactor.
+static void toggle_sound(void) {
+  ram_poke(0x69c2, (uint8_t)(ram_peek(0x69c2) ^ 0x01));
+}
+
 void game_tick_sound_native(void) {
   GAME_CYCLES(0x6bfb, 6);
   ram_poke(0x6c48, 0x14); // twenty passes
@@ -2250,7 +2257,8 @@ void game_cout_hook_native(uint8_t ch) {
 enum { DIR_RIGHT = 1, DIR_UP = 2, DIR_LEFT = 3, DIR_DOWN = 4 };
 
 /// What the player can press, after game_read_direction_native() has had its
-/// say. The arrows turn; the letters are the I/J/K/M diamond; $92 quits.
+/// say. The arrows turn; the letters are the I/J/K/M diamond; $92 quits. The
+/// last two are read by $69A9 alone, at the far end of the dispatch chain.
 enum {
   KEY_TURN_CW = 0x95,
   KEY_TURN_CCW = 0x88,
@@ -2259,6 +2267,8 @@ enum {
   KEY_LEFT = 0xca,
   KEY_RIGHT = 0xcb,
   KEY_DOWN = 0xcd,
+  KEY_CTRL_S = 0x93,
+  KEY_ESC = 0x9b,
 };
 
 /// $6387/$638C/$6391/$6396 -- turn an absolute-direction key into the relative
@@ -2308,6 +2318,66 @@ static uint8_t scrn_cell(Cell c, uint16_t ret) {
 /// offset the key-redefinition screen chose.
 static void poll_and_discard(void) {
   peek(0xc000 + ram_peek(0x6c49));
+}
+
+/* ========================================================================== */
+/* $69A9 -- pause and mute                                                    */
+/*                                                                            */
+/* The dispatch chain above ends in a JSR here, so this is not only the pause */
+/* key: it is where every key the game does not recognise comes to be         */
+/* ignored. Both tests simply fail and it returns.                            */
+/*                                                                            */
+/* ESC spins on the keyboard until something is pressed, and the key that     */
+/* ends the wait is left in A and falls through into the Ctrl-S test -- so    */
+/* ESC and then Ctrl-S resumes and toggles the sound in a single pass. The    */
+/* strobe is cleared after the wait rather than before it, so a key already   */
+/* pending when ESC arrives ends the pause immediately.                       */
+/*                                                                            */
+/* Three of the six blocks are decoded from the binary rather than checked by */
+/* a recording: $69AD and $69B2, the spin and the strobe clear, and $69B9,    */
+/* the toggle. No committed recording presses either key. Converting takes    */
+/* those addresses off the site list, so this comment is now the only record  */
+/* that they are unverified.                                                  */
+/*                                                                            */
+/* What the other three do get is thinner than it looks, and it was measured  */
+/* rather than assumed. Only play-rebind reaches this routine at all, and it  */
+/* reaches it once. Inverting the Ctrl-S test is caught, by trace-ext on that */
+/* scenario. Mis-charging the entry block is not: 4 cycles written as 5       */
+/* passes verify.sh 4/4 and every probe scenario, because the one oracle that */
+/* compares cycles (verify.sh) never executes this code, and the oracle that  */
+/* does (probe-acceptance.sh) stamps its input on a probe counter precisely   */
+/* so that it does not depend on cycles. 4 written as 4000 is caught, by      */
+/* frame-boundary drift. So the cycle charges here are checked only to a      */
+/* resolution of roughly a frame, and the numbers below rest on the opcode    */
+/* timings, not on a passing test.                                            */
+/* ========================================================================== */
+
+uint8_t game_pause_or_toggle_sound_native(uint8_t key) {
+  GAME_CYCLES(0x69a9, 4);
+  if (key == KEY_ESC) {
+    for (;;) {
+      GAME_CYCLES(0x69ad, 6);
+      key = io_peek(0xc000);
+      if (key & 0x80)
+        break;
+      GAME_CYCLES(0x69b0, 1);
+    }
+    GAME_CYCLES(0x69b2, 4);
+    io_poke(0xc010, key);
+  } else {
+    GAME_CYCLES(0x69ab, 1);
+  }
+
+  GAME_CYCLES(0x69b5, 4);
+  if (key == KEY_CTRL_S) {
+    GAME_CYCLES(0x69b9, 10);
+    toggle_sound();
+  } else {
+    GAME_CYCLES(0x69b7, 1);
+  }
+
+  GAME_CYCLES(0x69c1, 6);
+  return key;
 }
 
 LifeEnd game_play_loop_native(uint8_t *cell_out) {

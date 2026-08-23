@@ -237,6 +237,13 @@ uint8_t game_read_direction_native(uint8_t key);
 /// presses something it will accept, and return that key.
 uint8_t game_edit_key_native(uint8_t slot);
 
+/// $69A9 -- ESC pauses until any key is pressed; Ctrl-S toggles the sound.
+/// Every key the dispatch chain did not recognise arrives here and is ignored.
+///
+/// Returns the key the Ctrl-S test actually saw, which is \p key unless ESC
+/// paused: the keypress that ends the pause replaces it and is tested in turn.
+uint8_t game_pause_or_toggle_sound_native(uint8_t key);
+
 /// $6BFB -- twenty passes of the falling tone that plays while the head moves.
 void game_tick_sound_native(void);
 
