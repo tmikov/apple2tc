@@ -520,6 +520,34 @@ phantom differences.
 
 ### Cleaning up the C
 
+**Status, 2026-08-24.** Steps 0, 1, 2, 3 and 5 are done. Step 4 is half done.
+Step 6 is characterised but deliberately not started — see its entry for why it
+is two steps and why neither is what unblocks the adapters.
+
+```
+ram_peek(0x...) / ram_poke(0x...)   0        was 115 distinct addresses
+bb_N: labels                        0        was 141
+tmpN_U8 temporaries                 0
+ret_addr parameters                 0        was 117; push16/pop16 unused
+compiler warnings of its own        0        at -Wall
+adapters left                      16        was 42
+```
+
+What remains, in order of how well-defined it is:
+
+1. **Step 4's last 16 adapters.** Each needs its A/flags write-back checked
+   against its callers, its cycle charge moved into the native if it is
+   non-zero, and the pinned site count lowered by hand. Five are charged zero
+   and are therefore cheapest: `game_cout_hook`, `game_draw_cell`,
+   `game_move_ok`, `game_step_bouncers` (its `$6594` half) and
+   `game_pause_or_toggle_sound`. The ones with the most write-back —
+   `game_draw_cell` at 10 and `game_move_ok` at 11 — are the ones to leave
+   until last.
+2. **Step 6**, on the terms in its entry.
+3. **Loose ends:** 451 unknown nonzero bytes in `coverage.txt`, probe phase 3,
+   and `robotron`/`bolo`, which have never been regenerated against any of this.
+
+
 `snake-byte-cold.c` is the decompilation, and it is not yet good C: values are
 passed in `s_a` (203 uses), 115 distinct addresses stand in for variables, 40
 functions still take a `uint16_t ret_addr` they mostly ignore, and there are
