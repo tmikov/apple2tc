@@ -3325,25 +3325,19 @@ static uint8_t dot_index(uint8_t ink, uint8_t scanline, uint8_t col) {
 
 /// $60E7 -- draw the loaded shape into one cell, replacing what was there.
 uint8_t game_draw_cell_native(uint8_t ink, Cell c) {
-  uint8_t scanline, dot_idx, hgr_lo, hgr_hi;
+  uint8_t hgr_hi;
   GAME_CYCLES(0x60e7, 22);
   uint16_t dest = cell_row_base(c.row);
-  scanline = 0x00;
-  hgr_lo = (uint8_t)dest;
   hgr_hi = (uint8_t)(dest >> 8);
 
   for (unsigned line = 0; line < 4; ++line) {
     GAME_CYCLES(0x60f7, 16);
     // Built in $06 in two steps, and written out between them because it is
     // zero page and a probe may sample there.
-    dot_idx = (uint8_t)((ink << 1) | (line & 1));
     GAME_CYCLES(0x6100, 62);
     const uint8_t idx = dot_index(ink, (uint8_t)line, c.col);
-    dot_idx = idx;
 
     poke(dest + c.col, (uint8_t)(ram_peek(kHgrPattern + idx) & ram_peek(kShapeMask + line)));
-
-    scanline = (uint8_t)(line + 1);
     dest += 0x0400; // one scanline down, i.e. +4 on the high byte
     hgr_hi = (uint8_t)(dest >> 8);
 
@@ -3366,11 +3360,9 @@ uint8_t game_draw_cell_native(uint8_t ink, Cell c) {
 /// $60F7 fails the screen check, so whatever the author meant, it is load
 /// bearing.
 uint8_t game_merge_cell_native(uint8_t ink, Cell c) {
-  uint8_t scanline, dot_idx, hgr_lo, hgr_hi;
+  uint8_t hgr_hi;
   GAME_CYCLES(0x6b96, 22);
   uint16_t dest = cell_row_base(c.row);
-  scanline = 0x00;
-  hgr_lo = (uint8_t)dest;
   hgr_hi = (uint8_t)(dest >> 8);
 
   for (unsigned line = 0; line < 4; ++line) {
@@ -3378,13 +3370,10 @@ uint8_t game_merge_cell_native(uint8_t ink, Cell c) {
     const uint8_t parity = (uint8_t)(line & 1);
     const uint8_t idx =
         (uint8_t)((uint8_t)(((uint8_t)((parity << 7) | (ink >> 1))) << 2) | (c.col & 3));
-    dot_idx = idx;
 
     const uint16_t at = dest + c.col;
     poke(at,
          (uint8_t)(((ram_peek(kHgrPattern + idx) ^ 0x7f) & ram_peek(kShapeMask + line)) | peek(at)));
-
-    scanline = (uint8_t)(line + 1);
     dest += 0x0400;
     hgr_hi = (uint8_t)(dest >> 8);
 
@@ -3399,10 +3388,7 @@ uint8_t game_merge_cell_native(uint8_t ink, Cell c) {
 /// $702B -- zero hi-res page 1, $2000 through $3FFF. The inner loop runs a
 /// full 256 bytes because Y wraps, so the terminating test is on the page.
 void game_clear_hgr_native(void) {
-  uint8_t hgr_lo, hgr_hi;
   GAME_CYCLES(0x702b, 12);
-  hgr_lo = 0x00;
-  hgr_hi = 0x20;
   s_y = 0x00;
 
   for (uint8_t page = 0x20;;) {
@@ -3418,7 +3404,6 @@ void game_clear_hgr_native(void) {
 
     GAME_CYCLES(0x703c, 12);
     ++page;
-    hgr_hi = page;
     if (page == 0x40)
       break;
     GAME_CYCLES(0x7042, 1);

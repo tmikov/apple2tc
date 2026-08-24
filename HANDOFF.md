@@ -495,6 +495,14 @@ routine. The check is a manual compile, and it must be a real one:
 gcc -c -o /dev/null -Wall -I../../include -I. snake-byte-cold.c
 ```
 
+**Count `-Wunused-but-set-variable` too.** It is a different warning from
+`-Wunused-variable` and a grep for the latter misses it. It caught eight dead
+locals on 2026-08-24 -- `scanline`, `dot_idx` and the hi-res pointer's low byte
+in the cell drawers, which were faithful copies of `$06`/`$07`/`$04` while
+those were emulated RAM and became write-only the moment the storage moved.
+Expect more of these as storage keeps moving: a store that was observable
+through the memory hash becomes dead code, and only this warning says so.
+
 `-fsyntax-only` does *not* report unused functions and comes back clean, which
 is how one survived a check that looked like it covered this. Turning `-Wall`
 on for the generated targets is a separate decision: a generated block nothing
