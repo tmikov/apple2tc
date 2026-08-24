@@ -227,8 +227,8 @@ short version.
 | `snake-byte` | `snake-byte.c` | Historical `--simple-c` output, no longer regenerated. |
 
 **Both are gated now.** `probe-acceptance.sh` compares cold against ext on every
-run — 788,097 block heads and 6,808 screen samples, aligned at the first
-`$3750`. The control is ext rather than the interpreter because there is no
+run — **421,789 block heads, 6,808 screen samples and 6,808 memory samples**,
+aligned at the first `$3750`. The control is ext rather than the interpreter because there is no
 interpreter that starts at `$3750`; ext earns the role by being checked against
 the interpreter a few dozen lines earlier in the same script.
 
@@ -637,8 +637,12 @@ any of this.
    manufactures edges to block 16 and reports 104 live cases instead of 89.
 
    Verified against the booting build, from `$3750` on: **block-head trace
-   identical over 788,097 blocks, screen identical at all 6,808 in-game
-   samples.** Nothing about the entry state was guessed -- `--snapshot-at`
+   identical, screen identical at all 6,808 in-game samples.** The block count
+   was 788,097 when this was written; it is 421,789 as of 2026-08-23, because
+   converting the top level and deleting the pure-marshalling adapters took
+   those addresses off the site list. A falling count here is the conversion
+   working, not a regression — but re-measure rather than trusting either
+   figure. Nothing about the entry state was guessed -- `--snapshot-at`
    captured it, and `make-entry-state.sh` regenerates it.
 
    **`--snapshot-at` now exists, as capture only** (2026-08-23). Every front

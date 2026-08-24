@@ -13,10 +13,11 @@ There are five build targets and they are not five copies of the same thing.
 | `snake-byte` | Historical. Built from `--simple-c` output that is no longer regenerated. |
 
 `snake-byte-cold` is the newer and better artifact; `snake-bytec1-ext` is the
-better *checked* one. Cold is verified against ext -- block-head trace identical
-over 788,097 blocks, screen identical at 6,808 samples -- but it is not yet in
-`probe-acceptance.sh`'s scenario list, so nothing re-checks it on every run.
-Know which of those two facts you are relying on.
+better *checked* one. Cold is verified against ext on every run of
+`probe-acceptance.sh` -- block-head trace identical over 421,789 blocks, screen
+and memory identical at 6,808 samples each. That pair checks only what is
+cold-specific: entry state, pruning, key offset. Both builds share the game's
+own C, so a bug in that changes both identically and is caught upstream.
 
 To run any build except `snake-byte-cold`, type `CALL 14160` at the BASIC
 prompt. The built programs type it for themselves; a replay contains it already.
