@@ -208,8 +208,6 @@ void game_install_cout_hook(void);
 void game_start_life_adapter(void);
 void game_move_ok(void);
 void game_move_bouncer(void);
-void game_step_bouncers(void);
-void game_pause_or_toggle_sound(void);
 void game_read_direction(void);
 void game_print_inline_str(uint16_t ret_addr);
 void rom_bascalc(void);
@@ -993,7 +991,6 @@ void game_setup_screen(void);
 /// $7230 -- print the NUL-terminated string that follows the call.
 void game_print_inline_str(uint16_t ret_addr);
 
-void game_cout_hook(void);
 
 /* --- $60E4/$60E7/$6127: the hi-res cell plotter -------------------------- */
 
@@ -1093,14 +1090,12 @@ void game_move_bouncer(void);
 
 /// $6594 -- step the bouncers the difficulty calls for, then return the next
 /// queued key in A.
-void game_step_bouncers(void);
 
 /// $69C3 -- find an apple by sweeping columns outward from the snake, leaving
 /// the result at $6B3B/$6B3C.
 
 /// $69A9 -- adapter for game_pause_or_toggle_sound_native(): ESC pauses until
 /// a key, Ctrl-S toggles the sound flag at $69C2.
-void game_pause_or_toggle_sound(void);
 
 /// $75D1 -- blink slot X of the key-redefinition screen and wait for a
 /// replacement key.
@@ -1980,7 +1975,7 @@ void rom_cout(void) {
               rom_cout1();
               break;
             case 0x664a:
-              game_cout_hook();
+              game_cout_hook_native(s_a);
               break;
             default:
               fprintf(
@@ -4935,7 +4930,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     // $639B -- anything else is the pause/mute key.
     GAME_CYCLES(0x637c, 1);
     GAME_CYCLES(0x639b, 6);
-    game_pause_or_toggle_sound();
+    (void)game_pause_or_toggle_sound_native(s_a);
     GAME_CYCLES(0x639e, 3);
     goto pace;
 
@@ -5997,14 +5992,6 @@ void game_print_inline_str(uint16_t ret_addr) {
   /*$724B*/ CYCLES(0x724b, 18);
 }
 
-void game_cout_hook(void) {
-  // Adapter for game_cout_hook_native(). Costs 4 trace sites; $664A survives,
-  // probed here with no cycles and charged for real inside.
-  bool branchTarget = true;
-
-  /*$664A*/ CYCLES(0x664a, 0);
-  game_cout_hook_native(s_a);
-}
 
 /* ========================================================================== */
 /* $6127, $60E7, $60E4 -- the hi-res cell plotter.                            */
@@ -6506,19 +6493,6 @@ void game_move_bouncer(void) {
 /* $6594, $69C3                                                               */
 /* ========================================================================== */
 
-void game_step_bouncers(void) {
-  // Adapter for game_step_bouncers_native(). Costs 9 trace sites.
-  bool branchTarget = true;
-
-  /*$6594*/ CYCLES(0x6594, 0);
-  const uint8_t key = game_step_bouncers_native();
-  // $6216 is shared with game_read_key, which is not converted, so it is
-  // still a probe site and has to stay one on this path too.
-  /*$6216*/ CYCLES(0x6216, 6);
-  s_a = key;
-  s_status_not_z = key;
-  s_status_n = (key & 0x80);
-}
 
 
 /* ========================================================================== */
@@ -6531,31 +6505,6 @@ void game_step_bouncers(void) {
 /* list, are what now record which blocks rest on the binary alone.           */
 /* ========================================================================== */
 
-void game_pause_or_toggle_sound(void) {
-  // Adapter for game_pause_or_toggle_sound_native(). Costs 5 trace sites;
-  // $69A9 itself survives, charged zero here and for real inside -- see
-  // game_find_apple below for why that works.
-  bool branchTarget = true;
-
-  /*$69A9*/ CYCLES(0x69a9, 0);
-  const uint8_t k = game_pause_or_toggle_sound_native(s_a);
-
-  // A is not written back. On the Ctrl-S path the original returns with the
-  // toggled flag in A rather than the key, and nothing reads it either way:
-  // `apple2tc --ir` gives func_69a9 `LiveOut: STATUS_C` and nothing else.
-  // The flags are written anyway -- C because it is the one the caller does
-  // read, N and Z because they follow from k and cost nothing.
-  s_status_c = (k >= 0x93);
-  if (k == 0x93) {
-    // $69B9 ended on the EOR, so N and Z describe the new flag, not the key.
-    const uint8_t f = ram_peek(kSoundMuted);
-    s_status_not_z = f;
-    s_status_n = (f & 0x80);
-  } else {
-    s_status_not_z = (k != 0x93);
-    s_status_n = ((uint8_t)(k - 0x93) & 0x80);
-  }
-}
 
 
 void game_read_direction(void) {
@@ -6566,12 +6515,18 @@ void game_read_direction(void) {
   // game_step_bouncers's own adapter is what keeps $6216 -- the RTS it shares
   // with the unconverted game_read_key -- a probe site.
   /*$6C72*/ CYCLES(0x6c72, 6);
-  game_step_bouncers();
+  const uint8_t key = game_step_bouncers_native();
+  // $6216 is an RTS shared with game_read_key, so it stays a probe site even
+  // though the routine that used to hold it is gone. Spelled with plain CYCLES
+  // rather than GAME_CYCLES_SHARED because site_addrs() does not grep for that
+  // form -- it would have kept probing and left the list, which is the silent
+  // half of a hole rather than the loud one.
+  CYCLES(0x6216, 6);
 
   // The original saves the key on the stack across the $0302 test; here it is
   // an argument. The pushed byte is never observed: nothing between the PHA
   // and the PLA samples memory, and ram.probe compares only the live stack.
-  const uint8_t code = game_read_direction_native(s_a);
+  const uint8_t code = game_read_direction_native(key);
   s_a = code;
   s_status_not_z = code;
   s_status_n = (code & 0x80);

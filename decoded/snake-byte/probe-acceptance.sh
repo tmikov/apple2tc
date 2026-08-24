@@ -710,8 +710,8 @@ ext_prog="$bin/decoded/snake-byte/snake-bytec1-ext-run"
 # -- the ROM is gone -- so it gets its own list rather than reusing one.
 site_addrs "$here/snake-byte-cold.c" > "$here/blocks-cold.txt"
 cold_sites=$(wc -l < "$here/blocks-cold.txt")
-if [ "$cold_sites" -ne 116 ]; then
-  echo "FAIL [cold]: site list has $cold_sites block heads, expected exactly 116" >&2
+if [ "$cold_sites" -ne 113 ]; then
+  echo "FAIL [cold]: site list has $cold_sites block heads, expected exactly 113" >&2
   echo "  Converting a routine lowers this deliberately; anything else is a regression." >&2
   exit 1
 fi
