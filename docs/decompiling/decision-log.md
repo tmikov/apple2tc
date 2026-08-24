@@ -2501,3 +2501,68 @@ that is where `ram-cold.probe` — added in step 0 for exactly this — stops be
 redundant and starts being the only thing checking that a value still means
 what it did. The `-O2` check does not survive: moving a variable changes the
 generated code by design.
+
+## 2026-08-23 (later still) — Step 3a: the plotter's block leaves RAM, and the first oracle is spent
+
+`$0000-$0008` no longer lives in `s_ram`. It is `s_plot[9]`, a C object, and
+196 accesses moved with it. This is the first change in the cleanup that a
+behavioural gate cannot fully check, and the memory half of the cold gate was
+narrowed to say so.
+
+### The union survives the move, deliberately
+
+Step 3 in the plan is "real parameters", and `$0000-$0003` is exactly what that
+means: shape, ink, column, row, set by a caller and read by the plotter. But
+two of the nine bytes are not that, and one of them is load-bearing.
+
+`bouncer_step` erases where the bouncer was using "whatever the caller last
+left in `$00`" — its own comment, and true. `game_cout_hook_native` writes
+`$0000-$0005` and `$0008` as a font pointer and the caller's saved X/Y. So a
+COUT through the hi-res hook, between a shape write and that erase, changes
+which cells get erased.
+
+Measured over all three recordings: the erase only ever sees `$01` or `$15`,
+both real shapes, never a font-pointer low byte. That is *not* enough. None of
+the recordings reaches the bonus screen, and the bonus screen is the one place
+the hi-res hook is installed while the play loop is running. The measurement
+covers the case that cannot happen and misses the one that can.
+
+Under the no-new-recordings agreement the answer is not another run: it is an
+argument from the binary that the hook cannot be installed across that window.
+That argument has not been made, so the nine bytes moved *together*, still
+aliased, still indexed by the same two enums. The move is bit-identical by
+construction and needs no argument at all.
+
+Splitting them into real parameters is still the goal. It is now a separate
+step with a stated precondition, which is better than a step that quietly
+assumed one.
+
+### Spending the oracle, and proving it was worth something
+
+The retirement was done in the order that produces evidence rather than
+assertions.
+
+First the move landed with the probe untouched, and the gate was run: **trace
+PASS, screen PASS, memory FAIL.** That is the memory oracle doing exactly what
+step 0 built it for — the values still drive the same drawing, so nothing
+visible changed, and only the memory hash could see that the bytes had gone.
+
+Then `ram-cold.probe` was narrowed to skip `$0000-$0008`, and all three pass.
+
+Then the narrowed probe was mutation-tested, because a probe that has just been
+made weaker should be made to fire before it is trusted: a stray
+`ram_poke(0x0040, 0x99)` in `game_draw_head_native` is caught by **memory
+alone** — trace and screen both pass it. So the remaining range is still
+covered, and the class of bug the memory check exists for is still the class it
+catches.
+
+### What is no longer checked
+
+A wrong shape, ink, column or row still changes pixels, and the screen compares
+all 6,808 samples. What left with the hash is a value that is wrong but never
+drawn.
+
+Probe phase 3 — apple2tc emitting `PROBE_x(...)` sites so a probe can read the
+generated C's own variables — is what would restore it, and is unbuilt. That is
+now the second thing on its list of justifications, after reading the generated
+C's block state.

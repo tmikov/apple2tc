@@ -525,6 +525,33 @@ argument block and the cursor, and the five most-touched addresses in the file
 because the 6502 had no other way. This is the step that moves storage, so it
 is the one that spends Step 0's memory oracle — retire it explicitly here.
 
+**3a done, 2026-08-23: `$0000-$0008` left RAM.** It is `s_plot[9]`, a C object,
+196 accesses moved, initialised from the entry snapshot so the first read before
+any write still sees what the booting build sees.
+
+- **They moved together, still aliased, and that was deliberate.** Two of the
+  nine are not arguments: `game_cout_hook_native` uses `$0000-$0005`/`$0008` as
+  a font pointer and saved X/Y, and `bouncer_step` erases with *whatever the
+  caller last left in `$00`*. So a COUT through the hi-res hook between a shape
+  write and that erase changes which cells get erased. **Splitting them into
+  real parameters needs an argument from the binary that the hook cannot be
+  installed across that window** — the recordings cannot supply it, because
+  none reaches the bonus screen, which is the one place the hook is installed
+  while the play loop runs. Until that argument exists, do not split them.
+- **The memory oracle is now narrowed and must not be widened back.**
+  `ram-cold.probe`'s `zp_lo` starts at `$0009`. The retirement was done in the
+  order that produces evidence: the move landed first with the probe untouched
+  and the gate read *trace PASS, screen PASS, memory FAIL* — which is what
+  proves the oracle was watching those bytes. Then the narrowing, then a
+  mutation (`ram_poke(0x0040, 0x99)`) that **memory alone** catches, which is
+  what proves the rest of the range still works.
+- **What is no longer checked:** a value that is wrong but never drawn. Wrong
+  shape/ink/column/row still moves pixels, and the screen compares 6,808
+  samples. Probe phase 3 would restore the rest and is unbuilt.
+
+The cursor (`$0024/$0025`) has not moved and is harder: the ROM routines read
+it, so it is the emulated machine's state as much as the game's.
+
 **Step 4 — return values instead of `s_a` and the flags.** As callers stop
 reading `s_a`, the 23 remaining marshalling adapters empty out and follow the
 first 15.
