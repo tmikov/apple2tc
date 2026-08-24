@@ -56,7 +56,7 @@ FE93 rom_setvid
 71CD game_set_apple_value
 7642 game_place_apple
 64A9 game_sound_sweep
-7633 game_eat_apple
+7633 game_award_extra_life
 6217 game_read_key
 7590 game_show_key
 6B3D game_draw_side_walls

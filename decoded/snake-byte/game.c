@@ -725,14 +725,14 @@ void game_sound_sweep(uint16_t ret_addr) {
     pop16();
 }
 
-void game_eat_apple(uint16_t ret_addr) {
-  // Adapter for game_eat_apple_native(). Costs 2 trace sites.
+void game_award_extra_life(uint16_t ret_addr) {
+  // Adapter for game_award_extra_life_native(). Costs 2 trace sites.
   bool branchTarget = true;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-  game_eat_apple_native();
+  game_award_extra_life_native();
 
   if (ret_addr)
     pop16();

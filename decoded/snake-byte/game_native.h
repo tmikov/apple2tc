@@ -298,7 +298,7 @@ void game_mark_head_native(void);
 void game_draw_head_native(void);
 
 /// $7633 -- count one apple eaten, and make the noise for it.
-void game_eat_apple_native(void);
+void game_award_extra_life_native(void);
 
 /// $60E4 -- load a shape and draw it into the current cell.
 void game_plot_shape_native(void);

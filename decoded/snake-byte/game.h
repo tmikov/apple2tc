@@ -111,7 +111,7 @@ void game_place_apple(uint16_t ret_addr);
 void game_sound_sweep(uint16_t ret_addr);
 
 /// $7633 -- count one apple eaten and play the sweep.
-void game_eat_apple(uint16_t ret_addr);
+void game_award_extra_life(uint16_t ret_addr);
 
 /// $6217 -- poll the keyboard into the 16-entry ring buffer at $623C.
 void game_read_key(uint16_t ret_addr);

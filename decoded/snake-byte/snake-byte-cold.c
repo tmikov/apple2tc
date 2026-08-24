@@ -871,7 +871,7 @@ void game_mark_head_native(void);
 void game_draw_head_native(void);
 
 /// $7633 -- count one apple eaten, and make the noise for it.
-void game_eat_apple_native(void);
+void game_award_extra_life_native(void);
 
 /// $60E4 -- load a shape and draw it into the current cell.
 void game_plot_shape_native(void);
@@ -4290,9 +4290,14 @@ void game_draw_head_native(void) {
   // Only V and D are live out, and neither is touched here.
 }
 
-/// $7633 -- one more apple eaten this level, BCD at $725E, and then the noise
-/// that says so. $77F8 compares $725E with the level's quota at $78B2.
-void game_eat_apple_native(void) {
+/// $7633 -- an extra snake for clearing the round, and the noise that says so.
+///
+/// Not "eat an apple", which is what this was called: it BCD-increments $725E,
+/// which the status panel prints as SNAKES LEFT, and its one caller is $7803 --
+/// reached from $77EA, the round-cleared path, straight after the bonus
+/// screen. Nothing about it runs when an apple is eaten; that path is $7743,
+/// and it touches four other counters and not this one.
+void game_award_extra_life_native(void) {
   GAME_CYCLES(0x7633, 22);
   s_status_d = 0x01;
   const uint16_t r = adc_dec16(lives(), 0x01, 0x00);
@@ -7163,7 +7168,7 @@ round_cleared: /* $77EA */
     GAME_CYCLES(0x77fe, 1);
   }
   GAME_CYCLES(0x7803, 6);
-  game_eat_apple_native();
+  game_award_extra_life_native();
   GAME_CYCLES(0x7806, 3);
   goto new_level;
 

@@ -81,7 +81,7 @@ void game_draw_head(uint16_t ret_addr);
 void game_set_apple_value(uint16_t ret_addr);
 void game_place_apple(uint16_t ret_addr);
 void game_sound_sweep(uint16_t ret_addr);
-void game_eat_apple(uint16_t ret_addr);
+void game_award_extra_life(uint16_t ret_addr);
 void game_read_key(uint16_t ret_addr);
 void game_show_key(uint16_t ret_addr);
 void game_draw_side_walls(uint16_t ret_addr);
@@ -3838,7 +3838,7 @@ void func_t001(uint16_t ret_addr) {
       break;
     case 72:  // $7803
       /*$7803*/ CYCLES(0x7803, 6);
-                game_eat_apple(0x7805);
+                game_award_extra_life(0x7805);
       /*$7806*/ CYCLES(0x7806, 3);
                 branchTarget = true; block_id = 23;
       break;
