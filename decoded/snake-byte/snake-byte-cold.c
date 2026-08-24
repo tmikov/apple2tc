@@ -2242,7 +2242,7 @@ enum {
   kHgrLineLo = 0x6000,      ///< 48 hi-res line addresses, low bytes
   kHgrLineHi = 0x6030,      ///< and high bytes
   kShapeMask = 0x6060,      ///< the loaded shape's four scanline masks
-  kHgrPattern = 0x6064,     ///< dot patterns, indexed by kDotIndex
+  kHgrPattern = 0x6064,     ///< dot patterns, indexed by s_dot_index
   kShapeMaskTable = 0x6174, ///< four masks per shape; the source for kShapeMask
   kSteerKey = 0x6a55,       ///< direction -> the key that turns to it
   kAppleValueTable = 0x71c8, ///< per-apple value, indexed by kDifficulty
@@ -2299,7 +2299,19 @@ enum { kJoystick = 0x6c71 };
 /// keeping a page counter. Written back because ram.probe hashes the range.
 enum { kRelocLoadOp = 0x3754, kRelocStoreOp = 0x3757 };
 
-/* --- The plotter's argument block: $0000-$0008 ---------------------------- */
+/* --- The plotter's arguments ---------------------------------------------- */
+/*
+ * Nine bytes that lived at $0000-$0008 because the 6502 had nowhere else to
+ * pass arguments. Every plot goes through them: set the shape, the ink and the
+ * cell, then call.
+ *
+ * They are C variables now, and no longer aliased with anything -- the glyph
+ * blitter, which used to borrow all nine for a font pointer and the caller's
+ * registers, has its own locals. Making them actual parameters is the step
+ * after this one, and each needs its own argument first: s_shape turned out to
+ * be a genuine global, because bouncer_step erases with whatever was last left
+ * in it.
+ */
 /*
  * Nine bytes of zero page that the drawing routines pass arguments in, because
  * the 6502 has nowhere else to put them. Every plot goes through here: set the
@@ -2318,41 +2330,25 @@ enum { kRelocLoadOp = 0x3754, kRelocStoreOp = 0x3757 };
 /// that a hazard was checked -- see the note below.
 static uint8_t s_shape;
 
-enum {
-  /// Lo-res colour, 0..15. Zero erases.
-  kInk = 0x0001,
-  /// The cell to draw into, on the 40x48 grid.
-  kCol = 0x0002,
-  kRow = 0x0003,
-  /// 16-bit, low byte first: the hi-res byte being written. Advanced by $0400
-  /// per scanline, which is +4 on the high byte.
-  kHgrDest = 0x0004,
-  /// The entry in tbl_hgr_pattern this dot lands on.
-  kDotIndex = 0x0006,
-  /// Which of the cell's four scanlines, 0..3.
-  kScanline = 0x0007,
-  /// The last column of a horizontal run, or the last row of a vertical one.
-  /// game_plot_hline and game_plot_vline step kCol / kRow up to it inclusive.
-  kRunEnd = 0x0008,
-};
 
-/// The nine bytes themselves, moved out of emulated RAM.
+/// The block itself, moved out of emulated RAM and split into variables now
+/// that the glyph blitter no longer shares it.
 ///
-/// They are the game's own: no ROM routine reads them, and after this move
-/// nothing can reach them by address at all. What did not change is that they
-/// are still nine aliased bytes rather than nine variables, because the union
-/// above is real and splitting it needs an argument this repo cannot currently
-/// make -- see the note on the glyph blitter's enum.
-///
-/// Initialised from the entry snapshot, so the first read before any write
-/// sees what the booting build would. install_entry_state does it.
-static uint8_t s_plot[9];
+/// They are still variables rather than parameters, which is the next step and
+/// not this one. What changed is that nothing can reach them by address, and
+/// each one has a type and a name instead of an index.
+static uint8_t s_ink;       ///< lo-res colour, 0..15; zero erases
+static uint8_t s_col;       ///< the cell to draw into, on the 40x48 grid
+static uint8_t s_row;
+static uint8_t s_hgr_lo, s_hgr_hi; ///< the hi-res byte being written
+static uint8_t s_dot_index; ///< the entry in tbl_hgr_pattern this dot lands on
+static uint8_t s_scanline;  ///< which of the cell's four, 0..3
+static uint8_t s_run_end;   ///< last column of a horizontal run, or last row
+                            ///< of a vertical one; the steppers go up to it
+                            ///< inclusive
 
-/// The two 16-bit pointers in the block, low byte first, as ram_peek16al read
-/// them when they lived in RAM.
-static inline uint16_t plot16(unsigned at) {
-  return (uint16_t)(s_plot[at] | (s_plot[at + 1] << 8));
-}
+/// The hi-res destination, low byte first, as ram_peek16al read it.
+static inline uint16_t hgr16(void) { return (uint16_t)(s_hgr_lo | (s_hgr_hi << 8)); }
 
 /// The glyph blitter at $664A used to park five values in this block -- the
 /// glyph, the caller's X and Y, and a source and destination pointer. They are
@@ -2574,12 +2570,12 @@ void bouncer_step(Bouncer *b) {
   // last left in $00 -- see the header.
   GAME_CYCLES(0x654c, 11);
   s_a = 0x00;
-  s_plot[kInk] = 0x00;
+  s_ink = 0x00;
   rom_setcol(0x6552);
 
   GAME_CYCLES(0x6553, 20);
-  s_plot[kCol] = b->col;
-  s_plot[kRow] = b->row;
+  s_col = b->col;
+  s_row = b->row;
   game_plot_shape_native();
 
   GAME_CYCLES(0x6560, 14);
@@ -2603,10 +2599,10 @@ void bouncer_step(Bouncer *b) {
   GAME_CYCLES(0x6573, 29);
   b->row = want_row;
   b->col = want_col;
-  s_plot[kRow] = b->row;
-  s_plot[kCol] = b->col;
+  s_row = b->row;
+  s_col = b->col;
   s_a = 0x03;
-  s_plot[kInk] = 0x03;
+  s_ink = 0x03;
   rom_setcol(0x6586);
 
   GAME_CYCLES(0x6587, 6);
@@ -3088,17 +3084,17 @@ static void spin(uint8_t outer, uint8_t middle) {
 /// bottom up. Ink 0 is black, so this erases.
 static void wipe_occupancy_map(void) {
   GAME_CYCLES(0x706c, 13);
-  s_plot[kRow] = 0x27;
+  s_row = 0x27;
   set_ink(0x00, 0x7074);
 
   for (;;) {
     GAME_CYCLES(0x7075, 16);
     s_h2 = 0x27;
-    lores_hline(s_plot[kRow], 0x00, 0x707f);
+    lores_hline(s_row, 0x00, 0x707f);
 
     GAME_CYCLES(0x7080, 7);
-    const uint8_t row = (uint8_t)(s_plot[kRow] - 1);
-    s_plot[kRow] = row;
+    const uint8_t row = (uint8_t)(s_row - 1);
+    s_row = row;
     // BPL: row 0 is drawn, and the loop ends one step later.
     if (row & 0x80)
       break;
@@ -3136,44 +3132,44 @@ static void draw_border(void) {
   lores_hline(0x27, 0x00, 0x70b9);
 
   GAME_CYCLES(0x70ba, 21);
-  s_plot[kCol] = 0x00;
-  s_plot[kRow] = 0x00;
-  s_plot[kRunEnd] = 0x27;
+  s_col = 0x00;
+  s_row = 0x00;
+  s_run_end = 0x27;
   game_lores_vline(0x70c8);
 
   GAME_CYCLES(0x70c9, 16);
-  s_plot[kRow] = 0x00;
-  s_plot[kCol] = 0x27;
+  s_row = 0x00;
+  s_col = 0x27;
   game_lores_vline(0x70d3);
 
   GAME_CYCLES(0x70d4, 19);
-  s_plot[kCol] = 0x00;
-  s_plot[kRow] = 0x00;
-  s_plot[kRunEnd] = 0x27;
+  s_col = 0x00;
+  s_row = 0x00;
+  s_run_end = 0x27;
   game_plot_hline(0x70e0);
 
   GAME_CYCLES(0x70e1, 16);
-  s_plot[kCol] = 0x00;
-  s_plot[kRow] = 0x27;
+  s_col = 0x00;
+  s_row = 0x27;
   game_plot_hline(0x70eb);
 
   GAME_CYCLES(0x70ec, 14);
-  s_plot[kCol] = 0x00;
-  s_plot[kRow] = 0x00;
+  s_col = 0x00;
+  s_row = 0x00;
   game_plot_vline(0x70f4);
 
   GAME_CYCLES(0x70f5, 16);
-  s_plot[kRow] = 0x00;
-  s_plot[kCol] = 0x27;
+  s_row = 0x00;
+  s_col = 0x27;
   game_plot_vline(0x70ff);
 
   // Ink 3 over columns $12-$16 of the bottom row, on top of the border just
   // laid down: the gap the snake leaves through.
   GAME_CYCLES(0x7100, 26);
-  s_plot[kInk] = 0x03;
-  s_plot[kRow] = 0x27;
-  s_plot[kCol] = 0x12;
-  s_plot[kRunEnd] = 0x16;
+  s_ink = 0x03;
+  s_row = 0x27;
+  s_col = 0x12;
+  s_run_end = 0x16;
   game_plot_hline(0x7112);
 }
 
@@ -3214,7 +3210,7 @@ void game_draw_playfield_native(void) {
   GAME_CYCLES(0x7084, 21);
   s_wndtop = 0x14;
   s_shape = 0x15;
-  s_plot[kInk] = 0x0d;
+  s_ink = 0x0d;
   set_ink(0x0d, 0x7092);
 
   open_wall_gaps();
@@ -3240,21 +3236,21 @@ restart:
       GAME_CYCLES(0x713e, 6);
       const uint8_t ink = script_byte(0x7140);
       GAME_CYCLES(0x7141, 9);
-      s_plot[kInk] = ink;
+      s_ink = ink;
       const uint8_t col = script_byte(0x7145);
       GAME_CYCLES(0x7146, 9);
-      s_plot[kCol] = col;
+      s_col = col;
       const uint8_t last = script_byte(0x714a);
       GAME_CYCLES(0x714b, 9);
-      s_plot[kRunEnd] = last;
+      s_run_end = last;
       const uint8_t row = script_byte(0x714f);
       GAME_CYCLES(0x7150, 12);
-      s_plot[kRow] = row;
-      set_ink(s_plot[kInk], 0x7156);
+      s_row = row;
+      set_ink(s_ink, 0x7156);
 
       GAME_CYCLES(0x7157, 18);
-      s_h2 = s_plot[kRunEnd];
-      lores_hline(s_plot[kRow], s_plot[kCol], 0x7161);
+      s_h2 = s_run_end;
+      lores_hline(s_row, s_col, 0x7161);
 
       GAME_CYCLES(0x7162, 6);
       game_plot_hline(0x7164);
@@ -3268,17 +3264,17 @@ restart:
       GAME_CYCLES(0x716c, 6);
       const uint8_t ink = script_byte(0x716e);
       GAME_CYCLES(0x716f, 9);
-      s_plot[kInk] = ink;
+      s_ink = ink;
       const uint8_t row = script_byte(0x7173);
       GAME_CYCLES(0x7174, 9);
-      s_plot[kRow] = row;
+      s_row = row;
       const uint8_t last = script_byte(0x7178);
       GAME_CYCLES(0x7179, 9);
-      s_plot[kRunEnd] = last;
+      s_run_end = last;
       const uint8_t col = script_byte(0x717d);
       GAME_CYCLES(0x717e, 12);
-      s_plot[kCol] = col;
-      set_ink(s_plot[kInk], 0x7184);
+      s_col = col;
+      set_ink(s_ink, 0x7184);
 
       GAME_CYCLES(0x7185, 6);
       game_lores_vline(0x7187);
@@ -3294,17 +3290,17 @@ restart:
       GAME_CYCLES(0x7192, 6);
       const uint8_t ink = script_byte(0x7194);
       GAME_CYCLES(0x7195, 9);
-      s_plot[kInk] = ink;
+      s_ink = ink;
       const uint8_t col = script_byte(0x7199);
       GAME_CYCLES(0x719a, 9);
-      s_plot[kCol] = col;
+      s_col = col;
       const uint8_t row = script_byte(0x719e);
       GAME_CYCLES(0x719f, 12);
-      s_plot[kRow] = row;
-      set_ink(s_plot[kInk], 0x71a5);
+      s_row = row;
+      set_ink(s_ink, 0x71a5);
 
       GAME_CYCLES(0x71a6, 12);
-      lores_plot(s_plot[kRow], s_plot[kCol], 0x71ac);
+      lores_plot(s_row, s_col, 0x71ac);
       GAME_CYCLES(0x71ad, 6);
       game_plot_shape_native();
       GAME_CYCLES(0x71b0, 3);
@@ -3360,24 +3356,24 @@ static uint8_t dot_index(uint8_t ink, uint8_t scanline, uint8_t col) {
 void game_draw_cell_native(uint8_t ink, Cell c) {
   GAME_CYCLES(0x60e7, 22);
   uint16_t dest = cell_row_base(c.row);
-  s_plot[kScanline] = 0x00;
-  s_plot[kHgrDest] = (uint8_t)dest;
-  s_plot[kHgrDest + 1] = (uint8_t)(dest >> 8);
+  s_scanline = 0x00;
+  s_hgr_lo = (uint8_t)dest;
+  s_hgr_hi = (uint8_t)(dest >> 8);
 
   for (unsigned line = 0; line < 4; ++line) {
     GAME_CYCLES(0x60f7, 16);
     // Built in $06 in two steps, and written out between them because it is
     // zero page and a probe may sample there.
-    s_plot[kDotIndex] = (uint8_t)((ink << 1) | (line & 1));
+    s_dot_index = (uint8_t)((ink << 1) | (line & 1));
     GAME_CYCLES(0x6100, 62);
     const uint8_t idx = dot_index(ink, (uint8_t)line, c.col);
-    s_plot[kDotIndex] = idx;
+    s_dot_index = idx;
 
     poke(dest + c.col, (uint8_t)(ram_peek(kHgrPattern + idx) & ram_peek(kShapeMask + line)));
 
-    s_plot[kScanline] = (uint8_t)(line + 1);
+    s_scanline = (uint8_t)(line + 1);
     dest += 0x0400; // one scanline down, i.e. +4 on the high byte
-    s_plot[kHgrDest + 1] = (uint8_t)(dest >> 8);
+    s_hgr_hi = (uint8_t)(dest >> 8);
 
     if (line != 3)
       GAME_CYCLES(0x6124, 1);
@@ -3398,24 +3394,24 @@ void game_draw_cell_native(uint8_t ink, Cell c) {
 void game_merge_cell_native(uint8_t ink, Cell c) {
   GAME_CYCLES(0x6b96, 22);
   uint16_t dest = cell_row_base(c.row);
-  s_plot[kScanline] = 0x00;
-  s_plot[kHgrDest] = (uint8_t)dest;
-  s_plot[kHgrDest + 1] = (uint8_t)(dest >> 8);
+  s_scanline = 0x00;
+  s_hgr_lo = (uint8_t)dest;
+  s_hgr_hi = (uint8_t)(dest >> 8);
 
   for (unsigned line = 0; line < 4; ++line) {
     GAME_CYCLES(0x6ba6, 85);
     const uint8_t parity = (uint8_t)(line & 1);
     const uint8_t idx =
         (uint8_t)((uint8_t)(((uint8_t)((parity << 7) | (ink >> 1))) << 2) | (c.col & 3));
-    s_plot[kDotIndex] = idx;
+    s_dot_index = idx;
 
     const uint16_t at = dest + c.col;
     poke(at,
          (uint8_t)(((ram_peek(kHgrPattern + idx) ^ 0x7f) & ram_peek(kShapeMask + line)) | peek(at)));
 
-    s_plot[kScanline] = (uint8_t)(line + 1);
+    s_scanline = (uint8_t)(line + 1);
     dest += 0x0400;
-    s_plot[kHgrDest + 1] = (uint8_t)(dest >> 8);
+    s_hgr_hi = (uint8_t)(dest >> 8);
 
     if (line != 3)
       GAME_CYCLES(0x6bd7, 1);
@@ -3428,8 +3424,8 @@ void game_merge_cell_native(uint8_t ink, Cell c) {
 /// full 256 bytes because Y wraps, so the terminating test is on the page.
 void game_clear_hgr_native(void) {
   GAME_CYCLES(0x702b, 12);
-  s_plot[kHgrDest] = 0x00;
-  s_plot[kHgrDest + 1] = 0x20;
+  s_hgr_lo = 0x00;
+  s_hgr_hi = 0x20;
   s_y = 0x00;
 
   for (uint8_t page = 0x20;;) {
@@ -3445,7 +3441,7 @@ void game_clear_hgr_native(void) {
 
     GAME_CYCLES(0x703c, 12);
     ++page;
-    s_plot[kHgrDest + 1] = page;
+    s_hgr_hi = page;
     if (page == 0x40)
       break;
     GAME_CYCLES(0x7042, 1);
@@ -3472,12 +3468,12 @@ void game_plot_hline_native(void) {
     game_draw_cell(0x614d);
 
     GAME_CYCLES(0x614e, 8);
-    const uint8_t col = s_plot[kCol];
-    if (col == s_plot[kRunEnd])
+    const uint8_t col = s_col;
+    if (col == s_run_end)
       break;
 
     GAME_CYCLES(0x6154, 8);
-    s_plot[kCol] = (uint8_t)(col + 1);
+    s_col = (uint8_t)(col + 1);
   }
   GAME_CYCLES(0x6152, 1);
   GAME_CYCLES(0x6159, 6);
@@ -3490,12 +3486,12 @@ void game_plot_vline_native(void) {
     game_draw_cell(0x615f);
 
     GAME_CYCLES(0x6160, 8);
-    const uint8_t row = s_plot[kRow];
-    if (row == s_plot[kRunEnd])
+    const uint8_t row = s_row;
+    if (row == s_run_end)
       break;
 
     GAME_CYCLES(0x6166, 8);
-    s_plot[kRow] = (uint8_t)(row + 1);
+    s_row = (uint8_t)(row + 1);
   }
   GAME_CYCLES(0x6164, 1);
   GAME_CYCLES(0x6159, 6);
@@ -3505,24 +3501,24 @@ void game_plot_vline_native(void) {
 /// $03 back where it found it, because the caller draws the hi-res run over
 /// the same coordinates next.
 void game_lores_vline_native(void) {
-  const uint8_t first_row = s_plot[kRow];
+  const uint8_t first_row = s_row;
   push8(first_row);
 
   for (;;) {
     GAME_CYCLES(0x7003, 12);
-    lores_plot(s_plot[kRow], s_plot[kCol], 0x7009);
+    lores_plot(s_row, s_col, 0x7009);
 
     GAME_CYCLES(0x700a, 8);
-    const uint8_t row = s_plot[kRow];
-    if (row == s_plot[kRunEnd])
+    const uint8_t row = s_row;
+    if (row == s_run_end)
       break;
 
     GAME_CYCLES(0x7010, 8);
-    s_plot[kRow] = (uint8_t)(row + 1);
+    s_row = (uint8_t)(row + 1);
   }
   GAME_CYCLES(0x700e, 1);
   GAME_CYCLES(0x7015, 13);
-  s_plot[kRow] = pop8();
+  s_row = pop8();
 }
 
 /* ========================================================================== */
@@ -3846,7 +3842,7 @@ static void edit_key_blank(uint8_t slot) {
   // The slot is parked at $0002 for the whole routine because COUT clobbers X
   // and every step below needs it again.
   GAME_CYCLES(0x75d1, 23);
-  s_plot[kCol] = slot;
+  s_col = slot;
   s_ch = slot_col(slot);
   s_cv = slot_row(slot);
   rom_fc68(0x75df);
@@ -4315,12 +4311,12 @@ void game_place_apple_native(void) {
     const uint8_t col = game_rand_byte_native();
 
     GAME_CYCLES(0x7645, 9);
-    s_plot[kCol] = col;
+    s_col = col;
     const uint8_t row = game_rand_byte_native();
 
     GAME_CYCLES(0x764a, 15);
-    s_plot[kRow] = row;
-    const bool taken = cell_taken(s_plot[kCol], s_plot[kRow], 0x7652);
+    s_row = row;
+    const bool taken = cell_taken(s_col, s_row, 0x7652);
 
     GAME_CYCLES(0x7653, 2);
     if (!taken)
@@ -4334,13 +4330,13 @@ void game_place_apple_native(void) {
   rom_setcol(0x7659);
 
   GAME_CYCLES(0x765a, 12);
-  s_a = s_plot[kRow];
-  s_y = s_plot[kCol];
+  s_a = s_row;
+  s_y = s_col;
   rom_plot(0x7660);
 
   GAME_CYCLES(0x7661, 16);
   s_shape = 0x01;
-  s_plot[kInk] = 0x09;
+  s_ink = 0x09;
   game_plot_shape_native();
 
   // One more apple on screen. $77D0 watches this pair and calls back here when
@@ -4523,7 +4519,7 @@ void game_sound_sweep_native(void) {
 /// $66A9.
 void game_show_key_native(uint8_t slot, uint8_t key) {
   GAME_CYCLES(0x7590, 7);
-  s_plot[kCol] = slot;
+  s_col = slot;
 
   uint8_t glyph = key;
   if (key == 0x88) { // left arrow
@@ -4570,9 +4566,9 @@ void game_draw_side_walls_native(void) {
 
   GAME_CYCLES(0x6b40, 26);
   s_shape = 0x15;
-  s_plot[kInk] = 0x02; // the upper segment
-  s_plot[kCol] = 0x00; // left wall
-  s_plot[kRow] = 0x01;
+  s_ink = 0x02; // the upper segment
+  s_col = 0x00; // left wall
+  s_row = 0x01;
 
   uint8_t seed = ram_peek(kLifeTimer);
   if (seed & 0x80) {
@@ -4586,24 +4582,24 @@ void game_draw_side_walls_native(void) {
   }
 
   GAME_CYCLES(0x6b5c, 18);
-  s_plot[kRunEnd] = (uint8_t)((seed >> 2) + 1);
+  s_run_end = (uint8_t)((seed >> 2) + 1);
   game_plot_vline(0x6b64);
 
   GAME_CYCLES(0x6b65, 16);
-  s_plot[kCol] = 0x27; // right wall, same rows
-  s_plot[kRow] = 0x01;
+  s_col = 0x27; // right wall, same rows
+  s_row = 0x01;
   game_plot_vline(0x6b6f);
 
   GAME_CYCLES(0x6b70, 30);
-  const uint8_t seam = (uint8_t)(s_plot[kRunEnd] + 1);
-  s_plot[kRunEnd] = 0x27;
-  s_plot[kRow] = seam;
-  s_plot[kInk] = 0x0d; // the lower segment
+  const uint8_t seam = (uint8_t)(s_run_end + 1);
+  s_run_end = 0x27;
+  s_row = seam;
+  s_ink = 0x0d; // the lower segment
   game_plot_vline(0x6b81);
 
   GAME_CYCLES(0x6b82, 18);
-  s_plot[kRow] = seam;
-  s_plot[kCol] = 0x00;
+  s_row = seam;
+  s_col = 0x00;
   game_plot_vline(0x6b8b);
 
   // Tail call: SCRN of the bottom-centre cell, whose result the caller reads.
@@ -4817,9 +4813,9 @@ static uint8_t turn_for_key(uint8_t key, uint8_t dir) {
 /// argument block.
 static void plot_shape_at(uint8_t shape, uint8_t ink, Cell c) {
   s_shape = shape;
-  s_plot[kInk] = ink;
-  s_plot[kCol] = c.col;
-  s_plot[kRow] = c.row;
+  s_ink = ink;
+  s_col = c.col;
+  s_row = c.row;
   game_plot_shape_native();
 }
 
@@ -5021,9 +5017,9 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     GAME_CYCLES(0x62a5, 28);
     const Cell head = {.col = ram_peek(kHeadCol), .row = ram_peek(kHeadRow)};
     s_shape = shape;
-    s_plot[kInk] = 0x0c;
-    s_plot[kCol] = head.col;
-    s_plot[kRow] = head.row;
+    s_ink = 0x0c;
+    s_col = head.col;
+    s_row = head.row;
     game_draw_head_native();
 
     // $62B8 -- the direction back into 1..4, and the ink is the direction.
@@ -5153,9 +5149,9 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       s_y = tail.col;
       rom_plot(0x63c8);
       GAME_CYCLES(0x63c9, 25);
-      s_plot[kInk] = 0x00;
-      s_plot[kRow] = tail.row;
-      s_plot[kCol] = tail.col;
+      s_ink = 0x00;
+      s_row = tail.row;
+      s_col = tail.col;
       game_plot_shape_native();
 
       // $63DA -- the byte that was under the tail is the direction the tail
@@ -5201,10 +5197,10 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       // the cell is occupied.
       GAME_CYCLES(0x642d, 31);
       s_shape = 0x15;
-      s_plot[kInk] = 0x0d;
-      s_plot[kRow] = 0x27;
-      s_plot[kCol] = 0x12;
-      s_plot[kRunEnd] = 0x16;
+      s_ink = 0x0d;
+      s_row = 0x27;
+      s_col = 0x12;
+      s_run_end = 0x16;
       game_plot_hline(0x6443);
       GAME_CYCLES(0x6444, 8);
       s_a = 0x0d;
@@ -5599,44 +5595,44 @@ void game_bonus_screen(void) {
   // $78D1 -- the frame, in ink 9: top and bottom edges, then both sides.
   GAME_CYCLES(0x78d1, 31);
   s_shape = 0x01;
-  s_plot[kInk] = 0x09;
-  s_plot[kCol] = 0x0d;
-  s_plot[kRow] = 0x10;
-  s_plot[kRunEnd] = 0x1a;
+  s_ink = 0x09;
+  s_col = 0x0d;
+  s_row = 0x10;
+  s_run_end = 0x1a;
   game_plot_hline(0x78e7);
   GAME_CYCLES(0x78e8, 16);
-  s_plot[kCol] = 0x0d;
-  s_plot[kRow] = 0x15;
+  s_col = 0x0d;
+  s_row = 0x15;
   game_plot_hline(0x78f2);
   GAME_CYCLES(0x78f3, 16);
-  s_plot[kRow] = 0x10;
-  s_plot[kRunEnd] = 0x15;
+  s_row = 0x10;
+  s_run_end = 0x15;
   game_plot_vline(0x78fd);
   GAME_CYCLES(0x78fe, 16);
-  s_plot[kCol] = 0x0d;
-  s_plot[kRow] = 0x10;
+  s_col = 0x0d;
+  s_row = 0x10;
   game_plot_vline(0x7908);
 
   // $7909 -- the interior, in ink 0, one row at a time from $11 to $14. The
   // original re-loads $02 each time and increments $03 in place, which is why
   // the rows are not written out as constants.
   GAME_CYCLES(0x7909, 26);
-  s_plot[kInk] = 0x00;
-  s_plot[kRunEnd] = 0x19;
-  s_plot[kRow] = 0x11;
-  s_plot[kCol] = 0x0e;
+  s_ink = 0x00;
+  s_run_end = 0x19;
+  s_row = 0x11;
+  s_col = 0x0e;
   game_plot_hline(0x791b);
   GAME_CYCLES(0x791c, 16);
-  s_plot[kCol] = 0x0e;
-  s_plot[kRow] = (uint8_t)(s_plot[kRow] + 1);
+  s_col = 0x0e;
+  s_row = (uint8_t)(s_row + 1);
   game_plot_hline(0x7924);
   GAME_CYCLES(0x7925, 16);
-  s_plot[kCol] = 0x0e;
-  s_plot[kRow] = (uint8_t)(s_plot[kRow] + 1);
+  s_col = 0x0e;
+  s_row = (uint8_t)(s_row + 1);
   game_plot_hline(0x792d);
   GAME_CYCLES(0x792e, 16);
-  s_plot[kCol] = 0x0e;
-  s_plot[kRow] = (uint8_t)(s_plot[kRow] + 1);
+  s_col = 0x0e;
+  s_row = (uint8_t)(s_row + 1);
   game_plot_hline(0x7936);
 
   // $7937 -- "BONUS: " and the amount, through the hi-res font.
@@ -5659,7 +5655,7 @@ void game_bonus_screen(void) {
   GAME_CYCLES(0x795d, 15);
   s_cswl = 0xf0;
   s_cswh = 0xfd;
-  s_plot[kCol] = 0x20;
+  s_col = 0x20;
 
   // $7969 -- hold the screen. Everything from $794D on keeps its probe: the
   // inline-string printer returns to an address it computes, so this whole tail
@@ -5689,11 +5685,11 @@ void game_bonus_screen(void) {
         GAME_CYCLES(0x7977, 1);
     } while (x != 0);
     GAME_CYCLES(0x7979, 7);
-    const uint8_t left = (uint8_t)(s_plot[kCol] - 1);
-    s_plot[kCol] = left;
+    const uint8_t left = (uint8_t)(s_col - 1);
+    s_col = left;
     if (left != 0)
       GAME_CYCLES(0x797b, 1);
-  } while (s_plot[kCol] != 0);
+  } while (s_col != 0);
   GAME_CYCLES(0x797d, 6);
 }
 
@@ -5807,8 +5803,8 @@ void game_setup_screen(void) {
   s_ch = 0x00;
   game_print_inline_str(0x73f3);
   GAME_CYCLES(0x7414, 10);
-  s_plot[kCol] = 0xe8;
-  s_plot[kRow] = 0x00;
+  s_col = 0xe8;
+  s_row = 0x00;
 
   uint8_t key;
 wait: /* $741C */
@@ -5830,8 +5826,8 @@ wait: /* $741C */
     }
 
     GAME_CYCLES(0x7424, 7);
-    const uint8_t inner = (uint8_t)(s_plot[kRow] + 1);
-    s_plot[kRow] = inner;
+    const uint8_t inner = (uint8_t)(s_row + 1);
+    s_row = inner;
     if (inner != 0) {
       GAME_CYCLES(0x7426, 1);
       continue;
@@ -5870,8 +5866,8 @@ wait: /* $741C */
 
     // $7451 -- the outer counter. When it wraps too, nobody is answering.
     GAME_CYCLES(0x7451, 7);
-    const uint8_t outer = (uint8_t)(s_plot[kCol] + 1);
-    s_plot[kCol] = outer;
+    const uint8_t outer = (uint8_t)(s_col + 1);
+    s_col = outer;
     if (outer == 0) {
       GAME_CYCLES(0x7455, 20);
       ram_poke(kDemoMode, 0x01);
@@ -5929,14 +5925,14 @@ wait: /* $741C */
   }
 
   GAME_CYCLES(0x754e, 26);
-  s_plot[kInk] = 0x0c;
+  s_ink = 0x0c;
   s_shape = 0x02;
-  s_plot[kRow] = 0x12;
-  s_plot[kCol] = 0x1e;
+  s_row = 0x12;
+  s_col = 0x1e;
   game_plot_shape_native();
   GAME_CYCLES(0x7561, 21);
-  s_plot[kRow] = 0x13;
-  s_plot[kRunEnd] = 0x1d;
+  s_row = 0x13;
+  s_run_end = 0x1d;
   s_shape = 0x0a;
   game_plot_vline(0x756f);
   GAME_CYCLES(0x7570, 11);
@@ -6184,14 +6180,14 @@ void game_draw_cell(uint16_t ret_addr) {
     abort();
   }
 
-  const Cell c = {.col = s_plot[kCol], .row = s_plot[kRow]};
-  game_draw_cell_native(s_plot[kInk], c);
+  const Cell c = {.col = s_col, .row = s_row};
+  game_draw_cell_native(s_ink, c);
 
   // What the loop leaves: X counted to 4, Y is the column, A the last
   // destination high byte, and the flags come from CPX #4.
   s_x = 0x04;
   s_y = c.col;
-  s_a = s_plot[kHgrDest + 1];
+  s_a = s_hgr_hi;
   s_status_c = 0x01;
   s_status_not_z = 0x00;
   s_status_n = 0x00;
@@ -6240,7 +6236,7 @@ void game_plot_hline(uint16_t ret_addr) {
   game_plot_hline_native();
 
   // The CMP that ended the loop, and the coordinate it compared.
-  const uint8_t at = s_plot[kCol];
+  const uint8_t at = s_col;
   s_a = at;
   s_status_c = 0x01;
   s_status_not_z = 0x00;
@@ -6263,7 +6259,7 @@ void game_plot_vline(uint16_t ret_addr) {
   game_plot_vline_native();
 
   // The CMP that ended the loop, and the coordinate it compared.
-  const uint8_t at = s_plot[kRow];
+  const uint8_t at = s_row;
   s_a = at;
   s_status_c = 0x01;
   s_status_not_z = 0x00;
@@ -6322,7 +6318,7 @@ void game_lores_vline(uint16_t ret_addr) {
   /*$7000*/ CYCLES(0x7000, 6);
   game_lores_vline_native();
 
-  const uint8_t restored = s_plot[kRow];
+  const uint8_t restored = s_row;
   s_a = restored;
   s_status_not_z = restored;
   s_status_n = (restored & 0x80);
@@ -6437,13 +6433,13 @@ void game_plot_shape_merge(uint16_t ret_addr) {
     abort();
   }
 
-  const Cell c = {.col = s_plot[kCol], .row = s_plot[kRow]};
+  const Cell c = {.col = s_col, .row = s_row};
   s_y = c.row; // LDY $03 at $6B98, before the loop overwrites it
-  game_merge_cell_native(s_plot[kInk], c);
+  game_merge_cell_native(s_ink, c);
 
   s_x = 0x04;
   s_y = c.col;
-  s_a = s_plot[kHgrDest + 1];
+  s_a = s_hgr_hi;
   s_status_c = 0x01;
   s_status_not_z = 0x00;
   s_status_n = 0x00;
@@ -7244,15 +7240,15 @@ ate_apple: /* $773E */
      marker on it, and stop the clock for the run to the gate -- see
      kLifeTime for why $FF stops it rather than lengthening it. */
   GAME_CYCLES(0x779a, 31);
-  s_plot[kInk] = 0x06;
-  s_plot[kRow] = 0x00;
-  s_plot[kCol] = 0x12;
-  s_plot[kRunEnd] = 0x16;
+  s_ink = 0x06;
+  s_row = 0x00;
+  s_col = 0x12;
+  s_run_end = 0x16;
   s_shape = 0x15;
   game_plot_hline(0x77b0);
   GAME_CYCLES(0x77b1, 16);
-  s_plot[kInk] = 0x00;
-  s_plot[kCol] = 0x14;
+  s_ink = 0x00;
+  s_col = 0x14;
   game_plot_shape_native();
   GAME_CYCLES(0x77bc, 14);
   set_life_time(0xff);
@@ -7586,9 +7582,15 @@ void init_emulated(void) {
      line above no longer initialises it. Take it from the same snapshot, or
      the first read before any write would see zero where the booting build
      sees what BASIC left there. */
-  for (unsigned i = 0; i != sizeof s_plot; ++i)
-    s_plot[i] = kSnakeByteEntryRam[i];
-  s_shape = kSnakeByteEntryRam[0];
+  s_shape = kSnakeByteEntryRam[0x00];
+  s_ink = kSnakeByteEntryRam[0x01];
+  s_col = kSnakeByteEntryRam[0x02];
+  s_row = kSnakeByteEntryRam[0x03];
+  s_hgr_lo = kSnakeByteEntryRam[0x04];
+  s_hgr_hi = kSnakeByteEntryRam[0x05];
+  s_dot_index = kSnakeByteEntryRam[0x06];
+  s_scanline = kSnakeByteEntryRam[0x07];
+  s_run_end = kSnakeByteEntryRam[0x08];
   s_ch = kSnakeByteEntryRam[0x24];
   s_cv = kSnakeByteEntryRam[0x25];
   s_wndlft = kSnakeByteEntryRam[0x20];
