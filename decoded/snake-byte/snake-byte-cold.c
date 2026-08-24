@@ -198,14 +198,11 @@ void rom_fc68(void);
 void rom_cout(void);
 void rom_setkbd(void);
 void rom_setvid(void);
-void game_load_shape(void);
 void game_draw_cell(uint8_t ink, Cell c);
 void game_plot_hline(Cell c, uint8_t to_col);
 void game_plot_vline(Cell c, uint8_t to_row);
 void game_lores_vline(Cell c, uint8_t to_row);
 void game_plot_shape_merge(uint8_t ink, Cell c);
-void game_install_cout_hook(void);
-void game_start_life_adapter(void);
 void game_move_ok(void);
 void game_move_bouncer(void);
 void game_read_direction(void);
@@ -995,7 +992,6 @@ void game_print_inline_str(uint16_t ret_addr);
 /* --- $60E4/$60E7/$6127: the hi-res cell plotter -------------------------- */
 
 /// $6127 -- load the four scanline masks for shape $00 into $6060.
-void game_load_shape(void);
 
 /// $60E7 -- draw the currently-loaded shape into the cell at row $03,
 /// column $02, in ink $01.
@@ -1048,11 +1044,9 @@ void game_plot_shape_merge(uint8_t ink, Cell c);
 /* --- snake state and scoring setup --------------------------------------- */
 
 /// $6641 -- point CSWL/CSWH at $664A so COUT reaches game_cout_hook.
-void game_install_cout_hook(void);
 
 /// $660F -- adapter for game_start_life(): head column in A, both bouncers
 /// placed at opposite corners.
-void game_start_life_adapter(void);
 
 /// $6BEF -- PLOT the head onto the lo-res map and raise $0305 and $6C46.
 
@@ -2382,6 +2376,9 @@ static void set_snake_head_col(uint8_t col) {
 }
 
 uint8_t game_start_life(uint8_t head_col) {
+  bool branchTarget = true;
+  (void)branchTarget;
+  /*$660F*/ CYCLES(0x660f, 50);
   set_snake_head_col(head_col);
 
   // Opposite corners, converging. The original's nine stores are these two.
@@ -2396,6 +2393,9 @@ uint8_t game_start_life(uint8_t head_col) {
 }
 
 uint8_t game_load_shape_masks(uint8_t shape) {
+  bool branchTarget = true;
+  (void)branchTarget;
+  /*$6127*/ CYCLES(0x6127, 53);
   // Four masks per shape at $6174, and $6060 is where the plotter reads them.
   // Both stay in emulated RAM: $6060 is read by game_draw_cell, which is not
   // converted, and $6174 is part of the loaded binary image.
@@ -2408,6 +2408,9 @@ uint8_t game_load_shape_masks(uint8_t shape) {
 }
 
 void game_install_cout_vector(void) {
+  bool branchTarget = true;
+  (void)branchTarget;
+  /*$6641*/ CYCLES(0x6641, 16);
   // CSWL/CSWH at $36/$37, pointed at $664A.
   s_cswl = 0x4a;
   s_cswh = 0x66;
@@ -4405,7 +4408,15 @@ void game_award_extra_life_native(void) {
 /// $60E4 -- load a shape and draw it, which is the pair every caller wants.
 void game_plot_shape_native(uint8_t ink, Cell c) {
   GAME_CYCLES(0x60e4, 6);
-  game_load_shape();
+  {
+    const uint8_t mask = game_load_shape_masks(s_shape);
+    // The original walked the table with INX, so X is left pointing at the
+    // last entry rather than one past it.
+    s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
+    s_a = mask;
+    s_status_not_z = mask;
+    s_status_n = (mask & 0x80);
+  }
   game_draw_cell(ink, c); // JMP -- a tail call.
 }
 
@@ -5551,7 +5562,11 @@ void game_bonus_screen(void) {
   GAME_CYCLES(0x7937, 16);
   s_ch = 0x0f;
   s_cv = 0x09;
-  game_install_cout_hook();
+  game_install_cout_vector();
+  // The LDA #$4A flags are overwritten by the second load; only these outlive.
+  s_a = 0x66;
+  s_status_not_z = 0x66;
+  s_status_n = 0x00;
   GAME_CYCLES(0x7942, 6);
   game_print_inline_str(0x7944);
   GAME_CYCLES(0x794d, 15);
@@ -5621,8 +5636,9 @@ void game_bonus_screen(void) {
 
 void game_begin_life(void) {
   GAME_CYCLES(0x6256, 8);
-  s_a = 0x14;
-  game_start_life_adapter();
+  s_a = game_start_life(0x14);
+  s_status_not_z = s_a;
+  s_status_n = 0x00;
 
   GAME_CYCLES(0x625b, 36);
   ram_poke(kTailCol, s_a); // from $6630, by way of $660F
@@ -5819,7 +5835,11 @@ wait: /* $741C */
   game_clear_hgr_native();
   GAME_CYCLES(0x7482, 10);
   io_peek(0xc052);
-  game_install_cout_hook();
+  game_install_cout_vector();
+  // The LDA #$4A flags are overwritten by the second load; only these outlive.
+  s_a = 0x66;
+  s_status_not_z = 0x66;
+  s_status_n = 0x00;
   GAME_CYCLES(0x7488, 11);
   s_cv = 0x01;
   game_print_inline_str(0x748e);
@@ -6033,22 +6053,6 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* against the interpreter instruction for instruction.                       */
 /* ========================================================================== */
 
-void game_load_shape(void) {
-  // Adapter. The body is game_load_shape_masks() in game_native.c; what is
-  // left here is the machine state its generated callers observe. One block,
-  // so the CYCLES site and the block-head trace are unaffected.
-  bool branchTarget = true;
-
-  /*$6127*/ CYCLES(0x6127, 53);
-  const uint8_t shape = s_shape;
-  const uint8_t mask = game_load_shape_masks(shape);
-  // The original walked the table with INX, so X is left pointing at the last
-  // entry rather than one past it.
-  s_x = (uint8_t)((uint8_t)(shape << 2) + 3);
-  s_a = mask;
-  s_status_not_z = mask;
-  s_status_n = (mask & 0x80);
-}
 
 void game_draw_cell(uint8_t ink, Cell c) {
   // Adapter for game_draw_cell_native(). Costs 3 trace sites; $60E7 survives.
@@ -6106,7 +6110,15 @@ void game_plot_hline(Cell c, uint8_t to_col) {
   bool branchTarget = true;
 
   /*$6148*/ CYCLES(0x6148, 6);
-  game_load_shape();
+  {
+    const uint8_t mask = game_load_shape_masks(s_shape);
+    // The original walked the table with INX, so X is left pointing at the
+    // last entry rather than one past it.
+    s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
+    s_a = mask;
+    s_status_not_z = mask;
+    s_status_n = (mask & 0x80);
+  }
   const uint8_t at = game_plot_hline_native(s_ink, c, to_col);
 
   // The CMP that ended the loop, and the coordinate it compared.
@@ -6122,7 +6134,15 @@ void game_plot_vline(Cell c, uint8_t to_row) {
   bool branchTarget = true;
 
   /*$615A*/ CYCLES(0x615a, 6);
-  game_load_shape();
+  {
+    const uint8_t mask = game_load_shape_masks(s_shape);
+    // The original walked the table with INX, so X is left pointing at the
+    // last entry rather than one past it.
+    s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
+    s_a = mask;
+    s_status_not_z = mask;
+    s_status_n = (mask & 0x80);
+  }
   const uint8_t at = game_plot_vline_native(s_ink, c, to_row);
 
   // The CMP that ended the loop, and the coordinate it compared.
@@ -6230,7 +6250,15 @@ void game_plot_shape_merge(uint8_t ink, Cell c) {
   bool branchTarget = true;
 
   /*$6B93*/ CYCLES(0x6b93, 6);
-  game_load_shape();
+  {
+    const uint8_t mask = game_load_shape_masks(s_shape);
+    // The original walked the table with INX, so X is left pointing at the
+    // last entry rather than one past it.
+    s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
+    s_a = mask;
+    s_status_not_z = mask;
+    s_status_n = (mask & 0x80);
+  }
 
   if (s_status_d) {
     fprintf(stderr, "game_plot_shape_merge: entered with decimal mode set\n");
@@ -6307,33 +6335,7 @@ void game_plot_shape_merge(uint8_t ink, Cell c) {
 /* optional wall gaps in game_draw_playfield.                                 */
 /* ========================================================================== */
 
-void game_install_cout_hook(void) {
-  // Adapter for game_install_cout_vector().
-  bool branchTarget = true;
 
-  /*$6641*/ CYCLES(0x6641, 16);
-  game_install_cout_vector();
-  // The LDA #$4A flags are overwritten by the second load; only these outlive.
-  s_a = 0x66;
-  s_status_not_z = 0x66;
-  s_status_n = 0x00;
-}
-
-void game_start_life_adapter(void) {
-  // Adapter for game_start_life(). Named for what it is; rom.externs maps
-  // $660F to this.
-  //
-  // Renamed from game_reset_snake on the way through: it sets the snake's head
-  // column, but the other eight stores are the two bouncers, placed at
-  // opposite corners and converging. Writing it as a struct is what made that
-  // obvious -- as parallel ram_pokes it read as nine unrelated bytes.
-  bool branchTarget = true;
-
-  /*$660F*/ CYCLES(0x660f, 50);
-  s_a = game_start_life(s_a);
-  s_status_not_z = s_a;
-  s_status_n = 0x00;
-}
 
 
 
