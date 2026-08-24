@@ -2350,6 +2350,12 @@ static uint8_t s_run_end;   ///< last column of a horizontal run, or last row
 /// The hi-res destination, low byte first, as ram_peek16al read it.
 static inline uint16_t hgr16(void) { return (uint16_t)(s_hgr_lo | (s_hgr_hi << 8)); }
 
+/// Plot the loaded shape, or a named one, into a cell. Defined further down,
+/// next to the run helpers; declared here because the bouncers and the snake
+/// use them well before that.
+static void plot_at(uint8_t ink, Cell c);
+static void plot_shape_at(uint8_t shape, uint8_t ink, Cell c);
+
 /// The glyph blitter at $664A used to park five values in this block -- the
 /// glyph, the caller's X and Y, and a source and destination pointer. They are
 /// locals in game_cout_hook_native now.
@@ -2574,9 +2580,7 @@ void bouncer_step(Bouncer *b) {
   rom_setcol(0x6552);
 
   GAME_CYCLES(0x6553, 20);
-  s_col = b->col;
-  s_row = b->row;
-  game_plot_shape_native();
+  plot_at(0x00, (Cell){.col = b->col, .row = b->row});
 
   GAME_CYCLES(0x6560, 14);
   s_a = b->row;
@@ -2599,14 +2603,12 @@ void bouncer_step(Bouncer *b) {
   GAME_CYCLES(0x6573, 29);
   b->row = want_row;
   b->col = want_col;
-  s_row = b->row;
-  s_col = b->col;
   s_a = 0x03;
   s_ink = 0x03;
   rom_setcol(0x6586);
 
   GAME_CYCLES(0x6587, 6);
-  game_plot_shape_native();
+  plot_shape_at(0x1a, 0x03, (Cell){.col = b->col, .row = b->row});
 
   GAME_CYCLES(0x658a, 14);
   s_a = b->row;
@@ -3036,6 +3038,18 @@ static void lores_hline(uint8_t row, uint8_t from_col, uint16_t ret) {
 /// call, exactly as plot_shape_at does. What they buy is that a caller states
 /// the whole run in one place, including the endpoint it used to inherit from
 /// whatever ran before it.
+/// Plot at a cell in a given ink, keeping whatever shape s_shape holds.
+///
+/// Separate from plot_shape_at because for these callers the shape genuinely
+/// is inherited -- see s_shape -- and passing one would be inventing a value
+/// the original does not have.
+static void plot_at(uint8_t ink, Cell c) {
+  s_ink = ink;
+  s_col = c.col;
+  s_row = c.row;
+  game_plot_shape_native();
+}
+
 static void plot_hline_at(uint8_t col, uint8_t row, uint8_t to_col, uint16_t ret) {
   s_col = col;
   s_row = row;
@@ -4323,16 +4337,17 @@ void game_place_apple_native(void) {
   // game_rand_byte returns $00-$7F while the field is 40x40, so most draws
   // land outside it and hit the border or garbage -- the retry loop does far
   // more work than it looks like.
+  Cell at = {0, 0};
   for (;;) {
     GAME_CYCLES(0x7642, 6);
-    const uint8_t col = game_rand_byte_native();
+    at.col = game_rand_byte_native();
 
     GAME_CYCLES(0x7645, 9);
-    s_col = col;
-    const uint8_t row = game_rand_byte_native();
+    s_col = at.col;
+    at.row = game_rand_byte_native();
 
     GAME_CYCLES(0x764a, 15);
-    s_row = row;
+    s_row = at.row;
     const bool taken = cell_taken(s_col, s_row, 0x7652);
 
     GAME_CYCLES(0x7653, 2);
@@ -4352,9 +4367,7 @@ void game_place_apple_native(void) {
   rom_plot(0x7660);
 
   GAME_CYCLES(0x7661, 16);
-  s_shape = 0x01;
-  s_ink = 0x09;
-  game_plot_shape_native();
+  plot_shape_at(0x01, 0x09, at);
 
   // One more apple on screen. $77D0 watches this pair and calls back here when
   // it reaches zero.
@@ -5160,10 +5173,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       s_y = tail.col;
       rom_plot(0x63c8);
       GAME_CYCLES(0x63c9, 25);
-      s_ink = 0x00;
-      s_row = tail.row;
-      s_col = tail.col;
-      game_plot_shape_native();
+      plot_at(0x00, tail);
 
       // $63DA -- the byte that was under the tail is the direction the tail
       // must follow, so the same delta tables move it on.
@@ -5924,10 +5934,10 @@ wait: /* $741C */
   GAME_CYCLES(0x7561, 21);
   s_shape = 0x0a;
   plot_vline_at(0x1e, 0x13, 0x1d, 0x756f);
+  // At the stem's far end -- the vline above left s_row on $1D.
   GAME_CYCLES(0x7570, 11);
   s_a = 0x0e;
-  s_shape = 0x0e;
-  game_plot_shape_native();
+  plot_shape_at(0x0e, 0x0c, (Cell){.col = 0x1e, .row = 0x1d});
 
   GAME_CYCLES(0x7577, 2);
   for (uint8_t i = 0; i != 6; ++i) {
@@ -7233,9 +7243,7 @@ ate_apple: /* $773E */
   s_shape = 0x15;
   plot_hline_at(0x12, 0x00, 0x16, 0x77b0);
   GAME_CYCLES(0x77b1, 16);
-  s_ink = 0x00;
-  s_col = 0x14;
-  game_plot_shape_native();
+  plot_shape_at(0x15, 0x00, (Cell){.col = 0x14, .row = 0x00});
   GAME_CYCLES(0x77bc, 14);
   set_life_time(0xff);
   s_a = 0x00;
