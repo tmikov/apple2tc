@@ -2275,10 +2275,16 @@ enum { kRelocLoadOp = 0x3754, kRelocStoreOp = 0x3757 };
  * unrelated -- see the second enum. That is not a naming problem to be tidied
  * away; it is a union the original wrote by hand, and the names say so.
  */
+/// $0000 -- which shape to draw. game_load_shape turns it into the four
+/// scanline masks at $6060.
+///
+/// A variable and not a parameter, which is what the original makes it:
+/// bouncer_step erases where the bouncer was using whatever was last left
+/// here, so the value outlives any one call. Every path that could have made
+/// that a hazard was checked -- see the note below.
+static uint8_t s_shape;
+
 enum {
-  /// Which shape to draw. game_load_shape turns it into the four scanline
-  /// masks at $6060.
-  kShape = 0x0000,
   /// Lo-res colour, 0..15. Zero erases.
   kInk = 0x0001,
   /// The cell to draw into, on the 40x48 grid.
@@ -2314,28 +2320,25 @@ static inline uint16_t plot16(unsigned at) {
   return (uint16_t)(s_plot[at] | (s_plot[at + 1] << 8));
 }
 
-/// The same nine bytes as the glyph blitter at $664A uses them. It shares
-/// nothing with a plot but the scratch space, so aliasing kShape and kCol
-/// there would be a lie; only the destination pointer means the same thing.
+/// The glyph blitter at $664A used to park five values in this block -- the
+/// glyph, the caller's X and Y, and a source and destination pointer. They are
+/// locals in game_cout_hook_native now.
 ///
-/// The aliasing is load-bearing and must not be split without evidence:
-/// bouncer_step erases with "whatever the caller last left in $00", so a COUT
-/// through this hook between a shape write and that erase changes which cells
-/// get erased. Measured over all three recordings, the erase only ever sees
-/// $01 or $15, both real shapes -- but that proves little, because none of the
-/// recordings reaches the bonus screen, which is the one place the hi-res hook
-/// is installed while the play loop is running. Splitting these needs an
-/// argument from the binary that the hook cannot be installed there, not
-/// another run.
-enum {
-  /// 16-bit pointer into tbl_font, at the glyph's eight rows.
-  kGlyphSrc = 0x0000,
-  /// The caller's X and Y, parked here and restored on the way out.
-  kSavedX = 0x0002,
-  kSavedY = 0x0003,
-  /// The character being drawn, $20..$7F.
-  kGlyph = 0x0008,
-};
+/// Splitting them out needed an argument, because bouncer_step erases with
+/// whatever was last left in s_shape: a COUT through the hi-res hook between a
+/// shape write and that erase used to change which cells got erased. The
+/// argument is that it cannot happen. The hook is installed in exactly two
+/// places, game_bonus_screen and game_setup_screen, and each restores CSWL
+/// before returning. Inside both windows every plot writes the shape
+/// immediately before its call. And every path out of either window reaches
+/// game_draw_playfield, which writes $15 unconditionally before it draws
+/// anything, before the play loop can run -- game_bonus_screen returns into
+/// round_cleared and game_setup_screen into new_game, and both fall through
+/// start_round.
+///
+/// The gate could not have caught this being wrong until 2026-08-23: the cold
+/// build ran $664A zero times under it. It now runs it 205 times per run, and
+/// samples state at $760F while it does.
 
 /* --- The snake, the key ring, and the click counter ----------------------- */
 /*
@@ -2551,7 +2554,7 @@ void bouncer_step(Bouncer *b) {
   rom_plot(0x6568);
 
   GAME_CYCLES(0x6569, 11);
-  s_plot[kShape] = 0x1a;
+  s_shape = 0x1a;
 
   if (want_row == 0) {
     // Off the board: not redrawn, and the position is not committed.
@@ -3173,7 +3176,7 @@ void game_draw_playfield_native(void) {
 
   GAME_CYCLES(0x7084, 21);
   ram_poke(kWNDTOP, 0x14);
-  s_plot[kShape] = 0x15;
+  s_shape = 0x15;
   s_plot[kInk] = 0x0d;
   set_ink(0x0d, 0x7092);
 
@@ -4299,7 +4302,7 @@ void game_place_apple_native(void) {
   rom_plot(0x7660);
 
   GAME_CYCLES(0x7661, 16);
-  s_plot[kShape] = 0x01;
+  s_shape = 0x01;
   s_plot[kInk] = 0x09;
   game_plot_shape_native();
 
@@ -4374,7 +4377,7 @@ void game_draw_head_native(void) {
   GAME_CYCLES(0x6bdd, 6);
   if (ram_peek(kHeadMoved)) {
     GAME_CYCLES(0x6be2, 11);
-    s_plot[kShape] = 0x01;
+    s_shape = 0x01;
     game_plot_shape_merge(0x6be8);
   } else {
     GAME_CYCLES(0x6be0, 1);
@@ -4529,7 +4532,7 @@ void game_draw_side_walls_native(void) {
   (void)game_rand_byte_native();
 
   GAME_CYCLES(0x6b40, 26);
-  s_plot[kShape] = 0x15;
+  s_shape = 0x15;
   s_plot[kInk] = 0x02; // the upper segment
   s_plot[kCol] = 0x00; // left wall
   s_plot[kRow] = 0x01;
@@ -4669,26 +4672,22 @@ void game_cout_hook_native(uint8_t ch) {
       abort();
     }
 
-    s_plot[kGlyph] = glyph;
-    s_plot[kSavedX] = s_x; // put back at $669F
-    s_plot[kSavedY] = s_y;
-    s_plot[kGlyphSrc] = 0x00;
-    s_plot[kGlyphSrc + 1] = 0x00;
-
-    s_plot[kHgrDest + 1] = (uint8_t)(hires_cursor() >> 8);
-    s_plot[kHgrDest] = (uint8_t)hires_cursor();
-
+    // The original parks all of this in the plotter's zero-page block, which
+    // it is not otherwise using. They are locals: the glyph, the caller's X
+    // and Y, the source and the destination all die at the closing brace, and
+    // nothing outside reads them. See the block's header for why the aliasing
+    // had to be shown to be unobservable before they could be split out.
+    const uint8_t saved_x = s_x, saved_y = s_y;
     const uint16_t src = glyph_rows(glyph);
-    s_plot[kGlyphSrc] = (uint8_t)src;
-    s_plot[kGlyphSrc + 1] = (uint8_t)(src >> 8);
+    uint16_t dest = hires_cursor();
     s_x = 0x00;
 
     for (unsigned row = 0; row < 8; ++row) {
       GAME_CYCLES(0x668b, 33);
-      poke(plot16(kHgrDest), peek((uint16_t)(plot16(kGlyphSrc) + row)));
+      poke(dest, peek((uint16_t)(src + row)));
 
       // One hi-res scanline down within the character cell, which is +$400.
-      s_plot[kHgrDest + 1] = (uint8_t)(s_plot[kHgrDest + 1] + 0x04);
+      dest = (uint16_t)(dest + 0x0400);
       s_x = (uint8_t)(row + 1);
 
       // `INX / CPX #8 / BNE`: the branch is taken on every pass but the last.
@@ -4697,8 +4696,8 @@ void game_cout_hook_native(uint8_t ch) {
     }
 
     GAME_CYCLES(0x669f, 9);
-    s_x = s_plot[kSavedX];
-    s_y = s_plot[kSavedY];
+    s_x = saved_x;
+    s_y = saved_y;
   }
 
   GAME_CYCLES(0x6651, 7);
@@ -4780,7 +4779,7 @@ static uint8_t turn_for_key(uint8_t key, uint8_t dir) {
 /// Draw \p shape into \p c with ink \p ink, through the plotter's zero-page
 /// argument block.
 static void plot_shape_at(uint8_t shape, uint8_t ink, Cell c) {
-  s_plot[kShape] = shape;
+  s_shape = shape;
   s_plot[kInk] = ink;
   s_plot[kCol] = c.col;
   s_plot[kRow] = c.row;
@@ -4984,7 +4983,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
   {
     GAME_CYCLES(0x62a5, 28);
     const Cell head = {.col = ram_peek(kHeadCol), .row = ram_peek(kHeadRow)};
-    s_plot[kShape] = shape;
+    s_shape = shape;
     s_plot[kInk] = 0x0c;
     s_plot[kCol] = head.col;
     s_plot[kRow] = head.row;
@@ -5164,7 +5163,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       // here: $6429's branch falls through to this and is only *taken* when
       // the cell is occupied.
       GAME_CYCLES(0x642d, 31);
-      s_plot[kShape] = 0x15;
+      s_shape = 0x15;
       s_plot[kInk] = 0x0d;
       s_plot[kRow] = 0x27;
       s_plot[kCol] = 0x12;
@@ -5562,7 +5561,7 @@ void game_bonus_screen(void) {
 
   // $78D1 -- the frame, in ink 9: top and bottom edges, then both sides.
   GAME_CYCLES(0x78d1, 31);
-  s_plot[kShape] = 0x01;
+  s_shape = 0x01;
   s_plot[kInk] = 0x09;
   s_plot[kCol] = 0x0d;
   s_plot[kRow] = 0x10;
@@ -5894,18 +5893,18 @@ wait: /* $741C */
 
   GAME_CYCLES(0x754e, 26);
   s_plot[kInk] = 0x0c;
-  s_plot[kShape] = 0x02;
+  s_shape = 0x02;
   s_plot[kRow] = 0x12;
   s_plot[kCol] = 0x1e;
   game_plot_shape_native();
   GAME_CYCLES(0x7561, 21);
   s_plot[kRow] = 0x13;
   s_plot[kRunEnd] = 0x1d;
-  s_plot[kShape] = 0x0a;
+  s_shape = 0x0a;
   game_plot_vline(0x756f);
   GAME_CYCLES(0x7570, 11);
   s_a = 0x0e;
-  s_plot[kShape] = 0x0e;
+  s_shape = 0x0e;
   game_plot_shape_native();
 
   GAME_CYCLES(0x7577, 2);
@@ -6121,7 +6120,7 @@ void game_load_shape(uint16_t ret_addr) {
     push16(ret_addr); // Fake return address.
 
   /*$6127*/ CYCLES(0x6127, 53);
-  const uint8_t shape = s_plot[kShape];
+  const uint8_t shape = s_shape;
   const uint8_t mask = game_load_shape_masks(shape);
   // The original walked the table with INX, so X is left pointing at the last
   // entry rather than one past it.
@@ -7212,7 +7211,7 @@ ate_apple: /* $773E */
   s_plot[kRow] = 0x00;
   s_plot[kCol] = 0x12;
   s_plot[kRunEnd] = 0x16;
-  s_plot[kShape] = 0x15;
+  s_shape = 0x15;
   game_plot_hline(0x77b0);
   GAME_CYCLES(0x77b1, 16);
   s_plot[kInk] = 0x00;
@@ -7552,6 +7551,7 @@ void init_emulated(void) {
      sees what BASIC left there. */
   for (unsigned i = 0; i != sizeof s_plot; ++i)
     s_plot[i] = kSnakeByteEntryRam[i];
+  s_shape = kSnakeByteEntryRam[0];
 
   /* Registers. SP matters most -- the live stack bytes above are meaningless
      without it. The flags are $A0: N set, everything else clear. */

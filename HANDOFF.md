@@ -555,15 +555,16 @@ is the one that spends Step 0's memory oracle — retire it explicitly here.
 196 accesses moved, initialised from the entry snapshot so the first read before
 any write still sees what the booting build sees.
 
-- **They moved together, still aliased, and that was deliberate.** Two of the
-  nine are not arguments: `game_cout_hook_native` uses `$0000-$0005`/`$0008` as
-  a font pointer and saved X/Y, and `bouncer_step` erases with *whatever the
-  caller last left in `$00`*. So a COUT through the hi-res hook between a shape
-  write and that erase changes which cells get erased. **Splitting them into
-  real parameters needs an argument from the binary that the hook cannot be
-  installed across that window** — the recordings cannot supply it, because
-  none reaches the bonus screen, which is the one place the hook is installed
-  while the play loop runs. Until that argument exists, do not split them.
+- **3b done: the glyph blitter is out of the block.** Its five values — the
+  glyph, the caller's X and Y, the source and the destination — are C locals in
+  `game_cout_hook_native`, and `$0000` is `s_shape`, a named global rather than
+  a slot. It is a global and not a parameter because the original makes it one:
+  `bouncer_step` erases with whatever was last left there.
+  The argument that the split is safe is written above the block, and rests on
+  the hook being installed in exactly two places, both of which restore CSWL
+  and both of whose exits reach `game_draw_playfield` — which writes `$15`
+  unconditionally — before the play loop can run. **Do not weaken that comment
+  without redoing the argument.**
 - **The memory oracle is now narrowed and must not be widened back.**
   `ram-cold.probe`'s `zp_lo` starts at `$0009`. The retirement was done in the
   order that produces evidence: the move landed first with the probe untouched
