@@ -220,7 +220,7 @@ short version.
 
 | Target | Source | Role |
 | --- | --- | --- |
-| `snake-byte-cold` | `snake-byte-cold.c` | **The artifact this work is aimed at.** One file, 9,462 lines, sharing nothing. Entered at `$3750`; no boot, no ROM code, no generated code. |
+| `snake-byte-cold` | `snake-byte-cold.c` | **The artifact this work is aimed at.** One translation unit, 7,219 lines plus two memory-image includes, sharing nothing. Entered at `$3750`; no boot, no ROM code, no generated code. |
 | `snake-bytec1-ext` | `snake-byte-ext.c` | The verified reference. Boots, types `CALL 14160`. ROM entry points from hand-written `a2rom.c` + `game.c`. |
 | `snake-bytec1` | `snake-bytec1.c` | Self-contained control. ROM decompiled alongside the game; links alone. `play.frames` was recorded from it. |
 | `snake-byte-easyc1-ext` | `snake-byte-easy-ext.c` | Test fixture, not a variant: apple quota 16 -> 2. |
@@ -401,10 +401,19 @@ death pause reads at `$E000` as delay lengths), five ROM helpers `a2rom.c`
 calls, and the machine definition.
 
 **And then the sharing went away.** `snake-byte-cold.c` is a single
-self-contained file of 9,462 lines: the pruned body, `a2rom.c`,
-`game_native.c`, `game.c` and the top level, each as this target's own copy,
-with the entry state inlined. The other four targets keep the shared originals
-and are unaffected.
+self-contained translation unit: the pruned body, `a2rom.c`, `game_native.c`,
+`game.c` and the top level, each as this target's own copy, with the entry
+state inlined. The other four targets keep the shared originals and are
+unaffected.
+
+The two memory images came back out on 2026-08-23 — `game-image.inc`
+(`$3750-$854E`) and `rom-image.inc` (`$D000-$FFFF`), 2,020 lines of hex
+between them, leaving 7,219 lines of actual C. They are `#include`d from
+exactly one place and define statics, so they cannot become shared by
+accident. The split is behaviour-preserving by construction and was checked
+that way rather than only by the gate: compiling before and after gives
+identical non-debug sections and two differing instructions, both `__LINE__`
+immediates for assertions. The gate was run anyway and is green.
 
 That was forced rather than chosen. While the file was shared, every change had
 to stay safe for builds still running a generated dispatch over the same
