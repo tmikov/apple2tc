@@ -1526,71 +1526,68 @@ void rom_scrn(uint16_t ret_addr) {
 /* $FC58 HOME                                                                 */
 /* ========================================================================== */
 
+/// $FC58 HOME. Clear the text window and put the cursor at its top left.
+///
+/// One line at a time from WNDTOP: VTAB to it, CLREOLZ it, next. The ROM
+/// carries the line number on the stack across both calls because VTABZ and
+/// CLREOLZ each destroy A.
 void rom_home(uint16_t ret_addr) {
   bool branchTarget = true;
-  uint8_t tmp1_U8;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
-  /*$FC58*/ CYCLES(0xfc58, 13);
-            tmp1_U8 = s_wndtop;
-            s_a = tmp1_U8;
-  /*$FC5A*/ s_cv = tmp1_U8;
+home: /* $FC58 */
+  CYCLES(0xfc58, 13);
+  s_a = s_wndtop;
+  /*$FC5A*/ s_cv = s_wndtop;
   /*$FC5C*/ s_y = 0x00;
   /*$FC5E*/ s_ch = 0x00;
-            branchTarget = true;
-            // $FC60 BEQ -- provably always taken (Y was just loaded 0), but
-            // the branch instruction still executes and still pays its own
-            // cost every time. The decompiler doesn't do cross-instruction
-            // flag proofs either, so it keeps charging this the same way.
+  branchTarget = true;
+  // $FC60 BEQ -- provably always taken (Y was just loaded 0), but the branch
+  // instruction still executes and still pays its own cost every time. The
+  // decompiler doesn't do cross-instruction flag proofs either, so it keeps
+  // charging this the same way.
   /*$FC60*/ CYCLES_EDGE(0xfc60, 1);
-            goto bb_2;
-bb_1:
-  /*$FC22*/ CYCLES(0xfc22, 3);
-            s_a = s_cv;
-            rom_vtabz(0x0000);
-            if (ret_addr) pop16(); return;
-bb_2:
-  /*$FC46*/ CYCLES(0xfc46, 9);
-            push8(s_a);
-  /*$FC47*/ rom_vtabz(0xfffe);
-  /*$FC4A*/ CYCLES(0xfc4a, 6);
-            rom_clreolz(0xfffe);
-  /*$FC4D*/ CYCLES(0xfc4d, 13);
-            s_y = 0x00;
-  /*$FC4F*/ tmp1_U8 = pop8();
-            s_a = tmp1_U8;
-            if (s_status_d)
-              goto bb_4;
-bb_3:
-  /*$FC50*/ s_a = (uint8_t)(s_a + s_status_c);
-            goto bb_5;
-bb_4:
-  /*$FC50*/ s_a = ((uint8_t)adc_dec16(s_a, 0x00, s_status_c));
-bb_5:
-  /*$FC52*/ tmp1_U8 = s_a >= s_wndbtm;
-            s_status_c = tmp1_U8;
-            branchTarget = true;
-            if (!tmp1_U8)
-              goto bb_7;
-bb_6:
-  /*$FC56*/ CYCLES(0xfc56, 2);
-            branchTarget = true;
-            if (s_status_c)
-              goto bb_8;
-            else
-              goto bb_0;
-bb_7:
-  // $FC54 BCC -- the branch itself, taken here.
-  /*$FC54*/ CYCLES_EDGE(0xfc54, 1);
-            goto bb_2;
-bb_8:
-  // $FC56 BCS -- the branch itself, same address as bb_6's own anchor
-  // because this is a singleton one-instruction block.
-  /*$FC56*/ CYCLES_EDGE(0xfc56, 1);
-            goto bb_1;
+
+  for (;;) { /* $FC46 -- CLRSC2, one line per pass */
+    CYCLES(0xfc46, 9);
+    push8(s_a);
+    /*$FC47*/ rom_vtabz(0xfffe);
+    /*$FC4A*/ CYCLES(0xfc4a, 6);
+    rom_clreolz(0xfffe);
+
+    /*$FC4D*/ CYCLES(0xfc4d, 13);
+    s_y = 0x00;
+    s_a = pop8();
+    if (!s_status_d)
+      s_a = (uint8_t)(s_a + s_status_c);
+    else
+      s_a = (uint8_t)adc_dec16(s_a, 0x00, s_status_c);
+
+    /*$FC52*/ s_status_c = (uint8_t)(s_a >= s_wndbtm);
+    branchTarget = true;
+    if (!s_status_c) {
+      // $FC54 BCC -- the branch itself, taken here.
+      /*$FC54*/ CYCLES_EDGE(0xfc54, 1);
+      continue;
+    }
+
+    /*$FC56*/ CYCLES(0xfc56, 2);
+    branchTarget = true;
+    if (!s_status_c)
+      goto home; // the BCS's not-taken arm, which cannot be reached
+    // $FC56 BCS -- the branch itself, same address as the block above because
+    // this is a singleton one-instruction block.
+    /*$FC56*/ CYCLES_EDGE(0xfc56, 1);
+    break;
+  }
+
+  /*$FC22*/ CYCLES(0xfc22, 3); // TABV
+  s_a = s_cv;
+  (void)branchTarget;
+  rom_vtabz(0x0000); // JMP -- a tail call.
+  if (ret_addr) pop16();
 }
 
 /* ========================================================================== */
@@ -1607,115 +1604,112 @@ bb_8:
 /* well under WNDBTM ($18), so they always take the BCC and never scroll.      */
 /* ========================================================================== */
 
+/// $FC68. The tail of the ROM's line feed: VTAB to CV, or scroll the window up
+/// one line first if CV has run past the bottom.
+///
+/// The game calls it directly as a plain VTAB -- $7590 and $75D1 store CH/CV
+/// and JSR here -- with a CV always well under WNDBTM, so the scroll below
+/// never runs on their behalf. See a2rom.h.
+///
+/// The scroll copies each line over the one above it, back to front, keeping
+/// the source line's base in BASL and the destination's in BAS2L.
 void rom_fc68(uint16_t ret_addr) {
   bool branchTarget = true;
-  uint8_t tmp1_U8;
-  uint8_t tmp2_U8;
-  uint16_t tmp3_U16;
-  uint16_t tmp4_U16;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$FC68*/ CYCLES(0xfc68, 8);
-            tmp1_U8 = s_cv;
-            s_a = tmp1_U8;
-  /*$FC6C*/ branchTarget = true;
-            if (!(tmp1_U8 >= s_wndbtm))
-              goto bb_10;
-bb_1:
+  s_a = s_cv;
+  branchTarget = true;
+  if (!(s_cv >= s_wndbtm)) {
+    // $FC6C BCC -- the branch itself, taken here. Nothing to scroll.
+    /*$FC6C*/ CYCLES_EDGE(0xfc6c, 1);
+    rom_vtabz(0x0000); // JMP -- a tail call.
+    if (ret_addr) pop16();
+    return;
+  }
+
   /*$FC6E*/ CYCLES(0xfc6e, 17);
-            s_cv = (uint8_t)(s_cv - 0x01);
-  /*$FC70*/ tmp1_U8 = s_wndtop;
-            s_a = tmp1_U8;
-  /*$FC72*/ push8(tmp1_U8);
+  s_cv = (uint8_t)(s_cv - 0x01);
+  /*$FC70*/ s_a = s_wndtop;
+  /*$FC72*/ push8(s_a);
   /*$FC73*/ rom_vtabz(0xfffe);
-            branchTarget = true;
-bb_2:
-  /*$FC76*/ CYCLES(0xfc76, 28);
+  branchTarget = true;
+
+scroll: /* $FC76 -- one line up per pass */
+  CYCLES(0xfc76, 28);
   /*$FC78*/ s_bas2l = s_basl;
   /*$FC7C*/ s_bas2h = s_bash;
   /*$FC80*/ s_y = (uint8_t)(s_wndwdth - 0x01);
-  /*$FC81*/ tmp1_U8 = pop8();
-            s_a = tmp1_U8;
-  /*$FC82*/ if (s_status_d)
-              goto bb_4;
-bb_3:
-  /*$FC82*/ tmp4_U16 = s_a;
-            tmp3_U16 = (tmp4_U16 + 0x0001) + s_status_c;
-            s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0x0001);
-            s_a = ((uint8_t)tmp3_U16);
-            goto bb_5;
-bb_4:
-  /*$FC82*/ tmp3_U16 = adc_dec16(s_a, 0x01, s_status_c);
-            s_a = ((uint8_t)tmp3_U16);
-            s_status_v = (((uint8_t)(tmp3_U16 >> 8) & 0x40) != 0);
-bb_5:
+  /*$FC81*/ s_a = pop8();
+  if (!s_status_d) {
+    const uint16_t r = ((uint16_t)s_a + 0x0001) + s_status_c;
+    s_status_v = ovf8((uint8_t)r, s_a, 0x01);
+    s_a = (uint8_t)r;
+  } else {
+    const uint16_t r = adc_dec16(s_a, 0x01, s_status_c);
+    s_a = (uint8_t)r;
+    s_status_v = (((uint8_t)(r >> 8) & 0x40) != 0);
+  }
+
   /*$FC86*/ branchTarget = true;
-            if (s_a >= s_wndbtm)
-              goto bb_13;
-bb_6:
+  if (s_a >= s_wndbtm) {
+    // $FC86 BCS -- the branch itself, taken here. That was the last line.
+    /*$FC86*/ CYCLES_EDGE(0xfc86, 1);
+    goto last_line;
+  }
+
   /*$FC88*/ CYCLES(0xfc88, 9);
-            push8(s_a);
+  push8(s_a);
   /*$FC89*/ rom_vtabz(0xfffe);
-            branchTarget = true;
-bb_7:
-  /*$FC8C*/ CYCLES(0xfc8c, 15);
-            tmp1_U8 = s_y;
-            tmp2_U8 = peek((bas16() + tmp1_U8));
-  /*$FC8E*/ poke((bas2_16() + tmp1_U8), tmp2_U8);
-  /*$FC90*/ tmp1_U8 = (uint8_t)(tmp1_U8 - 0x01);
-            tmp2_U8 = tmp1_U8 & 0x80;
-            s_status_n = tmp2_U8;
-            s_y = tmp1_U8;
-  /*$FC91*/ branchTarget = true;
-            if (!tmp2_U8)
-              goto bb_14;
-bb_8:
+  branchTarget = true;
+
+copy: /* $FC8C -- one character, right to left */
+  CYCLES(0xfc8c, 15);
+  {
+    const uint8_t at = s_y;
+    /*$FC8E*/ poke((uint16_t)(bas2_16() + at), peek((uint16_t)(bas16() + at)));
+    /*$FC90*/ const uint8_t next = (uint8_t)(at - 0x01);
+    s_status_n = (uint8_t)(next & 0x80);
+    s_y = next;
+    branchTarget = true;
+    if (!s_status_n) {
+      // $FC91 BPL -- the branch itself, taken here (loop back).
+      /*$FC91*/ CYCLES_EDGE(0xfc91, 1);
+      goto copy;
+    }
+  }
+
   /*$FC93*/ CYCLES(0xfc93, 2);
-            branchTarget = true;
-            if (s_status_n)
-              goto bb_15;
-bb_9:
-  /*$FC95*/ CYCLES(0xfc95, 8);
-            s_y = 0x00;
+  branchTarget = true;
+  if (s_status_n) {
+    // $FC93 BMI -- the branch itself, taken here (outer loop back).
+    /*$FC93*/ CYCLES_EDGE(0xfc93, 1);
+    goto scroll;
+  }
+
+last_line: /* $FC95 -- blank what the scroll left at the bottom */
+  CYCLES(0xfc95, 8);
+  s_y = 0x00;
   /*$FC97*/ rom_clreolz(0xfffe);
+
   /*$FC9A*/ CYCLES(0xfc9a, 2);
-            branchTarget = true;
-            if (!s_status_c)
-              goto bb_11;
-            // $FC9A BCS -- taken here (falls into the trampoline charge
-            // below before continuing into bb_12; the not-taken arm above
-            // jumps straight to bb_11 without it).
+  branchTarget = true;
+  (void)branchTarget;
+  if (!s_status_c) {
+    rom_clreol(0x0000); // JMP -- a tail call.
+    if (ret_addr) pop16();
+    return;
+  }
+  // $FC9A BCS -- taken here, and it falls into the trampoline charge below
+  // before continuing; the not-taken arm above jumps straight out without it.
   /*$FC9A*/ CYCLES_EDGE(0xfc9a, 1);
-bb_12:
-  /*$FC22*/ CYCLES(0xfc22, 3);
-            s_a = s_cv;
-            rom_vtabz(0x0000);
-            if (ret_addr) pop16(); return;
-bb_10:
-  // $FC6C BCC -- the branch itself, taken here.
-  /*$FC6C*/ CYCLES_EDGE(0xfc6c, 1);
-            rom_vtabz(0x0000);
-            branchTarget = true;
-            if (ret_addr) pop16(); return;
-bb_11:
-  /*$FC9A*/ rom_clreol(0x0000);
-            branchTarget = true;
-            if (ret_addr) pop16(); return;
-bb_13:
-  // $FC86 BCS -- the branch itself, taken here.
-  /*$FC86*/ CYCLES_EDGE(0xfc86, 1);
-            goto bb_9;
-bb_14:
-  // $FC91 BPL -- the branch itself, taken here (loop back).
-  /*$FC91*/ CYCLES_EDGE(0xfc91, 1);
-            goto bb_7;
-bb_15:
-  // $FC93 BNE -- the branch itself, taken here (outer loop back).
-  /*$FC93*/ CYCLES_EDGE(0xfc93, 1);
-            goto bb_2;
+
+  /*$FC22*/ CYCLES(0xfc22, 3); // TABV
+  s_a = s_cv;
+  rom_vtabz(0x0000);
+  if (ret_addr) pop16();
 }
 
 /* ========================================================================== */
