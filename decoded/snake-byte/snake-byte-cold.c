@@ -16,11 +16,20 @@
 /// the extern build carries 1,434 blocks of Applesoft against 79 of game. None
 /// of it can be removed while the program still has to boot to reach the game.
 ///
-/// This build starts at $3750. Nothing is deleted yet -- the boot blocks are
-/// still in the file, simply never entered -- so the only difference from
-/// snake-bytec1-ext is the entry point and the state it starts from. Removing
-/// the now-unreachable blocks is the next step, and it is separable precisely
-/// because this one changes nothing else.
+/// This build starts at $3750, and everything unreachable from there has been
+/// deleted: 16,195 lines to 3,046, func_t001 from 1,775 cases to 89, its
+/// address map from 136 entries to 1, and 42 of 47 generated ROM helpers gone.
+/// The five that remain are the ones a2rom.c calls.
+///
+/// The reachable set came from `apple2tc --ir`, which prints Succ() for every
+/// block and every Call, walked from $3750. Do not try the same walk on the
+/// emitted C: `pop16`, `tmp3_U16` and `sbc_dec16` all contain "16", so scanning
+/// for `block_id = N` invents edges to block 16 and reports 104 live cases
+/// against the true 89.
+///
+/// One thing survives that looks like it should not: s_mem_d000, the ROM image.
+/// The death pause reads its delay lengths out of ROM *as data* at $E000, so
+/// the bytes are still live even though none of the code is.
 ///
 /// What has to be installed, and why
 /// ---------------------------------

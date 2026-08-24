@@ -441,10 +441,30 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
    display lists read as a byte stream by `$7019`. Nothing reaches it because
    nothing jumps into it. See the log entry for the command grammar, which
    parses the region exactly.
-4. **Phase 1b: retarget the entry to `$3750`.** This is what actually cuts the
-   ROM — measured at 1,530 blocks deleted, leaving 4. Needs an entry-state
-   snapshot and a re-based trace, because a cold start skips the 168 boot frames
-   `play.frames` opens with.
+4. ~~**Phase 1b: retarget the entry to `$3750`.**~~ — **done 2026-08-23**, as
+   the `snake-byte-cold` target. See `decoded/snake-byte/snake-byte-cold.c`.
+
+   `snake-byte-cold-body.c` is a hand-owned fork of the generated
+   `snake-bytec1-ext.c`: the dispatch is rooted at `$3750` instead of the reset
+   vector, and everything unreachable from there is deleted. **16,195 lines ->
+   3,046.** `func_t001` went from 1,775 cases to 89 — every one of them game
+   code — its address map from 136 entries to 1, and 42 of the 47 generated ROM
+   helpers went with it. The five that stayed are the ones `a2rom.c` calls.
+
+   What could not go: `s_mem_d000`, the ROM image. The death pause reads its
+   delay lengths out of ROM *as data* at `$E000`, so the bytes are still needed
+   even though none of the code is.
+
+   The reachable set came from `apple2tc --ir`, which prints `Succ(...)` per
+   block and every `Call` — walk it from `$3750` and 1,776 blocks reduce to 89.
+   Doing the same walk on the emitted C instead is a trap: `pop16`, `tmp3_U16`
+   and `sbc_dec16` all contain "16", so a naive scan for `block_id = N`
+   manufactures edges to block 16 and reports 104 live cases instead of 89.
+
+   Verified against the booting build, from `$3750` on: **block-head trace
+   identical over 788,097 blocks, screen identical at all 6,808 in-game
+   samples.** Nothing about the entry state was guessed -- `--snapshot-at`
+   captured it, and `make-entry-state.sh` regenerates it.
 
    **`--snapshot-at` now exists, as capture only** (2026-08-23). Every front
    end takes `--snapshot-at=<hex> --snapshot-out=<path>` and writes 64KB of RAM
