@@ -576,8 +576,31 @@ any write still sees what the booting build sees.
   shape/ink/column/row still moves pixels, and the screen compares 6,808
   samples. Probe phase 3 would restore the rest and is unbuilt.
 
-The cursor (`$0024/$0025`) has not moved and is harder: the ROM routines read
-it, so it is the emulated machine's state as much as the game's.
+**3c: the delay loop.** `$7061`'s two outer counters were `kCol`/`kRow`,
+borrowed because zero page was the only place to put them. They are parameters.
+Safe because nothing reads the residue — `wipe_occupancy_map` overwrites the
+row on its first line and the column is not read until `draw_border` writes it.
+
+### What is left of step 3
+
+`s_plot` still has 160 uses: `kInk`, `kCol`, `kRow`, `kHgrDest`, `kDotIndex`,
+`kScanline`, `kRunEnd`. Turning those into real parameters is the rest of the
+step, and each one needs the same treatment `kShape` got — find the readers,
+find whether any of them inherits rather than receives, and write the argument
+down. `kShape` turned out to be a genuine global; do not assume the others are
+not.
+
+The order that worked: readers first (there are far fewer than writers), then
+ask which reader gets its value from a caller and which from whatever ran last.
+
+**The cursor (`$0024/$0025`) is a different question and worth deciding
+deliberately.** Every other address in step 3 is the game's own. CH and CV are
+not: the ROM routines read them, five of which are still decompiler-generated
+in this file, and the game writes them as the monitor's documented interface —
+`game_status_panel` and `game_show_key_native` both set them before calling
+COUT. Moving them means the emulated ROM stops keeping its own state in
+emulated RAM, which is a change to what "the emulated machine" is here, not
+just to where a variable lives.
 
 **Step 4 — return values instead of `s_a` and the flags.** As callers stop
 reading `s_a`, the 23 remaining marshalling adapters empty out and follow the
