@@ -198,12 +198,7 @@ void rom_fc68(void);
 void rom_cout(void);
 void rom_setkbd(void);
 void rom_setvid(void);
-void game_draw_cell(uint8_t ink, Cell c);
-void game_lores_vline(Cell c, uint8_t to_row);
-void game_plot_shape_merge(uint8_t ink, Cell c);
-void game_move_ok(void);
 void game_move_bouncer(void);
-void game_read_direction(void);
 void game_print_inline_str(uint16_t ret_addr);
 void rom_bascalc(void);
 void rom_vtabz(void);
@@ -993,7 +988,6 @@ void game_print_inline_str(uint16_t ret_addr);
 
 /// $60E7 -- draw the currently-loaded shape into the cell at row $03,
 /// column $02, in ink $01.
-void game_draw_cell(uint8_t ink, Cell c);
 
 /// $60E4 -- load the shape for $00, then draw it. The form nearly every
 /// caller uses.
@@ -1014,7 +1008,6 @@ void game_draw_cell(uint8_t ink, Cell c);
 
 /// $7000 -- plot a vertical run on the lo-res occupancy map, from row $03
 /// through row $08 inclusive at column $02, leaving $03 unchanged.
-void game_lores_vline(Cell c, uint8_t to_row);
 
 /* --- $702B/$71F3/$7226/$7267: the score ---------------------------------- */
 
@@ -1032,7 +1025,6 @@ void game_lores_vline(Cell c, uint8_t to_row);
 
 /// $6B93 -- load the shape for $00 and merge it into the cell at row $03,
 /// column $02, setting bits rather than replacing the byte.
-void game_plot_shape_merge(uint8_t ink, Cell c);
 
 /// $7045 -- clear the screen, draw the border, then interpret the current
 /// level's display list at $8000. See game.c for the opcodes.
@@ -1067,7 +1059,6 @@ void game_plot_shape_merge(uint8_t ink, Cell c);
 
 /// $6AB8 -- can the snake step in direction $6B38? Returns A = 0 / Z set for
 /// yes, and refuses dead ends one move early.
-void game_move_ok(void);
 
 /// $64C8 -- step the bouncer at $6633/$6634 by its deltas, reflecting off
 /// whatever it hits.
@@ -1091,20 +1082,14 @@ void game_move_bouncer(void);
 /// replacement key.
 
 /// $6C72 -- turn the next key, or the joystick, into a direction.
-void game_read_direction(void);
 
 /// $6288 -- play one life, and leave the reason it ended in $6253, which is
 /// what the caller at $7739 reads.
 static void game_play_one_life(void);
 
-/// $72CE -- draw the status panel. Adapter for game_status_panel().
 
-/// $78B3 -- the bonus screen. Adapter for game_bonus_screen(). Entered with
-/// decimal mode set.
 
-/// $6256 -- start a life and run it. Adapter for game_begin_life().
 
-/// $7980 -- the setup screen. Adapter for game_setup_screen().
 
 /* ========================================================================== *
  * Apple II ROM entry points, hand-written                                  *
@@ -3011,7 +2996,15 @@ static void plot_vline_at(uint8_t col, uint8_t row, uint8_t to_row) {
 }
 
 static void lores_vline_at(uint8_t col, uint8_t row, uint8_t to_row) {
-  game_lores_vline((Cell){.col = col, .row = row}, to_row);
+  { // was game_lores_vline()
+    bool branchTarget = true;
+
+    /*$7000*/ CYCLES(0x7000, 6);
+    const uint8_t restored = game_lores_vline_native((Cell){.col = col, .row = row}, to_row);
+    s_a = restored;
+    s_status_not_z = restored;
+    s_status_n = (restored & 0x80);
+  }
 }
 
 /// The ROM's PLOT.
@@ -3319,6 +3312,10 @@ static uint8_t dot_index(uint8_t ink, uint8_t scanline, uint8_t col) {
 
 /// $60E7 -- draw the loaded shape into one cell, replacing what was there.
 uint8_t game_draw_cell_native(uint8_t ink, Cell c) {
+  bool branchTarget = true;
+  (void)branchTarget;
+  /*$60E7*/ CYCLES(0x60e7, 0);
+  assert_binary_mode("game_draw_cell", 0x60e7);
   uint8_t hgr_hi;
   GAME_CYCLES(0x60e7, 22);
   uint16_t dest = cell_row_base(c.row);
@@ -3340,7 +3337,15 @@ uint8_t game_draw_cell_native(uint8_t ink, Cell c) {
   }
 
   GAME_CYCLES(0x6126, 6);
-  // The high byte the loop ended on. Its caller's caller puts it in A.
+  // What the loop leaves: X counted to 4, Y is the column, A the last
+  // destination high byte, and the flags come from CPX #4.
+  s_x = 0x04;
+  s_y = c.col;
+  s_a = hgr_hi;
+  s_status_c = 0x01;
+  s_status_not_z = 0x00;
+  s_status_n = 0x00;
+  s_status_v = ovf8(s_a, (uint8_t)(s_a - 0x04), 0x04);
   return hgr_hi;
 }
 
@@ -3436,7 +3441,7 @@ uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
   }
   for (;;) {
     GAME_CYCLES(0x614b, 6);
-    game_draw_cell(ink, c);
+    game_draw_cell_native(ink, c);
 
     GAME_CYCLES(0x614e, 8);
     if (c.col == to_col)
@@ -3472,7 +3477,7 @@ uint8_t game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
   }
   for (;;) {
     GAME_CYCLES(0x615d, 6);
-    game_draw_cell(ink, c);
+    game_draw_cell_native(ink, c);
 
     GAME_CYCLES(0x6160, 8);
     if (c.row == to_row)
@@ -4402,7 +4407,37 @@ void game_draw_head_native(uint8_t ink, Cell c) {
   if (ram_peek(kHeadMoved)) {
     GAME_CYCLES(0x6be2, 11);
     s_shape = 0x01;
-    game_plot_shape_merge(ink, c);
+    { // was game_plot_shape_merge()
+      bool branchTarget = true;
+
+      /*$6B93*/ CYCLES(0x6b93, 6);
+      {
+      const uint8_t mask = game_load_shape_masks(s_shape);
+      // The original walked the table with INX, so X is left pointing at the
+      // last entry rather than one past it.
+      s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
+      s_a = mask;
+      s_status_not_z = mask;
+      s_status_n = (mask & 0x80);
+      }
+
+      if (s_status_d) {
+      fprintf(stderr, "game_plot_shape_merge: entered with decimal mode set\n");
+      error_handler(0x6b93);
+      abort();
+      }
+
+      s_y = c.row; // LDY $03 at $6B98, before the loop overwrites it
+      const uint8_t last_hi = game_merge_cell_native(ink, c);
+
+      s_x = 0x04;
+      s_y = c.col;
+      s_a = last_hi;
+      s_status_c = 0x01;
+      s_status_not_z = 0x00;
+      s_status_n = 0x00;
+      s_status_v = ovf8(s_a, (uint8_t)(s_a - 0x04), 0x04);
+    }
   } else {
     GAME_CYCLES(0x6be0, 1);
   }
@@ -4445,7 +4480,7 @@ void game_plot_shape_native(uint8_t ink, Cell c) {
     s_status_not_z = mask;
     s_status_n = (mask & 0x80);
   }
-  game_draw_cell(ink, c); // JMP -- a tail call.
+  game_draw_cell_native(ink, c); // JMP -- a tail call.
 }
 
 /* ========================================================================== */
@@ -4898,7 +4933,29 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     GAME_CYCLES(0x628b, 6);
     game_read_key_native();
     GAME_CYCLES(0x628e, 6);
-    game_read_direction();
+    { // was game_read_direction()
+      bool branchTarget = true;
+
+      // The JSR stays here rather than moving into the native routine, because
+      // game_step_bouncers's own adapter is what keeps $6216 -- the RTS it shares
+      // with the unconverted game_read_key -- a probe site.
+      /*$6C72*/ CYCLES(0x6c72, 6);
+      const uint8_t key = game_step_bouncers_native();
+      // $6216 is an RTS shared with game_read_key, so it stays a probe site even
+      // though the routine that used to hold it is gone. Spelled with plain CYCLES
+      // rather than GAME_CYCLES_SHARED because site_addrs() does not grep for that
+      // form -- it would have kept probing and left the list, which is the silent
+      // half of a hole rather than the loud one.
+      CYCLES(0x6216, 6);
+
+      // The original saves the key on the stack across the $0302 test; here it is
+      // an argument. The pushed byte is never observed: nothing between the PHA
+      // and the PLA samples memory, and ram.probe compares only the live stack.
+      const uint8_t code = game_read_direction_native(key);
+      s_a = code;
+      s_status_not_z = code;
+      s_status_n = (code & 0x80);
+    }
     uint8_t code = s_a;
 
     uint8_t dir = ram_peek(kDirection);
@@ -5272,7 +5329,41 @@ static bool steer_try(
     unsigned after_cycles) {
   GAME_CYCLES(before_addr, before_cycles);
   ram_poke(kSteerDir, dir);
-  game_move_ok();
+  { // was game_move_ok()
+    bool branchTarget = true;
+
+    /*$6AB8*/ CYCLES(0x6ab8, 0);
+    if (s_status_d) {
+    fprintf(stderr, "game_move_ok: entered with decimal mode set\n");
+    error_handler(0x6ab8);
+    abort();
+    }
+
+    uint8_t cell = 0;
+    const MoveVerdict v = snake_move_verdict(ram_peek(kSteerDir), &cell);
+
+    // Turn the verdict back into what the callers at $6A40 branch on.
+    switch (v) {
+    case MOVE_TARGET_TAKEN:
+    // $6AD9 CMP #$0F left these.
+    s_a = cell;
+    s_status_not_z = (cell != 0x0f);
+    s_status_c = (cell >= 0x0f);
+    s_status_n = ((uint8_t)(cell - 0x0f) & 0x80);
+    break;
+    case MOVE_ROW_ZERO:
+    case MOVE_OK:
+    s_a = 0x00;
+    s_status_not_z = 0x00;
+    s_status_n = 0x00;
+    break;
+    case MOVE_DEAD_END:
+    s_a = 0x01;
+    s_status_not_z = 0x01;
+    s_status_n = 0x00;
+    break;
+    }
+  }
   GAME_CYCLES(after_addr, after_cycles);
   // The original branches on Z, which game_move_ok leaves set for exactly the
   // verdicts that permit the move -- including a target holding the apple.
@@ -6082,29 +6173,6 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* ========================================================================== */
 
 
-void game_draw_cell(uint8_t ink, Cell c) {
-  // Adapter for game_draw_cell_native(). Costs 3 trace sites; $60E7 survives.
-  bool branchTarget = true;
-
-  /*$60E7*/ CYCLES(0x60e7, 0);
-  if (s_status_d) {
-    fprintf(stderr, "game_draw_cell: entered with decimal mode set\n");
-    error_handler(0x60e7);
-    abort();
-  }
-
-  const uint8_t last_hi = game_draw_cell_native(ink, c);
-
-  // What the loop leaves: X counted to 4, Y is the column, A the last
-  // destination high byte, and the flags come from CPX #4.
-  s_x = 0x04;
-  s_y = c.col;
-  s_a = last_hi;
-  s_status_c = 0x01;
-  s_status_not_z = 0x00;
-  s_status_n = 0x00;
-  s_status_v = ovf8(s_a, (uint8_t)(s_a - 0x04), 0x04);
-}
 
 
 /* ========================================================================== */
@@ -6157,16 +6225,6 @@ void game_draw_cell(uint8_t ink, Cell c) {
 
 
 
-void game_lores_vline(Cell c, uint8_t to_row) {
-  // Adapter for game_lores_vline_native(). Costs 4 trace sites.
-  bool branchTarget = true;
-
-  /*$7000*/ CYCLES(0x7000, 6);
-  const uint8_t restored = game_lores_vline_native(c, to_row);
-  s_a = restored;
-  s_status_not_z = restored;
-  s_status_n = (restored & 0x80);
-}
 
 /* ========================================================================== */
 /* $71F3, $7226, $7267, $702B -- the score.                                   */
@@ -6227,38 +6285,6 @@ void game_lores_vline(Cell c, uint8_t to_row) {
 /* including the lost bit, because the screen the game draws depends on it.   */
 /* ========================================================================== */
 
-void game_plot_shape_merge(uint8_t ink, Cell c) {
-  // Adapter for game_merge_cell_native(), plus the shape load it opens with.
-  bool branchTarget = true;
-
-  /*$6B93*/ CYCLES(0x6b93, 6);
-  {
-    const uint8_t mask = game_load_shape_masks(s_shape);
-    // The original walked the table with INX, so X is left pointing at the
-    // last entry rather than one past it.
-    s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
-    s_a = mask;
-    s_status_not_z = mask;
-    s_status_n = (mask & 0x80);
-  }
-
-  if (s_status_d) {
-    fprintf(stderr, "game_plot_shape_merge: entered with decimal mode set\n");
-    error_handler(0x6b93);
-    abort();
-  }
-
-  s_y = c.row; // LDY $03 at $6B98, before the loop overwrites it
-  const uint8_t last_hi = game_merge_cell_native(ink, c);
-
-  s_x = 0x04;
-  s_y = c.col;
-  s_a = last_hi;
-  s_status_c = 0x01;
-  s_status_not_z = 0x00;
-  s_status_n = 0x00;
-  s_status_v = ovf8(s_a, (uint8_t)(s_a - 0x04), 0x04);
-}
 
 /* ========================================================================== */
 /* $7045 -- draw the playfield, and run the level's display list.             */
@@ -6366,43 +6392,6 @@ void game_plot_shape_merge(uint8_t ink, Cell c) {
 /* $6237[dir] + $6250, the direction deltas added to the snake's head.        */
 /* ========================================================================== */
 
-void game_move_ok(void) {
-  // Adapter for snake_move_verdict(). Costs 21 trace sites; $6AB8 itself
-  // survives, charged zero here and for real inside.
-  bool branchTarget = true;
-
-  /*$6AB8*/ CYCLES(0x6ab8, 0);
-  if (s_status_d) {
-    fprintf(stderr, "game_move_ok: entered with decimal mode set\n");
-    error_handler(0x6ab8);
-    abort();
-  }
-
-  uint8_t cell = 0;
-  const MoveVerdict v = snake_move_verdict(ram_peek(kSteerDir), &cell);
-
-  // Turn the verdict back into what the callers at $6A40 branch on.
-  switch (v) {
-  case MOVE_TARGET_TAKEN:
-    // $6AD9 CMP #$0F left these.
-    s_a = cell;
-    s_status_not_z = (cell != 0x0f);
-    s_status_c = (cell >= 0x0f);
-    s_status_n = ((uint8_t)(cell - 0x0f) & 0x80);
-    break;
-  case MOVE_ROW_ZERO:
-  case MOVE_OK:
-    s_a = 0x00;
-    s_status_not_z = 0x00;
-    s_status_n = 0x00;
-    break;
-  case MOVE_DEAD_END:
-    s_a = 0x01;
-    s_status_not_z = 0x01;
-    s_status_n = 0x00;
-    break;
-  }
-}
 
 /* ========================================================================== */
 /* $64C8 -- move the bouncer one step.                                        */
@@ -6491,30 +6480,6 @@ void game_move_bouncer(void) {
 
 
 
-void game_read_direction(void) {
-  // Adapter for game_read_direction_native(). Costs 31 trace sites.
-  bool branchTarget = true;
-
-  // The JSR stays here rather than moving into the native routine, because
-  // game_step_bouncers's own adapter is what keeps $6216 -- the RTS it shares
-  // with the unconverted game_read_key -- a probe site.
-  /*$6C72*/ CYCLES(0x6c72, 6);
-  const uint8_t key = game_step_bouncers_native();
-  // $6216 is an RTS shared with game_read_key, so it stays a probe site even
-  // though the routine that used to hold it is gone. Spelled with plain CYCLES
-  // rather than GAME_CYCLES_SHARED because site_addrs() does not grep for that
-  // form -- it would have kept probing and left the list, which is the silent
-  // half of a hole rather than the loud one.
-  CYCLES(0x6216, 6);
-
-  // The original saves the key on the stack across the $0302 test; here it is
-  // an argument. The pushed byte is never observed: nothing between the PHA
-  // and the PLA samples memory, and ram.probe compares only the live stack.
-  const uint8_t code = game_read_direction_native(key);
-  s_a = code;
-  s_status_not_z = code;
-  s_status_n = (code & 0x80);
-}
 
 /* ========================================================================== */
 /* $6288 -- one life. See game_native.c for what it does.                     */

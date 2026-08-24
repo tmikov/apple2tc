@@ -530,22 +530,21 @@ bb_N: labels                        0        was 141
 tmpN_U8 temporaries                 0
 ret_addr parameters                 0        was 117; push16/pop16 unused
 compiler warnings of its own        0        at -Wall
-adapters left                       5        was 42
+adapters left                       0        was 42
 ```
 
 What remains, in order of how well-defined it is:
 
-1. **Step 4's last 5 adapters** — `game_draw_cell`, `game_lores_vline`,
-   `game_plot_shape_merge`, `game_move_ok`, `game_move_bouncer`,
-   `game_read_direction`.
+1. ~~**Step 4's adapters.**~~ **Done 2026-08-24 — there are none left.** The
+   last six merged into their natives or inlined at their single call site;
+   `game_draw_cell` had three callers so it merged. Not one comparison point
+   was spent doing it: the pin held at 113 throughout and the block-head counts
+   are identical to the digit, 421,698 and 95,140.
 
-   **Merge them, do not delete them.** That is the lesson of the last six: an
-   adapter deleted costs the trace its site and lowers the pin; an adapter
-   *merged into its native* — charge, `CYCLES` site and machine-state
-   write-back all moving inside — costs nothing at all. Five went that way with
-   the pin fixed at 113 and the block-head counts identical to the digit. The
-   question for each is only where its write-back belongs, and the answer is
-   usually "inside the routine it describes".
+   The lesson, if more marshalling ever appears: an adapter *deleted* costs the
+   trace its site and moves the pin; an adapter *merged* — charge, `CYCLES`
+   site and write-back all moving inside the routine it describes — costs
+   nothing.
 2. **Step 6**, on the terms in its entry.
 3. **Loose ends:** 451 unknown nonzero bytes in `coverage.txt`, probe phase 3,
    and `robotron`/`bolo`, which have never been regenerated against any of this.
