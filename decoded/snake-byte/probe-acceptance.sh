@@ -158,7 +158,7 @@ set_scenario() {
 # `[^_A-Za-z]` is what keeps it out, since `CYCLES(0x` is a substring of
 # `GAME_CYCLES(0x`.
 site_addrs() {
-  grep -ohE '(^|[^_A-Za-z])CYCLES\(0x[0-9a-f]+|GAME_CYCLES_COORD\(0x[0-9a-f]+' "$@" \
+  grep -ohE '(^|[^_A-Za-z])CYCLES\(0x[0-9a-f]+|GAME_CYCLES_COORD\(0x[0-9a-f]+|GAME_CYCLES_ANCHOR\(0x[0-9a-f]+' "$@" \
     | sed 's/.*0x//' | sort -u
 }
 
@@ -681,10 +681,10 @@ ext_prog="$bin/decoded/snake-byte/snake-bytec1-ext-run"
 # The cold build's own block-head set. It is much smaller than the ext build's
 # -- the ROM is gone -- so it gets its own list rather than reusing one.
 site_addrs "$here/snake-byte-cold-body.c" "$here/a2rom.c" "$here/game.c" \
-  "$here/game_native.c" > "$here/blocks-cold.txt"
+  "$here/game_native.c" "$here/game_top.c" > "$here/blocks-cold.txt"
 cold_sites=$(wc -l < "$here/blocks-cold.txt")
-if [ "$cold_sites" -ne 186 ]; then
-  echo "FAIL [cold]: site list has $cold_sites block heads, expected exactly 186" >&2
+if [ "$cold_sites" -ne 120 ]; then
+  echo "FAIL [cold]: site list has $cold_sites block heads, expected exactly 120" >&2
   echo "  Converting a routine lowers this deliberately; anything else is a regression." >&2
   exit 1
 fi

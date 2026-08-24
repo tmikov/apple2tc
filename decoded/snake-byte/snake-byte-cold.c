@@ -67,6 +67,7 @@
 #include "a2rom.c"
 #include "game_native.c"
 #include "game.c"
+#include "game_top.c" /* the top level; cold-only, see the file header */
 
 #include "apple2tc/a2host_api.h"
 #include "apple2tc/a2io.h"
@@ -141,4 +142,15 @@ void init_emulated(void) {
   a2_io_push_key(a2host_io(), 0x0d);
   io_peek(0xc000);
   io_poke(0xc010, 0);
+}
+
+/// The generated dispatch is gone; this is what is left of it.
+///
+/// snake-byte-cold-body.c still declares func_t001 and its emulated_entry_point
+/// still calls it, because that is how a generated program starts. The body it
+/// used to have -- 968 lines of block-id switch -- is now
+/// game_cold_start() in game_native.c.
+void func_t001(uint16_t ret_addr) {
+  (void)ret_addr; // nothing calls this but the entry point, with 0
+  game_cold_start();
 }

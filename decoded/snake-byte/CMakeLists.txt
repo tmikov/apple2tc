@@ -55,8 +55,8 @@ set_source_files_properties(snake-byte-easyc1-ext.c game_native.c
 # one on its own.
 add_a2_program(snake-byte-cold
   snake-byte-cold.c
-  snake-byte-cold-body.c a2rom.c a2rom.h game_native.c game_native.h game.c game.h
+  snake-byte-cold-body.c a2rom.c a2rom.h game_native.c game_native.h game.c game.h game_top.c
   ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   )
-set_source_files_properties(snake-byte-cold-body.c a2rom.c game_native.c game.c
+set_source_files_properties(snake-byte-cold-body.c a2rom.c game_native.c game.c game_top.c
   PROPERTIES HEADER_FILE_ONLY TRUE)

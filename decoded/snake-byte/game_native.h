@@ -137,6 +137,20 @@ typedef struct {
 /// GAME_CYCLES must not be, and GAME_CYCLES_COORD must be on the coordinate.
 #define GAME_CYCLES_SHARED(addr, n) GAME_CYCLES_COORD((addr), (n))
 
+/// Charge the cycles and keep the probe, because the address is where a
+/// cross-build comparison lines the two traces up.
+///
+/// Exactly one address uses this, and it is $3750. probe-acceptance.sh checks
+/// the cold-start build against the booting one, and the booting one's trace
+/// has to have its boot prefix removed before the two are comparable. The only
+/// way to find where that prefix ends is to look for the entry address, so the
+/// entry address has to still be in the trace. Converting it to a plain
+/// GAME_CYCLES takes it out and the alignment silently finds nothing.
+///
+/// Spelled apart from GAME_CYCLES_COORD, which it expands to, because the
+/// reason is different and the two lints check different things.
+#define GAME_CYCLES_ANCHOR(addr, n) GAME_CYCLES_COORD((addr), (n))
+
 /* --- The bouncers --------------------------------------------------------- */
 
 /// One of the two objects that ricochet around the playfield. The original
@@ -236,6 +250,11 @@ uint8_t game_read_direction_native(uint8_t key);
 /// $75D1 -- blink slot \p slot on the key-redefinition screen until the player
 /// presses something it will accept, and return that key.
 uint8_t game_edit_key_native(uint8_t slot);
+
+/// $3750 -- the program's entry, and the outermost loop: relocate the level
+/// data, initialise $0300-$0304, then new game -> level -> round -> life
+/// forever. Never returns; the game has no way out.
+void game_cold_start(void);
 
 /// $69A9 -- ESC pauses until any key is pressed; Ctrl-S toggles the sound.
 /// Every key the dispatch chain did not recognise arrives here and is ignored.

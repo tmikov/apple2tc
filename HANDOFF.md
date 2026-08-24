@@ -393,12 +393,26 @@ Items 1-4 below are all struck through now. What actually remains, in order:
 
 **a. ~~Put `snake-byte-cold` in `probe-acceptance.sh`.~~** Done 2026-08-23.
 
-**b. Convert the last 89 blocks.** `func_t001` in `snake-byte-cold-body.c` is
-968 lines of unrewritten decompiler output, and it is the *whole* remainder: the
-`$3750` relocation and `$0300` init, then `$7691-$789F`, the top-level loop.
-Everything it calls is already real C. Doing it leaves the program with no
-decompiler output in it at all — only `s_mem_3750` (the game's data) and
-`s_mem_d000` (ROM bytes the death pause reads at `$E000` as delay lengths).
+**b. ~~Convert the last 89 blocks.~~** Done 2026-08-23 — `game_top.c`, 377
+lines of C in place of 968 lines of dispatch. **The cold build now contains no
+decompiler-generated code at all**; `snake-byte-cold-body.c` is down to 2,441
+lines and every one of them is data or runtime scaffolding (`s_mem_3750`,
+`s_mem_d000`, five ROM helpers, the machine definition).
+
+It lives in its own file rather than in `game_native.c` because that file is
+shared with `snake-bytec1-ext`, whose generated `func_t001` still emits every
+address in it — two sources claiming one block head is what the site-list lint
+exists to reject.
+
+Two conditions came out inverted and neither oracle would have caught them
+without help: at `$7851` the original *branches away* when the value is not
+`$FE`, so equality is the fall-through; and the paddle button at `$788E` reads
+with bit 7 clear when pressed. The technique that found them is worth reusing —
+temporarily respell every `GAME_CYCLES` in the converted C as
+`GAME_CYCLES_ANCHOR`, which keeps the probe, and the converted code becomes
+comparable block-for-block against the generated original. Take the edges out
+first: the original's `CYCLES_EDGE` addresses must stay unprobed or they show as
+phantom differences.
 
 **c. Then the shape, in this order:** drop the 28 adapters that no longer have a
 generated caller; turn off `--ret-addr` and the emulated stack for the shipped
