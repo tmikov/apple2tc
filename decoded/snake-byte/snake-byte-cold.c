@@ -1229,47 +1229,47 @@ static void rom_cout1(uint16_t ret_addr);
 
 /// $F847 GBASCALC. Compute the lo-res base address for row A into GBASL/GBASH
 /// ($26/$27).
+/// $F847 GBASCALC. The lo-res twin of BASCALC: a row 0-47 in A becomes that
+/// row's base address in GBASL/GBASH.
+///
+/// Same shape as BASCALC and the same trick -- LSR puts the row's low bit in
+/// the carry, the next three bits pick the band, and the `ADC #$7F` folds in
+/// the half. It differs in the tail: BASCALC ORs the shifted value back in to
+/// build a text address, and this one shifts by two and ORs, which lands on
+/// the lo-res page instead.
 static void rom_gbascalc(uint16_t ret_addr) {
   bool branchTarget = true;
-  uint8_t tmp1_U8;
-  uint8_t tmp2_U8;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$F847*/ CYCLES(0xf847, 20);
-            tmp1_U8 = s_a;
-            push8(tmp1_U8);
-  /*$F848*/ tmp2_U8 = tmp1_U8 & 0x01;
-            s_status_c = tmp2_U8;
-  /*$F84D*/ s_gbash = (((tmp1_U8 >> 0x01) & 0x03) | 0x04);
-  /*$F84F*/ tmp1_U8 = pop8();
-  /*$F850*/ s_a = (tmp1_U8 & 0x18);
-            branchTarget = true;
-            if (!tmp2_U8)
-              goto bb_6;
-bb_1:
-  /*$F854*/ CYCLES(0xf854, 2);
-            if (s_status_d)
-              goto bb_3;
-bb_2:
-  /*$F854*/ s_a = (uint8_t)((s_a + 0x007f) + s_status_c);
-            goto bb_4;
-bb_3:
-  /*$F854*/ s_a = ((uint8_t)adc_dec16(s_a, 0x7f, s_status_c));
-bb_4:
-bb_5:
+  const uint8_t row = s_a;
+  const uint8_t odd = (uint8_t)(row & 0x01);
+  s_status_c = odd;
+  /*$F84D*/ s_gbash = (uint8_t)(((row >> 0x01) & 0x03) | 0x04);
+  /*$F850*/ s_a = (uint8_t)(row & 0x18);
+
+  if (odd) {
+    /*$F854*/ CYCLES(0xf854, 2);
+    if (!s_status_d)
+      s_a = (uint8_t)((s_a + 0x7f) + s_status_c);
+    else
+      s_a = (uint8_t)adc_dec16(s_a, 0x7f, s_status_c);
+  } else {
+    // $F852 BCC -- the branch itself, taken here (not modelled by the block
+    // above's own cost, which is the not-taken total; see the design doc on
+    // edge costs).
+    /*$F852*/ CYCLES_EDGE(0xf852, 1);
+  }
+  branchTarget = true;
+  (void)branchTarget;
+
   /*$F856*/ CYCLES(0xf856, 19);
-            tmp2_U8 = s_a;
-            s_gbasl = tmp2_U8;
-  /*$F85C*/ s_gbasl = ((uint8_t)(tmp2_U8 << 0x02) | s_gbasl);
-  /*$F85E*/ if (ret_addr) pop16(); return;
-bb_6:
-  // $F852 BCC -- the branch itself, taken here (not modelled by bb_1's own
-  // cost, which is the not-taken total; see the design doc on edge costs).
-  /*$F852*/ CYCLES_EDGE(0xf852, 1);
-            goto bb_5;
+  s_gbasl = s_a;
+  /*$F85C*/ s_gbasl = (uint8_t)((uint8_t)(s_a << 0x02) | s_gbasl);
+
+  /*$F85E*/ if (ret_addr) pop16();
 }
 
 /// $F80E PLOT1. Store the color mask ($30) into the lo-res half-byte selected
@@ -1300,62 +1300,66 @@ static void rom_plot1(uint16_t ret_addr) {
 /* $F800 PLOT                                                                 */
 /* ========================================================================== */
 
+/// $F800 PLOT. Light the lo-res cell at row A, column Y, in COLOR.
+///
+/// Two cells share a byte, so the row's low bit picks which nibble -- MASK
+/// becomes $0F for the lower half and $F0 for the upper. The ROM gets there by
+/// keeping the bit on the stack across GBASCALC and then adding $E0 to $0F,
+/// which is $F0 with the carry set and $EF without; only the low bit of the
+/// row can make the difference, so the sum is one of the two masks.
 void rom_plot(uint16_t ret_addr) {
   bool branchTarget = true;
-  uint8_t tmp1_U8;
-  uint8_t tmp2_U8;
-  uint16_t tmp3_U16;
-  uint16_t tmp4_U16;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$F800*/ CYCLES(0xf800, 11);
-            tmp1_U8 = s_a;
-            tmp2_U8 = tmp1_U8 >> 0x01;
-            s_a = tmp2_U8;
-  /*$F801*/ push8(((tmp1_U8 & 0x01) | ((tmp2_U8 == 0) << 1) | (s_status_i << 2) | (s_status_d << 3) | STATUS_B | (s_status_v << 6) | (tmp2_U8 & 0x80)));
+  const uint8_t row = s_a;
+  const uint8_t half = (uint8_t)(row >> 0x01);
+  const bool upper = (row & 0x01) != 0;
+  s_a = half;
+  /*$F801*/ push8((uint8_t)((row & 0x01) | ((half == 0) << 1) | (s_status_i << 2) |
+                            (s_status_d << 3) | STATUS_B | (s_status_v << 6) |
+                            (half & 0x80)));
   /*$F802*/ rom_gbascalc(0xfffe);
+
   /*$F805*/ CYCLES(0xf805, 8);
-            tmp1_U8 = pop8();
-            tmp2_U8 = tmp1_U8 & 0x01;
-            s_status_c = tmp2_U8;
-            s_status_i = ((tmp1_U8 & 0x04) != 0);
-            s_status_d = ((tmp1_U8 & 0x08) != 0);
-            s_status_b = 0x00;
-            s_status_v = ((tmp1_U8 & 0x40) != 0);
+  {
+    const uint8_t saved = pop8();
+    s_status_c = (uint8_t)(saved & 0x01);
+    s_status_i = ((saved & 0x04) != 0);
+    s_status_d = ((saved & 0x08) != 0);
+    s_status_b = 0x00;
+    s_status_v = ((saved & 0x40) != 0);
+  }
   /*$F806*/ s_a = 0x0f;
-            branchTarget = true;
-            if (!tmp2_U8)
-              goto bb_6;
-bb_1:
-  /*$F80A*/ CYCLES(0xf80a, 2);
-            if (s_status_d)
-              goto bb_3;
-bb_2:
-  /*$F80A*/ tmp3_U16 = s_a;
-            tmp4_U16 = (tmp3_U16 + 0x00e0) + s_status_c;
-            s_status_c = (uint8_t)(tmp4_U16 >> 8);
-            s_status_v = ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0x00e0);
-            s_a = ((uint8_t)tmp4_U16);
-            goto bb_4;
-bb_3:
-  /*$F80A*/ tmp4_U16 = adc_dec16(s_a, 0xe0, s_status_c);
-            s_a = ((uint8_t)tmp4_U16);
-            tmp2_U8 = (uint8_t)(tmp4_U16 >> 8);
-            s_status_c = (tmp2_U8 & 0x01);
-            s_status_v = ((tmp2_U8 & 0x40) != 0);
-bb_4:
-bb_5:
+
+  if (upper) {
+    /*$F80A*/ CYCLES(0xf80a, 2);
+    if (!s_status_d) {
+      const uint16_t r = ((uint16_t)s_a + 0x00e0) + s_status_c;
+      s_status_c = (uint8_t)(r >> 8);
+      s_status_v = ovf8((uint8_t)r, s_a, 0xe0);
+      s_a = (uint8_t)r;
+    } else {
+      const uint16_t r = adc_dec16(s_a, 0xe0, s_status_c);
+      s_a = (uint8_t)r;
+      const uint8_t flags = (uint8_t)(r >> 8);
+      s_status_c = (flags & 0x01);
+      s_status_v = ((flags & 0x40) != 0);
+    }
+  } else {
+    // $F808 BCC -- the branch itself, taken here.
+    /*$F808*/ CYCLES_EDGE(0xf808, 1);
+  }
+  branchTarget = true;
+  (void)branchTarget;
+
   /*$F80C*/ CYCLES(0xf80c, 3);
-            s_mask = s_a;
-            rom_plot1(0x0000);
-            if (ret_addr) pop16(); return;
-bb_6:
-  // $F808 BCC -- the branch itself, taken here.
-  /*$F808*/ CYCLES_EDGE(0xf808, 1);
-            goto bb_5;
+  s_mask = s_a;
+  rom_plot1(0x0000); // JMP -- a tail call.
+
+  if (ret_addr) pop16();
 }
 
 /* ========================================================================== */
