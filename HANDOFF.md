@@ -292,8 +292,18 @@ the ROM helpers were "owned"; that was wrong and the plan reads better without
 it. Everything in `snake-byte-cold.c` is a decompilation of one binary, and a
 routine still emitted as a switch over block ids is a less finished one, not a
 different kind. The five that were left — BASCALC, VTABZ, CLREOL, CLREOLZ,
-WAIT — are C now. The `bb_N:` count is **112**, all of it inside the other ROM
-entry points, and that is a work list rather than a boundary.
+WAIT — are C now, and so are PLOT1, SETCOL and SCRN. The `bb_N:` count is
+**106**, all of it inside the remaining ROM entry points, and that is a work
+list rather than a boundary:
+
+```
+rom_coutz 41, rom_fc68 16, rom_hline 11, rom_home 9, rom_gbascalc 7,
+rom_plot 7, rom_cout1 5, rom_setkbd 5, rom_setvid 5
+```
+
+Decimal mode is **not** asserted away in ROM routines the way it is in game
+ones. `game_bonus_screen` is entered with `D` set and it prints, so COUT can
+reach BASCALC and VTABZ in decimal mode. Keep both arms.
 
 `a2rom.c` and `game.c` are **`#include`d, never compiled separately**.
 `system2-inc.h` defines the machine state (`s_ram`, `s_a`, the `CYCLES` macro)
@@ -590,17 +600,43 @@ borrowed because zero page was the only place to put them. They are parameters.
 Safe because nothing reads the residue — `wipe_occupancy_map` overwrites the
 row on its first line and the column is not read until `draw_border` writes it.
 
+**3e-3h, 2026-08-24.** The monitor's whole zero page (`$0020-$003E`) followed
+the cursor out of RAM; `s_plot[9]` became named variables; the hi-res cell
+drawers' four scratch bytes became locals, with the destination's high byte a
+return value instead of a global the adapters read after the call; and every
+plot and run call site states its arguments (`plot_at`, `plot_shape_at`,
+`plot_hline_at`, `plot_vline_at`, `lores_vline_at`).
+
+**`ram_peek(0x...)` and `ram_poke(0x...)` appear zero times in the file.** Every
+address that stood in for a variable is a variable. The ~290 remaining
+`ram_peek`/`ram_poke` calls all go through named constants for storage that is
+genuinely the game's memory image.
+
+Writing the inherited values out is where this stopped being cosmetic. Three
+were load-bearing and none of them looked it:
+
+- the bonus screen's box reads as four edges at column `$0D` and is not — an
+  hline leaves `s_col` at its own endpoint, so the first vline ran down `$1A`,
+  the box's right edge.
+- `game_draw_side_walls` computed its seam from `s_run_end`, still holding the
+  wall top from two calls earlier. That is a local named `wall_top` now.
+- the redefinition screen's stem and third glyph both inherit column `$1E` from
+  the arrow plotted above them.
+
 ### What is left of step 3
 
-`s_plot` still has 160 uses: `kInk`, `kCol`, `kRow`, `kHgrDest`, `kDotIndex`,
-`kScanline`, `kRunEnd`. Turning those into real parameters is the rest of the
-step, and each one needs the same treatment `kShape` got — find the readers,
-find whether any of them inherits rather than receives, and write the argument
-down. `kShape` turned out to be a genuine global; do not assume the others are
-not.
+`s_shape`, `s_ink`, `s_col`, `s_row` and `s_run_end`. These are the plotting
+subsystem's shared state and the steppers mutate them mid-loop — `s_col` and
+`s_row` are read back by the adapters as the routine's result, and by
+`game_draw_cell` as the cell to draw. Threading them means restructuring
+`game_plot_shape_native`, the three steppers and both cell drawers together,
+rather than one address at a time. `s_shape` is a genuine global and will not
+thread at all; do not assume the other four are the same, and do not assume
+they are not.
 
-The order that worked: readers first (there are far fewer than writers), then
-ask which reader gets its value from a caller and which from whatever ran last.
+The order that worked everywhere else: readers first (there are far fewer than
+writers), then ask which reader gets its value from a caller and which from
+whatever ran last.
 
 **3d: the cursor.** `$0024/$0025` — CH and CV — are `s_ch` and `s_cv`, 43
 accesses moved. That they belong to the ROM rather than to the game was raised
