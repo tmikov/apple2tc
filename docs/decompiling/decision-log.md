@@ -2795,3 +2795,64 @@ All five carry a comment saying so. None of them lost coverage in the
 conversion — the generated versions were equally unreached — but an error in
 any would not be caught, and that is worth more written down than inferred from
 a block count.
+
+## 2026-08-24 — Step 5 done, and step 6 rests on a false premise
+
+`ret_addr` is gone from 36 functions, along with the `push16`/`pop16` pair
+each carried. `push16` and `pop16` are unused in this build: there is no
+emulated call stack any more.
+
+Nothing was spent for it. `ram-cold.probe` has never hashed `$0100-$01FF` —
+it dropped the stack when it was written, on the argument that comparing
+scaffolding would go red on the first adapter deleted rather than on the first
+bug. That call, made before any of this, is what made this step free.
+
+The documented trap did not bite either. `game_print_inline_str` finds its
+string by address, and that address has been an ordinary parameter since the
+routine was converted; what it reads is the game's own image, not the stack.
+
+### Step 6 is not what the plan says it is
+
+The plan reads: "**Step 6 — `CYCLES`.** Last. It is what the trace oracle is
+made of, so after this the screen is the only check left." That is half true and
+the missing half changes the step.
+
+`CYCLES` is also the **clock**. The macro sets `s_pc`, adds to `s_cycles`, and
+calls `cycles_expired()` when the budget runs out — which is what advances the
+host's frames. Delete the sites and time stops: `--frames=N` never terminates,
+the delay loops cost nothing, and the speaker never clicks.
+
+Measured, the 851 sites are two different populations:
+
+| | count | what it is |
+| --- | --- | --- |
+| probing `CYCLES` / `GAME_CYCLES_*` | 130 (120 distinct) | the trace oracle *and* the clock |
+| charge-only `CYCLES_EDGE` / `GAME_CYCLES` | 721 | the clock alone |
+
+So the step decomposes:
+
+- **6a, retiring the trace** — stop the 130 from probing. Cheap, reversible in
+  principle, and it is the trade the plan describes. But on its own it spends
+  the strongest oracle and improves no code: the sites stay, they just stop
+  being watched.
+- **6b, removing the clock** — delete the charges. This needs the artifact to
+  pace itself some other way, which nothing has designed, and it puts the cold
+  build beyond comparison with the booting one, because the gate's whole method
+  is running the same emulated program twice.
+
+**6b is what the artifact eventually wants and it cannot be verified by this
+gate.** That is not an argument against doing it; it is an argument for doing it
+when the artifact stops being checked by comparison, and not before.
+
+### What that means for the adapters
+
+Step 4's remaining adapters were thought to be blocked on step 6, because they
+hold `CYCLES` sites and deleting one "silently" drops a comparison point. It is
+not silent: `probe-acceptance.sh` pins the count at 120 and fails loudly until
+the number is changed on purpose. The script already says so — "converting a
+routine lowers this deliberately; anything else is a regression."
+
+So they can go one at a time, each lowering the pinned count with a reason, and
+the trace stays intact for everything else. Four of them are already charged
+`CYCLES(addr, 0)`, so deleting those costs no cycles at all — only the site.
+That is the route, and it does not need step 6 first.

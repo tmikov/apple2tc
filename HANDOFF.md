@@ -664,17 +664,58 @@ whatever — and the plan should be read that way throughout.
 GBASCALC before every use, so a stray write there is overwritten before the
 next sample can see it. Do not "fix" that by widening the hash.
 
-**Step 4 — return values instead of `s_a` and the flags.** As callers stop
-reading `s_a`, the 23 remaining marshalling adapters empty out and follow the
-first 15.
+**Step 4 — return values instead of `s_a` and the flags.** Half done
+2026-08-24: the seven adapters with no `CYCLES` site of their own are gone, and
+their callers pass values (`game_print_bcd_native(byte)` rather than `s_a =
+byte` then a call). `game_play_loop` became `game_play_one_life()`. Three
+decimal-mode gates became one `assert_binary_mode()`.
 
-**Step 5 — drop `ret_addr` and the emulated stack.** 40 signatures, mechanical,
-with one trap: `game_print_inline_str` finds its string by *reading* the pushed
-return address. It has to take a real string parameter before the stack goes,
-or it breaks silently.
+What is left is 531 register/flag references, and **294 of them are inside
+`rom_*`, where registers are the algorithm** — the monitor's own routines pass
+in A/Y/X because that is what they are. The game side is already clean: it goes
+through `lores_plot(row, col)`, `scrn_cell(c)`, `plot_shape_at(...)`. So the
+remaining work is the 19 adapters with `CYCLES` sites, and the route to those
+is under step 6 below — not through step 6.
 
-**Step 6 — `CYCLES`.** Last. It is what the trace oracle is made of, so after
-this the screen is the only check left.
+**~~Step 5 — drop `ret_addr` and the emulated stack.~~** Done 2026-08-24. 36
+signatures, and `push16`/`pop16` are unused in this build. Free, because
+`ram-cold.probe` never hashed `$0100-$01FF`. The documented trap did not bite:
+`game_print_inline_str` takes its address as an ordinary parameter and reads
+the game's own image, not the stack. `push8`/`pop8` stay — 21 of them, PHA/PHP
+inside a routine that the routine pops itself.
+
+**Step 6 — `CYCLES`. Read this before starting: the step is not what this line
+used to say.** It said "it is what the trace oracle is made of, so after this
+the screen is the only check left". True, and incomplete — **`CYCLES` is also
+the clock.** The macro adds to `s_cycles` and calls `cycles_expired()`, which
+is what advances the host's frames. Delete the sites and time stops: `--frames`
+never terminates and the delay loops cost nothing.
+
+Measured 2026-08-24, the 851 sites are two populations:
+
+| | count | what it is |
+| --- | --- | --- |
+| probing `CYCLES` / `GAME_CYCLES_*` | 130 (120 distinct) | trace oracle *and* clock |
+| charge-only `CYCLES_EDGE` / `GAME_CYCLES` | 721 | clock alone |
+
+- **6a — retire the trace.** Stop the 130 probing. This is the trade the plan
+  described, but on its own it spends the strongest oracle and improves no
+  code: the sites stay, they just stop being watched. **Do not do it to unblock
+  the adapters — it does not.**
+- **6b — remove the clock.** Needs the artifact to pace itself some other way,
+  which nothing has designed, and it puts the cold build beyond comparison with
+  the booting one, since the gate's whole method is running the same emulated
+  program twice. Do this when the artifact stops being checked by comparison.
+
+**The adapters are not blocked on either.** They hold `CYCLES` sites, and
+deleting one drops a comparison point — but not silently:
+`probe-acceptance.sh` pins the count at 120 and fails until the number is
+changed on purpose. Delete them one at a time, lower the pin with a reason, and
+the rest of the trace is untouched. Four are already charged `CYCLES(addr, 0)`
+— `game_clear_hgr`, `game_draw_playfield`, `game_update_high_score`,
+`game_find_apple` — so deleting those costs no cycles at all, only the site.
+Check each one's A/flags write-back is unread first; that is the only real
+work in it.
 
 **d. Loose ends:** 451 unknown nonzero bytes in the coverage report; probe phase
 3 (apple2tc emitting `PROBE_x(...)` sites so a probe can read the generated C's
