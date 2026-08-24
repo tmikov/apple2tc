@@ -1743,241 +1743,254 @@ last_line: /* $FC95 -- blank what the scroll left at the bottom */
 /* covered by the oracle - the one part of this file in that category.         */
 /* ========================================================================== */
 
+/// $FB78 COUTZ. The monitor's character-output dispatcher: printable
+/// characters go on the screen, the four control codes it knows do their
+/// thing, and everything else is dropped.
+///
+/// Entered from COUT1, which has already masked the character with INVFLG.
+///
+/// **Three of its arms are decoded and never run.** Probed at their entry
+/// addresses across both cold scenarios: the character store fires 204 and 651
+/// times and the carriage return and line feed 0 and 17, but the Ctrl-S
+/// handshake ($FB85), its spin ($FB88), the backspace ($FC10) and the bell
+/// ($FBD9 and $FBDD) fire **zero** times in either. Everything this game
+/// prints is printable, a return, or a line feed; it never emits a Ctrl-G or a
+/// backspace, and no recording holds a key down across a return. Those arms
+/// rest on the binary alone.
+///
+/// The labels keep their addresses. This is a dispatcher whose arms rejoin at
+/// several depths -- backspace falls into the cursor-up path, a wrapped line
+/// falls into the carriage return, and a carriage return falls into the line
+/// feed -- and writing it as nested ifs would need each of those spelled out
+/// twice.
 static void rom_coutz(uint16_t ret_addr) {
   bool branchTarget = true;
-  uint8_t tmp1_U8;
-  uint8_t tmp2_U8;
-  uint8_t tmp3_U8;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$FB78*/ CYCLES(0xfb78, 4);
-  /*$FB7A*/ branchTarget = true;
-            if (s_a != 0x8d)
-              goto bb_27;
-bb_1:
+  branchTarget = true;
+  if (s_a != 0x8d) {
+    /*$FB7A*/ CYCLES_EDGE(0xfb7a, 1);
+    goto emit;
+  }
+
+  /* $FB7C -- the Ctrl-S handshake, on a carriage return only. If a key is
+     already waiting and it is Ctrl-S, stop here until another key arrives.
+     Ctrl-C is left in the keyboard latch on the way out so that whatever is
+     running next still sees it; anything else is consumed. */
   /*$FB7C*/ CYCLES(0xfb7c, 6);
-            tmp1_U8 = io_peek(0xc000);
-            s_y = tmp1_U8;
-  /*$FB7F*/ branchTarget = true;
-            if (!(tmp1_U8 & 0x80))
-              goto bb_28;
-bb_2:
+  s_y = io_peek(0xc000);
+  branchTarget = true;
+  if (!(s_y & 0x80)) {
+    /*$FB7F*/ CYCLES_EDGE(0xfb7f, 1);
+    goto emit;
+  }
+
   /*$FB81*/ CYCLES(0xfb81, 4);
-  /*$FB83*/ branchTarget = true;
-            if (s_y != 0x93)
-              goto bb_29;
-bb_3:
+  branchTarget = true;
+  if (s_y != 0x93) {
+    /*$FB83*/ CYCLES_EDGE(0xfb83, 1);
+    goto emit;
+  }
+
   /*$FB85*/ CYCLES(0xfb85, 4);
-            tmp1_U8 = io_peek(0xc010);
-            s_status_v = ((tmp1_U8 >> 0x06) & 0x01);
-bb_4:
-  /*$FB88*/ CYCLES(0xfb88, 6);
-            tmp1_U8 = io_peek(0xc000);
-            s_y = tmp1_U8;
-  /*$FB8B*/ branchTarget = true;
-            if (!(tmp1_U8 & 0x80))
-              goto bb_30;
-bb_5:
-  /*$FB8D*/ CYCLES(0xfb8d, 4);
-  /*$FB8F*/ branchTarget = true;
-            if (!(s_y != 0x83))
-              goto bb_31;
-bb_6:
-  /*$FB91*/ CYCLES(0xfb91, 4);
-            tmp1_U8 = io_peek(0xc010);
-            s_status_v = ((tmp1_U8 >> 0x06) & 0x01);
-bb_7:
-  /*$FB94*/ CYCLES(0xfb94, 3);
+  s_status_v = (uint8_t)((io_peek(0xc010) >> 0x06) & 0x01);
+
+  for (;;) { /* $FB88 -- spin until a key is pressed */
+    CYCLES(0xfb88, 6);
+    s_y = io_peek(0xc000);
+    branchTarget = true;
+    if (!(s_y & 0x80)) {
+      /*$FB8B*/ CYCLES_EDGE(0xfb8b, 1);
+      continue;
+    }
+
+    /*$FB8D*/ CYCLES(0xfb8d, 4);
+    branchTarget = true;
+    if (s_y == 0x83) {
+      // Ctrl-C: leave it latched.
+      /*$FB8F*/ CYCLES_EDGE(0xfb8f, 1);
+      break;
+    }
+    /*$FB91*/ CYCLES(0xfb91, 4);
+    s_status_v = (uint8_t)((io_peek(0xc010) >> 0x06) & 0x01);
+    break;
+  }
+
+emit: /* $FB94 JMP $FBFD */
+  CYCLES(0xfb94, 3);
   /*$FBFD*/ CYCLES(0xfbfd, 4);
-  /*$FBFF*/ branchTarget = true;
-            if (!(s_a >= 0xa0))
-              goto bb_10;
-            // $FBFF BCS -- taken here (falls into the trampoline charge
-            // below before continuing into bb_8; the not-taken arm above
-            // jumps straight to bb_10 without it).
+  branchTarget = true;
+  if (!(s_a >= 0xa0)) {
+    // The not-taken arm jumps straight to the dispatch without the edge charge.
+    goto dispatch;
+  }
+  // $FBFF BCS -- taken here, and it falls into the trampoline charge before
+  // continuing.
   /*$FBFF*/ CYCLES_EDGE(0xfbff, 1);
-bb_8:
-  /*$FBF0*/ CYCLES(0xfbf0, 9);
-            tmp1_U8 = s_ch;
-            s_y = tmp1_U8;
-  /*$FBF2*/ poke((bas16() + tmp1_U8), s_a);
-bb_9:
+
+store: /* $FBF0 -- put the character at the cursor */
+  CYCLES(0xfbf0, 9);
+  s_y = s_ch;
+  /*$FBF2*/ poke((uint16_t)(bas16() + s_y), s_a);
+
   /*$FBF4*/ CYCLES(0xfbf4, 13);
-            s_ch = (uint8_t)(s_ch + 0x01);
-  /*$FBF6*/ tmp1_U8 = s_ch;
-            s_a = tmp1_U8;
-  /*$FBF8*/ tmp2_U8 = s_wndwdth;
-            s_status_not_z = (tmp1_U8 != tmp2_U8);
-            tmp3_U8 = tmp1_U8 >= tmp2_U8;
-            s_status_c = tmp3_U8;
-            s_status_n = ((uint8_t)(tmp1_U8 - tmp2_U8) & 0x80);
-  /*$FBFA*/ branchTarget = true;
-            if (tmp3_U8)
-              goto bb_33;
-bb_19:
+  s_ch = (uint8_t)(s_ch + 0x01);
+  s_a = s_ch;
+  {
+    const uint8_t width = s_wndwdth;
+    s_status_not_z = (uint8_t)(s_a != width);
+    s_status_c = (uint8_t)(s_a >= width);
+    s_status_n = (uint8_t)((uint8_t)(s_a - width) & 0x80);
+    branchTarget = true;
+    if (s_status_c) {
+      // Off the right edge, so wrap: the same thing a carriage return does.
+      /*$FBFA*/ CYCLES_EDGE(0xfbfa, 1);
+      goto carriage_return;
+    }
+  }
   /*$FBFC*/ CYCLES(0xfbfc, 6);
-            branchTarget = true;
-            if (ret_addr) pop16(); return;
-bb_10:
-  /*$FC01*/ CYCLES(0xfc01, 4);
-            tmp3_U8 = s_a;
-            s_y = tmp3_U8;
-  /*$FC02*/ branchTarget = true;
-            if (!(tmp3_U8 & 0x80))
-              goto bb_34;
-bb_11:
+  branchTarget = true;
+  goto out;
+
+dispatch: /* $FC01 -- not printable; which control code is it? */
+  CYCLES(0xfc01, 4);
+  s_y = s_a;
+  branchTarget = true;
+  if (!(s_a & 0x80)) {
+    // Below $80 the monitor stores it anyway, high bit and all.
+    /*$FC02*/ CYCLES_EDGE(0xfc02, 1);
+    goto store;
+  }
+
   /*$FC04*/ CYCLES(0xfc04, 4);
-  /*$FC06*/ branchTarget = true;
-            if (!(s_a != 0x8d))
-              goto bb_35;
-bb_12:
+  branchTarget = true;
+  if (s_a == 0x8d) {
+    /*$FC06*/ CYCLES_EDGE(0xfc06, 1);
+    goto carriage_return;
+  }
+
   /*$FC08*/ CYCLES(0xfc08, 4);
-  /*$FC0A*/ branchTarget = true;
-            if (!(s_a != 0x8a))
-              goto bb_36;
-bb_13:
+  branchTarget = true;
+  if (s_a == 0x8a) {
+    /*$FC0A*/ CYCLES_EDGE(0xfc0a, 1);
+    goto line_feed;
+  }
+
   /*$FC0C*/ CYCLES(0xfc0c, 4);
-            tmp3_U8 = s_a;
-            s_status_c = (tmp3_U8 >= 0x88);
-  /*$FC0E*/ branchTarget = true;
-            if (tmp3_U8 != 0x88)
-              goto bb_37;
-bb_14:
+  s_status_c = (uint8_t)(s_a >= 0x88);
+  branchTarget = true;
+  if (s_a != 0x88) {
+    /*$FC0E*/ CYCLES_EDGE(0xfc0e, 1);
+    goto bell;
+  }
+
+  /* $FC10 -- backspace. Off the left edge wraps to the end of the line above,
+     which is why it falls into the cursor-up path rather than returning. */
   /*$FC10*/ CYCLES(0xfc10, 7);
-            tmp3_U8 = (uint8_t)(s_ch - 0x01);
-            s_status_not_z = tmp3_U8;
-            tmp2_U8 = tmp3_U8 & 0x80;
-            s_status_n = tmp2_U8;
-            s_ch = tmp3_U8;
-  /*$FC12*/ branchTarget = true;
-            if (!tmp2_U8)
-              goto bb_38;
-bb_15:
+  {
+    const uint8_t back = (uint8_t)(s_ch - 0x01);
+    s_status_not_z = back;
+    s_status_n = (uint8_t)(back & 0x80);
+    s_ch = back;
+    branchTarget = true;
+    if (!(back & 0x80)) {
+      /*$FC12*/ CYCLES_EDGE(0xfc12, 1);
+      /*$FBFC*/ CYCLES(0xfbfc, 6);
+      branchTarget = true;
+      goto out;
+    }
+  }
+
   /*$FC14*/ CYCLES(0xfc14, 11);
   /*$FC16*/ s_ch = s_wndwdth;
   /*$FC18*/ s_ch = (uint8_t)(s_ch - 0x01);
-bb_16:
+
   /*$FC1A*/ CYCLES(0xfc1a, 8);
-            tmp2_U8 = s_wndtop;
-            s_a = tmp2_U8;
-  /*$FC1C*/ tmp3_U8 = s_cv;
-            s_status_not_z = (tmp2_U8 != tmp3_U8);
-            tmp1_U8 = tmp2_U8 >= tmp3_U8;
-            s_status_c = tmp1_U8;
-            s_status_n = ((uint8_t)(tmp2_U8 - tmp3_U8) & 0x80);
-  /*$FC1E*/ branchTarget = true;
-            if (tmp1_U8)
-              goto bb_39;
-bb_17:
+  {
+    const uint8_t top = s_wndtop;
+    s_a = top;
+    const uint8_t cv = s_cv;
+    s_status_not_z = (uint8_t)(top != cv);
+    s_status_c = (uint8_t)(top >= cv);
+    s_status_n = (uint8_t)((uint8_t)(top - cv) & 0x80);
+    branchTarget = true;
+    if (s_status_c) {
+      // Already on the window's top line; there is nowhere to go up to.
+      /*$FC1E*/ CYCLES_EDGE(0xfc1e, 1);
+      /*$FC2B*/ CYCLES(0xfc2b, 6);
+      branchTarget = true;
+      goto out;
+    }
+  }
+
   /*$FC20*/ CYCLES(0xfc20, 5);
-            s_cv = (uint8_t)(s_cv - 0x01);
-  /*$FC22*/ CYCLES(0xfc22, 3);
-            s_a = s_cv;
-            rom_vtabz(0x0000);
-            if (ret_addr) pop16(); return;
-bb_18:
-  /*$FC2B*/ CYCLES(0xfc2b, 6);
-            branchTarget = true;
-            if (ret_addr) pop16(); return;
-bb_22:
-  /*$FBD9*/ CYCLES(0xfbd9, 4);
-            tmp2_U8 = s_a;
-            tmp1_U8 = tmp2_U8 != 0x87;
-            s_status_not_z = tmp1_U8;
-            s_status_c = (tmp2_U8 >= 0x87);
-            s_status_n = ((uint8_t)(tmp2_U8 - 0x87) & 0x80);
-  /*$FBDB*/ branchTarget = true;
-            if (tmp1_U8)
-              goto bb_40;
-bb_23:
+  s_cv = (uint8_t)(s_cv - 0x01);
+  /*$FC22*/ CYCLES(0xfc22, 3); // TABV
+  s_a = s_cv;
+  rom_vtabz(0x0000);
+  goto out;
+
+bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
+  CYCLES(0xfbd9, 4);
+  {
+    const uint8_t ch = s_a;
+    const uint8_t differs = (uint8_t)(ch != 0x87);
+    s_status_not_z = differs;
+    s_status_c = (uint8_t)(ch >= 0x87);
+    s_status_n = (uint8_t)((uint8_t)(ch - 0x87) & 0x80);
+    branchTarget = true;
+    if (differs) {
+      // Not the bell either. Drop it.
+      /*$FBDB*/ CYCLES_EDGE(0xfbdb, 1);
+      /*$FBEF*/ CYCLES(0xfbef, 6);
+      branchTarget = true;
+      goto out;
+    }
+  }
+
+  // A tenth of a second of silence, then 192 clicks of the speaker.
   /*$FBDD*/ CYCLES(0xfbdd, 8);
-            s_a = 0x40;
+  s_a = 0x40;
   /*$FBDF*/ rom_wait(0xfffe);
-            branchTarget = true;
-bb_24:
+  branchTarget = true;
   /*$FBE2*/ CYCLES(0xfbe2, 2);
-            s_y = 0xc0;
-bb_25:
-  /*$FBE4*/ CYCLES(0xfbe4, 8);
-            s_a = 0x0c;
-  /*$FBE6*/ rom_wait(0xfffe);
-            branchTarget = true;
-  /*$FBE9*/ CYCLES(0xfbe9, 8);
-            tmp1_U8 = io_peek(0xc030);
-            s_a = tmp1_U8;
-  /*$FBEC*/ tmp1_U8 = (uint8_t)(s_y - 0x01);
-            s_status_not_z = tmp1_U8;
-            s_status_n = (tmp1_U8 & 0x80);
-            s_y = tmp1_U8;
-  /*$FBED*/ branchTarget = true;
-            if (tmp1_U8)
-              goto bb_41;
-bb_26:
+  s_y = 0xc0;
+
+  for (;;) { /* $FBE4 */
+    CYCLES(0xfbe4, 8);
+    s_a = 0x0c;
+    /*$FBE6*/ rom_wait(0xfffe);
+    branchTarget = true;
+    /*$FBE9*/ CYCLES(0xfbe9, 8);
+    s_a = io_peek(0xc030);
+    /*$FBEC*/ s_y = (uint8_t)(s_y - 0x01);
+    s_status_not_z = s_y;
+    s_status_n = (uint8_t)(s_y & 0x80);
+    branchTarget = true;
+    if (!s_y)
+      break;
+    /*$FBED*/ CYCLES_EDGE(0xfbed, 1);
+  }
+
   /*$FBEF*/ CYCLES(0xfbef, 6);
-            branchTarget = true;
-            if (ret_addr) pop16(); return;
-bb_20:
-  /*$FC62*/ CYCLES(0xfc62, 5);
+  branchTarget = true;
+  goto out;
+
+carriage_return: /* $FC62 -- to the left edge, then down */
+  CYCLES(0xfc62, 5);
   /*$FC64*/ s_ch = 0x00;
-bb_21:
-  /*$FC66*/ CYCLES(0xfc66, 5);
-            s_cv = (uint8_t)(s_cv + 0x01);
-  /*$FC68*/ rom_fc68(0x0000);
-            if (ret_addr) pop16(); return;
 
-  /* Taken-branch trampolines: each pays the +1 a taken branch costs beyond
-     the not-taken base already charged above, then jumps on. See the design
-     doc; this mirrors what the decompiler does at every JCond.
+line_feed: /* $FC66 */
+  CYCLES(0xfc66, 5);
+  s_cv = (uint8_t)(s_cv + 0x01);
+  /*$FC68*/ rom_fc68(0x0000); // JMP -- a tail call, and where a scroll happens.
 
-     CYCLES_EDGE, not CYCLES: these carry the address of a branch that the
-     block ending in it already reported, so charging them through CYCLES
-     would trace and probe that branch twice on a single execution. Same
-     reasoning as AddEdgeCycles in tools/apple2tc/ir/Values.def. */
-bb_27:
-  /*$FB7A*/ CYCLES_EDGE(0xfb7a, 1);
-            goto bb_7;
-bb_28:
-  /*$FB7F*/ CYCLES_EDGE(0xfb7f, 1);
-            goto bb_7;
-bb_29:
-  /*$FB83*/ CYCLES_EDGE(0xfb83, 1);
-            goto bb_7;
-bb_30:
-  /*$FB8B*/ CYCLES_EDGE(0xfb8b, 1);
-            goto bb_4;
-bb_31:
-  /*$FB8F*/ CYCLES_EDGE(0xfb8f, 1);
-            goto bb_7;
-bb_33:
-  /*$FBFA*/ CYCLES_EDGE(0xfbfa, 1);
-            goto bb_20;
-bb_34:
-  /*$FC02*/ CYCLES_EDGE(0xfc02, 1);
-            goto bb_8;
-bb_35:
-  /*$FC06*/ CYCLES_EDGE(0xfc06, 1);
-            goto bb_20;
-bb_36:
-  /*$FC0A*/ CYCLES_EDGE(0xfc0a, 1);
-            goto bb_21;
-bb_37:
-  /*$FC0E*/ CYCLES_EDGE(0xfc0e, 1);
-            goto bb_22;
-bb_38:
-  /*$FC12*/ CYCLES_EDGE(0xfc12, 1);
-            goto bb_19;
-bb_39:
-  /*$FC1E*/ CYCLES_EDGE(0xfc1e, 1);
-            goto bb_18;
-bb_40:
-  /*$FBDB*/ CYCLES_EDGE(0xfbdb, 1);
-            goto bb_26;
-bb_41:
-  /*$FBED*/ CYCLES_EDGE(0xfbed, 1);
-            goto bb_25;
+out:
+  (void)branchTarget;
+  if (ret_addr) pop16();
 }
 
 /* ========================================================================== */

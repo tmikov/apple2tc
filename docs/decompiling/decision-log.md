@@ -2753,3 +2753,45 @@ the vector right — `s_cswl = 0x00` instead of the snapshot byte:
 So the store is live now and demonstrably was not before. The same trick is the
 general way to test a store nothing currently depends on: remove the other
 source of the value and see whether the store can stand alone.
+
+## 2026-08-24 (very last) — No decompiler-shaped code left, anywhere
+
+`bb_N:` appears zero times in `snake-byte-cold.c`. The twelve ROM entry points
+that were still switches over block ids are C: PLOT1, SETCOL, SCRN, GBASCALC,
+PLOT, COUT1, HLINE/VLINEZ, HOME, the `$FC68` line-feed tail, SETKBD, SETVID and
+COUTZ.
+
+That the ROM was ever a separate question is the thing this session got wrong
+and then fixed. The category did not exist; the work did.
+
+### Labels are not always a failure
+
+Four of these keep named labels rather than becoming nested loops, and that is
+the right answer rather than an unfinished one.
+
+`rom_hline` is two entry points sharing one body: HLINE walks columns to H2 and
+falls out of the bottom of its loop into VLINEZ's, which walks rows to V2. They
+are entered at different depths and leave through each other. `rom_coutz` is a
+dispatcher whose arms rejoin at three depths — a wrapped line falls into the
+carriage return, which falls into the line feed; a backspace off the left edge
+falls into the cursor-up path. `rom_home` has a `goto` back to its own entry
+that cannot execute, kept because the decompiler kept it and for the same
+reason: nothing here does cross-instruction flag proofs.
+
+Writing any of those as loops needs a flag the original does not have. `across`
+/ `down` / `store` / `dispatch` / `bell` beat `bb_1` / `bb_3` / `bb_8` without
+inventing structure. `game_cold_start` made this call first; it generalises.
+
+### Coverage per routine, measured
+
+The rule from the cold-gate episode — check that a scenario runs it *and* that
+a sample point fires while it does — was applied to every conversion. Probing
+entry addresses across both cold scenarios found five arms that never run:
+`rom_clreol` (its caller is the scroll path, and nothing scrolls), `rom_wait`
+(BELL1 only, and nothing emits Ctrl-G), and COUTZ's Ctrl-S handshake, bell and
+backspace (the game prints only printable characters, returns and line feeds).
+
+All five carry a comment saying so. None of them lost coverage in the
+conversion — the generated versions were equally unreached — but an error in
+any would not be caught, and that is worth more written down than inferred from
+a block count.

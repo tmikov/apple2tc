@@ -291,19 +291,30 @@ was treated as a category once, as a reason to defer moving `$0024/$0025` until
 the ROM helpers were "owned"; that was wrong and the plan reads better without
 it. Everything in `snake-byte-cold.c` is a decompilation of one binary, and a
 routine still emitted as a switch over block ids is a less finished one, not a
-different kind. The five that were left — BASCALC, VTABZ, CLREOL, CLREOLZ,
-WAIT — are C now, and so are PLOT1, SETCOL and SCRN. The `bb_N:` count is
-**106**, all of it inside the remaining ROM entry points, and that is a work
-list rather than a boundary:
-
-```
-rom_coutz 41, rom_fc68 16, rom_hline 11, rom_home 9, rom_gbascalc 7,
-rom_plot 7, rom_cout1 5, rom_setkbd 5, rom_setvid 5
-```
+different kind. All of them are C now, and **the `bb_N:` count is 0.** There is no
+decompiler-shaped code left in the file at all — not in the game, not in the
+ROM. BASCALC, VTABZ, CLREOL, CLREOLZ, WAIT, PLOT1, SETCOL, SCRN, GBASCALC,
+PLOT, COUT1, HLINE/VLINEZ, HOME, the line-feed tail and COUTZ went on
+2026-08-24.
 
 Decimal mode is **not** asserted away in ROM routines the way it is in game
 ones. `game_bonus_screen` is entered with `D` set and it prints, so COUT can
 reach BASCALC and VTABZ in decimal mode. Keep both arms.
+
+Where a routine's control flow genuinely rejoins at several depths — COUTZ's
+dispatch, HLINE falling into VLINEZ, HOME's provably-always-taken BCS — the
+labels keep their addresses and get names. That is the same call
+`game_cold_start` made about its state machine, and it is not a failure to
+structure them further; it is what the code is.
+
+**What is decoded and never run is now recorded per routine.** Measured by
+probing entry addresses across both cold scenarios, not assumed:
+
+| never fires in either scenario | why |
+| --- | --- |
+| `rom_clreol` | its only caller is the scroll path; nothing scrolls |
+| `rom_wait` | called only from BELL1; nothing emits Ctrl-G |
+| COUTZ's Ctrl-S handshake, bell and backspace | the game prints only printable characters, returns and line feeds |
 
 `a2rom.c` and `game.c` are **`#include`d, never compiled separately**.
 `system2-inc.h` defines the machine state (`s_ram`, `s_a`, the `CYCLES` macro)
@@ -903,7 +914,9 @@ Mistakes already made here. The log has the full accounts.
 ## Open questions
 
 - **The `$93`/`$83` Ctrl-S handshake** in `rom_coutz`: reachable at runtime
-  (needs a key pending when a CR is output) but not on this trace. Transcribed
-  faithfully, unvalidated by execution.
+  (needs a key pending when a CR is output) but not on any trace. Transcribed
+  faithfully, unvalidated by execution — and now measured rather than assumed:
+  probed at `$FB85` it fires 0 times in both cold scenarios, as do the bell and
+  the backspace beside it. The routine says so above itself.
 - **`$66A6`**: `JMP $6655`, an alternate entry to the glyph blitter that skips
   the control-character filter. Nothing references it. Left unimplemented.
