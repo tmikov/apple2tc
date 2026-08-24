@@ -15,8 +15,10 @@
 # text page, the buffers, and the game's own data at $6000-$BFFF. Those are the
 # game's state, and they have to survive every step of the cleanup.
 #
-# $0000-$0008 and $0024/$0025 are skipped. That is the oracle this cleanup has
-# spent so far, and the reason is the same for both.
+# $0000-$0008 and $0020-$003E are skipped. That is the oracle this cleanup has
+# spent so far, and the reason is the same for all of it: the storage moved out
+# of emulated RAM into C, so the bytes left behind are stale in one build and
+# current in the other.
 # The plotter's argument block used to live there; it is a C object in the cold
 # build now (s_plot), so the bytes it left in RAM are stale in one build and
 # current in the other. Nothing is wrong -- the values still exist and still
@@ -33,14 +35,24 @@
 # here would fail on every run and teach whoever sees it to ignore the memory
 # check.
 #
-# $0024/$0025 are CH and CV, the text cursor, and they went the same way for
-# the same reason. They belonged to the ROM rather than to the game, which is
-# not a distinction that survives: the ROM is being decompiled too, and there is
-# no version of this artifact in which the monitor keeps its state in a 64K
-# array. What still covers them is the screen -- a cursor that is wrong puts
-# characters in the wrong place, at both sample sites.
+# $0020-$003E went the same way and for the same reason. That is the monitor's
+# own zero page -- the text window, the cursor, the line bases, the lo-res
+# colour and mask, the output vector -- and it belonged to the ROM rather than
+# to the game. That is not a distinction that survives: the ROM is being
+# decompiled too, and there is no version of this artifact in which the monitor
+# keeps its state in a 64K array.
 #
-# The rest of zero page is hashed in three pieces, to skip those two and
+# The whole span is skipped rather than the twenty-one addresses that actually
+# moved. The nine that did not ($2F, $31, $33, $34, $38-$3D) are written by
+# neither build, so they hold their entry-state value in both and hashing them
+# proves nothing either way.
+#
+# What still covers this range is the screen, at both sample sites. Nearly all
+# of it is drawing state: a wrong cursor, window, line base, colour or mask
+# puts the wrong thing in the wrong place, which is the whole of what these
+# bytes do.
+#
+# The rest of zero page is hashed in three pieces, to skip that span and
 # $4E/$4F, RNDL and RNDH. The ROM's
 # KEYIN increments them while it spins, so their value records how long the
 # boot waited for a keystroke -- which makes them differ between two boots of
@@ -59,8 +71,8 @@ probe kb() {
 }
 
 probe mem(
-    zp_a = hash($0009, $0023),
-    zp_b = hash($0026, $004D),
+    zp_a = hash($0009, $001F),
+    zp_b = hash($003F, $004D),
     zp_hi = hash($0050, $00FF),
     low = hash($0200, $03FF),
     txt = hash($0400, $07FF),

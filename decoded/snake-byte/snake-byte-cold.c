@@ -124,26 +124,41 @@ static uint16_t sbc_dec16(uint8_t a, uint8_t b, uint8_t cf) {
  * is deliberate; every Apple II reference uses it, and a2rom.h's prose
  * already does.
  */
-enum {
-  kWNDLFT = 0x0020,  ///< text window: left, width, top, bottom
-  kWNDWDTH = 0x0021,
-  kWNDTOP = 0x0022,
-  kWNDBTM = 0x0023,
-  kGBASL = 0x0026,   ///< lo-res line base, computed by GBASCALC from V2
-  kGBASH = 0x0027,
-  kBASL = 0x0028,    ///< text line base, computed by BASCALC from CV
-  kBASH = 0x0029,
-  kBAS2L = 0x002a,   ///< the scroll's destination line
-  kBAS2H = 0x002b,
-  kV2 = 0x002d,      ///< VLINE's bottom row
-  kMASK = 0x002e,    ///< which nibble of the lo-res byte a PLOT touches
-  kCOLOR = 0x0030,   ///< the lo-res colour, both nibbles
-  kINVFLG = 0x0032,  ///< COUT1 ANDs the character with this: $FF normal
-  kYSAV1 = 0x0035,   ///< where COUT1 parks Y
-  kCSWL = 0x0036,    ///< the character output vector, which the game repoints
-  kCSWH = 0x0037,
-  kA2L = 0x003e,     ///< SETKBD/SETVID scratch
-};
+/* The monitor's own state, out of emulated RAM on the same terms as the game's.
+   Names are the Apple II's, because every reference uses them and a2rom.h's
+   prose already did. */
+static uint8_t s_wndlft;  ///< text window: left, width, top, bottom
+static uint8_t s_wndwdth;
+static uint8_t s_wndtop;
+static uint8_t s_wndbtm;
+static uint8_t s_gbasl, s_gbash; ///< lo-res line base, from GBASCALC and V2
+static uint8_t s_basl, s_bash;   ///< text line base, from BASCALC and CV
+static uint8_t s_bas2l, s_bas2h; ///< the scroll's destination line
+static uint8_t s_v2;      ///< VLINE's bottom row
+static uint8_t s_mask;    ///< which nibble of a lo-res byte a PLOT touches
+static uint8_t s_color;   ///< the lo-res colour, both nibbles
+static uint8_t s_invflg;  ///< COUT1 ANDs the character with this: $FF normal
+static uint8_t s_ysav1;   ///< where COUT1 parks Y
+static uint8_t s_cswl, s_cswh; ///< the character output vector the game repoints
+static uint8_t s_a2l;     ///< SETKBD/SETVID scratch
+
+/// $002C, and still one byte doing two jobs.
+///
+/// To the ROM it is H2, the right-hand end of a lo-res HLINE. To
+/// game_print_bcd it is the flag saying a digit has been printed, so
+/// game_print_zero_if_blank knows whether the field came out empty. The two
+/// never overlap -- nothing draws while a number is being printed -- and
+/// draw_border actually *relies* on the H2 half persisting from
+/// wipe_occupancy_map ("$2C is still $27 from the wipe"), so the storage stays
+/// shared. Splitting it would need that argument made in both directions; the
+/// accessors below carry the meaning instead.
+static uint8_t s_h2;
+
+/// The three pointer pairs, low byte first, as ram_peek16al read them.
+static inline uint16_t gbas16(void) { return (uint16_t)(s_gbasl | (s_gbash << 8)); }
+static inline uint16_t bas16(void) { return (uint16_t)(s_basl | (s_bash << 8)); }
+static inline uint16_t bas2_16(void) { return (uint16_t)(s_bas2l | (s_bas2h << 8)); }
+static inline uint16_t csw16(void) { return (uint16_t)(s_cswl | (s_cswh << 8)); }
 
 /// $0024/$0025 -- CH and CV, the text cursor, out of emulated RAM.
 ///
@@ -159,15 +174,6 @@ enum {
 ///
 /// Initialised from the entry snapshot, like the plotter's block.
 static uint8_t s_ch, s_cv;
-
-/// $002C is two things, in two different callers.
-///
-/// To the ROM it is H2, the right-hand end of an HLINE, and the game sets it
-/// as such before calling. To game_print_bcd it is a flag: raised when a digit
-/// is actually printed, so game_print_zero_if_blank knows whether the field
-/// came out empty. Nothing drawn and nothing printed overlap, so the reuse is
-/// safe, and it is the original's, not this file's.
-enum { kH2 = 0x002c, kDigitSeen = 0x002c };
 
 void game_cold_start(void);
 void rom_plot(uint16_t ret_addr);
@@ -316,7 +322,7 @@ void rom_bascalc(uint16_t ret_addr) {
   // LSR: the carry is the line's low bit, and it is what decides the ADC below.
   const uint8_t odd = line & 0x01;
   s_status_c = odd;
-  ram_poke(kBASH, (uint8_t)(((line >> 1) & 0x03) | 0x04));
+  s_bash = (uint8_t)(((line >> 1) & 0x03) | 0x04);
   s_a = line & 0x18;
 
   if (!odd) {
@@ -337,16 +343,16 @@ void rom_bascalc(uint16_t ret_addr) {
   branchTarget = true;
 
   /*$FBD0*/ CYCLES(0xfbd0, 19);
-  ram_poke(kBASL, s_a);
+  s_basl = s_a;
   // ASL twice, then OR the original back in. The second shift's carry out is
   // the one the original leaves behind.
   const uint16_t shifted = (uint16_t)(s_a << 0x02);
   s_status_c = (uint8_t)((shifted & 0x01ff) >> 8);
-  const uint8_t addr_lo = (uint8_t)shifted | ram_peek(kBASL);
+  const uint8_t addr_lo = (uint8_t)shifted | s_basl;
   s_status_not_z = addr_lo;
   s_status_n = (addr_lo & 0x80);
   s_a = addr_lo;
-  ram_poke(kBASL, addr_lo);
+  s_basl = addr_lo;
 
   (void)branchTarget;
   if (ret_addr) pop16();
@@ -367,7 +373,7 @@ void rom_vtabz(uint16_t ret_addr) {
 
   /*$FC27*/ CYCLES(0xfc27, 6);
   if (!s_status_d) {
-    const uint8_t left = ram_peek(kWNDLFT);
+    const uint8_t left = s_wndlft;
     const uint16_t r = ((uint16_t)s_a + left) + s_status_c;
     s_status_c = (uint8_t)(r >> 8);
     s_status_v = ovf8((uint8_t)r, s_a, left);
@@ -375,7 +381,7 @@ void rom_vtabz(uint16_t ret_addr) {
     s_status_not_z = s_a;
     s_status_n = (s_a & 0x80);
   } else {
-    const uint16_t r = adc_dec16(s_a, ram_peek(kWNDLFT), s_status_c);
+    const uint16_t r = adc_dec16(s_a, s_wndlft, s_status_c);
     s_a = (uint8_t)r;
     const uint8_t flags = (uint8_t)(r >> 8);
     s_status_c = (flags & 0x01);
@@ -383,7 +389,7 @@ void rom_vtabz(uint16_t ret_addr) {
     s_status_v = ((flags & 0x40) != 0);
     s_status_n = (flags & 0x80);
   }
-  ram_poke(kBASL, s_a);
+  s_basl = s_a;
 
   /*$FC2B*/ CYCLES(0xfc2b, 6);
   if (ret_addr) pop16();
@@ -427,12 +433,12 @@ void rom_clreolz(uint16_t ret_addr) {
   for (;;) {
     /*$FCA0*/ CYCLES(0xfca0, 13);
     const uint8_t col = s_y;
-    poke((uint16_t)(ram_peek16al(kBASL) + col), s_a);
+    poke((uint16_t)(bas16() + col), s_a);
 
     const uint8_t next = (uint8_t)(col + 1);
     s_y = next;
 
-    const uint8_t width = ram_peek(kWNDWDTH);
+    const uint8_t width = s_wndwdth;
     s_status_not_z = (next != width);
     s_status_c = (next >= width);
     s_status_n = (uint8_t)((uint8_t)(next - width) & 0x80);
@@ -1236,7 +1242,7 @@ bb_0:
             push8(tmp1_U8);
   /*$F848*/ tmp2_U8 = tmp1_U8 & 0x01;
             s_status_c = tmp2_U8;
-  /*$F84D*/ ram_poke(kGBASH, (((tmp1_U8 >> 0x01) & 0x03) | 0x04));
+  /*$F84D*/ s_gbash = (((tmp1_U8 >> 0x01) & 0x03) | 0x04);
   /*$F84F*/ tmp1_U8 = pop8();
   /*$F850*/ s_a = (tmp1_U8 & 0x18);
             branchTarget = true;
@@ -1255,8 +1261,8 @@ bb_4:
 bb_5:
   /*$F856*/ CYCLES(0xf856, 19);
             tmp2_U8 = s_a;
-            ram_poke(kGBASL, tmp2_U8);
-  /*$F85C*/ ram_poke(kGBASL, ((uint8_t)(tmp2_U8 << 0x02) | ram_peek(kGBASL)));
+            s_gbasl = tmp2_U8;
+  /*$F85C*/ s_gbasl = ((uint8_t)(tmp2_U8 << 0x02) | s_gbasl);
   /*$F85E*/ if (ret_addr) pop16(); return;
 bb_6:
   // $F852 BCC -- the branch itself, taken here (not modelled by bb_1's own
@@ -1279,13 +1285,13 @@ static void rom_plot1(uint16_t ret_addr) {
 bb_0:
   /*$F80E*/ CYCLES(0xf80e, 28);
             tmp1_U8 = s_y;
-            tmp2_U8 = peek((ram_peek16al(kGBASL) + tmp1_U8));
-  /*$F814*/ tmp3_U8 = peek((ram_peek16al(kGBASL) + tmp1_U8));
-            tmp2_U8 = ((tmp2_U8 ^ ram_peek(kCOLOR)) & ram_peek(kMASK)) ^ tmp3_U8;
+            tmp2_U8 = peek((gbas16() + tmp1_U8));
+  /*$F814*/ tmp3_U8 = peek((gbas16() + tmp1_U8));
+            tmp2_U8 = ((tmp2_U8 ^ s_color) & s_mask) ^ tmp3_U8;
             s_status_not_z = tmp2_U8;
             s_status_n = (tmp2_U8 & 0x80);
             s_a = tmp2_U8;
-  /*$F816*/ poke((ram_peek16al(kGBASL) + tmp1_U8), tmp2_U8);
+  /*$F816*/ poke((gbas16() + tmp1_U8), tmp2_U8);
   /*$F818*/ if (ret_addr) pop16(); return;
 }
 
@@ -1342,7 +1348,7 @@ bb_3:
 bb_4:
 bb_5:
   /*$F80C*/ CYCLES(0xf80c, 3);
-            ram_poke(kMASK, s_a);
+            s_mask = s_a;
             rom_plot1(0x0000);
             if (ret_addr) pop16(); return;
 bb_6:
@@ -1370,7 +1376,7 @@ bb_0:
             branchTarget = true;
 bb_1:
   /*$F81C*/ CYCLES(0xf81c, 5);
-            tmp1_U8 = s_y >= ram_peek(kH2);
+            tmp1_U8 = s_y >= s_h2;
             s_status_c = tmp1_U8;
             branchTarget = true;
             if (tmp1_U8)
@@ -1404,7 +1410,7 @@ bb_6:
   /*$F82C*/ CYCLES(0xf82c, 9);
             tmp1_U8 = pop8();
             s_a = tmp1_U8;
-  /*$F82D*/ tmp1_U8 = tmp1_U8 >= ram_peek(kV2);
+  /*$F82D*/ tmp1_U8 = tmp1_U8 >= s_v2;
             s_status_c = tmp1_U8;
             branchTarget = true;
             if (!tmp1_U8)
@@ -1441,14 +1447,14 @@ void rom_setcol(uint16_t ret_addr) {
 bb_0:
   /*$F864*/ CYCLES(0xf864, 25);
             tmp1_U8 = s_a & 0x0f;
-  /*$F866*/ ram_poke(kCOLOR, tmp1_U8);
+  /*$F866*/ s_color = tmp1_U8;
   /*$F86B*/ tmp2_U16 = tmp1_U8 << 0x04;
             s_status_c = (uint8_t)((tmp2_U16 & 0x01ff) >> 8);
-  /*$F86C*/ tmp1_U8 = ((uint8_t)tmp2_U16) | ram_peek(kCOLOR);
+  /*$F86C*/ tmp1_U8 = ((uint8_t)tmp2_U16) | s_color;
             s_status_not_z = tmp1_U8;
             s_status_n = (tmp1_U8 & 0x80);
             s_a = tmp1_U8;
-  /*$F86E*/ ram_poke(kCOLOR, tmp1_U8);
+  /*$F86E*/ s_color = tmp1_U8;
   /*$F870*/ if (ret_addr) pop16(); return;
 }
 
@@ -1472,7 +1478,7 @@ bb_0:
   /*$F872*/ push8(((tmp1_U8 & 0x01) | ((tmp2_U8 == 0) << 1) | (s_status_i << 2) | (s_status_d << 3) | STATUS_B | (s_status_v << 6) | (tmp2_U8 & 0x80)));
   /*$F873*/ rom_gbascalc(0xfffe);
   /*$F876*/ CYCLES(0xf876, 11);
-            tmp1_U8 = peek((ram_peek16al(kGBASL) + s_y));
+            tmp1_U8 = peek((gbas16() + s_y));
             s_a = tmp1_U8;
   /*$F878*/ tmp1_U8 = pop8();
             tmp2_U8 = tmp1_U8 & 0x01;
@@ -1515,7 +1521,7 @@ void rom_home(uint16_t ret_addr) {
 
 bb_0:
   /*$FC58*/ CYCLES(0xfc58, 13);
-            tmp1_U8 = ram_peek(kWNDTOP);
+            tmp1_U8 = s_wndtop;
             s_a = tmp1_U8;
   /*$FC5A*/ s_cv = tmp1_U8;
   /*$FC5C*/ s_y = 0x00;
@@ -1550,7 +1556,7 @@ bb_3:
 bb_4:
   /*$FC50*/ s_a = ((uint8_t)adc_dec16(s_a, 0x00, s_status_c));
 bb_5:
-  /*$FC52*/ tmp1_U8 = s_a >= ram_peek(kWNDBTM);
+  /*$FC52*/ tmp1_U8 = s_a >= s_wndbtm;
             s_status_c = tmp1_U8;
             branchTarget = true;
             if (!tmp1_U8)
@@ -1602,21 +1608,21 @@ bb_0:
             tmp1_U8 = s_cv;
             s_a = tmp1_U8;
   /*$FC6C*/ branchTarget = true;
-            if (!(tmp1_U8 >= ram_peek(kWNDBTM)))
+            if (!(tmp1_U8 >= s_wndbtm))
               goto bb_10;
 bb_1:
   /*$FC6E*/ CYCLES(0xfc6e, 17);
             s_cv = (uint8_t)(s_cv - 0x01);
-  /*$FC70*/ tmp1_U8 = ram_peek(kWNDTOP);
+  /*$FC70*/ tmp1_U8 = s_wndtop;
             s_a = tmp1_U8;
   /*$FC72*/ push8(tmp1_U8);
   /*$FC73*/ rom_vtabz(0xfffe);
             branchTarget = true;
 bb_2:
   /*$FC76*/ CYCLES(0xfc76, 28);
-  /*$FC78*/ ram_poke(kBAS2L, ram_peek(kBASL));
-  /*$FC7C*/ ram_poke(kBAS2H, ram_peek(kBASH));
-  /*$FC80*/ s_y = (uint8_t)(ram_peek(kWNDWDTH) - 0x01);
+  /*$FC78*/ s_bas2l = s_basl;
+  /*$FC7C*/ s_bas2h = s_bash;
+  /*$FC80*/ s_y = (uint8_t)(s_wndwdth - 0x01);
   /*$FC81*/ tmp1_U8 = pop8();
             s_a = tmp1_U8;
   /*$FC82*/ if (s_status_d)
@@ -1633,7 +1639,7 @@ bb_4:
             s_status_v = (((uint8_t)(tmp3_U16 >> 8) & 0x40) != 0);
 bb_5:
   /*$FC86*/ branchTarget = true;
-            if (s_a >= ram_peek(kWNDBTM))
+            if (s_a >= s_wndbtm)
               goto bb_13;
 bb_6:
   /*$FC88*/ CYCLES(0xfc88, 9);
@@ -1643,8 +1649,8 @@ bb_6:
 bb_7:
   /*$FC8C*/ CYCLES(0xfc8c, 15);
             tmp1_U8 = s_y;
-            tmp2_U8 = peek((ram_peek16al(kBASL) + tmp1_U8));
-  /*$FC8E*/ poke((ram_peek16al(kBAS2L) + tmp1_U8), tmp2_U8);
+            tmp2_U8 = peek((bas16() + tmp1_U8));
+  /*$FC8E*/ poke((bas2_16() + tmp1_U8), tmp2_U8);
   /*$FC90*/ tmp1_U8 = (uint8_t)(tmp1_U8 - 0x01);
             tmp2_U8 = tmp1_U8 & 0x80;
             s_status_n = tmp2_U8;
@@ -1789,13 +1795,13 @@ bb_8:
   /*$FBF0*/ CYCLES(0xfbf0, 9);
             tmp1_U8 = s_ch;
             s_y = tmp1_U8;
-  /*$FBF2*/ poke((ram_peek16al(kBASL) + tmp1_U8), s_a);
+  /*$FBF2*/ poke((bas16() + tmp1_U8), s_a);
 bb_9:
   /*$FBF4*/ CYCLES(0xfbf4, 13);
             s_ch = (uint8_t)(s_ch + 0x01);
   /*$FBF6*/ tmp1_U8 = s_ch;
             s_a = tmp1_U8;
-  /*$FBF8*/ tmp2_U8 = ram_peek(kWNDWDTH);
+  /*$FBF8*/ tmp2_U8 = s_wndwdth;
             s_status_not_z = (tmp1_U8 != tmp2_U8);
             tmp3_U8 = tmp1_U8 >= tmp2_U8;
             s_status_c = tmp3_U8;
@@ -1843,11 +1849,11 @@ bb_14:
               goto bb_38;
 bb_15:
   /*$FC14*/ CYCLES(0xfc14, 11);
-  /*$FC16*/ s_ch = ram_peek(kWNDWDTH);
+  /*$FC16*/ s_ch = s_wndwdth;
   /*$FC18*/ s_ch = (uint8_t)(s_ch - 0x01);
 bb_16:
   /*$FC1A*/ CYCLES(0xfc1a, 8);
-            tmp2_U8 = ram_peek(kWNDTOP);
+            tmp2_U8 = s_wndtop;
             s_a = tmp2_U8;
   /*$FC1C*/ tmp3_U8 = s_cv;
             s_status_not_z = (tmp2_U8 != tmp3_U8);
@@ -2011,7 +2017,7 @@ void rom_cout(uint16_t ret_addr) {
     push16(ret_addr); // Fake return address.
 
   /*$FDED*/ CYCLES(0xfded, 5);
-            vector = ram_peek16al(kCSWL); // JMP ($36)
+            vector = csw16(); // JMP ($36)
             branchTarget = true;
             switch (vector) {
             case 0xfdf0:
@@ -2054,10 +2060,10 @@ bb_1:
               goto bb_5;
 bb_2:
   /*$FDF4*/ CYCLES(0xfdf4, 3);
-            s_a = (s_a & ram_peek(kINVFLG));
+            s_a = (s_a & s_invflg);
 bb_3:
   /*$FDF6*/ CYCLES(0xfdf6, 12);
-            ram_poke(kYSAV1, s_y);
+            s_ysav1 = s_y;
   /*$FDF8*/ push8(s_a);
   /*$FDF9*/ branchTarget = true;
             rom_coutz(0xfdfb); // JSR $FB78
@@ -2065,7 +2071,7 @@ bb_4:
   /*$FDFC*/ CYCLES(0xfdfc, 13);
             tmp1_U8 = pop8();
             s_a = tmp1_U8;
-  /*$FDFD*/ tmp1_U8 = ram_peek(kYSAV1);
+  /*$FDFD*/ tmp1_U8 = s_ysav1;
             s_status_not_z = tmp1_U8;
             s_status_n = (tmp1_U8 & 0x80);
             s_y = tmp1_U8;
@@ -2093,7 +2099,7 @@ void rom_setkbd(uint16_t ret_addr) {
 
 bb_0:
   /*$FE89*/ CYCLES(0xfe89, 11);
-  /*$FE8B*/ ram_poke(kA2L, 0x00);
+  /*$FE8B*/ s_a2l = 0x00;
   /*$FE8D*/ s_x = 0x38;
   /*$FE8F*/ s_y = 0x1b;
             // $FE91 BNE -- provably always taken (Y was just loaded #$1B,
@@ -2102,7 +2108,7 @@ bb_0:
             // executes and still pays its own cost every time.
   /*$FE91*/ CYCLES_EDGE(0xfe91, 1);
   /*$FE9B*/ CYCLES(0xfe9b, 7);
-  /*$FE9D*/ tmp1_U8 = ram_peek(kA2L) & 0x0f;
+  /*$FE9D*/ tmp1_U8 = s_a2l & 0x0f;
             s_a = tmp1_U8;
             branchTarget = true;
             if (!tmp1_U8)
@@ -2139,11 +2145,11 @@ void rom_setvid(uint16_t ret_addr) {
 
 bb_0:
   /*$FE93*/ CYCLES(0xfe93, 9);
-  /*$FE95*/ ram_poke(kA2L, 0x00);
+  /*$FE95*/ s_a2l = 0x00;
   /*$FE97*/ s_x = 0x36;
   /*$FE99*/ s_y = 0xf0;
   /*$FE9B*/ CYCLES(0xfe9b, 7);
-  /*$FE9D*/ tmp1_U8 = ram_peek(kA2L) & 0x0f;
+  /*$FE9D*/ tmp1_U8 = s_a2l & 0x0f;
             s_a = tmp1_U8;
             branchTarget = true;
             if (!tmp1_U8)
@@ -2450,8 +2456,8 @@ uint8_t game_load_shape_masks(uint8_t shape) {
 
 void game_install_cout_vector(void) {
   // CSWL/CSWH at $36/$37, pointed at $664A.
-  ram_poke(kCSWL, 0x4a);
-  ram_poke(kCSWH, 0x66);
+  s_cswl = 0x4a;
+  s_cswh = 0x66;
 }
 
 /* ========================================================================== */
@@ -3087,7 +3093,7 @@ static void wipe_occupancy_map(void) {
 
   for (;;) {
     GAME_CYCLES(0x7075, 16);
-    ram_poke(kH2, 0x27);
+    s_h2 = 0x27;
     lores_hline(s_plot[kRow], 0x00, 0x707f);
 
     GAME_CYCLES(0x7080, 7);
@@ -3206,7 +3212,7 @@ void game_draw_playfield_native(void) {
   wipe_occupancy_map();
 
   GAME_CYCLES(0x7084, 21);
-  ram_poke(kWNDTOP, 0x14);
+  s_wndtop = 0x14;
   s_shape = 0x15;
   s_plot[kInk] = 0x0d;
   set_ink(0x0d, 0x7092);
@@ -3247,7 +3253,7 @@ restart:
       set_ink(s_plot[kInk], 0x7156);
 
       GAME_CYCLES(0x7157, 18);
-      ram_poke(kH2, s_plot[kRunEnd]);
+      s_h2 = s_plot[kRunEnd];
       lores_hline(s_plot[kRow], s_plot[kCol], 0x7161);
 
       GAME_CYCLES(0x7162, 6);
@@ -4072,11 +4078,11 @@ void game_tick_sound_native(void) {
 /// leading zeros print nothing and interior ones print; $7226 consults it
 /// after the last byte, and prints a single "0" if the whole number was.
 static bool digit_seen(void) {
-  return ram_peek(kDigitSeen) != 0;
+  return s_h2 != 0;
 }
 
 static void note_digit(uint8_t digit) {
-  ram_poke(kDigitSeen, digit);
+  s_h2 = digit;
 }
 
 enum { kCharZero = 0xb0 };
@@ -4680,8 +4686,8 @@ static uint16_t glyph_rows(uint8_t glyph) {
 /// text line, CH at $24 is the column; `- 4 + $20` on the high byte is
 /// `+ $1C`, which maps $04xx (text page 1) onto $20xx (hi-res page 1).
 static uint16_t hires_cursor(void) {
-  const uint8_t hi = (uint8_t)(ram_peek(kBASH) - 0x04 + 0x20);
-  const uint8_t lo = (uint8_t)(ram_peek(kBASL) + s_ch);
+  const uint8_t hi = (uint8_t)(s_bash - 0x04 + 0x20);
+  const uint8_t lo = (uint8_t)(s_basl + s_ch);
   return (uint16_t)(lo | (hi << 8));
 }
 
@@ -5431,7 +5437,7 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
 /// $002C -- the flag game_print_bcd raises when it prints a digit, so that
 /// game_print_zero_if_blank knows whether the field came out empty.
 static void clear_leading_zero_flag(void) {
-  ram_poke(kDigitSeen, 0x00);
+  s_h2 = 0x00;
 }
 
 void game_status_panel(void) {
@@ -5641,7 +5647,7 @@ void game_bonus_screen(void) {
   GAME_CYCLES(0x7942, 6);
   game_print_inline_str(0x7944);
   GAME_CYCLES(0x794d, 15);
-  ram_poke(kDigitSeen, 0x00);
+  s_h2 = 0x00;
   s_a = ram_peek(kBonusAmount + 1);
   game_print_bcd(0x7956);
   GAME_CYCLES(0x7957, 10);
@@ -5651,8 +5657,8 @@ void game_bonus_screen(void) {
   // $795D -- COUT back to the ROM's, and $02 becomes the outermost counter of
   // the pause below.
   GAME_CYCLES(0x795d, 15);
-  ram_poke(kCSWL, 0xf0);
-  ram_poke(kCSWH, 0xfd);
+  s_cswl = 0xf0;
+  s_cswh = 0xfd;
   s_plot[kCol] = 0x20;
 
   // $7969 -- hold the screen. Everything from $794D on keeps its probe: the
@@ -5954,8 +5960,8 @@ wait: /* $741C */
 
   // $7587 -- COUT back to the ROM's.
   GAME_CYCLES(0x7587, 16);
-  ram_poke(kCSWL, 0xf0);
-  ram_poke(kCSWH, 0xfd);
+  s_cswl = 0xf0;
+  s_cswh = 0xfd;
 }
 
 /* ========================================================================== *
@@ -7160,7 +7166,7 @@ start_round: /* $76C7 */
   GAME_CYCLES(0x7700, 23);
   ram_poke(kHeadMoved, 0x00);
   ram_poke(kLifeTimer, life_time());
-  ram_poke(kWNDTOP, 0x14); // window top, so HOME clears only the status panel
+  s_wndtop = 0x14; // window top, so HOME clears only the status panel
   rom_home(0x770f);
   GAME_CYCLES(0x7710, 6);
   game_status_panel();
@@ -7172,7 +7178,7 @@ start_round: /* $76C7 */
 life: /* $7719 */
   GAME_CYCLES(0x7719, 19);
   ram_poke(kLifeTimer, life_time());
-  ram_poke(kWNDTOP, 0x14);
+  s_wndtop = 0x14;
   rom_home(0x7725);
   GAME_CYCLES(0x7726, 6);
   game_status_panel();
@@ -7585,6 +7591,25 @@ void init_emulated(void) {
   s_shape = kSnakeByteEntryRam[0];
   s_ch = kSnakeByteEntryRam[0x24];
   s_cv = kSnakeByteEntryRam[0x25];
+  s_wndlft = kSnakeByteEntryRam[0x20];
+  s_wndwdth = kSnakeByteEntryRam[0x21];
+  s_wndtop = kSnakeByteEntryRam[0x22];
+  s_wndbtm = kSnakeByteEntryRam[0x23];
+  s_gbasl = kSnakeByteEntryRam[0x26];
+  s_gbash = kSnakeByteEntryRam[0x27];
+  s_basl = kSnakeByteEntryRam[0x28];
+  s_bash = kSnakeByteEntryRam[0x29];
+  s_bas2l = kSnakeByteEntryRam[0x2a];
+  s_bas2h = kSnakeByteEntryRam[0x2b];
+  s_h2 = kSnakeByteEntryRam[0x2c];
+  s_v2 = kSnakeByteEntryRam[0x2d];
+  s_mask = kSnakeByteEntryRam[0x2e];
+  s_color = kSnakeByteEntryRam[0x30];
+  s_invflg = kSnakeByteEntryRam[0x32];
+  s_ysav1 = kSnakeByteEntryRam[0x35];
+  s_cswl = kSnakeByteEntryRam[0x36];
+  s_cswh = kSnakeByteEntryRam[0x37];
+  s_a2l = kSnakeByteEntryRam[0x3e];
 
   /* Registers. SP matters most -- the live stack bytes above are meaningless
      without it. The flags are $A0: N set, everything else clear. */
