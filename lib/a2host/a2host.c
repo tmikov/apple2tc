@@ -491,14 +491,32 @@ void a2host_init_emulation(void) {
   r.sp = 0xF0;
   set_regs(r);
 
+  // The dummy keypress goes in *before* init_emulated(), not after, so that a
+  // program which installs its own machine state can see it and decide what to
+  // do with it.
+  //
+  // It exists because the first key pressed before initialization is lost, and
+  // for a program that boots that is harmless: the ROM's KEYIN swallows it at
+  // the prompt long before the program proper runs. For a program entered past
+  // the boot -- one that restores a machine state instead of computing it --
+  // nothing swallows it, and it arrives at the program's first keyboard read as
+  // a keystroke the recording does not contain. Snake Byte's cold-start build
+  // found this: its very first game_read_key ingested the dummy and diverged
+  // from the booting build immediately, on a run where no key was due for
+  // another 900 coordinate hits.
+  //
+  // Only the command-line sources can be tested this early; buffered_keys_ is
+  // registered by init_emulated() itself, so its case stays below.
+  if (kbd_file_ || key_presses_)
+    a2_io_push_key(&io_, '\r');
+
   init_emulated();
 
   // init_emulated() is where a program registers buffered keys, so this is the
   // first chance to see them.
   if (kbd_file_ || key_presses_ || buffered_keys_) {
-    // The first key pressed before initialization is lost, so just add a dummy
-    // keypress.
-    a2_io_push_key(&io_, '\r');
+    if (!kbd_file_ && !key_presses_)
+      a2_io_push_key(&io_, '\r');
     // Both command-line sources outrank buffered keys: a recording already
     // contains whatever the program would have typed for itself.
     if (key_presses_)
