@@ -528,6 +528,42 @@ The emitted C looks like it would do as well and does not. Scanning it for
 inventing edges to block 16 and reporting 104 live cases against the true 89. The
 C is a rendering of the IR; the IR is the thing with the edges in it.
 
+**`[process]` To debug converted code, put its probes back temporarily.**
+Converting a routine deletes the block-head trace for it -- that is the trade --
+which also deletes the only tool that can say *where* the new C diverges from
+the old. Snake Byte's top-level conversion came out with two inverted
+conditions and the failure presented as "the game plays on instead of pausing",
+about 57,000 blocks after the mistake.
+
+The fix is to respell every cycle charge in the converted file with the variant
+that keeps its probe, rebuild, and diff against the generated original
+block-for-block. Both inversions were pinned in one run. One caveat, learned by
+tripping over it: the original's *edge* charges must stay unprobed. Respelling
+those too reports the edges as differences and buries the real one.
+
+What it caught, and both are the same shape -- a branch whose sense reads
+backwards from the C:
+
+- `CMP #$FE / BNE` at `$7851`: the original branches *away* when the value is
+  not `$FE`, so equality is the fall-through. Writing `if (x != 0xFE) goto
+  fallthrough` inverts the routine.
+- The paddle button at `$788E` reads with bit 7 *clear* when pressed.
+
+**`[process]` The artifact should not share files with its own scaffolding.**
+Snake Byte's converted game lived in files that three builds included: the
+cold-start artifact, the booting reference it is checked against, and a
+fixture. Every change to the game then had to stay safe for two builds still
+running a generated dispatch over the same addresses -- which is a real
+constraint, not a theoretical one. It first bit when a converted routine and
+the generated dispatch both claimed the same block head and the site-list lint
+refused them; the workaround was a separate file, which is the same problem one
+step later.
+
+The resolution is that the artifact gets its own copy of everything and shares
+nothing. It costs duplication against builds that exist only to check it, and
+it buys the freedom to change the thing being decompiled. Do it as soon as the
+artifact exists, not after the third workaround.
+
 **`[process]` A fixture built to reach new code also deepens the code you
 already had.** Snake Byte's `easy` build exists to make the display list
 reachable -- the apple quota lowered so levels change. It turns out to be the

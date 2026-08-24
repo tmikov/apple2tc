@@ -220,7 +220,7 @@ short version.
 
 | Target | Source | Role |
 | --- | --- | --- |
-| `snake-byte-cold` | `snake-byte-cold.c` | **The artifact this work is aimed at.** One file, 9,491 lines, sharing nothing. Entered at `$3750`; no boot, no ROM code, no generated code. |
+| `snake-byte-cold` | `snake-byte-cold.c` | **The artifact this work is aimed at.** One file, 9,462 lines, sharing nothing. Entered at `$3750`; no boot, no ROM code, no generated code. |
 | `snake-bytec1-ext` | `snake-byte-ext.c` | The verified reference. Boots, types `CALL 14160`. ROM entry points from hand-written `a2rom.c` + `game.c`. |
 | `snake-bytec1` | `snake-bytec1.c` | Self-contained control. ROM decompiled alongside the game; links alone. `play.frames` was recorded from it. |
 | `snake-byte-easyc1-ext` | `snake-byte-easy-ext.c` | Test fixture, not a variant: apple quota 16 -> 2. |
@@ -299,8 +299,8 @@ cd decoded/snake-byte && ./verify.sh ../../cmake-build-debug   # expect: 4x PASS
 `decompile.sh` reproduces the committed generated C exactly: run it at a clean
 HEAD and `git status` comes back empty. `probe-acceptance.sh` checks that before
 it checks anything else, because everything else it does runs the committed
-`.c` files. Note `snake-byte-cold-body.c` is *not* regenerated — it is a
-hand-pruned fork.
+`.c` files. Note `snake-byte-cold.c` is *not* regenerated and never will be —
+it is the decompilation, owned by hand.
 
 `run-tests.sh` is no longer only decompiler regression. It also asserts that
 `a2emu --headless` byte-matches `a2run`, and carries the probe compiler's 4
@@ -393,22 +393,47 @@ Items 1-4 below are all struck through now. What actually remains, in order:
 
 **a. ~~Put `snake-byte-cold` in `probe-acceptance.sh`.~~** Done 2026-08-23.
 
-**b. ~~Convert the last 89 blocks.~~** Done 2026-08-23 — `game_top.c`, 377
-lines of C in place of 968 lines of dispatch. **The cold build now contains no
-decompiler-generated code at all**; `snake-byte-cold-body.c` is down to 2,441
-lines and every one of them is data or runtime scaffolding (`s_mem_3750`,
-`s_mem_d000`, five ROM helpers, the machine definition).
+**b. ~~Convert the last 89 blocks.~~** Done 2026-08-23 — 377 lines of C in
+place of 968 lines of dispatch. **The cold build contains no
+decompiler-generated code at all.** What is left that is not the game is data
+and runtime: `s_mem_3750` (the game's own image), `s_mem_d000` (ROM bytes the
+death pause reads at `$E000` as delay lengths), five ROM helpers `a2rom.c`
+calls, and the machine definition.
 
-**And then the sharing went away.** `snake-byte-cold.c` is now a single
-self-contained file: the pruned body, `a2rom.c`, `game_native.c`, `game.c` and
-the top level, each as its own copy. The other four targets keep the shared
-originals and are unaffected.
+**And then the sharing went away.** `snake-byte-cold.c` is a single
+self-contained file of 9,462 lines: the pruned body, `a2rom.c`,
+`game_native.c`, `game.c` and the top level, each as this target's own copy,
+with the entry state inlined. The other four targets keep the shared originals
+and are unaffected.
 
 That was forced rather than chosen. While the file was shared, every change had
 to stay safe for builds still running a generated dispatch over the same
 addresses — the top-level conversion had already had to be split into a separate
 file for exactly that reason. Cold owns its code now, and the gate is what says
 whether the game still behaves.
+
+**Know which half of the gate a change spends.** The cold gate compares against
+`snake-bytec1-ext`, which still shares the originals. Refactoring inside the
+single file stays fully checked while it preserves behaviour *and* block-head
+order. The moment a change deliberately breaks the second — dropping the
+emulated stack, moving storage out of RAM — the trace half stops applying and
+the screen half is all that is left. `screen.probe` was built for exactly that
+moment; see its header.
+
+**Dead code does not announce itself here: the build has no `-Wall`.** Three
+functions were found by hand on 2026-08-23 -- `addr_to_block_id` and its
+comparator, left behind when the dispatch went, and `game_hi_cmp`, which had
+been dead in the shared `game.c` since its call sites moved into a converted
+routine. The check is a manual compile, and it must be a real one:
+
+```bash
+gcc -c -o /dev/null -Wall -I../../include -I. snake-byte-cold.c
+```
+
+`-fsyntax-only` does *not* report unused functions and comes back clean, which
+is how one survived a check that looked like it covered this. Turning `-Wall`
+on for the generated targets is a separate decision: a generated block nothing
+jumps to still gets a label, so they emit dozens of unused-label warnings.
 
 Two conditions came out inverted and neither oracle would have caught them
 without help: at `$7851` the original *branches away* when the value is not
@@ -419,6 +444,13 @@ temporarily respell every `GAME_CYCLES` in the converted C as
 comparable block-for-block against the generated original. Take the edges out
 first: the original's `CYCLES_EDGE` addresses must stay unprobed or they show as
 phantom differences.
+
+**b2. `func_t001` is pure indirection now.** Forward-declared, called once by
+`emulated_entry_point`, and defined as a stub that discards its `ret_addr` and
+calls `game_cold_start()`. It survives only because it is the name the
+generated entry point called. Not quite a pure deletion: `game_cold_start` is
+declared at line 2820 and `emulated_entry_point` sits at 152, so either the
+declaration moves up or the entry function moves down.
 
 **c. Then the shape, in this order:** drop the 28 adapters that no longer have a
 generated caller; turn off `--ret-addr` and the emulated stack for the shipped
