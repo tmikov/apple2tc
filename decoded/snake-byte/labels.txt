@@ -103,9 +103,6 @@
 0304 var_level_time     # the level's allowance, seeding var_life_time. Written
                         # by the display list's 'T' command. NOT the apple
                         # value: $71CD never reads it.
-0300 var_step_delay     # snake speed; $772E takes 2 off each life, floor 3
-0301 var_difficulty     # indexes the per-apple table at $71C8
-
 # --- text output -----------------------------------------------------------
 6641 install_cout_hook # LDA #$4A / STA $36 / LDA #$66 / STA $37 -- points CSWL at cout_hires
 664A cout_hires        # the game's own COUT: hi-res glyph blitter, then ROM COUT1
@@ -177,6 +174,21 @@
 7113 select_script     # skips ($0303 - 1) scripts from $8000
 8000 tbl_display_lists # 29 '*'-terminated drawing scripts
 0303 var_script_index  # 1-based; init_0300 sets it to 1
+0300 var_step_delay     # snake speed; $772E takes 2 off each life, floor 3
+0301 var_difficulty     # 0..2; indexes the per-apple value table at $71C8
+0302 var_demo_mode      # nobody answered the difficulty prompt, so the game
+                        # plays itself. Any input clears it.
+0305 var_head_moved     # the head moved this step, so the next draw merges the
+                        # head shape over the cell. $6BEF raises, $6BDA clears.
+000A var_script_ptr     # into the current display list
+000C var_str_ptr        # into the string after a JSR to print_inline_str
+000E var_rand_ptr       # $6C4B's cursor. Not a generator: it walks $1800-$1FFF
+                        # and returns the first byte with bit 7 clear, so the
+                        # numbers are the game's own level data, relocated
+                        # there by $3750. $7980 clamps the high byte to
+                        # [$18,$1F).
+73D7 var_setup_seen     # the setup screen has run once; the first pass asks
+                        # nothing and takes difficulty 1 plus demo mode
 
 # --- video soft switches used once, at $704D-$7056 -------------------------
 7045 set_video_mode    # $C050 graphics, $C057 hi-res, $C055 page 2, $C052 full

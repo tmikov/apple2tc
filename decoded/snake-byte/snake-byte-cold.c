@@ -2544,12 +2544,57 @@ enum {
   kLifeTime = 0x7266,
 };
 
-/// $0304 -- the level's time allowance, which seeds kLifeTime at the start of
-/// every life. Set by the display list's 'T' command (see run_script), and
-/// $64 until one says otherwise. It is *not* the apple value, which is
-/// kAppleValue and is computed by game_set_apple_value from the difficulty
-/// and the level number; that routine never reads this byte.
-enum { kLevelTime = 0x0304 };
+/* --- The settings block: $0300-$0305 -------------------------------------- */
+/*
+ * Six bytes that outlive a life, set once at $376E and then kept up to date as
+ * the game goes on. Everything else about a life is torn down and rebuilt.
+ */
+enum {
+  /// How long the pace loop dawdles between steps, i.e. the snake's speed.
+  /// $52 at startup and at the top of every round; $772E takes two off at the
+  /// start of each life and stops at 3, so the snake speeds up as lives are
+  /// lost and never goes faster than that.
+  kStepDelay = 0x0300,
+  /// 0..2, chosen at the setup prompt. Indexes the per-apple value table at
+  /// $71C8, and decides how many bouncers step per pass.
+  kDifficulty = 0x0301,
+  /// The game is playing itself, because nobody answered the difficulty
+  /// prompt before it timed out. Any input at all clears it, and while it is
+  /// set the death pause does not wait to be told to carry on.
+  kDemoMode = 0x0302,
+  /// Which of the 29 display lists at $8000 this level draws, 1-based.
+  /// select_script skips that many '*'-terminated scripts to find it.
+  kScriptIndex = 0x0303,
+  /// $0304 -- the level's time allowance, which seeds kLifeTime at the start
+  /// of every life. Set by the display list's 'T' command (see run_script),
+  /// and $64 until one says otherwise. It is *not* the apple value, which is
+  /// kAppleValue and is computed by game_set_apple_value from the difficulty
+  /// and the level number; that routine never reads this byte.
+  kLevelTime = 0x0304,
+  /// The head moved this step, so the next draw merges the head shape over
+  /// the cell. game_mark_head raises it, game_draw_head reads it and clears it.
+  kHeadMoved = 0x0305,
+};
+
+/* --- The three zero-page pointers ----------------------------------------- */
+enum {
+  /// Into the current display list. game_next_byte reads through it and bumps
+  /// it; select_script points it at the right script first.
+  kScriptPtr = 0x000a,
+  /// Into the string that follows a JSR to game_print_inline_str -- which is
+  /// where the printer finds it, by reading the return address off the stack.
+  kStrPtr = 0x000c,
+  /// game_rand_byte's cursor. It is not a generator: it walks $1800-$1FFF and
+  /// returns the first byte it finds with bit 7 clear, so the "random" numbers
+  /// are the game's own level data, relocated there by the cold start.
+  /// $7980 clamps the high byte into [$18,$1F) on the way into the setup
+  /// screen, which is what keeps it inside that window.
+  kRandPtr = 0x000e,
+};
+
+/// $73D7 -- the setup screen has run once. The first time through it asks
+/// nothing, takes difficulty 1 and demo mode, and only sets this.
+enum { kSetupSeen = 0x73d7 };
 
 /// VALUE -- what one apple is worth on this level, two BCD bytes.
 /// game_set_apple_value recomputes it per level.
@@ -2929,7 +2974,7 @@ static void wipe_occupancy_map(void) {
 /// One gap per bouncer, which is what the difficulty counts.
 static void open_wall_gaps(void) {
   GAME_CYCLES(0x7093, 6);
-  const uint8_t difficulty = ram_peek(0x0301);
+  const uint8_t difficulty = ram_peek(kDifficulty);
   if (!difficulty) {
     GAME_CYCLES(0x7096, 1);
     return;
@@ -2939,7 +2984,7 @@ static void open_wall_gaps(void) {
   lores_plot(0x01, 0x01, 0x709d);
 
   GAME_CYCLES(0x709e, 8);
-  if (ram_peek(0x0301) == 0x01) {
+  if (ram_peek(kDifficulty) == 0x01) {
     GAME_CYCLES(0x70a3, 1);
     return;
   }
@@ -3001,9 +3046,9 @@ static void draw_border(void) {
 /// per level below it. DEX first, so level 1 skips nothing.
 static void seek_script(void) {
   GAME_CYCLES(0x7113, 14);
-  s_x = ram_peek(0x0303);
-  ram_poke(0x000a, 0x00);
-  ram_poke(0x000b, 0x80);
+  s_x = ram_peek(kScriptIndex);
+  ram_poke(kScriptPtr, 0x00);
+  ram_poke(kScriptPtr + 1, 0x80);
 
   for (;;) {
     GAME_CYCLES(0x711e, 4);
@@ -3050,7 +3095,7 @@ restart:
     GAME_CYCLES(0x712e, 4);
     if (op == OP_RESTART) {
       GAME_CYCLES(0x7132, 9);
-      ram_poke(0x0303, 0x01);
+      ram_poke(kScriptIndex, 0x01);
       goto restart;
     }
     GAME_CYCLES(0x7130, 1);
@@ -3404,7 +3449,7 @@ static uint8_t dequeue_key(void) {
 /// the key dequeue whose byte is the return value.
 uint8_t game_step_bouncers_native(void) {
   GAME_CYCLES(0x6594, 6);
-  const uint8_t difficulty = ram_peek(0x0301);
+  const uint8_t difficulty = ram_peek(kDifficulty);
 
   if (!difficulty) {
     GAME_CYCLES(0x6599, 3);
@@ -3414,7 +3459,7 @@ uint8_t game_step_bouncers_native(void) {
 
   step_bouncer_slot(0, 0x659c, 38, 0x65b6, 0x65b7, 40);
 
-  if (ram_peek(0x0301) == 0x01) {
+  if (ram_peek(kDifficulty) == 0x01) {
     GAME_CYCLES(0x65d6, 3);
     return dequeue_key();
   }
@@ -3475,7 +3520,7 @@ static void select_joystick(bool on) {
 /// timed out, so the game is playing itself. Any input at all ends it, which
 /// is why the whole key table is skipped below.
 static bool attract_mode(void) {
-  return ram_peek(0x0302) != 0;
+  return ram_peek(kDemoMode) != 0;
 }
 
 /// A switch input. Every one of the game's three read sites -- here, the
@@ -4053,15 +4098,15 @@ void game_set_ink_native(uint8_t ink) {
 void game_next_byte_native(void) {
   GAME_CYCLES(0x7019, 14);
   s_y = 0x00;
-  s_a = peek(ram_peek16al(0x000a));
+  s_a = peek(ram_peek16al(kScriptPtr));
 
-  const uint8_t lo = (uint8_t)(ram_peek(0x000a) + 1);
-  ram_poke(0x000a, lo);
+  const uint8_t lo = (uint8_t)(ram_peek(kScriptPtr) + 1);
+  ram_poke(kScriptPtr, lo);
   if (lo) {
     GAME_CYCLES(0x701f, 1);
   } else {
     GAME_CYCLES(0x7021, 5);
-    ram_poke(0x000b, (uint8_t)(ram_peek(0x000b) + 1));
+    ram_poke(kScriptPtr + 1, (uint8_t)(ram_peek(kScriptPtr + 1) + 1));
   }
   GAME_CYCLES(0x7023, 6);
   // A and Y are live out; N and Z are not.
@@ -4085,18 +4130,18 @@ void game_next_byte_native(void) {
 /// the game. Nothing enforces that; the original simply relies on it.
 uint8_t game_rand_byte_native(void) {
   GAME_CYCLES(0x6c4b, 7);
-  const uint8_t lo = (uint8_t)(ram_peek(0x000e) + 1);
-  ram_poke(0x000e, lo);
+  const uint8_t lo = (uint8_t)(ram_peek(kRandPtr) + 1);
+  ram_poke(kRandPtr, lo);
   if (lo) {
     GAME_CYCLES(0x6c4d, 1);
   } else {
     GAME_CYCLES(0x6c4f, 5);
-    ram_poke(0x000f, (uint8_t)(ram_peek(0x000f) + 1));
+    ram_poke(kRandPtr + 1, (uint8_t)(ram_peek(kRandPtr + 1) + 1));
   }
 
   for (;;) {
     GAME_CYCLES(0x6c51, 9);
-    const uint8_t b = peek(ram_peek16al(0x000e));
+    const uint8_t b = peek(ram_peek16al(kRandPtr));
     if (!(b & 0x80)) {
       GAME_CYCLES(0x6c55, 1);
       GAME_CYCLES(0x6c62, 6);
@@ -4104,8 +4149,8 @@ uint8_t game_rand_byte_native(void) {
     }
 
     GAME_CYCLES(0x6c57, 13);
-    ram_poke(0x000e, 0x00);
-    ram_poke(0x000f, 0x18);
+    ram_poke(kRandPtr, 0x00);
+    ram_poke(kRandPtr + 1, 0x18);
   }
 }
 
@@ -4178,8 +4223,8 @@ void game_set_apple_value_native(void) {
   GAME_CYCLES(0x71cd, 20);
   ram_poke(kAppleValue, 0x00);
   ram_poke(kAppleValue + 1, 0x00);
-  const uint8_t per_apple = ram_peek(0x71c8 + ram_peek(0x0301));
-  uint8_t levels = ram_peek(0x0303);
+  const uint8_t per_apple = ram_peek(0x71c8 + ram_peek(kDifficulty));
+  uint8_t levels = ram_peek(kScriptIndex);
   s_status_d = 0x01;
 
   uint8_t flags = 0;
@@ -4215,7 +4260,7 @@ void game_mark_head_native(void) {
   rom_plot(0x6bf1);
 
   GAME_CYCLES(0x6bf2, 16);
-  ram_poke(0x0305, 0x01);
+  ram_poke(kHeadMoved, 0x01);
   ram_poke(0x6c46, 0x01);
 
   // A and its flags are live out of $6BEF, unlike almost everything else here.
@@ -4232,7 +4277,7 @@ void game_draw_head_native(void) {
   game_plot_shape_native();
 
   GAME_CYCLES(0x6bdd, 6);
-  if (ram_peek(0x0305)) {
+  if (ram_peek(kHeadMoved)) {
     GAME_CYCLES(0x6be2, 11);
     ram_poke(kShape, 0x01);
     game_plot_shape_merge(0x6be8);
@@ -4241,7 +4286,7 @@ void game_draw_head_native(void) {
   }
 
   GAME_CYCLES(0x6be9, 12);
-  ram_poke(0x0305, 0x00);
+  ram_poke(kHeadMoved, 0x00);
   // Only V and D are live out, and neither is touched here.
 }
 
@@ -4808,7 +4853,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
 
   autopilot: /* $6308 -- no steering this step */
     GAME_CYCLES(0x6308, 6);
-    if (ram_peek(0x0302)) {
+    if (ram_peek(kDemoMode)) {
       uint8_t proposal = 0;
       GAME_CYCLES(0x630d, 6);
       const SteerChoice choice = game_auto_steer(&proposal);
@@ -5041,7 +5086,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     // as long as the last move gave it something to say.
     // DEX/BNE again: $0300 of zero would mean 256 passes, not none.
     GAME_CYCLES(0x6450, 4);
-    uint8_t n = ram_peek(0x0300);
+    uint8_t n = ram_peek(kStepDelay);
     do {
       GAME_CYCLES(0x6453, 6);
       game_tick_sound_native();
@@ -5591,7 +5636,7 @@ void game_begin_life(void) {
 void game_setup_screen(void) {
   // $7980 -- keep $0E/$0F inside the window game_rand_byte expects.
   GAME_CYCLES(0x7980, 7);
-  const uint8_t hi = ram_peek(0x000f);
+  const uint8_t hi = ram_peek(kRandPtr + 1);
   bool clamp_lo = hi >= 0x1f;
   if (!clamp_lo) {
     GAME_CYCLES(0x7986, 4);
@@ -5603,18 +5648,18 @@ void game_setup_screen(void) {
   }
   if (clamp_lo) {
     GAME_CYCLES(0x798a, 8);
-    ram_poke(0x000e, (uint8_t)(ram_peek(0x000e) & 0xde));
+    ram_poke(kRandPtr, (uint8_t)(ram_peek(kRandPtr) & 0xde));
   }
   GAME_CYCLES(0x7990, 13);
-  ram_poke(0x000f, (uint8_t)((ram_peek(0x000f) & 0x1f) | 0x18));
+  ram_poke(kRandPtr + 1, (uint8_t)((ram_peek(kRandPtr + 1) & 0x1f) | 0x18));
 
   // $73D8 -- the first call through here never asks anything.
   GAME_CYCLES(0x73d8, 6);
-  if (!ram_peek(0x73d7)) {
+  if (!ram_peek(kSetupSeen)) {
     GAME_CYCLES(0x73dd, 20);
-    ram_poke(0x0302, 0x01);
-    ram_poke(0x0301, 0x01);
-    ram_poke(0x73d7, 0x01);
+    ram_poke(kDemoMode, 0x01);
+    ram_poke(kDifficulty, 0x01);
+    ram_poke(kSetupSeen, 0x01);
     return;
   }
 
@@ -5693,8 +5738,8 @@ wait: /* $741C */
     ram_poke(kCol, outer);
     if (outer == 0) {
       GAME_CYCLES(0x7455, 20);
-      ram_poke(0x0302, 0x01);
-      ram_poke(0x0301, 0x01);
+      ram_poke(kDemoMode, 0x01);
+      ram_poke(kDifficulty, 0x01);
       io_poke(0xc010, 0x01);
       return;
     }
@@ -5718,8 +5763,8 @@ wait: /* $741C */
     }
     // $7470 -- a digit. The subtract is a plain SBC with carry set.
     GAME_CYCLES(0x7470, 24);
-    ram_poke(0x0301, (uint8_t)(key - 0xb0));
-    ram_poke(0x0302, 0x00);
+    ram_poke(kDifficulty, (uint8_t)(key - 0xb0));
+    ram_poke(kDemoMode, 0x00);
     io_poke(0xc010, 0x00);
     return;
   }
@@ -5876,25 +5921,25 @@ void game_print_inline_str(uint16_t ret_addr) {
   bool branchTarget = true;
 
   /*$7230*/ CYCLES(0x7230, 20);
-  ram_poke(0x000c, (uint8_t)ret_addr);
-  ram_poke(0x000d, (uint8_t)(ret_addr >> 8));
+  ram_poke(kStrPtr, (uint8_t)ret_addr);
+  ram_poke(kStrPtr + 1, (uint8_t)(ret_addr >> 8));
   rom_fc68(0x7239); // VTAB to the current CV
 
   for (;;) {
     // The pointer is stepped before the read, which is why the caller passes
     // the address of the JSR's last byte rather than of the string.
     /*$7239*/ CYCLES(0x7239, 7);
-    const uint8_t lo = (uint8_t)(ram_peek(0x000c) + 1);
-    ram_poke(0x000c, lo);
+    const uint8_t lo = (uint8_t)(ram_peek(kStrPtr) + 1);
+    ram_poke(kStrPtr, lo);
     if (!lo) {
       /*$723D*/ CYCLES(0x723d, 5);
-      ram_poke(0x000d, (uint8_t)(ram_peek(0x000d) + 1));
+      ram_poke(kStrPtr + 1, (uint8_t)(ram_peek(kStrPtr + 1) + 1));
     } else {
       /*$723B*/ CYCLES_EDGE(0x723b, 1);
     }
 
     /*$723F*/ CYCLES(0x723f, 9);
-    const uint8_t ch = peek(ram_peek16al(0x000c));
+    const uint8_t ch = peek(ram_peek16al(kStrPtr));
     s_y = 0x00;
     s_a = ch;
     s_status_not_z = ch;
@@ -6930,10 +6975,10 @@ void game_cold_start(void) {
   GAME_CYCLES(0x376b, 6);
   rom_setkbd(0x376d);
   GAME_CYCLES(0x376e, 29);
-  ram_poke(0x0300, 0x52); // step delay
-  ram_poke(0x0301, 0x01); // difficulty
-  ram_poke(0x0302, 0x01); // demo mode, so the first pass plays itself
-  ram_poke(0x0303, 0x01); // level script index
+  ram_poke(kStepDelay, 0x52);
+  ram_poke(kDifficulty, 0x01);
+  ram_poke(kDemoMode, 0x01); // so the first pass plays itself
+  ram_poke(kScriptIndex, 0x01);
   ram_poke(kLevelTime, 0x64);
   goto round;             // $3783: JMP $76C2
 
@@ -6943,7 +6988,7 @@ new_game: /* $7691 */
   GAME_CYCLES(0x7694, 6);
   game_update_high_score(0x7696);
   GAME_CYCLES(0x7697, 40);
-  ram_poke(0x0303, 0x01);
+  ram_poke(kScriptIndex, 0x01);
   set_level(0x01);
   ram_poke(kScore, 0x00);
   ram_poke(kScore + 1, 0x00);
@@ -6980,10 +7025,10 @@ start_round: /* $76C7 */
   GAME_CYCLES(0x76f6, 6);
   game_plot_shape_native();
   GAME_CYCLES(0x76f9, 8);
-  ram_poke(0x0300, 0x52);
+  ram_poke(kStepDelay, 0x52);
   s_a = 0x00;
   GAME_CYCLES(0x7700, 23);
-  ram_poke(0x0305, 0x00);
+  ram_poke(kHeadMoved, 0x00);
   ram_poke(kLifeTimer, life_time());
   ram_poke(kWNDTOP, 0x14); // window top, so HOME clears only the status panel
   rom_home(0x770f);
@@ -7002,10 +7047,10 @@ life: /* $7719 */
   GAME_CYCLES(0x7726, 6);
   game_status_panel();
   GAME_CYCLES(0x7729, 8);
-  if (ram_peek(0x0300) >= 0x03) {
+  if (ram_peek(kStepDelay) >= 0x03) {
     // $7730 -- two steps faster each life, but never past 3.
     GAME_CYCLES(0x7730, 8);
-    ram_poke(0x0300, (uint8_t)(ram_peek(0x0300) - 2));
+    ram_poke(kStepDelay, (uint8_t)(ram_peek(kStepDelay) - 2));
   } else {
     GAME_CYCLES(0x772e, 1);
   }
@@ -7109,7 +7154,7 @@ round_cleared: /* $77EA */
     set_level((uint8_t)r);
   }
   s_status_d = 0x00;
-  ram_poke(0x0303, (uint8_t)(ram_peek(0x0303) + 1)); // next level script
+  ram_poke(kScriptIndex, (uint8_t)(ram_peek(kScriptIndex) + 1));
   // $77F8 -- no life was lost this round, so it earns a bonus.
   if (lives() == ram_peek(kLivesAtLevelStart)) {
     GAME_CYCLES(0x7800, 6);
@@ -7172,7 +7217,7 @@ ended: /* $7847 */
   }
   GAME_CYCLES(0x7853, 1);
   GAME_CYCLES(0x7858, 6);
-  if (ram_peek(0x0302)) {
+  if (ram_peek(kDemoMode)) {
     GAME_CYCLES(0x785b, 1);
     goto lose_life; // the demo does not wait to be told to carry on
   }
