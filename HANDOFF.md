@@ -483,18 +483,22 @@ Do it while the trace is strongest, sliced by subsystem, a commit each. Biggest
 readability win at the lowest risk, and it is where the remaining "what *is*
 `$725A`?" knowledge stops being re-derived.
 
-**In progress.** The scoreboard slice went on 2026-08-23: `$7252-$7266` plus
-`$71CB`, `$78B0-$78B2`, `$0300`, `$0301`, `$0304` — 19 fields, 92
-substitutions, and the names also went into `labels.txt` so `id` shows them.
+**Done, 2026-08-23.** All 115 addresses are named, in six slices — the
+scoreboard, the snake, the plotter's argument block, the monitor's zero page,
+the settings block and pointers, and the tables. `ram_peek(0x...)` no longer
+appears in `snake-byte-cold.c`. The names are in `labels.txt` too, so `id`
+shows them.
 
-Two things to carry into the remaining slices:
+Three things to carry forward:
 
 - **The oracle for a rename is a compile, not the gate.** A real rename must
   produce the same object. Build the file at `-O2` before and after (the
   one-line accessors inline away) and diff the disassembly; the only permitted
-  difference is `__LINE__` immediates for assertions, displaced by whatever
-  lines you added. That is stronger than any behavioural gate and costs one
-  compile. It stops applying at step 3, where storage moves.
+  difference is `__LINE__` immediates, displaced by whatever lines you added.
+  Normalise the symbol name out first if you renamed a function. This was run
+  on all six slices and caught nothing, which is what it is for. **It does not
+  survive step 3** — moving storage changes the code by design, and that is
+  where `ram-cold.probe` takes over.
   ```bash
   git show HEAD:decoded/snake-byte/snake-byte-cold.c > /tmp/head-cold.c
   for f in /tmp/head-cold.c decoded/snake-byte/snake-byte-cold.c; do
@@ -502,12 +506,18 @@ Two things to carry into the remaining slices:
     objdump -d --no-show-raw-insn /tmp/$(basename $f).o | sed 's/^ *[0-9a-f]*:\t//' | tail -n +3
   done  # diff the two outputs
   ```
-- **Naming is what audits the comments.** Three were wrong in this slice, all in
-  converted hand-written C that every gate passes: `$725F/$7260` is apples *on
-  the field*, not a countdown to the next one; `$0304` is the level's time
-  allowance, not the apple value; and scoring stops at `$11` apples, not `$110`.
-  A comment cannot fail a test, so this is the only pass that will catch them.
-  See the 2026-08-23 decision-log entry.
+- **Two blocks are hand-written unions. Do not tidy them into one name.**
+  `$0000-$0008` is the plotter's arguments *and*, inside
+  `game_cout_hook_native` only, a font pointer plus the caller's saved X/Y plus
+  the character. `$002C` is HLINE's H2 *and* `game_print_bcd`'s digit flag.
+  Both have two enums over the same addresses, and the substitutions went per
+  routine.
+- **Naming is what audits the names.** Four were wrong, all in converted C that
+  passes every gate: `$725F/$7260` is apples on the field, not a countdown;
+  `$0304` is the level's time allowance, not the apple value;
+  `poll_and_discard()` was a speaker click; and `game_eat_apple` awards an
+  extra life. The last came from `rom.externs`, so the generated C carried it
+  too. See the two 2026-08-23 decision-log entries.
 
 **Step 3 — real parameters.** `$0000-$0003` and `$0024/$0025` are the plotter's
 argument block and the cursor, and the five most-touched addresses in the file

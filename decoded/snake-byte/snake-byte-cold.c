@@ -2198,6 +2198,73 @@ void bouncer_store(int i, Bouncer b) {
   ram_poke(kBouncerAddr[i].dy, (uint8_t)b.dy);
 }
 
+/* --- The game's own tables ------------------------------------------------ */
+/*
+ * All of these are data inside the loaded image, so they are read and never
+ * written -- except kShapeMask, which is the working copy kShapeMaskTable is
+ * copied into. labels.txt carries the same names for the disassembler.
+ */
+enum {
+  kHgrLineLo = 0x6000,      ///< 48 hi-res line addresses, low bytes
+  kHgrLineHi = 0x6030,      ///< and high bytes
+  kShapeMask = 0x6060,      ///< the loaded shape's four scanline masks
+  kHgrPattern = 0x6064,     ///< dot patterns, indexed by kDotIndex
+  kShapeMaskTable = 0x6174, ///< four masks per shape; the source for kShapeMask
+  kSteerKey = 0x6a55,       ///< direction -> the key that turns to it
+  kAppleValueTable = 0x71c8, ///< per-apple value, indexed by kDifficulty
+  kKeyTable = 0x6c63,       ///< the six bound keys, in slot order
+  kKeyDefaults = 0x6c6a,    ///< the same six as shipped; never written
+  kKeyCH = 0x75b3,          ///< redefinition screen: where each slot's key
+  kKeyCV = 0x75b9,          ///< ... and its arrow are printed
+  kArrowCH = 0x75bf,
+  kArrowCV = 0x75c5,
+  kArrowGlyph = 0x75cb,     ///< which arrow glyph each slot blinks
+};
+
+/* --- The bouncers' working copy ------------------------------------------- */
+/*
+ * $6633-$6638 and $6C4A. The original does not step a bouncer where it lives:
+ * it copies one of the two into $6633 first, steps that, and writes it back --
+ * a calling convention in fixed memory, which is why a Bouncer struct fits it.
+ */
+enum {
+  kBouncer = 0x6633,        ///< col, row, dx, dy at +0..+3
+  kWantCol = 0x6637,        ///< where the step would land, before the walls
+  kWantRow = 0x6638,        ///< get a say
+  kBounceBlocked = 0x6c4a,  ///< that cell was occupied, so reflect instead
+};
+
+/* --- The auto-steer's answers --------------------------------------------- */
+enum {
+  /// The direction $6A32 settled on. game_move_ok and key_for_direction both
+  /// read it back rather than being passed it.
+  kSteerDir = 0x6b38,
+  /// The apple sweep's cursor, left wherever the search stopped...
+  kSearchCol = 0x6b39,
+  kSearchRow = 0x6b3a,
+  /// ...and the answer, which $6A25 copies out of it. Two pairs holding the
+  /// same cell on exit, but only this one is what the steer reads.
+  kAppleCol = 0x6b3b,
+  kAppleRow = 0x6b3c,
+};
+
+/* --- Sound ---------------------------------------------------------------- */
+enum {
+  kTonePeriod = 0x6c46,    ///< and the on/off switch: 0 is silent
+  kToneCountdown = 0x6c47, ///< passes left before the next click
+  kTonePasses = 0x6c48,    ///< how many passes one tick of the tone runs
+  kClickPort = 0x6c49,     ///< $30 the speaker, $20 the cassette, i.e. muted
+  kSoundMuted = 0x69c2,    ///< toggled by Ctrl-S
+};
+
+/// $6C71 -- the player chose the joystick at the setup prompt.
+enum { kJoystick = 0x6c71 };
+
+/// $3754 and $3757 -- the address operands of the LDA and STA in the
+/// relocation loop, which the loop increments to walk eight pages instead of
+/// keeping a page counter. Written back because ram.probe hashes the range.
+enum { kRelocLoadOp = 0x3754, kRelocStoreOp = 0x3757 };
+
 /* --- The plotter's argument block: $0000-$0008 ---------------------------- */
 /*
  * Nine bytes of zero page that the drawing routines pass arguments in, because
@@ -2316,8 +2383,8 @@ uint8_t game_load_shape_masks(uint8_t shape) {
   // converted, and $6174 is part of the loaded binary image.
   uint8_t last = 0;
   for (unsigned line = 0; line < 4; ++line) {
-    last = ram_peek(0x6174 + (uint8_t)((uint8_t)(shape << 2) + line));
-    ram_poke(0x6060 + line, last);
+    last = ram_peek(kShapeMaskTable + (uint8_t)((uint8_t)(shape << 2) + line));
+    ram_poke(kShapeMask + line, last);
   }
   return last;
 }
@@ -2385,7 +2452,7 @@ void bouncer_step(Bouncer *b) {
 
   if (b->row == 0) {
     GAME_CYCLES(0x64d2, 6);
-    ram_poke(0x6c4a, 0x00);
+    ram_poke(kBounceBlocked, 0x00);
     return;
   }
   GAME_CYCLES(0x64d0, 1);
@@ -2461,9 +2528,9 @@ void bouncer_step(Bouncer *b) {
   if (want_row == 0) {
     // Off the board: not redrawn, and the position is not committed.
     GAME_CYCLES(0x6572, 6);
-    ram_poke(0x6637, want_col);
-    ram_poke(0x6638, want_row);
-    ram_poke(0x6c4a, (uint8_t)blocked);
+    ram_poke(kWantCol, want_col);
+    ram_poke(kWantRow, want_row);
+    ram_poke(kBounceBlocked, (uint8_t)blocked);
     return;
   }
   GAME_CYCLES(0x6570, 1);
@@ -2486,9 +2553,9 @@ void bouncer_step(Bouncer *b) {
   rom_plot(0x6592);
 
   GAME_CYCLES(0x6593, 6);
-  ram_poke(0x6637, want_col);
-  ram_poke(0x6638, want_row);
-  ram_poke(0x6c4a, (uint8_t)blocked);
+  ram_poke(kWantCol, want_col);
+  ram_poke(kWantRow, want_row);
+  ram_poke(kBounceBlocked, (uint8_t)blocked);
 }
 
 /* --- The scoreboard: $7252-$7266 ------------------------------------------ */
@@ -2759,10 +2826,10 @@ void game_find_nearest_apple(void) {
   GAME_CYCLES(0x6a25, 22);
   // The cursor is scratch, but ram.probe hashes $6000-$BFFF, so what the
   // original left there is still compared.
-  ram_poke(0x6b39, c.col);
-  ram_poke(0x6b3a, c.row);
-  ram_poke(0x6b3b, c.col);
-  ram_poke(0x6b3c, c.row);
+  ram_poke(kSearchCol, c.col);
+  ram_poke(kSearchRow, c.row);
+  ram_poke(kAppleCol, c.col);
+  ram_poke(kAppleRow, c.row);
 }
 
 /* ========================================================================== */
@@ -2800,8 +2867,8 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
       .row = (uint8_t)(ram_peek(kRowDelta + dir) + ram_peek(kHeadRow)),
   };
   s_status_v = ovf8(target.row, ram_peek(kRowDelta + dir), ram_peek(kHeadRow));
-  ram_poke(0x6637, target.col);
-  ram_poke(0x6638, target.row);
+  ram_poke(kWantCol, target.col);
+  ram_poke(kWantRow, target.row);
 
   const uint8_t cell = cell_at(target, 0x6ad4);
   *cell_out = cell;
@@ -2820,7 +2887,7 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
   GAME_CYCLES(0x6adb, 1);
 
   GAME_CYCLES(0x6ade, 12);
-  ram_poke(0x6c4a, 0x00);
+  ram_poke(kBounceBlocked, 0x00);
   if (target.row == 0) {
     // Row 0 is the top border; there is nothing above it to look at.
     GAME_CYCLES(0x6ae6, 1);
@@ -2845,7 +2912,7 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
     if (v == 0x00) {
       GAME_CYCLES(kNeighbour[i].inc_block, 6);
       ++free_neighbours;
-      ram_poke(0x6c4a, (uint8_t)free_neighbours);
+      ram_poke(kBounceBlocked, (uint8_t)free_neighbours);
     } else {
       GAME_CYCLES(kNeighbour[i].edge, 1);
     }
@@ -2916,7 +2983,7 @@ static uint8_t script_byte(uint16_t ret) {
 /// Graphics, hi-res, page 2, full screen. The reads are the writes.
 static void select_hires_page2(void) {
   GAME_CYCLES(0x7048, 32);
-  ram_poke(0x6c46, 0x00);
+  ram_poke(kTonePeriod, 0x00);
   io_peek(0xc050);
   io_peek(0xc057);
   io_peek(0xc055);
@@ -3077,7 +3144,7 @@ void game_draw_playfield_native(void) {
   wipe_occupancy_map();
 
   GAME_CYCLES(0x7084, 21);
-  ram_poke(kWNDTOP, 0x14); // text window top
+  ram_poke(kWNDTOP, 0x14);
   ram_poke(kShape, 0x15);
   ram_poke(kInk, 0x0d);
   set_ink(0x0d, 0x7092);
@@ -3212,7 +3279,7 @@ restart:
 
 /// The address of a cell row's first scanline, from the split table.
 static uint16_t cell_row_base(uint8_t row) {
-  return (uint16_t)(ram_peek(0x6000 + row) | (ram_peek(0x6030 + row) << 8));
+  return (uint16_t)(ram_peek(kHgrLineLo + row) | (ram_peek(kHgrLineHi + row) << 8));
 }
 
 /// Index into the 128-byte dot table at $6064: 16 inks of 8, four column
@@ -3238,7 +3305,7 @@ void game_draw_cell_native(uint8_t ink, Cell c) {
     const uint8_t idx = dot_index(ink, (uint8_t)line, c.col);
     ram_poke(kDotIndex, idx);
 
-    poke(dest + c.col, (uint8_t)(ram_peek(0x6064 + idx) & ram_peek(0x6060 + line)));
+    poke(dest + c.col, (uint8_t)(ram_peek(kHgrPattern + idx) & ram_peek(kShapeMask + line)));
 
     ram_poke(kScanline, (uint8_t)(line + 1));
     dest += 0x0400; // one scanline down, i.e. +4 on the high byte
@@ -3276,7 +3343,7 @@ void game_merge_cell_native(uint8_t ink, Cell c) {
 
     const uint16_t at = dest + c.col;
     poke(at,
-         (uint8_t)(((ram_peek(0x6064 + idx) ^ 0x7f) & ram_peek(0x6060 + line)) | peek(at)));
+         (uint8_t)(((ram_peek(kHgrPattern + idx) ^ 0x7f) & ram_peek(kShapeMask + line)) | peek(at)));
 
     ram_poke(kScanline, (uint8_t)(line + 1));
     dest += 0x0400;
@@ -3401,18 +3468,18 @@ static void step_bouncer_slot(int slot, uint16_t block, uint16_t cycles, uint16_
                               uint16_t back_block, uint16_t back_cycles) {
   GAME_CYCLES(block, cycles);
   const Bouncer in = bouncer_load(slot);
-  ram_poke(0x6633, in.col);
-  ram_poke(0x6634, in.row);
-  ram_poke(0x6635, (uint8_t)in.dx);
-  ram_poke(0x6636, (uint8_t)in.dy);
+  ram_poke(kBouncer, in.col);
+  ram_poke(kBouncer + 1, in.row);
+  ram_poke(kBouncer + 2, (uint8_t)in.dx);
+  ram_poke(kBouncer + 3, (uint8_t)in.dy);
   game_move_bouncer(ret);
 
   GAME_CYCLES(back_block, back_cycles);
   const Bouncer out = {
-      .col = ram_peek(0x6633),
-      .row = ram_peek(0x6634),
-      .dx = (int8_t)ram_peek(0x6635),
-      .dy = (int8_t)ram_peek(0x6636),
+      .col = ram_peek(kBouncer),
+      .row = ram_peek(kBouncer + 1),
+      .dx = (int8_t)ram_peek(kBouncer + 2),
+      .dy = (int8_t)ram_peek(kBouncer + 3),
   };
   bouncer_store(slot, out);
 }
@@ -3493,11 +3560,11 @@ uint8_t game_step_bouncers_native(void) {
 enum { kInputCount = 6 };
 
 static uint8_t input_key(int i) {
-  return ram_peek(0x6c63 + i);
+  return ram_peek(kKeyTable + i);
 }
 
 static uint8_t input_code(int i) {
-  return ram_peek(0x6c6a + i);
+  return ram_peek(kKeyDefaults + i);
 }
 
 /// The two codes that are settings rather than directions.
@@ -3509,11 +3576,11 @@ enum { kCodeStop = 0x92 };
 
 /// $6C71 -- set once the player has chosen the joystick.
 static bool joystick_selected(void) {
-  return ram_peek(0x6c71) != 0;
+  return ram_peek(kJoystick) != 0;
 }
 
 static void select_joystick(bool on) {
-  ram_poke(0x6c71, on ? 0x01 : 0x00);
+  ram_poke(kJoystick, on ? 0x01 : 0x00);
 }
 
 /// $0302 -- attract mode: nobody answered the difficulty prompt before it
@@ -3611,7 +3678,7 @@ uint8_t game_read_direction_native(uint8_t key) {
   GAME_CYCLES(0x6cb7, 1);
 
   GAME_CYCLES(0x6cba, 6);
-  const uint8_t joystick = ram_peek(0x6c71);
+  const uint8_t joystick = ram_peek(kJoystick);
   if (!joystick) {
     GAME_CYCLES(0x6cbf, 8);
     return code;
@@ -3686,15 +3753,15 @@ uint8_t game_read_direction_native(uint8_t key) {
 /// game's own hi-res COUT, which is why the player knows which key is being
 /// asked for.
 static uint8_t slot_col(int slot) {
-  return ram_peek(0x75bf + slot);
+  return ram_peek(kArrowCH + slot);
 }
 
 static uint8_t slot_row(int slot) {
-  return ram_peek(0x75c5 + slot);
+  return ram_peek(kArrowCV + slot);
 }
 
 static uint8_t slot_glyph(int slot) {
-  return ram_peek(0x75cb + slot);
+  return ram_peek(kArrowGlyph + slot);
 }
 
 /// Both halves of the blink count X down to zero 256 times, and the X they
@@ -3829,20 +3896,20 @@ uint8_t game_edit_key_native(uint8_t slot) {
 /// game_draw_playfield clears it, so the sound follows the snake and stops
 /// with it.
 static uint8_t tone_period(void) {
-  return ram_peek(0x6c46);
+  return ram_peek(kTonePeriod);
 }
 
 static void set_tone_period(uint8_t v) {
-  ram_poke(0x6c46, v);
+  ram_poke(kTonePeriod, v);
 }
 
 /// Passes left before the next click.
 static uint8_t tone_countdown(void) {
-  return ram_peek(0x6c47);
+  return ram_peek(kToneCountdown);
 }
 
 static void set_tone_countdown(uint8_t v) {
-  ram_poke(0x6c47, v);
+  ram_poke(kToneCountdown, v);
 }
 
 /// Where the click goes, as the low byte of the soft switch: $C030 is the
@@ -3850,24 +3917,24 @@ static void set_tone_countdown(uint8_t v) {
 /// therefore a store rather than a branch, and the click itself is one indexed
 /// read -- see the $7642 header for why that shape was chosen.
 static void set_click_port(uint8_t lo) {
-  ram_poke(0x6c49, lo);
+  ram_poke(kClickPort, lo);
 }
 
 /// $69C2 -- toggled by Ctrl-S at $69B9.
 static bool sound_muted(void) {
-  return ram_peek(0x69c2) != 0;
+  return ram_peek(kSoundMuted) != 0;
 }
 
 /// $69B9 -- flip it. The storage stays in emulated RAM rather than becoming a
 /// C variable because ram.probe hashes $6000-$BFFF, so moving it would read as
 /// a divergence rather than as a refactor.
 static void toggle_sound(void) {
-  ram_poke(0x69c2, (uint8_t)(ram_peek(0x69c2) ^ 0x01));
+  ram_poke(kSoundMuted, (uint8_t)(ram_peek(kSoundMuted) ^ 0x01));
 }
 
 void game_tick_sound_native(void) {
   GAME_CYCLES(0x6bfb, 6);
-  ram_poke(0x6c48, 0x14); // twenty passes
+  ram_poke(kTonePasses, 0x14); // twenty
 
   for (;;) {
     GAME_CYCLES(0x6c00, 6);
@@ -3880,7 +3947,7 @@ void game_tick_sound_native(void) {
         set_tone_countdown(left);
         if (!left) {
           GAME_CYCLES(0x6c0e, 28);
-          const uint8_t port = ram_peek(0x6c49);
+          const uint8_t port = ram_peek(kClickPort);
           s_y = port; // live out of this routine; the click is `LDA $C000,Y`
           peek((uint16_t)(0xc000 + port));
 
@@ -3925,8 +3992,8 @@ void game_tick_sound_native(void) {
     }
 
     GAME_CYCLES(0x6c40, 8);
-    const uint8_t left = (uint8_t)(ram_peek(0x6c48) - 1);
-    ram_poke(0x6c48, left);
+    const uint8_t left = (uint8_t)(ram_peek(kTonePasses) - 1);
+    ram_poke(kTonePasses, left);
     if (!left)
       break;
     GAME_CYCLES(0x6c43, 1);
@@ -4223,7 +4290,7 @@ void game_set_apple_value_native(void) {
   GAME_CYCLES(0x71cd, 20);
   ram_poke(kAppleValue, 0x00);
   ram_poke(kAppleValue + 1, 0x00);
-  const uint8_t per_apple = ram_peek(0x71c8 + ram_peek(kDifficulty));
+  const uint8_t per_apple = ram_peek(kAppleValueTable + ram_peek(kDifficulty));
   uint8_t levels = ram_peek(kScriptIndex);
   s_status_d = 0x01;
 
@@ -4261,7 +4328,7 @@ void game_mark_head_native(void) {
 
   GAME_CYCLES(0x6bf2, 16);
   ram_poke(kHeadMoved, 0x01);
-  ram_poke(0x6c46, 0x01);
+  ram_poke(kTonePeriod, 0x01);
 
   // A and its flags are live out of $6BEF, unlike almost everything else here.
   s_a = 0x01;
@@ -4348,7 +4415,7 @@ void game_sound_sweep_native(void) {
     // $30 here would pass too, and that would be a real bug: the mute would
     // stop working and no oracle in this repo looks at sound.
     GAME_CYCLES(0x64b0, 12);
-    peek((uint16_t)(0xc000 + ram_peek(0x6c49)));
+    peek((uint16_t)(0xc000 + ram_peek(kClickPort)));
     if (--x)
       GAME_CYCLES(0x64b7, 1);
   } while (x);
@@ -4365,7 +4432,7 @@ void game_sound_sweep_native(void) {
     } while (y);
 
     GAME_CYCLES(0x64be, 12);
-    port = ram_peek(0x6c49);
+    port = ram_peek(kClickPort);
     last = peek((uint16_t)(0xc000 + port));
     if (++x)
       GAME_CYCLES(0x64c5, 1);
@@ -4408,8 +4475,8 @@ void game_show_key_native(uint8_t slot, uint8_t key) {
 
   GAME_CYCLES(0x759e, 23);
   s_x = slot; // read back by the COUT hook, which is why it is set here
-  ram_poke(kCH, ram_peek(0x75b3 + slot));
-  ram_poke(kCV, ram_peek(0x75b9 + slot));
+  ram_poke(kCH, ram_peek(kKeyCH + slot));
+  ram_poke(kCV, ram_peek(kKeyCV + slot));
   rom_fc68(0x75ab);
 
   GAME_CYCLES(0x75ac, 10);
@@ -4575,7 +4642,7 @@ void game_cout_hook_native(uint8_t ch) {
     }
 
     ram_poke(kGlyph, glyph);
-    ram_poke(kSavedX, s_x); // X and Y are the caller's, and are put back below
+    ram_poke(kSavedX, s_x); // put back at $669F
     ram_poke(kSavedY, s_y);
     ram_poke(kGlyphSrc, 0x00);
     ram_poke(kGlyphSrc + 1, 0x00);
@@ -4709,7 +4776,7 @@ static uint8_t scrn_cell(Cell c, uint16_t ret) {
 /// database resolves the $C000 to KBD, so the disassembly reads `LDA KBD,Y`
 /// and the index is what makes it the speaker.
 static void click_speaker(void) {
-  peek(0xc000 + ram_peek(0x6c49));
+  peek(0xc000 + ram_peek(kClickPort));
 }
 
 /* ========================================================================== */
@@ -5142,7 +5209,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
 /// $6A55 -- the absolute-direction key that turns the snake to face \p dir.
 /// Index 0 is unused; the four that matter are the I/J/K/M diamond.
 static uint8_t key_for_direction(uint8_t dir) {
-  return ram_peek(0x6a55 + dir);
+  return ram_peek(kSteerKey + dir);
 }
 
 /// Propose \p dir and report whether the move is allowed.
@@ -5163,7 +5230,7 @@ static bool steer_try(
     uint16_t after_addr,
     unsigned after_cycles) {
   GAME_CYCLES(before_addr, before_cycles);
-  ram_poke(0x6b38, dir);
+  ram_poke(kSteerDir, dir);
   game_move_ok(move_ok_ret);
   GAME_CYCLES(after_addr, after_cycles);
   // The original branches on Z, which game_move_ok leaves set for exactly the
@@ -5173,8 +5240,8 @@ static bool steer_try(
 
 SteerChoice game_auto_steer(uint8_t *key_out) {
   GAME_CYCLES(0x6a32, 10);
-  const uint8_t apple_row = ram_peek(0x6b3c);
-  const uint8_t apple_col = ram_peek(0x6b3b);
+  const uint8_t apple_row = ram_peek(kAppleRow);
+  const uint8_t apple_col = ram_peek(kAppleCol);
   const uint8_t head_row = ram_peek(kHeadRow);
   const uint8_t head_col = ram_peek(kHeadCol);
 
@@ -5259,7 +5326,7 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
   // $6A48 -- a direction was accepted. Already going that way means there is
   // nothing to say; otherwise name the key that turns to it.
   GAME_CYCLES(0x6a48, 10);
-  const uint8_t dir = ram_peek(0x6b38);
+  const uint8_t dir = ram_peek(kSteerDir);
   if (dir == ram_peek(kDirection)) {
     GAME_CYCLES(0x6a4e, 1);
     GAME_CYCLES(0x6a54, 6);
@@ -5589,12 +5656,12 @@ void game_begin_life(void) {
   game_start_life_adapter(0x625a);
 
   GAME_CYCLES(0x625b, 36);
-  ram_poke(kTailCol, s_a); // tail column, from $6630 by way of $660F
-  ram_poke(kHeadRow, 0x27); // head row: the bottom edge
-  ram_poke(kTailRow, 0x27); // tail row, the same cell
+  ram_poke(kTailCol, s_a); // from $6630, by way of $660F
+  ram_poke(kHeadRow, 0x27); // the bottom edge
+  ram_poke(kTailRow, 0x27); // the same cell
   ram_poke(kDirection, DIR_UP);
-  ram_poke(kGrowth, 0x0a); // ten segments still to grow
-  ram_poke(kLifeTimer, 0x64); // the level timer
+  ram_poke(kGrowth, 0x0a); // ten
+  ram_poke(kLifeTimer, 0x64);
 
   // $6279 -- empty the sixteen-entry key ring at $623C. DEX/BPL, so it runs
   // down through 0 and stops when X wraps negative, one more pass than a
@@ -5709,7 +5776,7 @@ wait: /* $741C */
     // $7428 -- once the inner counter wraps, try the joystick, if one is
     // selected. Each button stands in for a digit.
     GAME_CYCLES(0x7428, 6);
-    if (ram_peek(0x6c71)) {
+    if (ram_peek(kJoystick)) {
       GAME_CYCLES(0x742d, 10);
       io_peek(0xc05b);
       if (!(io_peek(0xc062) & 0x80)) {
@@ -5789,7 +5856,7 @@ wait: /* $741C */
   GAME_CYCLES(0x7541, 2);
   for (uint8_t i = 0; i != 6; ++i) {
     GAME_CYCLES(0x7543, 10);
-    s_a = ram_peek(0x6c63 + i);
+    s_a = ram_peek(kKeyTable + i);
     s_x = i;
     game_show_key(0x7548);
     GAME_CYCLES(0x7549, 6);
@@ -5819,7 +5886,7 @@ wait: /* $741C */
     s_x = i;
     game_edit_key(0x757b);
     GAME_CYCLES(0x757c, 11);
-    ram_poke(0x6c63 + i, s_a);
+    ram_poke(kKeyTable + i, s_a);
     s_x = i;
     game_show_key(0x7581);
     GAME_CYCLES(0x7582, 6);
@@ -6513,7 +6580,7 @@ void game_move_ok(uint16_t ret_addr) {
   }
 
   uint8_t cell = 0;
-  const MoveVerdict v = snake_move_verdict(ram_peek(0x6b38), &cell);
+  const MoveVerdict v = snake_move_verdict(ram_peek(kSteerDir), &cell);
 
   // Turn the verdict back into what the callers at $6A40 branch on.
   switch (v) {
@@ -6587,10 +6654,10 @@ void game_move_bouncer(uint16_t ret_addr) {
   }
 
   Bouncer b = {
-      .col = ram_peek(0x6633),
-      .row = ram_peek(0x6634),
-      .dx = (int8_t)ram_peek(0x6635),
-      .dy = (int8_t)ram_peek(0x6636),
+      .col = ram_peek(kBouncer),
+      .row = ram_peek(kBouncer + 1),
+      .dx = (int8_t)ram_peek(kBouncer + 2),
+      .dy = (int8_t)ram_peek(kBouncer + 3),
   };
 
   // The state the original leaves behind: A holds the row it loaded first, and
@@ -6601,10 +6668,10 @@ void game_move_bouncer(uint16_t ret_addr) {
 
   bouncer_step(&b);
 
-  ram_poke(0x6633, b.col);
-  ram_poke(0x6634, b.row);
-  ram_poke(0x6635, (uint8_t)b.dx);
-  ram_poke(0x6636, (uint8_t)b.dy);
+  ram_poke(kBouncer, b.col);
+  ram_poke(kBouncer + 1, b.row);
+  ram_poke(kBouncer + 2, (uint8_t)b.dx);
+  ram_poke(kBouncer + 3, (uint8_t)b.dy);
 
   if (ret_addr)
     pop16();
@@ -6678,7 +6745,7 @@ void game_find_apple(uint16_t ret_addr) {
   /*$69C3*/ CYCLES(0x69c3, 0);
   game_find_nearest_apple();
 
-  const uint8_t row = ram_peek(0x6b3a);
+  const uint8_t row = ram_peek(kSearchRow);
   s_a = row;
   s_status_not_z = row;
   s_status_n = (row & 0x80);
@@ -6717,7 +6784,7 @@ void game_pause_or_toggle_sound(uint16_t ret_addr) {
   s_status_c = (k >= 0x93);
   if (k == 0x93) {
     // $69B9 ended on the EOR, so N and Z describe the new flag, not the key.
-    const uint8_t f = ram_peek(0x69c2);
+    const uint8_t f = ram_peek(kSoundMuted);
     s_status_not_z = f;
     s_status_n = (f & 0x80);
   } else {
@@ -6969,8 +7036,8 @@ void game_cold_start(void) {
         GAME_CYCLES(0x3759, 1);
     }
     GAME_CYCLES(0x375b, 20);
-    ram_poke(0x3754, (uint8_t)(ram_peek(0x3754) + 1));
-    ram_poke(0x3757, (uint8_t)(ram_peek(0x3757) + 1));
+    ram_poke(kRelocLoadOp, (uint8_t)(ram_peek(kRelocLoadOp) + 1));
+    ram_poke(kRelocStoreOp, (uint8_t)(ram_peek(kRelocStoreOp) + 1));
     if (page != 7)
       GAME_CYCLES(0x3766, 1);
   }
@@ -7235,7 +7302,7 @@ ended: /* $7847 */
   game_print_inline_str(0x7867);
   for (;;) {
     GAME_CYCLES(0x7886, 6);
-    if (ram_peek(0x6c71)) {
+    if (ram_peek(kJoystick)) {
       GAME_CYCLES(0x788b, 6);
       // The button reads with bit 7 *clear* when pressed on this path.
       if (!(io_peek(0xc061) & 0x80)) {

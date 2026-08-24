@@ -43,6 +43,24 @@
 6000 tbl_hgr_lo        # 48 hi-res line address low bytes
 6030 tbl_hgr_hi        # 48 hi-res line address high bytes
 6060 var_hgr_mask      # 4 bytes, rewritten by hgr_set_masks
+6633 var_bouncer       # col/row/dx/dy: the working copy $64C8 steps. A bouncer
+                       # is not stepped where it lives -- one is copied in
+                       # here, stepped, and written back.
+6637 var_want_col      # where the step would land, before the walls get a say
+6638 var_want_row
+6C4A var_bounce_blocked # that cell was occupied, so reflect instead
+6B38 var_steer_dir     # the direction $6A32 settled on; $6AB8 reads it back
+6B39 var_search_col    # the apple sweep's cursor, left where it stopped
+6B3A var_search_row
+6B3B var_apple_col     # the answer, copied out of the cursor at $6A25
+6B3C var_apple_row
+6C46 var_tone_period   # and the on/off switch: 0 is silent
+6C47 var_tone_countdown # passes left before the next click
+6C48 var_tone_passes   # passes one tick of the tone runs
+6C71 var_joystick      # the player chose the joystick at the setup prompt
+3754 var_reloc_load_op # the address operands of the LDA and STA in the
+3757 var_reloc_store_op # relocation loop at $3750, incremented to walk eight
+                       # pages instead of keeping a page counter
 6064 tbl_hgr_pattern   # indexed by the value built in $0006
 6174 tbl_hgr_masks     # source for hgr_set_masks, 4 bytes per entry
 

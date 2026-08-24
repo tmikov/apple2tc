@@ -2426,3 +2426,78 @@ This is decoded from the two call sites, not observed. A probe at `$6B55` and
 `$641C` shows all three recordings seed the timer `$64` and never reach the
 clamp. Under the standing no-new-recordings agreement that is fine, and the
 comment on `kLifeTime` says which half is which.
+
+## 2026-08-23 (later) — Step 2 finished: 115 addresses, and four wrong names
+
+All 115 are named, in six slices: the scoreboard, the snake, the plotter's
+argument block, the monitor's zero page, the settings block and pointers, and
+the tables. `ram_peek(0x...)` does not appear in `snake-byte-cold.c` any more.
+
+### The check held for every slice
+
+Each slice was proven inert by compiling at `-O2` and diffing the disassembly
+against `HEAD`, permitting only `__LINE__` immediates to move. That caught
+nothing, which is the point: it means the six commits are a rename and the
+gates were never the thing standing between a mistake and the tree. One slice
+needed the symbol name normalised out of the disassembly first, because it
+renamed a function rather than an address.
+
+The gates ran on every slice too, and were green every time.
+
+### Unions are real and must not be tidied
+
+Two blocks turned out to be hand-written unions, and naming them uniformly
+would have been a lie in both cases.
+
+`$0000-$0008` is the plotter's argument block — shape, ink, cell, the hi-res
+destination, the run end. `game_cout_hook_native` reuses all nine bytes for an
+unrelated job: `$0000` is a pointer into the font, `$0002/$0003` hold the
+caller's X and Y (`$669F` restores them from there), `$0008` is the character.
+Only `$0004` means the same thing in both. So there are two enums over the same
+addresses and the substitution went per routine.
+
+`$002C` is the same story across a smaller gap: H2, the right-hand end of a
+lo-res HLINE, and separately the flag `game_print_bcd` raises when it prints a
+digit. Drawing and printing never overlap, so the original's reuse is safe.
+
+That second one paid for itself immediately. `$794D` in `game_bonus_screen`
+zeroes `$002C` right before printing two BCD bytes, so it is the digit flag —
+the same thing `clear_leading_zero_flag()` does for every other field — and a
+uniform substitution would have called it H2 and left it looking like a drawing
+argument for good.
+
+### Four names were wrong, and only reading for names could find them
+
+None of these can fail a test. All were in hand-written C that passes every
+gate, and two of them had a *correct* comment about the same bytes elsewhere in
+the same file.
+
+- **`$725F/$7260`** was "apples until the next one appears". It is apples on the
+  playfield now.
+- **`$0304`** was "the apple value", twice. It is the level's time allowance.
+- **`poll_and_discard()`** was neither. It reads `$C000 + $6C49`, and `$6C49` is
+  the click port — `$30` the speaker, `$20` the cassette output nobody can hear,
+  which is how muting works. One speaker click. What hid it is that the symbol
+  database resolves `$C000` to KBD, so the disassembly reads `LDA KBD,Y` and
+  only the index says otherwise. `game_sound_sweep` does the identical thing
+  fourteen lines away and its comment was right all along.
+- **`game_eat_apple`** awards an extra life. `$7633` BCD-increments `$725E`,
+  which the status panel prints as SNAKES LEFT, and its one caller is the
+  round-cleared path straight after the bonus screen. This one was not just a
+  comment: the name came from `rom.externs`, so the generated C called
+  `game_eat_apple()` too, and fixing it meant changing the map and
+  regenerating.
+
+The pattern is worth naming. Each wrong name survived *because* the address was
+spelled in hex everywhere it was used: nothing ever put the claim and the
+arithmetic side by side. `kLives` and `adc_dec16(lives(), 1, 0)` in a routine
+called `eat_apple` cannot be read past. `ram_poke(0x725e, ...)` can, and was,
+for months.
+
+### What this costs the next step
+
+Step 2 spent no oracle at all. Step 3 moves storage out of emulated RAM, and
+that is where `ram-cold.probe` — added in step 0 for exactly this — stops being
+redundant and starts being the only thing checking that a value still means
+what it did. The `-O2` check does not survive: moving a variable changes the
+generated code by design.
