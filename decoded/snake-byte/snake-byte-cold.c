@@ -189,38 +189,38 @@ typedef struct {
 } Cell;
 
 void game_cold_start(void);
-void rom_plot(uint16_t ret_addr);
-void rom_hline(uint16_t ret_addr);
-void rom_setcol(uint16_t ret_addr);
-void rom_scrn(uint16_t ret_addr);
-void rom_home(uint16_t ret_addr);
-void rom_fc68(uint16_t ret_addr);
-void rom_cout(uint16_t ret_addr);
-void rom_setkbd(uint16_t ret_addr);
-void rom_setvid(uint16_t ret_addr);
-void game_load_shape(uint16_t ret_addr);
-void game_draw_cell(uint16_t ret_addr, uint8_t ink, Cell c);
-void game_plot_hline(uint16_t ret_addr, Cell c, uint8_t to_col);
-void game_plot_vline(uint16_t ret_addr, Cell c, uint8_t to_row);
-void game_lores_vline(uint16_t ret_addr, Cell c, uint8_t to_row);
-void game_clear_hgr(uint16_t ret_addr);
-void game_plot_shape_merge(uint16_t ret_addr, uint8_t ink, Cell c);
-void game_draw_playfield(uint16_t ret_addr);
-void game_install_cout_hook(uint16_t ret_addr);
-void game_start_life_adapter(uint16_t ret_addr);
-void game_move_ok(uint16_t ret_addr);
-void game_move_bouncer(uint16_t ret_addr);
-void game_update_high_score(uint16_t ret_addr);
-void game_step_bouncers(uint16_t ret_addr);
-void game_find_apple(uint16_t ret_addr);
-void game_pause_or_toggle_sound(uint16_t ret_addr);
-void game_read_direction(uint16_t ret_addr);
+void rom_plot(void);
+void rom_hline(void);
+void rom_setcol(void);
+void rom_scrn(void);
+void rom_home(void);
+void rom_fc68(void);
+void rom_cout(void);
+void rom_setkbd(void);
+void rom_setvid(void);
+void game_load_shape(void);
+void game_draw_cell(uint8_t ink, Cell c);
+void game_plot_hline(Cell c, uint8_t to_col);
+void game_plot_vline(Cell c, uint8_t to_row);
+void game_lores_vline(Cell c, uint8_t to_row);
+void game_clear_hgr(void);
+void game_plot_shape_merge(uint8_t ink, Cell c);
+void game_draw_playfield(void);
+void game_install_cout_hook(void);
+void game_start_life_adapter(void);
+void game_move_ok(void);
+void game_move_bouncer(void);
+void game_update_high_score(void);
+void game_step_bouncers(void);
+void game_find_apple(void);
+void game_pause_or_toggle_sound(void);
+void game_read_direction(void);
 void game_print_inline_str(uint16_t ret_addr);
-void rom_bascalc(uint16_t ret_addr);
-void rom_vtabz(uint16_t ret_addr);
-void rom_clreol(uint16_t ret_addr);
-void rom_clreolz(uint16_t ret_addr);
-void rom_wait(uint16_t ret_addr);
+void rom_bascalc(void);
+void rom_vtabz(void);
+void rom_clreol(void);
+void rom_clreolz(void);
+void rom_wait(void);
 
 /// The program starts here. There used to be a func_t001 in between -- the
 /// generated dispatch -- and by the end it was a stub that called this.
@@ -317,11 +317,8 @@ static void emulated_entry_point(void) {
 /// A and the flags are left as the original leaves them, because COUT1 and
 /// CLREOLZ both read BASL straight afterwards and the monitor's callers are
 /// not all in this file's control.
-void rom_bascalc(uint16_t ret_addr) {
+void rom_bascalc(void) {
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$FBC1*/ CYCLES(0xfbc1, 20);
   const uint8_t line = s_a;
@@ -361,21 +358,17 @@ void rom_bascalc(uint16_t ret_addr) {
   s_basl = addr_lo;
 
   (void)branchTarget;
-  if (ret_addr) pop16();
 }
 
 /// $FC24 VTABZ. BASCALC for the line in A, then shift the base right by the
 /// window's left edge, so BASL points at the first column of the window rather
 /// than of the screen.
-void rom_vtabz(uint16_t ret_addr) {
+void rom_vtabz(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
   /*$FC24*/ CYCLES(0xfc24, 6);
-  rom_bascalc(0xfc26);
+  rom_bascalc();
 
   /*$FC27*/ CYCLES(0xfc27, 6);
   if (!s_status_d) {
@@ -398,7 +391,6 @@ void rom_vtabz(uint16_t ret_addr) {
   s_basl = s_a;
 
   /*$FC2B*/ CYCLES(0xfc2b, 6);
-  if (ret_addr) pop16();
 }
 
 /// $FC9C CLREOL. Blank from the cursor to the right edge of the window.
@@ -408,18 +400,14 @@ void rom_vtabz(uint16_t ret_addr) {
 /// only caller is $FC9A on the scroll path and nothing in the recordings
 /// scrolls. The body is three instructions and its tail call is the routine
 /// below, which *is* exercised, so what is unchecked is the LDY and the jump.
-void rom_clreol(uint16_t ret_addr) {
+void rom_clreol(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
   /*$FC9C*/ CYCLES(0xfc9c, 3);
   s_y = s_ch;
-  rom_clreolz(0x0000); // JMP -- a tail call.
+  rom_clreolz(); // JMP -- a tail call.
 
-  if (ret_addr) pop16();
 }
 
 /// $FC9E CLREOLZ. The same, from column Y rather than from the cursor. Writes
@@ -427,11 +415,8 @@ void rom_clreol(uint16_t ret_addr) {
 ///
 /// Y is left at the width and the carry set, which is how the original exits
 /// the loop; both are still written because the monitor's callers read them.
-void rom_clreolz(uint16_t ret_addr) {
+void rom_clreolz(void) {
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$FC9E*/ CYCLES(0xfc9e, 2);
   s_a = 0xa0; // a space, high bit set
@@ -458,7 +443,6 @@ void rom_clreolz(uint16_t ret_addr) {
 
   /*$FCA7*/ CYCLES(0xfca7, 6);
   (void)branchTarget;
-  if (ret_addr) pop16();
 }
 
 /// $FCA8 WAIT. The monitor's delay: two nested `SBC #$01 / BNE` loops around
@@ -473,11 +457,8 @@ void rom_clreolz(uint16_t ret_addr) {
 /// A comes back as 0 and the carry set. The inner loop counts A down to zero
 /// from a copy on the stack, and the outer one counts the original down, so
 /// the total is quadratic in A rather than linear.
-void rom_wait(uint16_t ret_addr) {
+void rom_wait(void) {
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$FCA8*/ CYCLES(0xfca8, 2);
   s_status_c = 0x01;
@@ -535,7 +516,6 @@ void rom_wait(uint16_t ret_addr) {
 
   /*$FCB3*/ CYCLES(0xfcb3, 6);
   (void)branchTarget;
-  if (ret_addr) pop16();
 }
 
 /* ========================================================================== *
@@ -556,12 +536,18 @@ void rom_wait(uint16_t ret_addr) {
 /// emit a declaration but no body for each of them, so the definitions in
 /// `a2rom.c` take over.
 ///
-/// All routines follow the calling convention of the generated code:
-///   - `ret_addr` is the "fake return address" pushed on entry, mimicking JSR.
-///     Zero means a tail call: nothing is pushed and nothing is popped, and the
-///     6502 return address that is already on the stack belongs to the caller.
-///   - CPU state is not passed or returned; it lives in the globals of
-///     `apple2tc/system2-inc.h` (`s_a`, `s_x`, `s_y`, `s_status_*`, `s_ram`).
+/// They followed the generated code's calling convention until 2026-08-24,
+/// taking a `ret_addr` they pushed on entry to mimic a JSR. That is gone --
+/// nothing in this build reads the emulated call stack, so `push16` and
+/// `pop16` are unused here and the routines are ordinary C functions.
+///
+/// What has not changed is that CPU state is not passed or returned: it lives
+/// in the globals of `apple2tc/system2-inc.h` (`s_a`, `s_x`, `s_y`,
+/// `s_status_*`, `s_ram`). Giving the ROM entry points real parameters is the
+/// next step; `rom_plot` wants a row and a column, not A and Y.
+///
+/// `push8`/`pop8` are still here and are not the same thing: PHA/PHP inside a
+/// routine, which the routine pops itself before it returns.
 ///
 /// IMPORTANT: `a2rom.c` is *not* a standalone translation unit. See the comment
 /// at the top of that file.
@@ -569,21 +555,21 @@ void rom_wait(uint16_t ret_addr) {
 
 
 /// $F800 PLOT. Plot a lo-res block at column Y, row A. Trashes A, preserves Y.
-void rom_plot(uint16_t ret_addr);
+void rom_plot(void);
 
 /// $F819 HLINE. Draw a horizontal lo-res line at row A from column Y to the
 /// column in $2C.
-void rom_hline(uint16_t ret_addr);
+void rom_hline(void);
 
 /// $F864 SETCOL. Set the lo-res color to A (low nibble), replicated into both
 /// nibbles of $30.
-void rom_setcol(uint16_t ret_addr);
+void rom_setcol(void);
 
 /// $F871 SCRN. Read the lo-res block at column Y, row A; returns the color in A.
-void rom_scrn(uint16_t ret_addr);
+void rom_scrn(void);
 
 /// $FC58 HOME. Clear the text window and move the cursor to its top left.
-void rom_home(uint16_t ret_addr);
+void rom_home(void);
 
 /// $FC68. The tail of the ROM's LF handling, not a documented entry point under
 /// a familiar name:
@@ -595,19 +581,19 @@ void rom_home(uint16_t ret_addr);
 /// bottom of the window. COUT1 reaches it by falling through $FC66, but the game
 /// also calls it directly as a VTAB -- $7590 and $75D1 store CH/CV and JSR here,
 /// with CV always well under WNDBTM ($18), so the scroll half never runs.
-void rom_fc68(uint16_t ret_addr);
+void rom_fc68(void);
 
 /// $FDED COUT. Output the character in A through the output vector CSWL/CSWH
 /// at $36/$37. See the extensive comment in `a2rom.c`: only the ROM COUT1
 /// ($FDF0) target is implemented; any other target aborts loudly.
-void rom_cout(uint16_t ret_addr);
+void rom_cout(void);
 
 /// $FE89 SETKBD. Reset the input vector KSWL/KSWH ($38/$39) to the keyboard.
-void rom_setkbd(uint16_t ret_addr);
+void rom_setkbd(void);
 
 /// $FE93 SETVID. Reset the output vector CSWL/CSWH ($36/$37) to the screen,
 /// i.e. to COUT1 at $FDF0.
-void rom_setvid(uint16_t ret_addr);
+void rom_setvid(void);
 
 /* ========================================================================== *
  * The game as ordinary C -- declarations                                   *
@@ -1011,27 +997,27 @@ void game_setup_screen(void);
 /// $7230 -- print the NUL-terminated string that follows the call.
 void game_print_inline_str(uint16_t ret_addr);
 
-void game_cout_hook(uint16_t ret_addr);
+void game_cout_hook(void);
 
 /* --- $60E4/$60E7/$6127: the hi-res cell plotter -------------------------- */
 
 /// $6127 -- load the four scanline masks for shape $00 into $6060.
-void game_load_shape(uint16_t ret_addr);
+void game_load_shape(void);
 
 /// $60E7 -- draw the currently-loaded shape into the cell at row $03,
 /// column $02, in ink $01.
-void game_draw_cell(uint16_t ret_addr, uint8_t ink, Cell c);
+void game_draw_cell(uint8_t ink, Cell c);
 
 /// $60E4 -- load the shape for $00, then draw it. The form nearly every
 /// caller uses.
 
 /// $6148 -- plot a horizontal run of cells, from column $02 through column
 /// $08 inclusive, along row $03.
-void game_plot_hline(uint16_t ret_addr, Cell c, uint8_t to_col);
+void game_plot_hline(Cell c, uint8_t to_col);
 
 /// $615A -- plot a vertical run of cells, from row $03 through row $08
 /// inclusive, down column $02.
-void game_plot_vline(uint16_t ret_addr, Cell c, uint8_t to_row);
+void game_plot_vline(Cell c, uint8_t to_row);
 
 /* --- $7000/$7019/$7024: the screen-script primitives ---------------------- */
 
@@ -1043,7 +1029,7 @@ void game_plot_vline(uint16_t ret_addr, Cell c, uint8_t to_row);
 
 /// $7000 -- plot a vertical run on the lo-res occupancy map, from row $03
 /// through row $08 inclusive at column $02, leaving $03 unchanged.
-void game_lores_vline(uint16_t ret_addr, Cell c, uint8_t to_row);
+void game_lores_vline(Cell c, uint8_t to_row);
 
 /* --- $702B/$71F3/$7226/$7267: the score ---------------------------------- */
 
@@ -1056,26 +1042,26 @@ void game_lores_vline(uint16_t ret_addr, Cell c, uint8_t to_row);
 /// $7267 -- add $71CC:$71CB to the four-byte BCD score at $7252.
 
 /// $702B -- zero hi-res page 1, $2000 through $3FFF.
-void game_clear_hgr(uint16_t ret_addr);
+void game_clear_hgr(void);
 
 /* --- $6B93 --------------------------------------------------------------- */
 
 /// $6B93 -- load the shape for $00 and merge it into the cell at row $03,
 /// column $02, setting bits rather than replacing the byte.
-void game_plot_shape_merge(uint16_t ret_addr, uint8_t ink, Cell c);
+void game_plot_shape_merge(uint8_t ink, Cell c);
 
 /// $7045 -- clear the screen, draw the border, then interpret the current
 /// level's display list at $8000. See game.c for the opcodes.
-void game_draw_playfield(uint16_t ret_addr);
+void game_draw_playfield(void);
 
 /* --- snake state and scoring setup --------------------------------------- */
 
 /// $6641 -- point CSWL/CSWH at $664A so COUT reaches game_cout_hook.
-void game_install_cout_hook(uint16_t ret_addr);
+void game_install_cout_hook(void);
 
 /// $660F -- adapter for game_start_life(): head column in A, both bouncers
 /// placed at opposite corners.
-void game_start_life_adapter(uint16_t ret_addr);
+void game_start_life_adapter(void);
 
 /// $6BEF -- PLOT the head onto the lo-res map and raise $0305 and $6C46.
 
@@ -1100,35 +1086,35 @@ void game_start_life_adapter(uint16_t ret_addr);
 
 /// $6AB8 -- can the snake step in direction $6B38? Returns A = 0 / Z set for
 /// yes, and refuses dead ends one move early.
-void game_move_ok(uint16_t ret_addr);
+void game_move_ok(void);
 
 /// $64C8 -- step the bouncer at $6633/$6634 by its deltas, reflecting off
 /// whatever it hits.
-void game_move_bouncer(uint16_t ret_addr);
+void game_move_bouncer(void);
 
 /// $728D -- copy the score at $7252 over the high score at $7256 if it beats
 /// it, comparing BCD bytes most significant first.
-void game_update_high_score(uint16_t ret_addr);
+void game_update_high_score(void);
 
 /// $6BFB -- twenty passes of a falling tone, driven by the period at $6C46.
 
 /// $6594 -- step the bouncers the difficulty calls for, then return the next
 /// queued key in A.
-void game_step_bouncers(uint16_t ret_addr);
+void game_step_bouncers(void);
 
 /// $69C3 -- find an apple by sweeping columns outward from the snake, leaving
 /// the result at $6B3B/$6B3C.
-void game_find_apple(uint16_t ret_addr);
+void game_find_apple(void);
 
 /// $69A9 -- adapter for game_pause_or_toggle_sound_native(): ESC pauses until
 /// a key, Ctrl-S toggles the sound flag at $69C2.
-void game_pause_or_toggle_sound(uint16_t ret_addr);
+void game_pause_or_toggle_sound(void);
 
 /// $75D1 -- blink slot X of the key-redefinition screen and wait for a
 /// replacement key.
 
 /// $6C72 -- turn the next key, or the joystick, into a direction.
-void game_read_direction(uint16_t ret_addr);
+void game_read_direction(void);
 
 /// $6288 -- play one life, and leave the reason it ended in $6253, which is
 /// what the caller at $7739 reads.
@@ -1202,14 +1188,14 @@ static void game_play_one_life(void);
 
 /* Helpers that remain in the generated code. Redeclared here so that this file
    reads standalone; C permits identical redeclarations. */
-void rom_vtabz(uint16_t ret_addr);
-void rom_clreolz(uint16_t ret_addr);
-void rom_clreol(uint16_t ret_addr);
-void rom_wait(uint16_t ret_addr);
+void rom_vtabz(void);
+void rom_clreolz(void);
+void rom_clreol(void);
+void rom_wait(void);
 
 /* $FDF0 COUT1, defined below. `rom_cout` dispatches to it, and so does the
    game's own $664A handler in game.c once it has drawn its glyph. */
-static void rom_cout1(uint16_t ret_addr);
+static void rom_cout1(void);
 
 /* ========================================================================== */
 /* Private helpers.                                                           */
@@ -1231,11 +1217,8 @@ static void rom_cout1(uint16_t ret_addr);
 /// the half. It differs in the tail: BASCALC ORs the shifted value back in to
 /// build a text address, and this one shifts by two and ORs, which lands on
 /// the lo-res page instead.
-static void rom_gbascalc(uint16_t ret_addr) {
+static void rom_gbascalc(void) {
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$F847*/ CYCLES(0xf847, 20);
   const uint8_t row = s_a;
@@ -1263,17 +1246,14 @@ static void rom_gbascalc(uint16_t ret_addr) {
   s_gbasl = s_a;
   /*$F85C*/ s_gbasl = (uint8_t)((uint8_t)(s_a << 0x02) | s_gbasl);
 
-  /*$F85E*/ if (ret_addr) pop16();
+  /*$F85E*/
 }
 
 /// $F80E PLOT1. Store the color mask ($30) into the lo-res half-byte selected
 /// by MASK ($2E) at GBASL/GBASH ($26) + Y.
-static void rom_plot1(uint16_t ret_addr) {
+static void rom_plot1(void) {
   bool branchTarget = true;
   (void)branchTarget;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   // One lo-res cell: replace the half of the byte MASK selects with the
   // matching half of COLOR, leaving the other half alone. `(old ^ colour) &
@@ -1287,7 +1267,7 @@ static void rom_plot1(uint16_t ret_addr) {
   s_a = mixed;
   /*$F816*/ poke(at, mixed);
 
-  /*$F818*/ if (ret_addr) pop16();
+  /*$F818*/
 }
 
 /* ========================================================================== */
@@ -1301,11 +1281,8 @@ static void rom_plot1(uint16_t ret_addr) {
 /// keeping the bit on the stack across GBASCALC and then adding $E0 to $0F,
 /// which is $F0 with the carry set and $EF without; only the low bit of the
 /// row can make the difference, so the sum is one of the two masks.
-void rom_plot(uint16_t ret_addr) {
+void rom_plot(void) {
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$F800*/ CYCLES(0xf800, 11);
   const uint8_t row = s_a;
@@ -1315,7 +1292,7 @@ void rom_plot(uint16_t ret_addr) {
   /*$F801*/ push8((uint8_t)((row & 0x01) | ((half == 0) << 1) | (s_status_i << 2) |
                             (s_status_d << 3) | STATUS_B | (s_status_v << 6) |
                             (half & 0x80)));
-  /*$F802*/ rom_gbascalc(0xfffe);
+  /*$F802*/ rom_gbascalc();
 
   /*$F805*/ CYCLES(0xf805, 8);
   {
@@ -1351,9 +1328,8 @@ void rom_plot(uint16_t ret_addr) {
 
   /*$F80C*/ CYCLES(0xf80c, 3);
   s_mask = s_a;
-  rom_plot1(0x0000); // JMP -- a tail call.
+  rom_plot1(); // JMP -- a tail call.
 
-  if (ret_addr) pop16();
 }
 
 /* ========================================================================== */
@@ -1371,14 +1347,11 @@ void rom_plot(uint16_t ret_addr) {
 /// same reason game_cold_start's do: the two loops are entered at different
 /// depths and leave through each other, which C's loop forms cannot say
 /// without a flag that the original does not have.
-void rom_hline(uint16_t ret_addr) {
+void rom_hline(void) {
   bool branchTarget = true;
 
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
   /*$F819*/ CYCLES(0xf819, 6);
-  rom_plot(0xfffe);
+  rom_plot();
   branchTarget = true;
 
 across: /* $F81C -- one column at a time, up to H2 */
@@ -1393,7 +1366,7 @@ across: /* $F81C -- one column at a time, up to H2 */
 
   /*$F820*/ CYCLES(0xf820, 8);
   s_y = (uint8_t)(s_y + 0x01);
-  /*$F821*/ rom_plot1(0xfffe);
+  /*$F821*/ rom_plot1();
   /*$F824*/ CYCLES(0xf824, 2);
   branchTarget = true;
   if (!s_status_c) {
@@ -1416,7 +1389,7 @@ down: /* $F826 -- one row at a time, up to V2 */
 
   /*$F828*/ CYCLES(0xf828, 9);
   push8(s_a);
-  /*$F829*/ rom_plot(0xfffe);
+  /*$F829*/ rom_plot();
   /*$F82C*/ CYCLES(0xf82c, 9);
   s_a = pop8();
   /*$F82D*/ s_status_c = (uint8_t)(s_a >= s_v2);
@@ -1430,19 +1403,15 @@ down: /* $F826 -- one row at a time, up to V2 */
 done:
   /*$F831*/ CYCLES(0xf831, 6);
   (void)branchTarget;
-  if (ret_addr) pop16();
 }
 
 /* ========================================================================== */
 /* $F864 SETCOL                                                               */
 /* ========================================================================== */
 
-void rom_setcol(uint16_t ret_addr) {
+void rom_setcol(void) {
   bool branchTarget = true;
   (void)branchTarget;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   // The lo-res colour is stored in both nibbles, so a PLOT can take whichever
   // half MASK selects without shifting. Four ASLs and an ORA get there; the
@@ -1458,19 +1427,16 @@ void rom_setcol(uint16_t ret_addr) {
   s_a = both;
   s_color = both;
 
-  /*$F870*/ if (ret_addr) pop16();
+  /*$F870*/
 }
 
 /* ========================================================================== */
 /* $F871 SCRN                                                                 */
 /* ========================================================================== */
 
-void rom_scrn(uint16_t ret_addr) {
+void rom_scrn(void) {
   bool branchTarget = true;
   (void)branchTarget;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   // The row's low bit says which half of the byte holds this cell, and the
   // ROM keeps it across GBASCALC on the stack -- as the whole status
@@ -1483,7 +1449,7 @@ void rom_scrn(uint16_t ret_addr) {
   /*$F872*/ push8((uint8_t)((row & 0x01) | ((half == 0) << 1) | (s_status_i << 2) |
                             (s_status_d << 3) | STATUS_B | (s_status_v << 6) |
                             (half & 0x80)));
-  /*$F873*/ rom_gbascalc(0xfffe);
+  /*$F873*/ rom_gbascalc();
 
   /*$F876*/ CYCLES(0xf876, 11);
   s_a = peek((uint16_t)(gbas16() + s_y));
@@ -1513,7 +1479,7 @@ void rom_scrn(uint16_t ret_addr) {
   s_status_not_z = s_a;
   s_status_n = 0x00;
 
-  /*$F881*/ if (ret_addr) pop16();
+  /*$F881*/
 }
 
 /* ========================================================================== */
@@ -1525,11 +1491,8 @@ void rom_scrn(uint16_t ret_addr) {
 /// One line at a time from WNDTOP: VTAB to it, CLREOLZ it, next. The ROM
 /// carries the line number on the stack across both calls because VTABZ and
 /// CLREOLZ each destroy A.
-void rom_home(uint16_t ret_addr) {
+void rom_home(void) {
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
 home: /* $FC58 */
   CYCLES(0xfc58, 13);
@@ -1547,9 +1510,9 @@ home: /* $FC58 */
   for (;;) { /* $FC46 -- CLRSC2, one line per pass */
     CYCLES(0xfc46, 9);
     push8(s_a);
-    /*$FC47*/ rom_vtabz(0xfffe);
+    /*$FC47*/ rom_vtabz();
     /*$FC4A*/ CYCLES(0xfc4a, 6);
-    rom_clreolz(0xfffe);
+    rom_clreolz();
 
     /*$FC4D*/ CYCLES(0xfc4d, 13);
     s_y = 0x00;
@@ -1580,8 +1543,7 @@ home: /* $FC58 */
   /*$FC22*/ CYCLES(0xfc22, 3); // TABV
   s_a = s_cv;
   (void)branchTarget;
-  rom_vtabz(0x0000); // JMP -- a tail call.
-  if (ret_addr) pop16();
+  rom_vtabz(); // JMP -- a tail call.
 }
 
 /* ========================================================================== */
@@ -1607,11 +1569,8 @@ home: /* $FC58 */
 ///
 /// The scroll copies each line over the one above it, back to front, keeping
 /// the source line's base in BASL and the destination's in BAS2L.
-void rom_fc68(uint16_t ret_addr) {
+void rom_fc68(void) {
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$FC68*/ CYCLES(0xfc68, 8);
   s_a = s_cv;
@@ -1619,16 +1578,15 @@ void rom_fc68(uint16_t ret_addr) {
   if (!(s_cv >= s_wndbtm)) {
     // $FC6C BCC -- the branch itself, taken here. Nothing to scroll.
     /*$FC6C*/ CYCLES_EDGE(0xfc6c, 1);
-    rom_vtabz(0x0000); // JMP -- a tail call.
-    if (ret_addr) pop16();
-    return;
+    rom_vtabz(); // JMP -- a tail call.
+      return;
   }
 
   /*$FC6E*/ CYCLES(0xfc6e, 17);
   s_cv = (uint8_t)(s_cv - 0x01);
   /*$FC70*/ s_a = s_wndtop;
   /*$FC72*/ push8(s_a);
-  /*$FC73*/ rom_vtabz(0xfffe);
+  /*$FC73*/ rom_vtabz();
   branchTarget = true;
 
 scroll: /* $FC76 -- one line up per pass */
@@ -1656,7 +1614,7 @@ scroll: /* $FC76 -- one line up per pass */
 
   /*$FC88*/ CYCLES(0xfc88, 9);
   push8(s_a);
-  /*$FC89*/ rom_vtabz(0xfffe);
+  /*$FC89*/ rom_vtabz();
   branchTarget = true;
 
 copy: /* $FC8C -- one character, right to left */
@@ -1686,15 +1644,14 @@ copy: /* $FC8C -- one character, right to left */
 last_line: /* $FC95 -- blank what the scroll left at the bottom */
   CYCLES(0xfc95, 8);
   s_y = 0x00;
-  /*$FC97*/ rom_clreolz(0xfffe);
+  /*$FC97*/ rom_clreolz();
 
   /*$FC9A*/ CYCLES(0xfc9a, 2);
   branchTarget = true;
   (void)branchTarget;
   if (!s_status_c) {
-    rom_clreol(0x0000); // JMP -- a tail call.
-    if (ret_addr) pop16();
-    return;
+    rom_clreol(); // JMP -- a tail call.
+      return;
   }
   // $FC9A BCS -- taken here, and it falls into the trampoline charge below
   // before continuing; the not-taken arm above jumps straight out without it.
@@ -1702,8 +1659,7 @@ last_line: /* $FC95 -- blank what the scroll left at the bottom */
 
   /*$FC22*/ CYCLES(0xfc22, 3); // TABV
   s_a = s_cv;
-  rom_vtabz(0x0000);
-  if (ret_addr) pop16();
+  rom_vtabz();
 }
 
 /* ========================================================================== */
@@ -1757,11 +1713,8 @@ last_line: /* $FC95 -- blank what the scroll left at the bottom */
 /// falls into the carriage return, and a carriage return falls into the line
 /// feed -- and writing it as nested ifs would need each of those spelled out
 /// twice.
-static void rom_coutz(uint16_t ret_addr) {
+static void rom_coutz(void) {
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$FB78*/ CYCLES(0xfb78, 4);
   branchTarget = true;
@@ -1924,7 +1877,7 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
   s_cv = (uint8_t)(s_cv - 0x01);
   /*$FC22*/ CYCLES(0xfc22, 3); // TABV
   s_a = s_cv;
-  rom_vtabz(0x0000);
+  rom_vtabz();
   goto out;
 
 bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
@@ -1948,7 +1901,7 @@ bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
   // A tenth of a second of silence, then 192 clicks of the speaker.
   /*$FBDD*/ CYCLES(0xfbdd, 8);
   s_a = 0x40;
-  /*$FBDF*/ rom_wait(0xfffe);
+  /*$FBDF*/ rom_wait();
   branchTarget = true;
   /*$FBE2*/ CYCLES(0xfbe2, 2);
   s_y = 0xc0;
@@ -1956,7 +1909,7 @@ bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
   for (;;) { /* $FBE4 */
     CYCLES(0xfbe4, 8);
     s_a = 0x0c;
-    /*$FBE6*/ rom_wait(0xfffe);
+    /*$FBE6*/ rom_wait();
     branchTarget = true;
     /*$FBE9*/ CYCLES(0xfbe9, 8);
     s_a = io_peek(0xc030);
@@ -1980,11 +1933,10 @@ carriage_return: /* $FC62 -- to the left edge, then down */
 line_feed: /* $FC66 */
   CYCLES(0xfc66, 5);
   s_cv = (uint8_t)(s_cv + 0x01);
-  /*$FC68*/ rom_fc68(0x0000); // JMP -- a tail call, and where a scroll happens.
+  /*$FC68*/ rom_fc68(); // JMP -- a tail call, and where a scroll happens.
 
 out:
   (void)branchTarget;
-  if (ret_addr) pop16();
 }
 
 /* ========================================================================== */
@@ -2024,22 +1976,19 @@ out:
 /// fallback. The recorded session never leaves $FDF0, so `verify.sh` cannot
 /// catch a wrong guess here -- a silent fallback would render with the wrong
 /// font onto the wrong page, undetectably.
-void rom_cout(uint16_t ret_addr) {
+void rom_cout(void) {
   bool branchTarget = true;
   uint16_t vector;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$FDED*/ CYCLES(0xfded, 5);
             vector = csw16(); // JMP ($36)
             branchTarget = true;
             switch (vector) {
             case 0xfdf0:
-              rom_cout1(0xfffe);
+              rom_cout1();
               break;
             case 0x664a:
-              game_cout_hook(0xfffe);
+              game_cout_hook();
               break;
             default:
               fprintf(
@@ -2053,8 +2002,7 @@ void rom_cout(uint16_t ret_addr) {
               abort();
             }
 
-            if (ret_addr) pop16();
-            return;
+                      return;
 }
 
 /// $FDF0 COUT1 -- the ROM's own character output: mask to the current text
@@ -2064,11 +2012,8 @@ void rom_cout(uint16_t ret_addr) {
 /// Printable characters ($A0 and up) are masked with INVFLG, which is how the
 /// monitor does inverse and flashing -- $FF leaves them alone. Control codes
 /// are let through unmasked, since mangling them would change what they mean.
-static void rom_cout1(uint16_t ret_addr) {
+static void rom_cout1(void) {
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$FDF0*/ CYCLES(0xfdf0, 4);
   const bool printable = s_a >= 0xa0;
@@ -2086,7 +2031,7 @@ static void rom_cout1(uint16_t ret_addr) {
   s_ysav1 = s_y;
   /*$FDF8*/ push8(s_a);
   branchTarget = true;
-  rom_coutz(0xfdfb); // JSR $FB78
+  rom_coutz(); // JSR $FB78
 
   /*$FDFC*/ CYCLES(0xfdfc, 13);
   s_a = pop8();
@@ -2096,7 +2041,7 @@ static void rom_cout1(uint16_t ret_addr) {
 
   branchTarget = true;
   (void)branchTarget;
-  /*$FDFF*/ if (ret_addr) pop16();
+  /*$FDFF*/
 }
 
 /* ========================================================================== */
@@ -2111,12 +2056,9 @@ static void rom_cout1(uint16_t ret_addr) {
 /// The vector it writes, KSWL/KSWH, is not read by anything in this build --
 /// nothing dispatches input through it -- but the routine runs at startup and
 /// its cycles count, so it is here in full.
-void rom_setkbd(uint16_t ret_addr) {
+void rom_setkbd(void) {
   bool branchTarget = true;
   (void)branchTarget;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$FE89*/ CYCLES(0xfe89, 11);
   s_a2l = 0x00;
@@ -2152,7 +2094,7 @@ void rom_setkbd(uint16_t ret_addr) {
   s_kswl = s_y;
   s_kswh = s_a;
 
-  /*$FEAD*/ if (ret_addr) pop16();
+  /*$FEAD*/
 }
 
 /// $FE93 SETVID. Point COUT's vector back at the ROM's own COUT1.
@@ -2164,12 +2106,9 @@ void rom_setkbd(uint16_t ret_addr) {
 /// snapshot already holds $FDF0 there, and the game only calls SETVID once, at
 /// startup, before it has repointed anything. Had it ever called it after
 /// installing the hook, COUT would have stayed hooked.
-void rom_setvid(uint16_t ret_addr) {
+void rom_setvid(void) {
   bool branchTarget = true;
   (void)branchTarget;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$FE93*/ CYCLES(0xfe93, 9);
   s_a2l = 0x00;
@@ -2200,7 +2139,7 @@ void rom_setvid(uint16_t ret_addr) {
   s_cswl = s_y;
   s_cswh = s_a;
 
-  /*$FEAD*/ if (ret_addr) pop16();
+  /*$FEAD*/
 }
 
 /* ========================================================================== *
@@ -2531,10 +2470,10 @@ static int8_t reflect(int8_t d) {
 /// original and the cycles differ per call site, so each caller charges its
 /// own. Folding them in here is what broke the first attempt -- 4 cycles
 /// missing three times over, and every oracle diverged at once.
-static bool cell_taken(uint8_t col, uint8_t row, uint16_t ret) {
+static bool cell_taken(uint8_t col, uint8_t row) {
   s_a = row;
   s_y = col;
-  rom_scrn(ret);
+  rom_scrn();
   return s_a != 0x00;
 }
 
@@ -2552,12 +2491,12 @@ void bouncer_step(Bouncer *b) {
   uint8_t want_col = (uint8_t)(b->col + b->dx);
   uint8_t want_row = (uint8_t)(b->row + b->dy);
 
-  const bool diagonal_taken = cell_taken(want_col, want_row, 0x64d4);
+  const bool diagonal_taken = cell_taken(want_col, want_row);
   GAME_CYCLES(0x64eb, 4);
   if (diagonal_taken) {
     // Which axis actually stopped it? Ask the two cells either side.
     GAME_CYCLES(0x64ef, 14);
-    const bool across_taken = cell_taken(want_col, b->row, 0x64f7);
+    const bool across_taken = cell_taken(want_col, b->row);
     GAME_CYCLES(0x64f8, 4);
     if (across_taken) {
       GAME_CYCLES(0x64fc, 24);
@@ -2569,7 +2508,7 @@ void bouncer_step(Bouncer *b) {
     }
 
     GAME_CYCLES(0x650d, 14);
-    const bool down_taken = cell_taken(b->col, want_row, 0x6515);
+    const bool down_taken = cell_taken(b->col, want_row);
     GAME_CYCLES(0x6516, 4);
     if (down_taken) {
       GAME_CYCLES(0x651a, 24);
@@ -2601,7 +2540,7 @@ void bouncer_step(Bouncer *b) {
   GAME_CYCLES(0x654c, 11);
   s_a = 0x00;
   s_ink = 0x00;
-  rom_setcol(0x6552);
+  rom_setcol();
 
   GAME_CYCLES(0x6553, 20);
   plot_at(0x00, (Cell){.col = b->col, .row = b->row});
@@ -2609,7 +2548,7 @@ void bouncer_step(Bouncer *b) {
   GAME_CYCLES(0x6560, 14);
   s_a = b->row;
   s_y = b->col;
-  rom_plot(0x6568);
+  rom_plot();
 
   GAME_CYCLES(0x6569, 11);
   s_shape = 0x1a;
@@ -2629,7 +2568,7 @@ void bouncer_step(Bouncer *b) {
   b->col = want_col;
   s_a = 0x03;
   s_ink = 0x03;
-  rom_setcol(0x6586);
+  rom_setcol();
 
   GAME_CYCLES(0x6587, 6);
   plot_shape_at(0x1a, 0x03, (Cell){.col = b->col, .row = b->row});
@@ -2637,7 +2576,7 @@ void bouncer_step(Bouncer *b) {
   GAME_CYCLES(0x658a, 14);
   s_a = b->row;
   s_y = b->col;
-  rom_plot(0x6592);
+  rom_plot();
 
   GAME_CYCLES(0x6593, 6);
   ram_poke(kWantCol, want_col);
@@ -2844,10 +2783,10 @@ void game_promote_high_score(void) {
 /* ========================================================================== */
 
 /// The lo-res occupancy map's value at \p c. $0F is an apple.
-static uint8_t cell_at(Cell c, uint16_t ret) {
+static uint8_t cell_at(Cell c) {
   s_a = c.row;
   s_y = c.col;
-  rom_scrn(ret);
+  rom_scrn();
   return s_a;
 }
 
@@ -2861,7 +2800,7 @@ void game_find_nearest_apple(void) {
   GAME_CYCLES(0x69c3, 14);
   for (;;) { // leftwards
     GAME_CYCLES(0x69ce, 14);
-    const uint8_t v = cell_at(c, 0x69d6);
+    const uint8_t v = cell_at(c);
     GAME_CYCLES(0x69d7, 4);
     if (v == kApple) {
       GAME_CYCLES(0x69d9, 1);
@@ -2886,7 +2825,7 @@ void game_find_nearest_apple(void) {
 
     for (;;) { // rightwards
       GAME_CYCLES(0x69f5, 14);
-      const uint8_t v = cell_at(c, 0x69fd);
+      const uint8_t v = cell_at(c);
       GAME_CYCLES(0x69fe, 2);
       GAME_CYCLES(0x6a00, 2);
       if (v == kApple) {
@@ -2957,7 +2896,7 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
   ram_poke(kWantCol, target.col);
   ram_poke(kWantRow, target.row);
 
-  const uint8_t cell = cell_at(target, 0x6ad4);
+  const uint8_t cell = cell_at(target);
   *cell_out = cell;
 
   // Empty or an apple, and nothing else, may be stepped into.
@@ -2994,7 +2933,7 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
     if (kNeighbour[i].drow)
       s_status_v = ovf8(n.row, target.row, kNeighbour[i].drow > 0 ? 0x01 : 0xfe);
 
-    const uint8_t v = cell_at(n, kNeighbour[i].scrn_ret);
+    const uint8_t v = cell_at(n);
     GAME_CYCLES(kNeighbour[i].cmp_block, 4);
     if (v == 0x00) {
       GAME_CYCLES(kNeighbour[i].inc_block, 6);
@@ -3039,18 +2978,16 @@ typedef enum {
   OP_END = 0x2a,     ///< '*' -- end of this level's script
 } ScriptOp;
 
-/// $7024 through its adapter. The ink arrives in the Z flag, not in A.
-static void set_ink(uint8_t ink, uint16_t ret) {
-  (void)ret; // $7024 has no CYCLES site of its own
-  assert(!ink == !ink);
+/// $7024 -- the lo-res plot colour. Zero erases, anything else draws.
+static void set_ink(uint8_t ink) {
   game_set_ink_native(ink);
 }
 
 /// The ROM's HLINE, which takes its right-hand end from $2C.
-static void lores_hline(uint8_t row, uint8_t from_col, uint16_t ret) {
+static void lores_hline(uint8_t row, uint8_t from_col) {
   s_a = row;
   s_y = from_col;
-  rom_hline(ret);
+  rom_hline();
 }
 
 /// The three runs, with their endpoints as arguments instead of as four
@@ -3079,23 +3016,23 @@ static void plot_at(uint8_t ink, Cell c) {
   game_plot_shape_native(ink, c);
 }
 
-static void plot_hline_at(uint8_t col, uint8_t row, uint8_t to_col, uint16_t ret) {
-  game_plot_hline(ret, (Cell){.col = col, .row = row}, to_col);
+static void plot_hline_at(uint8_t col, uint8_t row, uint8_t to_col) {
+  game_plot_hline((Cell){.col = col, .row = row}, to_col);
 }
 
-static void plot_vline_at(uint8_t col, uint8_t row, uint8_t to_row, uint16_t ret) {
-  game_plot_vline(ret, (Cell){.col = col, .row = row}, to_row);
+static void plot_vline_at(uint8_t col, uint8_t row, uint8_t to_row) {
+  game_plot_vline((Cell){.col = col, .row = row}, to_row);
 }
 
-static void lores_vline_at(uint8_t col, uint8_t row, uint8_t to_row, uint16_t ret) {
-  game_lores_vline(ret, (Cell){.col = col, .row = row}, to_row);
+static void lores_vline_at(uint8_t col, uint8_t row, uint8_t to_row) {
+  game_lores_vline((Cell){.col = col, .row = row}, to_row);
 }
 
 /// The ROM's PLOT.
-static void lores_plot(uint8_t row, uint8_t col, uint16_t ret) {
+static void lores_plot(uint8_t row, uint8_t col) {
   s_a = row;
   s_y = col;
-  rom_plot(ret);
+  rom_plot();
 }
 
 /// $7019 through its adapter: the next display-list byte.
@@ -3148,12 +3085,12 @@ static void spin(uint8_t outer, uint8_t middle) {
 static void wipe_occupancy_map(void) {
   GAME_CYCLES(0x706c, 13);
   uint8_t at = 0x27;
-  set_ink(0x00, 0x7074);
+  set_ink(0x00);
 
   for (;;) {
     GAME_CYCLES(0x7075, 16);
     s_h2 = 0x27;
-    lores_hline(at, 0x00, 0x707f);
+    lores_hline(at, 0x00);
 
     GAME_CYCLES(0x7080, 7);
     const uint8_t row = (uint8_t)(at - 1);
@@ -3175,7 +3112,7 @@ static void open_wall_gaps(void) {
   }
 
   GAME_CYCLES(0x7098, 10);
-  lores_plot(0x01, 0x01, 0x709d);
+  lores_plot(0x01, 0x01);
 
   GAME_CYCLES(0x709e, 8);
   if (ram_peek(kDifficulty) == 0x01) {
@@ -3183,43 +3120,43 @@ static void open_wall_gaps(void) {
     return;
   }
   GAME_CYCLES(0x70a5, 10);
-  lores_plot(0x01, 0x26, 0x70ab);
+  lores_plot(0x01, 0x26);
 }
 
 /// The border, in both representations, plus the gap the snake leaves through.
 static void draw_border(void) {
   GAME_CYCLES(0x70ac, 10);
-  lores_hline(0x00, 0x00, 0x70b2); // $2C is still $27 from the wipe
+  lores_hline(0x00, 0x00); // $2C is still $27 from the wipe
 
   GAME_CYCLES(0x70b3, 10);
-  lores_hline(0x27, 0x00, 0x70b9);
+  lores_hline(0x27, 0x00);
 
   // The four sides, twice: once on the lo-res occupancy map and once in
   // hi-res. Four of these seven used to leave the endpoint out and inherit
   // $27 from the call above; it is written at each of them now.
   GAME_CYCLES(0x70ba, 21);
-  lores_vline_at(0x00, 0x00, 0x27, 0x70c8);
+  lores_vline_at(0x00, 0x00, 0x27);
 
   GAME_CYCLES(0x70c9, 16);
-  lores_vline_at(0x27, 0x00, 0x27, 0x70d3);
+  lores_vline_at(0x27, 0x00, 0x27);
 
   GAME_CYCLES(0x70d4, 19);
-  plot_hline_at(0x00, 0x00, 0x27, 0x70e0);
+  plot_hline_at(0x00, 0x00, 0x27);
 
   GAME_CYCLES(0x70e1, 16);
-  plot_hline_at(0x00, 0x27, 0x27, 0x70eb);
+  plot_hline_at(0x00, 0x27, 0x27);
 
   GAME_CYCLES(0x70ec, 14);
-  plot_vline_at(0x00, 0x00, 0x27, 0x70f4);
+  plot_vline_at(0x00, 0x00, 0x27);
 
   GAME_CYCLES(0x70f5, 16);
-  plot_vline_at(0x27, 0x00, 0x27, 0x70ff);
+  plot_vline_at(0x27, 0x00, 0x27);
 
   // Ink 3 over columns $12-$16 of the bottom row, on top of the border just
   // laid down: the gap the snake leaves through.
   GAME_CYCLES(0x7100, 26);
   s_ink = 0x03;
-  plot_hline_at(0x12, 0x27, 0x16, 0x7112);
+  plot_hline_at(0x12, 0x27, 0x16);
 }
 
 /// Walk the pointer to the current level's script, skipping one whole script
@@ -3251,7 +3188,7 @@ static void seek_script(void) {
 
 void game_draw_playfield_native(void) {
   GAME_CYCLES(0x7045, 6);
-  game_clear_hgr(0x7047);
+  game_clear_hgr();
   select_hires_page2();
   spin(0x04, 0x00); // the counts $7056 used to store into $02/$03
   wipe_occupancy_map();
@@ -3260,7 +3197,7 @@ void game_draw_playfield_native(void) {
   s_wndtop = 0x14;
   s_shape = 0x15;
   s_ink = 0x0d;
-  set_ink(0x0d, 0x7092);
+  set_ink(0x0d);
 
   open_wall_gaps();
   draw_border();
@@ -3292,14 +3229,14 @@ restart:
       GAME_CYCLES(0x714b, 9);
       const uint8_t row = script_byte(0x714f);
       GAME_CYCLES(0x7150, 12);
-      set_ink(ink, 0x7156);
+      set_ink(ink);
 
       GAME_CYCLES(0x7157, 18);
       s_h2 = last;
-      lores_hline(row, col, 0x7161);
+      lores_hline(row, col);
 
       GAME_CYCLES(0x7162, 6);
-      plot_hline_at(col, row, last, 0x7164);
+      plot_hline_at(col, row, last);
       GAME_CYCLES(0x7165, 3);
       continue;
     }
@@ -3317,14 +3254,14 @@ restart:
       GAME_CYCLES(0x7179, 9);
       const uint8_t col = script_byte(0x717d);
       GAME_CYCLES(0x717e, 12);
-      set_ink(ink, 0x7184);
+      set_ink(ink);
 
       // The lo-res half puts s_row back where it found it, which is what lets
       // the hi-res half run the same span without restating it.
       GAME_CYCLES(0x7185, 6);
-      lores_vline_at(col, row, last, 0x7187);
+      lores_vline_at(col, row, last);
       GAME_CYCLES(0x7188, 6);
-      plot_vline_at(col, row, last, 0x718a);
+      plot_vline_at(col, row, last);
       GAME_CYCLES(0x718b, 3);
       continue;
     }
@@ -3339,10 +3276,10 @@ restart:
       GAME_CYCLES(0x719a, 9);
       const uint8_t row = script_byte(0x719e);
       GAME_CYCLES(0x719f, 12);
-      set_ink(ink, 0x71a5);
+      set_ink(ink);
 
       GAME_CYCLES(0x71a6, 12);
-      lores_plot(row, col, 0x71ac);
+      lores_plot(row, col);
       GAME_CYCLES(0x71ad, 6);
       game_plot_shape_native(ink, (Cell){.col = col, .row = row});
       GAME_CYCLES(0x71b0, 3);
@@ -3518,7 +3455,7 @@ void game_clear_hgr_native(void) {
 uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
   for (;;) {
     GAME_CYCLES(0x614b, 6);
-    game_draw_cell(0x614d, ink, c);
+    game_draw_cell(ink, c);
 
     GAME_CYCLES(0x614e, 8);
     if (c.col == to_col)
@@ -3536,7 +3473,7 @@ uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
 uint8_t game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
   for (;;) {
     GAME_CYCLES(0x615d, 6);
-    game_draw_cell(0x615f, ink, c);
+    game_draw_cell(ink, c);
 
     GAME_CYCLES(0x6160, 8);
     if (c.row == to_row)
@@ -3560,7 +3497,7 @@ uint8_t game_lores_vline_native(Cell c, uint8_t to_row) {
 
   for (;;) {
     GAME_CYCLES(0x7003, 12);
-    lores_plot(c.row, c.col, 0x7009);
+    lores_plot(c.row, c.col);
 
     GAME_CYCLES(0x700a, 8);
     if (c.row == to_row)
@@ -3589,7 +3526,7 @@ static void step_bouncer_slot(int slot, uint16_t block, uint16_t cycles, uint16_
   ram_poke(kBouncer + 1, in.row);
   ram_poke(kBouncer + 2, (uint8_t)in.dx);
   ram_poke(kBouncer + 3, (uint8_t)in.dy);
-  game_move_bouncer(ret);
+  game_move_bouncer();
 
   GAME_CYCLES(back_block, back_cycles);
   const Bouncer out = {
@@ -3898,14 +3835,14 @@ static void edit_key_blank(uint8_t slot) {
   GAME_CYCLES(0x75d1, 23);
   s_ch = slot_col(slot);
   s_cv = slot_row(slot);
-  rom_fc68(0x75df);
+  rom_fc68();
 
   GAME_CYCLES(0x75e0, 11);
   s_x = slot;
   s_a = 0xa0; // space
   s_status_not_z = 0xa0;
   s_status_n = 0x80;
-  rom_cout(0x75e6);
+  rom_cout();
 
   GAME_CYCLES(0x75e7, 2);
   uint8_t x = cout_left_x();
@@ -3935,7 +3872,7 @@ static uint8_t edit_key_prompt(uint8_t slot) {
   s_x = slot;
   s_ch = slot_col(slot);
   s_cv = slot_row(slot);
-  rom_fc68(0x7601);
+  rom_fc68();
 
   GAME_CYCLES(0x7602, 13);
   s_x = slot;
@@ -3943,7 +3880,7 @@ static uint8_t edit_key_prompt(uint8_t slot) {
   s_a = glyph;
   s_status_not_z = glyph;
   s_status_n = (glyph & 0x80);
-  rom_cout(0x7609);
+  rom_cout();
 
   GAME_CYCLES(0x760a, 2);
   uint8_t x = cout_left_x();
@@ -4149,7 +4086,7 @@ static void cout_digit(uint8_t digit, uint16_t ret) {
     abort();
   }
   s_a = (uint8_t)(kCharZero + digit);
-  rom_cout(ret);
+  rom_cout();
 }
 
 void game_print_bcd_native(uint8_t byte) {
@@ -4206,7 +4143,7 @@ void game_print_zero_if_blank_native(void) {
 
   GAME_CYCLES(0x722a, 5);
   s_a = kCharZero;
-  rom_cout(0x0000); // JMP $FDED -- a tail call, so no return address.
+  rom_cout(); // JMP $FDED -- a tail call, so no return address.
 }
 
 /* ========================================================================== */
@@ -4274,7 +4211,7 @@ void game_set_ink_native(uint8_t ink) {
 
   GAME_CYCLES(0x7028, 3);
   s_a = ink ? 0x05 : 0x00;
-  rom_setcol(0x0000); // JMP $F864 -- a tail call.
+  rom_setcol(); // JMP $F864 -- a tail call.
 }
 
 /// $7019 -- read the byte the $000A pointer addresses and advance it. The
@@ -4368,7 +4305,7 @@ Cell game_place_apple_native(void) {
     at.row = game_rand_byte_native();
 
     GAME_CYCLES(0x764a, 15);
-    const bool taken = cell_taken(at.col, at.row, 0x7652);
+    const bool taken = cell_taken(at.col, at.row);
 
     GAME_CYCLES(0x7653, 2);
     if (!taken)
@@ -4379,12 +4316,12 @@ Cell game_place_apple_native(void) {
   // White on the occupancy map, so the snake's collision test sees it.
   GAME_CYCLES(0x7655, 8);
   s_a = 0x0f;
-  rom_setcol(0x7659);
+  rom_setcol();
 
   GAME_CYCLES(0x765a, 12);
   s_a = at.row;
   s_y = at.col;
-  rom_plot(0x7660);
+  rom_plot();
 
   GAME_CYCLES(0x7661, 16);
   plot_shape_at(0x01, 0x09, at);
@@ -4439,7 +4376,7 @@ void game_set_apple_value_native(void) {
 /// there: $0305 for the next draw and $6C46 to start the tone.
 void game_mark_head_native(void) {
   GAME_CYCLES(0x6bef, 6);
-  rom_plot(0x6bf1);
+  rom_plot();
 
   GAME_CYCLES(0x6bf2, 16);
   ram_poke(kHeadMoved, 0x01);
@@ -4462,7 +4399,7 @@ void game_draw_head_native(uint8_t ink, Cell c) {
   if (ram_peek(kHeadMoved)) {
     GAME_CYCLES(0x6be2, 11);
     s_shape = 0x01;
-    game_plot_shape_merge(0x6be8, ink, c);
+    game_plot_shape_merge(ink, c);
   } else {
     GAME_CYCLES(0x6be0, 1);
   }
@@ -4496,8 +4433,8 @@ void game_award_extra_life_native(void) {
 /// $60E4 -- load a shape and draw it, which is the pair every caller wants.
 void game_plot_shape_native(uint8_t ink, Cell c) {
   GAME_CYCLES(0x60e4, 6);
-  game_load_shape(0x60e6);
-  game_draw_cell(0x0000, ink, c); // JMP -- a tail call.
+  game_load_shape();
+  game_draw_cell(ink, c); // JMP -- a tail call.
 }
 
 /* ========================================================================== */
@@ -4591,13 +4528,13 @@ void game_show_key_native(uint8_t slot, uint8_t key) {
   s_x = slot; // read back by the COUT hook, which is why it is set here
   s_ch = ram_peek(kKeyCH + slot);
   s_cv = ram_peek(kKeyCV + slot);
-  rom_fc68(0x75ab);
+  rom_fc68();
 
   GAME_CYCLES(0x75ac, 10);
   s_a = glyph;
   s_status_not_z = glyph;
   s_status_n = (glyph & 0x80);
-  rom_cout(0x75af);
+  rom_cout();
 
   GAME_CYCLES(0x75b0, 9);
   s_x = slot;
@@ -4633,24 +4570,24 @@ void game_draw_side_walls_native(void) {
   // as a life runs out.
   GAME_CYCLES(0x6b5c, 18);
   const uint8_t wall_top = (uint8_t)((seed >> 2) + 1);
-  plot_vline_at(0x00, 0x01, wall_top, 0x6b64);
+  plot_vline_at(0x00, 0x01, wall_top);
 
   GAME_CYCLES(0x6b65, 16);
-  plot_vline_at(0x27, 0x01, wall_top, 0x6b6f);
+  plot_vline_at(0x27, 0x01, wall_top);
 
   GAME_CYCLES(0x6b70, 30);
   const uint8_t seam = (uint8_t)(wall_top + 1);
   s_ink = 0x0d; // the lower segment
-  plot_vline_at(0x27, seam, 0x27, 0x6b81);
+  plot_vline_at(0x27, seam, 0x27);
 
   GAME_CYCLES(0x6b82, 18);
-  plot_vline_at(0x00, seam, 0x27, 0x6b8b);
+  plot_vline_at(0x00, seam, 0x27);
 
   // Tail call: SCRN of the bottom-centre cell, whose result the caller reads.
   GAME_CYCLES(0x6b8c, 7);
   s_a = 0x27;
   s_y = 0x14;
-  rom_scrn(0x0000);
+  rom_scrn();
 }
 
 /* ========================================================================== */
@@ -4779,7 +4716,7 @@ void game_cout_hook_native(uint8_t ch) {
 
   GAME_CYCLES(0x6651, 7);
   s_a = ch; // PLA -- the high bit is still on it
-  rom_cout1(0xfffe); // JMP $FDF0
+  rom_cout1(); // JMP $FDF0
 }
 
 /* ========================================================================== */
@@ -4862,10 +4799,10 @@ static void plot_shape_at(uint8_t shape, uint8_t ink, Cell c) {
 }
 
 /// SCRN one cell.
-static uint8_t scrn_cell(Cell c, uint16_t ret) {
+static uint8_t scrn_cell(Cell c) {
   s_a = c.row;
   s_y = c.col;
-  rom_scrn(ret);
+  rom_scrn();
   return s_a;
 }
 
@@ -4943,14 +4880,14 @@ uint8_t game_pause_or_toggle_sound_native(uint8_t key) {
 
 LifeEnd game_play_loop_native(uint8_t *cell_out) {
   GAME_CYCLES(0x6288, 6);
-  game_find_apple(0x628a);
+  game_find_apple();
 
   for (;;) {
     /* --- $628B: a key, and what the game makes of it -------------------- */
     GAME_CYCLES(0x628b, 6);
     game_read_key_native();
     GAME_CYCLES(0x628e, 6);
-    game_read_direction(0x6290);
+    game_read_direction();
     uint8_t code = s_a;
 
     uint8_t dir = ram_peek(kDirection);
@@ -5021,7 +4958,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     // $639B -- anything else is the pause/mute key.
     GAME_CYCLES(0x637c, 1);
     GAME_CYCLES(0x639b, 6);
-    game_pause_or_toggle_sound(0x639d);
+    game_pause_or_toggle_sound();
     GAME_CYCLES(0x639e, 3);
     goto pace;
 
@@ -5066,12 +5003,12 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     dir = (uint8_t)((((uint8_t)(ram_peek(kDirection) - 1)) & 3) + 1);
     ram_poke(kDirection, dir);
     s_a = dir;
-    rom_setcol(0x62c7);
+    rom_setcol();
 
     GAME_CYCLES(0x62c8, 14);
     s_a = head.row;
     s_y = head.col;
-    rom_plot(0x62d0);
+    rom_plot();
 
     // $62D1 -- advance the head, and see what is there.
     GAME_CYCLES(0x62d1, 42);
@@ -5081,7 +5018,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     };
     ram_poke(kHeadCol, next.col);
     ram_poke(kHeadRow, next.row);
-    const uint8_t cell = scrn_cell(next, 0x62ed);
+    const uint8_t cell = scrn_cell(next);
 
     GAME_CYCLES(0x62ee, 25);
     ram_poke(kLifeOutcome, cell);
@@ -5095,11 +5032,11 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       GAME_CYCLES(0x6479, 3);
       GAME_CYCLES(0x632e, 8);
       s_a = 0x07;
-      rom_setcol(0x6332);
+      rom_setcol();
       GAME_CYCLES(0x6333, 14);
       s_a = next.row;
       s_y = next.col;
-      rom_plot(0x633b);
+      rom_plot();
 
       // $633C -- the gate is column $14 of row 0.
       GAME_CYCLES(0x633c, 8);
@@ -5123,7 +5060,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       GAME_CYCLES(0x6480, 14);
       ram_poke(kClickCount, 0x20);
       s_a = 0x07;
-      rom_setcol(0x6489);
+      rom_setcol();
       GAME_CYCLES(0x648a, 14);
       s_a = next.row;
       s_y = next.col;
@@ -5173,7 +5110,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       GAME_CYCLES(0x63a4, 1);
       GAME_CYCLES(0x63b1, 14);
       const Cell tail = {.col = ram_peek(kTailCol), .row = ram_peek(kTailRow)};
-      const uint8_t under = scrn_cell(tail, 0x63b9);
+      const uint8_t under = scrn_cell(tail);
 
       // The original keeps `under` on the stack across the erase. It stays on
       // the emulated stack here too: ram.probe hashes the live stack, and a
@@ -5182,11 +5119,11 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       GAME_CYCLES(0x63ba, 11);
       push8(under);
       s_a = 0x00;
-      rom_setcol(0x63bf);
+      rom_setcol();
       GAME_CYCLES(0x63c0, 14);
       s_a = tail.row;
       s_y = tail.col;
-      rom_plot(0x63c8);
+      rom_plot();
       GAME_CYCLES(0x63c9, 25);
       plot_at(0x00, tail);
 
@@ -5200,7 +5137,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       };
       ram_poke(kTailCol, tail_next.col);
       ram_poke(kTailRow, tail_next.row);
-      const uint8_t ahead = scrn_cell(tail_next, 0x63f5);
+      const uint8_t ahead = scrn_cell(tail_next);
 
       GAME_CYCLES(0x63f6, 32);
       plot_shape_at((uint8_t)(ahead + 0x0c), 0x0c, tail_next);
@@ -5234,14 +5171,14 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       GAME_CYCLES(0x642d, 31);
       s_shape = 0x15;
       s_ink = 0x0d;
-      plot_hline_at(0x12, 0x27, 0x16, 0x6443);
+      plot_hline_at(0x12, 0x27, 0x16);
       GAME_CYCLES(0x6444, 8);
       s_a = 0x0d;
-      rom_setcol(0x6448);
+      rom_setcol();
       GAME_CYCLES(0x6449, 10);
       s_a = 0x27;
       s_y = 0x14;
-      rom_plot(0x644f);
+      rom_plot();
     } else {
       GAME_CYCLES(0x642b, 1);
     }
@@ -5324,7 +5261,7 @@ static bool steer_try(
     unsigned after_cycles) {
   GAME_CYCLES(before_addr, before_cycles);
   ram_poke(kSteerDir, dir);
-  game_move_ok(move_ok_ret);
+  game_move_ok();
   GAME_CYCLES(after_addr, after_cycles);
   // The original branches on Z, which game_move_ok leaves set for exactly the
   // verdicts that permit the move -- including a target holding the apple.
@@ -5521,7 +5458,7 @@ void game_status_panel(void) {
   // longer count earlier in the game.
   GAME_CYCLES(0x7360, 8);
   s_a = 0xa0;
-  rom_cout(0x7364);
+  rom_cout();
 
   // VALUE, same row, column $14. Two bytes at $71CB -- the current worth of an
   // apple, which game_set_apple_value computes per level.
@@ -5567,7 +5504,7 @@ void game_status_panel(void) {
   GAME_CYCLES(0x73cf, 11);
   s_a = 0x00;
   s_cv = 0x00;
-  rom_fc68(0x73d5);
+  rom_fc68();
   GAME_CYCLES(0x73d6, 6);
 }
 
@@ -5617,32 +5554,32 @@ void game_bonus_screen(void) {
   // Columns $0D-$1A, rows $10-$15. The two sides used to inherit their column
   // from the edge above: an hline leaves s_col at its own endpoint, so the
   // first vline ran down $1A, the right edge, and not the $0D it looks like.
-  plot_hline_at(0x0d, 0x10, 0x1a, 0x78e7);
+  plot_hline_at(0x0d, 0x10, 0x1a);
   GAME_CYCLES(0x78e8, 16);
-  plot_hline_at(0x0d, 0x15, 0x1a, 0x78f2);
+  plot_hline_at(0x0d, 0x15, 0x1a);
   GAME_CYCLES(0x78f3, 16);
-  plot_vline_at(0x1a, 0x10, 0x15, 0x78fd);
+  plot_vline_at(0x1a, 0x10, 0x15);
   GAME_CYCLES(0x78fe, 16);
-  plot_vline_at(0x0d, 0x10, 0x15, 0x7908);
+  plot_vline_at(0x0d, 0x10, 0x15);
 
   // $7909 -- the interior, in ink 0, one row at a time from $11 to $14. The
   // original re-loads $02 each time and increments $03 in place, which is why
   // the rows are not written out as constants.
   GAME_CYCLES(0x7909, 26);
   s_ink = 0x00;
-  plot_hline_at(0x0e, 0x11, 0x19, 0x791b);
+  plot_hline_at(0x0e, 0x11, 0x19);
   GAME_CYCLES(0x791c, 16);
-  plot_hline_at(0x0e, 0x12, 0x19, 0x7924);
+  plot_hline_at(0x0e, 0x12, 0x19);
   GAME_CYCLES(0x7925, 16);
-  plot_hline_at(0x0e, 0x13, 0x19, 0x792d);
+  plot_hline_at(0x0e, 0x13, 0x19);
   GAME_CYCLES(0x792e, 16);
-  plot_hline_at(0x0e, 0x14, 0x19, 0x7936);
+  plot_hline_at(0x0e, 0x14, 0x19);
 
   // $7937 -- "BONUS: " and the amount, through the hi-res font.
   GAME_CYCLES(0x7937, 16);
   s_ch = 0x0f;
   s_cv = 0x09;
-  game_install_cout_hook(0x7941);
+  game_install_cout_hook();
   GAME_CYCLES(0x7942, 6);
   game_print_inline_str(0x7944);
   GAME_CYCLES(0x794d, 15);
@@ -5713,7 +5650,7 @@ void game_bonus_screen(void) {
 void game_begin_life(void) {
   GAME_CYCLES(0x6256, 8);
   s_a = 0x14;
-  game_start_life_adapter(0x625a);
+  game_start_life_adapter();
 
   GAME_CYCLES(0x625b, 36);
   ram_poke(kTailCol, s_a); // from $6630, by way of $660F
@@ -5907,10 +5844,10 @@ wait: /* $741C */
   // draw the highlight, then walk them again asking for replacements.
   GAME_CYCLES(0x7466, 1);
   GAME_CYCLES(0x747f, 6);
-  game_clear_hgr(0x7481);
+  game_clear_hgr();
   GAME_CYCLES(0x7482, 10);
   io_peek(0xc052);
-  game_install_cout_hook(0x7487);
+  game_install_cout_hook();
   GAME_CYCLES(0x7488, 11);
   s_cv = 0x01;
   game_print_inline_str(0x748e);
@@ -5930,7 +5867,7 @@ wait: /* $741C */
   // from the plot above rather than restating.
   GAME_CYCLES(0x7561, 21);
   s_shape = 0x0a;
-  plot_vline_at(0x1e, 0x13, 0x1d, 0x756f);
+  plot_vline_at(0x1e, 0x13, 0x1d);
   // At the stem's far end -- the vline above left s_row on $1D.
   GAME_CYCLES(0x7570, 11);
   s_a = 0x0e;
@@ -6049,7 +5986,7 @@ void game_print_inline_str(uint16_t ret_addr) {
   /*$7230*/ CYCLES(0x7230, 20);
   ram_poke(kStrPtr, (uint8_t)ret_addr);
   ram_poke(kStrPtr + 1, (uint8_t)(ret_addr >> 8));
-  rom_fc68(0x7239); // VTAB to the current CV
+  rom_fc68(); // VTAB to the current CV
 
   for (;;) {
     // The pointer is stepped before the read, which is why the caller passes
@@ -6076,26 +6013,20 @@ void game_print_inline_str(uint16_t ret_addr) {
     }
 
     /*$7245*/ CYCLES(0x7245, 6);
-    rom_cout(0x7247);
+    rom_cout();
     /*$7248*/ CYCLES(0x7248, 3);
   }
 
   /*$724B*/ CYCLES(0x724b, 18);
 }
 
-void game_cout_hook(uint16_t ret_addr) {
+void game_cout_hook(void) {
   // Adapter for game_cout_hook_native(). Costs 4 trace sites; $664A survives,
   // probed here with no cycles and charged for real inside.
   bool branchTarget = true;
 
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
   /*$664A*/ CYCLES(0x664a, 0);
   game_cout_hook_native(s_a);
-
-  if (ret_addr)
-    pop16();
 }
 
 /* ========================================================================== */
@@ -6138,14 +6069,11 @@ void game_cout_hook(uint16_t ret_addr) {
 /* against the interpreter instruction for instruction.                       */
 /* ========================================================================== */
 
-void game_load_shape(uint16_t ret_addr) {
+void game_load_shape(void) {
   // Adapter. The body is game_load_shape_masks() in game_native.c; what is
   // left here is the machine state its generated callers observe. One block,
   // so the CYCLES site and the block-head trace are unaffected.
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$6127*/ CYCLES(0x6127, 53);
   const uint8_t shape = s_shape;
@@ -6156,17 +6084,11 @@ void game_load_shape(uint16_t ret_addr) {
   s_a = mask;
   s_status_not_z = mask;
   s_status_n = (mask & 0x80);
-
-  if (ret_addr)
-    pop16();
 }
 
-void game_draw_cell(uint16_t ret_addr, uint8_t ink, Cell c) {
+void game_draw_cell(uint8_t ink, Cell c) {
   // Adapter for game_draw_cell_native(). Costs 3 trace sites; $60E7 survives.
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$60E7*/ CYCLES(0x60e7, 0);
   if (s_status_d) {
@@ -6186,9 +6108,6 @@ void game_draw_cell(uint16_t ret_addr, uint8_t ink, Cell c) {
   s_status_not_z = 0x00;
   s_status_n = 0x00;
   s_status_v = ovf8(s_a, (uint8_t)(s_a - 0x04), 0x04);
-
-  if (ret_addr)
-    pop16();
 }
 
 
@@ -6217,16 +6136,13 @@ void game_draw_cell(uint16_t ret_addr, uint8_t ink, Cell c) {
 /* every time a caller changes.                                               */
 /* ========================================================================== */
 
-void game_plot_hline(uint16_t ret_addr, Cell c, uint8_t to_col) {
+void game_plot_hline(Cell c, uint8_t to_col) {
   // Adapter for game_plot_hline_native(). The shape load stays here: it is the
   // routine's own first block and keeps its probe site.
   bool branchTarget = true;
 
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
   /*$6148*/ CYCLES(0x6148, 6);
-  game_load_shape(0x614a);
+  game_load_shape();
   const uint8_t at = game_plot_hline_native(s_ink, c, to_col);
 
   // The CMP that ended the loop, and the coordinate it compared.
@@ -6234,21 +6150,15 @@ void game_plot_hline(uint16_t ret_addr, Cell c, uint8_t to_col) {
   s_status_c = 0x01;
   s_status_not_z = 0x00;
   s_status_n = 0x00;
-
-  if (ret_addr)
-    pop16();
 }
 
-void game_plot_vline(uint16_t ret_addr, Cell c, uint8_t to_row) {
+void game_plot_vline(Cell c, uint8_t to_row) {
   // Adapter for game_plot_vline_native(). The shape load stays here: it is the
   // routine's own first block and keeps its probe site.
   bool branchTarget = true;
 
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
   /*$615A*/ CYCLES(0x615a, 6);
-  game_load_shape(0x615c);
+  game_load_shape();
   const uint8_t at = game_plot_vline_native(s_ink, c, to_row);
 
   // The CMP that ended the loop, and the coordinate it compared.
@@ -6256,9 +6166,6 @@ void game_plot_vline(uint16_t ret_addr, Cell c, uint8_t to_row) {
   s_status_c = 0x01;
   s_status_not_z = 0x00;
   s_status_n = 0x00;
-
-  if (ret_addr)
-    pop16();
 }
 
 /* ========================================================================== */
@@ -6284,21 +6191,15 @@ void game_plot_vline(uint16_t ret_addr, Cell c, uint8_t to_row) {
 
 
 
-void game_lores_vline(uint16_t ret_addr, Cell c, uint8_t to_row) {
+void game_lores_vline(Cell c, uint8_t to_row) {
   // Adapter for game_lores_vline_native(). Costs 4 trace sites.
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$7000*/ CYCLES(0x7000, 6);
   const uint8_t restored = game_lores_vline_native(c, to_row);
   s_a = restored;
   s_status_not_z = restored;
   s_status_n = (restored & 0x80);
-
-  if (ret_addr)
-    pop16();
 }
 
 /* ========================================================================== */
@@ -6331,12 +6232,9 @@ void game_lores_vline(uint16_t ret_addr, Cell c, uint8_t to_row) {
 
 
 
-void game_clear_hgr(uint16_t ret_addr) {
+void game_clear_hgr(void) {
   // Adapter for game_clear_hgr_native(). Costs 3 trace sites.
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$702B*/ CYCLES(0x702b, 0);
   game_clear_hgr_native();
@@ -6344,9 +6242,6 @@ void game_clear_hgr(uint16_t ret_addr) {
   s_status_c = 0x01;
   s_status_not_z = 0x00;
   s_status_n = 0x00;
-
-  if (ret_addr)
-    pop16();
 }
 
 /* ========================================================================== */
@@ -6377,15 +6272,12 @@ void game_clear_hgr(uint16_t ret_addr) {
 /* including the lost bit, because the screen the game draws depends on it.   */
 /* ========================================================================== */
 
-void game_plot_shape_merge(uint16_t ret_addr, uint8_t ink, Cell c) {
+void game_plot_shape_merge(uint8_t ink, Cell c) {
   // Adapter for game_merge_cell_native(), plus the shape load it opens with.
   bool branchTarget = true;
 
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
   /*$6B93*/ CYCLES(0x6b93, 6);
-  game_load_shape(0x6b95);
+  game_load_shape();
 
   if (s_status_d) {
     fprintf(stderr, "game_plot_shape_merge: entered with decimal mode set\n");
@@ -6403,9 +6295,6 @@ void game_plot_shape_merge(uint16_t ret_addr, uint8_t ink, Cell c) {
   s_status_not_z = 0x00;
   s_status_n = 0x00;
   s_status_v = ovf8(s_a, (uint8_t)(s_a - 0x04), 0x04);
-
-  if (ret_addr)
-    pop16();
 }
 
 /* ========================================================================== */
@@ -6449,7 +6338,7 @@ void game_plot_shape_merge(uint16_t ret_addr, uint8_t ink, Cell c) {
 /* game_cout_hook already does at $669F.                                      */
 /* ========================================================================== */
 
-void game_draw_playfield(uint16_t ret_addr) {
+void game_draw_playfield(void) {
   // Adapter for game_draw_playfield_native(). The largest single conversion:
   // 61 trace sites, a fifth of what game.c had. $7045 itself survives, charged
   // zero here and for real inside.
@@ -6459,14 +6348,8 @@ void game_draw_playfield(uint16_t ret_addr) {
   // so the adapter marshals nothing back.
   bool branchTarget = true;
 
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
   /*$7045*/ CYCLES(0x7045, 0);
   game_draw_playfield_native();
-
-  if (ret_addr)
-    pop16();
 }
 
 /* ========================================================================== */
@@ -6484,12 +6367,9 @@ void game_draw_playfield(uint16_t ret_addr) {
 /* optional wall gaps in game_draw_playfield.                                 */
 /* ========================================================================== */
 
-void game_install_cout_hook(uint16_t ret_addr) {
+void game_install_cout_hook(void) {
   // Adapter for game_install_cout_vector().
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$6641*/ CYCLES(0x6641, 16);
   game_install_cout_vector();
@@ -6497,12 +6377,9 @@ void game_install_cout_hook(uint16_t ret_addr) {
   s_a = 0x66;
   s_status_not_z = 0x66;
   s_status_n = 0x00;
-
-  if (ret_addr)
-    pop16();
 }
 
-void game_start_life_adapter(uint16_t ret_addr) {
+void game_start_life_adapter(void) {
   // Adapter for game_start_life(). Named for what it is; rom.externs maps
   // $660F to this.
   //
@@ -6512,16 +6389,10 @@ void game_start_life_adapter(uint16_t ret_addr) {
   // obvious -- as parallel ram_pokes it read as nine unrelated bytes.
   bool branchTarget = true;
 
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
   /*$660F*/ CYCLES(0x660f, 50);
   s_a = game_start_life(s_a);
   s_status_not_z = s_a;
   s_status_n = 0x00;
-
-  if (ret_addr)
-    pop16();
 }
 
 
@@ -6571,13 +6442,10 @@ void game_start_life_adapter(uint16_t ret_addr) {
 /* $6237[dir] + $6250, the direction deltas added to the snake's head.        */
 /* ========================================================================== */
 
-void game_move_ok(uint16_t ret_addr) {
+void game_move_ok(void) {
   // Adapter for snake_move_verdict(). Costs 21 trace sites; $6AB8 itself
   // survives, charged zero here and for real inside.
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$6AB8*/ CYCLES(0x6ab8, 0);
   if (s_status_d) {
@@ -6610,9 +6478,6 @@ void game_move_ok(uint16_t ret_addr) {
     s_status_n = 0x00;
     break;
   }
-
-  if (ret_addr)
-    pop16();
 }
 
 /* ========================================================================== */
@@ -6637,7 +6502,7 @@ void game_move_ok(uint16_t ret_addr) {
 /*   back the way it came.                                                    */
 /* ========================================================================== */
 
-void game_move_bouncer(uint16_t ret_addr) {
+void game_move_bouncer(void) {
   // Adapter. The body is bouncer_step() in game_native.c.
   //
   // Cost: the trace gives up every block head in here except $64C8's, which
@@ -6649,9 +6514,6 @@ void game_move_bouncer(uint16_t ret_addr) {
   // literally a load and a store of the struct its caller already copies in
   // and out by hand.
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$64C8*/ CYCLES(0x64c8, 12);
   if (s_status_d) {
@@ -6679,16 +6541,13 @@ void game_move_bouncer(uint16_t ret_addr) {
   ram_poke(kBouncer + 1, b.row);
   ram_poke(kBouncer + 2, (uint8_t)b.dx);
   ram_poke(kBouncer + 3, (uint8_t)b.dy);
-
-  if (ret_addr)
-    pop16();
 }
 
 /* ========================================================================== */
 /* $728D, $6BFB                                                               */
 /* ========================================================================== */
 
-void game_update_high_score(uint16_t ret_addr) {
+void game_update_high_score(void) {
   // Adapter for game_promote_high_score(). Costs 9 trace sites.
   //
   // $728D itself survives as a probe site: CYCLES(addr, 0) below still sets
@@ -6696,9 +6555,6 @@ void game_update_high_score(uint16_t ret_addr) {
   // game_promote_high_score by GAME_CYCLES. So a converted routine can keep
   // its entry site for nothing, which is worth doing every time.
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$728D*/ CYCLES(0x728d, 0);
   game_promote_high_score();
@@ -6710,9 +6566,6 @@ void game_update_high_score(uint16_t ret_addr) {
   s_a = top;
   s_status_not_z = top;
   s_status_n = (top & 0x80);
-
-  if (ret_addr)
-    pop16();
 }
 
 
@@ -6720,12 +6573,9 @@ void game_update_high_score(uint16_t ret_addr) {
 /* $6594, $69C3                                                               */
 /* ========================================================================== */
 
-void game_step_bouncers(uint16_t ret_addr) {
+void game_step_bouncers(void) {
   // Adapter for game_step_bouncers_native(). Costs 9 trace sites.
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$6594*/ CYCLES(0x6594, 0);
   const uint8_t key = game_step_bouncers_native();
@@ -6735,19 +6585,13 @@ void game_step_bouncers(uint16_t ret_addr) {
   s_a = key;
   s_status_not_z = key;
   s_status_n = (key & 0x80);
-
-  if (ret_addr)
-    pop16();
 }
 
-void game_find_apple(uint16_t ret_addr) {
+void game_find_apple(void) {
   // Adapter for game_find_nearest_apple(). Costs 12 trace sites; $69C3 itself
   // survives, charged zero here and for real inside -- see
   // game_update_high_score above for why that works.
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$69C3*/ CYCLES(0x69c3, 0);
   game_find_nearest_apple();
@@ -6756,9 +6600,6 @@ void game_find_apple(uint16_t ret_addr) {
   s_a = row;
   s_status_not_z = row;
   s_status_n = (row & 0x80);
-
-  if (ret_addr)
-    pop16();
 }
 
 /* ========================================================================== */
@@ -6771,14 +6612,11 @@ void game_find_apple(uint16_t ret_addr) {
 /* list, are what now record which blocks rest on the binary alone.           */
 /* ========================================================================== */
 
-void game_pause_or_toggle_sound(uint16_t ret_addr) {
+void game_pause_or_toggle_sound(void) {
   // Adapter for game_pause_or_toggle_sound_native(). Costs 5 trace sites;
   // $69A9 itself survives, charged zero here and for real inside -- see
   // game_find_apple below for why that works.
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   /*$69A9*/ CYCLES(0x69a9, 0);
   const uint8_t k = game_pause_or_toggle_sound_native(s_a);
@@ -6798,24 +6636,18 @@ void game_pause_or_toggle_sound(uint16_t ret_addr) {
     s_status_not_z = (k != 0x93);
     s_status_n = ((uint8_t)(k - 0x93) & 0x80);
   }
-
-  if (ret_addr)
-    pop16();
 }
 
 
-void game_read_direction(uint16_t ret_addr) {
+void game_read_direction(void) {
   // Adapter for game_read_direction_native(). Costs 31 trace sites.
   bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
   // The JSR stays here rather than moving into the native routine, because
   // game_step_bouncers's own adapter is what keeps $6216 -- the RTS it shares
   // with the unconverted game_read_key -- a probe site.
   /*$6C72*/ CYCLES(0x6c72, 6);
-  game_step_bouncers(0x6c74);
+  game_step_bouncers();
 
   // The original saves the key on the stack across the $0302 test; here it is
   // an argument. The pushed byte is never observed: nothing between the PHA
@@ -6824,9 +6656,6 @@ void game_read_direction(uint16_t ret_addr) {
   s_a = code;
   s_status_not_z = code;
   s_status_n = (code & 0x80);
-
-  if (ret_addr)
-    pop16();
 }
 
 /* ========================================================================== */
@@ -6966,9 +6795,9 @@ void game_cold_start(void) {
   }
 
   GAME_CYCLES(0x3768, 6);
-  rom_setvid(0x376a);
+  rom_setvid();
   GAME_CYCLES(0x376b, 6);
-  rom_setkbd(0x376d);
+  rom_setkbd();
   GAME_CYCLES(0x376e, 29);
   ram_poke(kStepDelay, 0x52);
   ram_poke(kDifficulty, 0x01);
@@ -6982,7 +6811,7 @@ new_game: /* $7691 */
   assert_binary_mode("game_setup", 0x7980);
   game_setup_screen();
   GAME_CYCLES(0x7694, 6);
-  game_update_high_score(0x7696);
+  game_update_high_score();
   GAME_CYCLES(0x7697, 40);
   ram_poke(kScriptIndex, 0x01);
   set_level(0x01);
@@ -7010,7 +6839,7 @@ start_round: /* $76C7 */
   ram_poke(kApplesEaten + 1, 0x00);
   ram_poke(kApplesLeft, ram_peek(kApplesQuota));
   ram_poke(kApplesLeft + 1, ram_peek(kApplesQuota + 1));
-  game_draw_playfield(0x76e3);
+  game_draw_playfield();
   GAME_CYCLES(0x76e4, 14);
   set_life_time(ram_peek(kLevelTime));
   game_set_apple_value_native();
@@ -7028,7 +6857,7 @@ start_round: /* $76C7 */
   ram_poke(kHeadMoved, 0x00);
   ram_poke(kLifeTimer, life_time());
   s_wndtop = 0x14; // window top, so HOME clears only the status panel
-  rom_home(0x770f);
+  rom_home();
   GAME_CYCLES(0x7710, 6);
   game_status_panel();
   GAME_CYCLES(0x7713, 6);
@@ -7041,7 +6870,7 @@ life: /* $7719 */
   GAME_CYCLES(0x7719, 19);
   ram_poke(kLifeTimer, life_time());
   s_wndtop = 0x14;
-  rom_home(0x7725);
+  rom_home();
   GAME_CYCLES(0x7726, 6);
   game_status_panel();
   GAME_CYCLES(0x7729, 8);
@@ -7108,17 +6937,17 @@ ate_apple: /* $773E */
   GAME_CYCLES(0x779a, 31);
   s_ink = 0x06;
   s_shape = 0x15;
-  plot_hline_at(0x12, 0x00, 0x16, 0x77b0);
+  plot_hline_at(0x12, 0x00, 0x16);
   GAME_CYCLES(0x77b1, 16);
   plot_shape_at(0x15, 0x00, (Cell){.col = 0x14, .row = 0x00});
   GAME_CYCLES(0x77bc, 14);
   set_life_time(0xff);
   s_a = 0x00;
-  rom_setcol(0x77c5);
+  rom_setcol();
   GAME_CYCLES(0x77c6, 10);
   s_a = 0x00;
   s_y = 0x14;
-  rom_plot(0x77cc);
+  rom_plot();
   GAME_CYCLES(0x77cd, 3);
   goto life;
 
