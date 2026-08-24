@@ -220,7 +220,7 @@ short version.
 
 | Target | Source | Role |
 | --- | --- | --- |
-| `snake-byte-cold` | `snake-byte-cold.c` | **The artifact this work is aimed at.** Entered at `$3750`, no boot, no ROM code. |
+| `snake-byte-cold` | `snake-byte-cold.c` | **The artifact this work is aimed at.** One file, 9,491 lines, sharing nothing. Entered at `$3750`; no boot, no ROM code, no generated code. |
 | `snake-bytec1-ext` | `snake-byte-ext.c` | The verified reference. Boots, types `CALL 14160`. ROM entry points from hand-written `a2rom.c` + `game.c`. |
 | `snake-bytec1` | `snake-bytec1.c` | Self-contained control. ROM decompiled alongside the game; links alone. `play.frames` was recorded from it. |
 | `snake-byte-easyc1-ext` | `snake-byte-easy-ext.c` | Test fixture, not a variant: apple quota 16 -> 2. |
@@ -399,10 +399,16 @@ decompiler-generated code at all**; `snake-byte-cold-body.c` is down to 2,441
 lines and every one of them is data or runtime scaffolding (`s_mem_3750`,
 `s_mem_d000`, five ROM helpers, the machine definition).
 
-It lives in its own file rather than in `game_native.c` because that file is
-shared with `snake-bytec1-ext`, whose generated `func_t001` still emits every
-address in it — two sources claiming one block head is what the site-list lint
-exists to reject.
+**And then the sharing went away.** `snake-byte-cold.c` is now a single
+self-contained file: the pruned body, `a2rom.c`, `game_native.c`, `game.c` and
+the top level, each as its own copy. The other four targets keep the shared
+originals and are unaffected.
+
+That was forced rather than chosen. While the file was shared, every change had
+to stay safe for builds still running a generated dispatch over the same
+addresses — the top-level conversion had already had to be split into a separate
+file for exactly that reason. Cold owns its code now, and the gate is what says
+whether the game still behaves.
 
 Two conditions came out inverted and neither oracle would have caught them
 without help: at `$7851` the original *branches away* when the value is not

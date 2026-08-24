@@ -680,8 +680,7 @@ ext_prog="$bin/decoded/snake-byte/snake-bytec1-ext-run"
 
 # The cold build's own block-head set. It is much smaller than the ext build's
 # -- the ROM is gone -- so it gets its own list rather than reusing one.
-site_addrs "$here/snake-byte-cold-body.c" "$here/a2rom.c" "$here/game.c" \
-  "$here/game_native.c" "$here/game_top.c" > "$here/blocks-cold.txt"
+site_addrs "$here/snake-byte-cold.c" > "$here/blocks-cold.txt"
 cold_sites=$(wc -l < "$here/blocks-cold.txt")
 if [ "$cold_sites" -ne 120 ]; then
   echo "FAIL [cold]: site list has $cold_sites block heads, expected exactly 120" >&2
