@@ -705,71 +705,98 @@ if ! comm -23 <(sort "$here/blocks-cold.txt") <(sort "$here/blocks-ext.txt") \
   exit 1
 fi
 
-"$ext_prog"  --key-file="$here/play.pkeys"      --probe="$here/trace-cold.probe" \
-  --probe-out=/tmp/pkeys-cold-ext.txt  --frames=1300 > /dev/null 2>&1
-"$cold_prog" --key-file="$here/play-cold.pkeys" --probe="$here/trace-cold.probe" \
-  --probe-out=/tmp/pkeys-cold-cold.txt --frames=1150 > /dev/null 2>&1
+# Both scenarios, because they exercise different halves of the build. `play`
+# is the ordinary game. `hires` presses C at the attract screen, which is what
+# reaches the hi-res text screen, the key-redefinition screen and -- the reason
+# it was added -- game_cout_hook_native at $664A. Measured before adding it:
+# the play scenario alone runs that routine exactly 0 times in the cold build,
+# so every byte of the glyph blitter was ungated here. It runs it 205 times.
+#
+# play-hires-cold.pkeys is derived, not recorded: make-cold-keys.sh shifts
+# play-hires.pkeys down by the coordinate of the first $3750 arrival. That
+# offset is 181207, re-measured rather than trusted.
+cold_compare() {
+  local label=$1 ext_keys=$2 cold_keys=$3
 
-# Align at the *first* $3750: it is re-entered eight times by the relocation
-# loop that copies the level data down to $1800.
-awk 'f { print } /^3750$/ && !f { f = 1; print }' /tmp/pkeys-cold-ext.txt \
-  > /tmp/pkeys-cold-ext-al.txt
+  "$ext_prog"  --key-file="$here/$ext_keys"  --probe="$here/trace-cold.probe" \
+    --probe-out=/tmp/pkeys-cold-ext.txt  --frames=1300 > /dev/null 2>&1
+  "$cold_prog" --key-file="$here/$cold_keys" --probe="$here/trace-cold.probe" \
+    --probe-out=/tmp/pkeys-cold-cold.txt --frames=1150 > /dev/null 2>&1
 
-ext_n=$(wc -l < /tmp/pkeys-cold-ext-al.txt)
-cold_n=$(wc -l < /tmp/pkeys-cold-cold.txt)
-if [ "$ext_n" -lt 100000 ]; then
-  echo "FAIL [cold]: only $ext_n blocks after aligning at \$3750 -- alignment is wrong" >&2
-  exit 1
-fi
-if [ "$cold_n" -lt "$ext_n" ]; then
-  echo "FAIL [cold]: cold produced $cold_n blocks, fewer than the $ext_n to compare against" >&2
-  echo "  Raise its --frames, or it stopped early." >&2
-  exit 1
-fi
-head -n "$ext_n" /tmp/pkeys-cold-cold.txt > /tmp/pkeys-cold-cold-p.txt
-if ! cmp -s /tmp/pkeys-cold-ext-al.txt /tmp/pkeys-cold-cold-p.txt; then
-  echo "FAIL [cold]: the cold and booting builds disagree from \$3750 onward" >&2
-  diff /tmp/pkeys-cold-ext-al.txt /tmp/pkeys-cold-cold-p.txt | head -20 >&2
-  exit 1
-fi
-echo "[cold] PASS: $ext_n block heads match the booting build from \$3750"
+  # Align at the *first* $3750: it is re-entered eight times by the relocation
+  # loop that copies the level data down to $1800.
+  awk 'f { print } /^3750$/ && !f { f = 1; print }' /tmp/pkeys-cold-ext.txt \
+    > /tmp/pkeys-cold-ext-al.txt
 
-# And the screen, which is the oracle meant to outlive the trace.
-"$ext_prog"  --key-file="$here/play.pkeys"      --probe="$here/screen.probe" \
-  --probe-out=/tmp/pkeys-cold-scr-ext.txt  --frames=1300 > /dev/null 2>&1
-"$cold_prog" --key-file="$here/play-cold.pkeys" --probe="$here/screen.probe" \
-  --probe-out=/tmp/pkeys-cold-scr-cold.txt --frames=1150 > /dev/null 2>&1
-scr_n=$(wc -l < /tmp/pkeys-cold-scr-cold.txt)
-if [ "$scr_n" -lt 6000 ]; then
-  echo "FAIL [cold]: only $scr_n screen samples; the run did not get far" >&2
-  exit 1
-fi
-head -n "$scr_n" /tmp/pkeys-cold-scr-ext.txt > /tmp/pkeys-cold-scr-p.txt
-if ! cmp -s /tmp/pkeys-cold-scr-p.txt /tmp/pkeys-cold-scr-cold.txt; then
-  echo "FAIL [cold]: screen differs from the booting build" >&2
-  exit 1
-fi
-echo "[cold] PASS: screen identical at $scr_n in-game samples"
+  local ext_n cold_n
+  ext_n=$(wc -l < /tmp/pkeys-cold-ext-al.txt)
+  cold_n=$(wc -l < /tmp/pkeys-cold-cold.txt)
+  # Test the alignment directly rather than by magnitude. The old check was
+  # "at least 100,000 blocks", which is a proxy that happens to hold for the
+  # play scenario and does not for hires -- that one spends most of its run in
+  # the redefinition screen, which is converted C and therefore barely probed,
+  # and produces 95,468. What alignment actually means is that the first line
+  # is the entry address.
+  if [ "$(head -n 1 /tmp/pkeys-cold-ext-al.txt)" != "3750" ]; then
+    echo "FAIL [cold/$label]: aligned trace does not start at \$3750 -- alignment is wrong" >&2
+    exit 1
+  fi
+  if [ "$ext_n" -lt 10000 ]; then
+    echo "FAIL [cold/$label]: only $ext_n blocks after aligning -- the run did not get far" >&2
+    exit 1
+  fi
+  if [ "$cold_n" -lt "$ext_n" ]; then
+    echo "FAIL [cold/$label]: cold produced $cold_n blocks, fewer than the $ext_n to compare against" >&2
+    echo "  Raise its --frames, or it stopped early." >&2
+    exit 1
+  fi
+  head -n "$ext_n" /tmp/pkeys-cold-cold.txt > /tmp/pkeys-cold-cold-p.txt
+  if ! cmp -s /tmp/pkeys-cold-ext-al.txt /tmp/pkeys-cold-cold-p.txt; then
+    echo "FAIL [cold/$label]: the cold and booting builds disagree from \$3750 onward" >&2
+    diff /tmp/pkeys-cold-ext-al.txt /tmp/pkeys-cold-cold-p.txt | head -20 >&2
+    exit 1
+  fi
+  echo "[cold/$label] PASS: $ext_n block heads match the booting build from \$3750"
 
-# And memory, minus the stack -- see ram-cold.probe for why the stack is out.
-# The screen alone would miss a wrong byte that has not been drawn yet, and
-# most of the cleanup ahead moves values around without moving pixels.
-"$ext_prog"  --key-file="$here/play.pkeys"      --probe="$here/ram-cold.probe" \
-  --probe-out=/tmp/pkeys-cold-mem-ext.txt  --frames=1300 > /dev/null 2>&1
-"$cold_prog" --key-file="$here/play-cold.pkeys" --probe="$here/ram-cold.probe" \
-  --probe-out=/tmp/pkeys-cold-mem-cold.txt --frames=1150 > /dev/null 2>&1
-mem_n=$(wc -l < /tmp/pkeys-cold-mem-cold.txt)
-if [ "$mem_n" -lt 6000 ]; then
-  echo "FAIL [cold]: only $mem_n memory samples; the run did not get far" >&2
-  exit 1
-fi
-head -n "$mem_n" /tmp/pkeys-cold-mem-ext.txt > /tmp/pkeys-cold-mem-p.txt
-if ! cmp -s /tmp/pkeys-cold-mem-p.txt /tmp/pkeys-cold-mem-cold.txt; then
-  echo "FAIL [cold]: memory differs from the booting build" >&2
-  diff /tmp/pkeys-cold-mem-p.txt /tmp/pkeys-cold-mem-cold.txt | head -4 >&2
-  exit 1
-fi
-echo "[cold] PASS: memory identical at $mem_n in-game samples"
+  # The screen, which is the oracle meant to outlive the trace, and memory,
+  # minus the stack -- see ram-cold.probe for why the stack is out. The screen
+  # alone would miss a wrong byte that has not been drawn yet, and most of the
+  # cleanup ahead moves values around without moving pixels.
+  local what probe n
+  for what in screen ram-cold; do
+    probe="$here/$what.probe"
+    "$ext_prog"  --key-file="$here/$ext_keys"  --probe="$probe" \
+      --probe-out=/tmp/pkeys-cold-x-ext.txt  --frames=1300 > /dev/null 2>&1
+    "$cold_prog" --key-file="$here/$cold_keys" --probe="$probe" \
+      --probe-out=/tmp/pkeys-cold-x-cold.txt --frames=1150 > /dev/null 2>&1
+    # Compare the common prefix. Neither side is reliably the shorter one:
+    # cold skips the boot, so the same frame budget carries it further, and in
+    # the hires scenario it produces 8,731 samples against the booting build's
+    # 8,465. Taking cold's count and truncating ext to it silently compared a
+    # long file against a short one and failed on length -- which read as a
+    # screen difference and was not one.
+    local ext_s cold_s
+    ext_s=$(wc -l < /tmp/pkeys-cold-x-ext.txt)
+    cold_s=$(wc -l < /tmp/pkeys-cold-x-cold.txt)
+    n=$ext_s
+    [ "$cold_s" -lt "$n" ] && n=$cold_s
+    if [ "$n" -lt 6000 ]; then
+      echo "FAIL [cold/$label]: only $n $what samples in common; a run did not get far" >&2
+      exit 1
+    fi
+    head -n "$n" /tmp/pkeys-cold-x-ext.txt > /tmp/pkeys-cold-x-p.txt
+    head -n "$n" /tmp/pkeys-cold-x-cold.txt > /tmp/pkeys-cold-x-c.txt
+    if ! cmp -s /tmp/pkeys-cold-x-p.txt /tmp/pkeys-cold-x-c.txt; then
+      echo "FAIL [cold/$label]: $what differs from the booting build" >&2
+      diff /tmp/pkeys-cold-x-p.txt /tmp/pkeys-cold-x-c.txt | head -4 >&2
+      exit 1
+    fi
+    echo "[cold/$label] PASS: $what identical at $n in-game samples"
+  done
+}
+
+cold_compare play  play.pkeys       play-cold.pkeys
+cold_compare hires play-hires.pkeys play-hires-cold.pkeys
 
 echo "--- coverage over all scenarios ---"
 coverage_report trace "$here/blocks.txt" 0

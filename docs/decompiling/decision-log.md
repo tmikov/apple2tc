@@ -2566,3 +2566,64 @@ Probe phase 3 — apple2tc emitting `PROBE_x(...)` sites so a probe can read the
 generated C's own variables — is what would restore it, and is unbuilt. That is
 now the second thing on its list of justifications, after reading the generated
 C's block state.
+
+## 2026-08-23 (last) — The cold gate was blind to a third of the build
+
+Step 3b was going to be splitting the plotter's block apart into real
+parameters. Making the argument that the split is safe meant asking what the
+gate would catch if it were wrong, and the answer turned out to be nothing.
+
+### Two holes, found by asking rather than by failing
+
+**The cold gate ran one scenario.** `play` never presses `C`, so it never
+reaches the hi-res text screen, the key-redefinition screen, or
+`game_cout_hook_native`. Measured: the cold build runs `$664A` **zero** times
+under the gated scenario. Every byte of the glyph blitter was ungated, which is
+precisely the code the union argument is about.
+
+`play-hires-cold.pkeys` closes it, and needed no new recording — the
+no-new-recordings agreement already anticipated this. `make-cold-keys.sh`
+shifts `play-hires.pkeys` down by the coordinate of the first `$3750` arrival;
+the offset is 181,207, re-measured rather than trusted. The cold build now runs
+`$664A` 205 times per gate run.
+
+**Adding the scenario was not enough, and the mutation said so.** With
+`hires` in the gate, shifting the glyph blitter's source by one row — 205 wrong
+glyphs — still passed all six checks. `screen.probe` and `ram-cold.probe`
+sampled only at `$6217`, the in-game keyboard ingest, and the redefinition
+screen reads keys at `$760F` instead. So the new scenario bought trace coverage
+and no state coverage at all: the samples were still taken exclusively during
+the part of the run that already worked.
+
+Both probes now install at `$6217, $760F`. The same mutation then fails
+`[cold/hires]` on the screen.
+
+This is the trap table's "a probe that produces no output says nothing about
+agreement", one level up: a probe that produces plenty of output, from only the
+states you were not worried about.
+
+### Two bugs in the comparison itself
+
+**A magnitude proxy standing in for the property.** The alignment check was "at
+least 100,000 blocks after aligning at `$3750`". That is not what alignment
+means, and `hires` produces 95,468 — it spends most of its run in the
+redefinition screen, which is converted C and barely probed. The check now
+tests the property directly: the first line of the aligned trace must be
+`3750`.
+
+**Comparing a long file against a short one.** The screen and memory checks
+took the *cold* build's sample count and truncated the booting build to it.
+Cold skips the boot, so the same frame budget carries it further, and in `hires`
+it produces 8,731 samples against 8,465. `cmp` then failed on length and
+reported "screen differs from the booting build" — a real-looking failure with
+nothing behind it. Both sides are now truncated to the common prefix. The
+`play` scenario never showed this because cold happened to produce fewer samples
+there.
+
+### What this says about the step it interrupted
+
+The union split is still not done, and it is now clear it should not have been
+attempted first. The reasoning that would have justified it — "every path from
+a hook install to a shape read passes through `start_round`" — is sound as far
+as it goes, but it would have been checked by a gate that could not see the
+routine in question at all. Strengthen the oracle, then spend it.

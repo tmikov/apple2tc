@@ -1,0 +1,11 @@
+# probe-stamped keys for the cold-start build, from play-hires.pkeys.
+# Prompt keystrokes dropped; remaining stamps shifted down by 181207.
+# Regenerate with make-cold-keys.sh -- do not hand-edit.
+915 32
+1533 67
+1551 87
+1653 65
+1910 68
+2131 88
+2388 81
+2609 69

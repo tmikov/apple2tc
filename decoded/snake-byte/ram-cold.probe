@@ -61,4 +61,11 @@ probe mem(
 }
 
 install kb at $FD1B, $741F, $7890, $6217, $760F, $FB7C, $FD26
-install mem at $6217
+
+# $760F as well as $6217. Both are keyboard reads, and between them they cover
+# the two states the game has: $6217 is the in-game ingest, and $760F is the
+# key-redefinition screen's read. Sampling only at $6217 meant the whole hi-res
+# text and redefinition path went unsampled -- measured by shifting the glyph
+# blitter's source by one row, which draws 205 wrong glyphs and was caught by
+# nothing at all.
+install mem at $6217, $760F
