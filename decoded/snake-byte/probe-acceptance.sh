@@ -708,7 +708,27 @@ ext_prog="$bin/decoded/snake-byte/snake-bytec1-ext-run"
 
 # The cold build's own block-head set. It is much smaller than the ext build's
 # -- the ROM is gone -- so it gets its own list rather than reusing one.
+# The spelling lint above reads game.c and game_native.c -- the sources the
+# booting builds share -- and so does not cover the cold file at all. Its one
+# load-bearing invariant is checked here instead.
+#
+# GAME_CYCLES_SHARED means "some other source still emits a CYCLES for this
+# address, so keep probing". site_addrs() does not grep for that spelling, so
+# if no other source does emit it, the site keeps probing and silently drops
+# off the block-head list. Checked on 2026-08-24 after exactly that happened:
+# an adapter went away, its plain CYCLES went with it, and the native's SHARED
+# spelling was suddenly the only mention of $6216.
 site_addrs "$here/snake-byte-cold.c" > "$here/blocks-cold.txt"
+
+for a in $(grep -ohE 'GAME_CYCLES_SHARED\(0x[0-9a-f]+' "$here/snake-byte-cold.c" \
+             | sed 's/.*0x//' | sort -u); do
+  if ! grep -qx "$a" "$here/blocks-cold.txt"; then
+    echo "FAIL [cold]: GAME_CYCLES_SHARED(\$$a) but no other source emits it" >&2
+    echo "  site_addrs() does not see that spelling, so the site keeps probing" >&2
+    echo "  and leaves the block-head list. Use plain CYCLES." >&2
+    exit 1
+  fi
+done
 cold_sites=$(wc -l < "$here/blocks-cold.txt")
 if [ "$cold_sites" -ne 113 ]; then
   echo "FAIL [cold]: site list has $cold_sites block heads, expected exactly 113" >&2
