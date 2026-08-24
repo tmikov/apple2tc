@@ -83,6 +83,25 @@
 
 #include "apple2tc/system2-inc.h"
 
+/// Charge the cycles the original spent, without naming the address.
+///
+/// Step 6b. The clock has to keep running -- `cycles_expired()` is what
+/// advances the host's frames, so with no charges at all `--frames` never
+/// terminates -- but nothing needs the *address* once the block-head trace is
+/// retired. This is the same arithmetic CYCLES does, minus the `s_pc` store
+/// and the probe dispatch that a charge-only site never used.
+///
+/// Timing is bit-identical, which is what makes the change checkable: the
+/// screen and memory comparisons run against the booting build unchanged.
+#define TICK(n)                            \
+  do {                                     \
+    if (s_remaining_cycles <= 0)           \
+      cycles_expired();                    \
+    s_cycles += (n);                       \
+    s_remaining_cycles -= (n);             \
+  } while (0)
+
+
 /// The zero-page fragment $00B1-$00C8 the run data carried: the six-byte
 /// CHRGET routine Applesoft assembles there at boot. Small enough to read,
 /// so unlike the other two images it stays in the file.
@@ -305,7 +324,7 @@ void rom_bascalc(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$FBC1*/ CYCLES_EDGE(0xfbc1, 20);
+  /*$FBC1*/ TICK(20);
   const uint8_t line = s_a;
   // LSR: the carry is the line's low bit, and it is what decides the ADC below.
   const uint8_t odd = line & 0x01;
@@ -314,9 +333,9 @@ void rom_bascalc(void) {
   s_a = line & 0x18;
 
   if (!odd) {
-    /*$FBCC*/ CYCLES_EDGE(0xfbcc, 1);
+    /*$FBCC*/ TICK(1);
   } else {
-    /*$FBCE*/ CYCLES_EDGE(0xfbce, 2);
+    /*$FBCE*/ TICK(2);
     // ADC #$7F with carry set, i.e. +$80: the second half of the band.
     if (!s_status_d) {
       const uint16_t r = (uint16_t)(s_a + 0x007f) + s_status_c;
@@ -330,7 +349,7 @@ void rom_bascalc(void) {
   }
   branchTarget = true;
 
-  /*$FBD0*/ CYCLES_EDGE(0xfbd0, 19);
+  /*$FBD0*/ TICK(19);
   s_basl = s_a;
   // ASL twice, then OR the original back in. The second shift's carry out is
   // the one the original leaves behind.
@@ -352,10 +371,10 @@ void rom_vtabz(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$FC24*/ CYCLES_EDGE(0xfc24, 6);
+  /*$FC24*/ TICK(6);
   rom_bascalc();
 
-  /*$FC27*/ CYCLES_EDGE(0xfc27, 6);
+  /*$FC27*/ TICK(6);
   if (!s_status_d) {
     const uint8_t left = s_wndlft;
     const uint16_t r = ((uint16_t)s_a + left) + s_status_c;
@@ -375,7 +394,7 @@ void rom_vtabz(void) {
   }
   s_basl = s_a;
 
-  /*$FC2B*/ CYCLES_EDGE(0xfc2b, 6);
+  /*$FC2B*/ TICK(6);
 }
 
 /// $FC9C CLREOL. Blank from the cursor to the right edge of the window.
@@ -389,7 +408,7 @@ void rom_clreol(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$FC9C*/ CYCLES_EDGE(0xfc9c, 3);
+  /*$FC9C*/ TICK(3);
   s_y = s_ch;
   rom_clreolz(); // JMP -- a tail call.
 
@@ -404,11 +423,11 @@ void rom_clreolz(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$FC9E*/ CYCLES_EDGE(0xfc9e, 2);
+  /*$FC9E*/ TICK(2);
   s_a = 0xa0; // a space, high bit set
 
   for (;;) {
-    /*$FCA0*/ CYCLES_EDGE(0xfca0, 13);
+    /*$FCA0*/ TICK(13);
     const uint8_t col = s_y;
     poke((uint16_t)(bas16() + col), s_a);
 
@@ -423,11 +442,11 @@ void rom_clreolz(void) {
     if (next >= width)
       break;
 
-    /*$FCA5*/ CYCLES_EDGE(0xfca5, 1);
+    /*$FCA5*/ TICK(1);
     branchTarget = true;
   }
 
-  /*$FCA7*/ CYCLES_EDGE(0xfca7, 6);
+  /*$FCA7*/ TICK(6);
   (void)branchTarget;
 }
 
@@ -447,16 +466,16 @@ void rom_wait(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$FCA8*/ CYCLES_EDGE(0xfca8, 2);
+  /*$FCA8*/ TICK(2);
   s_status_c = 0x01;
 
   for (;;) {
-    /*$FCA9*/ CYCLES_EDGE(0xfca9, 3);
+    /*$FCA9*/ TICK(3);
     push8(s_a);
 
     // The inner loop: A down to zero, one SBC per pass.
     for (;;) {
-      /*$FCAA*/ CYCLES_EDGE(0xfcaa, 4);
+      /*$FCAA*/ TICK(4);
       if (!s_status_d) {
         const uint16_t r = (uint16_t)(s_a - 0x0001) - (uint8_t)(0x01 - s_status_c);
         s_status_c = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
@@ -472,12 +491,12 @@ void rom_wait(void) {
       branchTarget = true;
       if (!s_status_not_z)
         break;
-      /*$FCAC*/ CYCLES_EDGE(0xfcac, 1);
+      /*$FCAC*/ TICK(1);
       branchTarget = true;
     }
 
     // The outer one: the copy off the stack, down by one.
-    /*$FCAE*/ CYCLES_EDGE(0xfcae, 8);
+    /*$FCAE*/ TICK(8);
     s_a = pop8();
     if (!s_status_d) {
       const uint8_t before = s_a;
@@ -497,11 +516,11 @@ void rom_wait(void) {
     branchTarget = true;
     if (!s_status_not_z)
       break;
-    /*$FCB1*/ CYCLES_EDGE(0xfcb1, 1);
+    /*$FCB1*/ TICK(1);
     branchTarget = true;
   }
 
-  /*$FCB3*/ CYCLES_EDGE(0xfcb3, 6);
+  /*$FCB3*/ TICK(6);
   (void)branchTarget;
 }
 
@@ -1186,7 +1205,7 @@ static void rom_gbascalc(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$F847*/ CYCLES_EDGE(0xf847, 20);
+  /*$F847*/ TICK(20);
   const uint8_t row = s_a;
   const uint8_t odd = (uint8_t)(row & 0x01);
   s_status_c = odd;
@@ -1194,7 +1213,7 @@ static void rom_gbascalc(void) {
   /*$F850*/ s_a = (uint8_t)(row & 0x18);
 
   if (odd) {
-    /*$F854*/ CYCLES_EDGE(0xf854, 2);
+    /*$F854*/ TICK(2);
     if (!s_status_d)
       s_a = (uint8_t)((s_a + 0x7f) + s_status_c);
     else
@@ -1203,12 +1222,12 @@ static void rom_gbascalc(void) {
     // $F852 BCC -- the branch itself, taken here (not modelled by the block
     // above's own cost, which is the not-taken total; see the design doc on
     // edge costs).
-    /*$F852*/ CYCLES_EDGE(0xf852, 1);
+    /*$F852*/ TICK(1);
   }
   branchTarget = true;
   (void)branchTarget;
 
-  /*$F856*/ CYCLES_EDGE(0xf856, 19);
+  /*$F856*/ TICK(19);
   s_gbasl = s_a;
   /*$F85C*/ s_gbasl = (uint8_t)((uint8_t)(s_a << 0x02) | s_gbasl);
 
@@ -1224,7 +1243,7 @@ static void rom_plot1(void) {
   // One lo-res cell: replace the half of the byte MASK selects with the
   // matching half of COLOR, leaving the other half alone. `(old ^ colour) &
   // mask ^ old` is the ROM's way of saying that in three instructions.
-  /*$F80E*/ CYCLES_EDGE(0xf80e, 28);
+  /*$F80E*/ TICK(28);
   const uint16_t at = (uint16_t)(gbas16() + s_y);
   const uint8_t old = peek(at);
   const uint8_t mixed = (uint8_t)(((old ^ s_color) & s_mask) ^ old);
@@ -1251,7 +1270,7 @@ void rom_plot(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$F800*/ CYCLES_EDGE(0xf800, 11);
+  /*$F800*/ TICK(11);
   const uint8_t row = s_a;
   const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
@@ -1261,7 +1280,7 @@ void rom_plot(void) {
                             (half & 0x80)));
   /*$F802*/ rom_gbascalc();
 
-  /*$F805*/ CYCLES_EDGE(0xf805, 8);
+  /*$F805*/ TICK(8);
   {
     const uint8_t saved = pop8();
     s_status_c = (uint8_t)(saved & 0x01);
@@ -1273,7 +1292,7 @@ void rom_plot(void) {
   /*$F806*/ s_a = 0x0f;
 
   if (upper) {
-    /*$F80A*/ CYCLES_EDGE(0xf80a, 2);
+    /*$F80A*/ TICK(2);
     if (!s_status_d) {
       const uint16_t r = ((uint16_t)s_a + 0x00e0) + s_status_c;
       s_status_c = (uint8_t)(r >> 8);
@@ -1288,12 +1307,12 @@ void rom_plot(void) {
     }
   } else {
     // $F808 BCC -- the branch itself, taken here.
-    /*$F808*/ CYCLES_EDGE(0xf808, 1);
+    /*$F808*/ TICK(1);
   }
   branchTarget = true;
   (void)branchTarget;
 
-  /*$F80C*/ CYCLES_EDGE(0xf80c, 3);
+  /*$F80C*/ TICK(3);
   s_mask = s_a;
   rom_plot1(); // JMP -- a tail call.
 
@@ -1318,33 +1337,33 @@ void rom_hline(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$F819*/ CYCLES_EDGE(0xf819, 6);
+  /*$F819*/ TICK(6);
   rom_plot();
   branchTarget = true;
 
 across: /* $F81C -- one column at a time, up to H2 */
-  CYCLES_EDGE(0xf81c, 5);
+  TICK(5);
   s_status_c = (uint8_t)(s_y >= s_h2);
   branchTarget = true;
   if (s_status_c) {
     // $F81E BCS -- the branch itself, taken here.
-    /*$F81E*/ CYCLES_EDGE(0xf81e, 1);
+    /*$F81E*/ TICK(1);
     goto done;
   }
 
-  /*$F820*/ CYCLES_EDGE(0xf820, 8);
+  /*$F820*/ TICK(8);
   s_y = (uint8_t)(s_y + 0x01);
   /*$F821*/ rom_plot1();
-  /*$F824*/ CYCLES_EDGE(0xf824, 2);
+  /*$F824*/ TICK(2);
   branchTarget = true;
   if (!s_status_c) {
     // $F824 BCC -- the branch itself, taken here.
-    /*$F824*/ CYCLES_EDGE(0xf824, 1);
+    /*$F824*/ TICK(1);
     goto across;
   }
 
 down: /* $F826 -- one row at a time, up to V2 */
-  CYCLES_EDGE(0xf826, 2);
+  TICK(2);
   if (!s_status_d) {
     const uint16_t r = ((uint16_t)s_a + 0x0001) + s_status_c;
     s_status_v = ovf8((uint8_t)r, s_a, 0x01);
@@ -1355,21 +1374,21 @@ down: /* $F826 -- one row at a time, up to V2 */
     s_status_v = (((uint8_t)(r >> 8) & 0x40) != 0);
   }
 
-  /*$F828*/ CYCLES_EDGE(0xf828, 9);
+  /*$F828*/ TICK(9);
   push8(s_a);
   /*$F829*/ rom_plot();
-  /*$F82C*/ CYCLES_EDGE(0xf82c, 9);
+  /*$F82C*/ TICK(9);
   s_a = pop8();
   /*$F82D*/ s_status_c = (uint8_t)(s_a >= s_v2);
   branchTarget = true;
   if (!s_status_c) {
     // $F82F BCC -- the branch itself, taken here.
-    /*$F82F*/ CYCLES_EDGE(0xf82f, 1);
+    /*$F82F*/ TICK(1);
     goto down;
   }
 
 done:
-  /*$F831*/ CYCLES_EDGE(0xf831, 6);
+  /*$F831*/ TICK(6);
   (void)branchTarget;
 }
 
@@ -1384,7 +1403,7 @@ void rom_setcol(void) {
   // The lo-res colour is stored in both nibbles, so a PLOT can take whichever
   // half MASK selects without shifting. Four ASLs and an ORA get there; the
   // carry the original leaves is the top bit shifted out of the low nibble.
-  /*$F864*/ CYCLES_EDGE(0xf864, 25);
+  /*$F864*/ TICK(25);
   const uint8_t low = (uint8_t)(s_a & 0x0f);
   s_color = low;
   const uint16_t shifted = (uint16_t)(low << 0x04);
@@ -1409,7 +1428,7 @@ void rom_scrn(void) {
   // The row's low bit says which half of the byte holds this cell, and the
   // ROM keeps it across GBASCALC on the stack -- as the whole status
   // register, because LSR put it in the carry and PHP is one byte.
-  /*$F871*/ CYCLES_EDGE(0xf871, 11);
+  /*$F871*/ TICK(11);
   const uint8_t row = s_a;
   const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
@@ -1419,7 +1438,7 @@ void rom_scrn(void) {
                             (half & 0x80)));
   /*$F873*/ rom_gbascalc();
 
-  /*$F876*/ CYCLES_EDGE(0xf876, 11);
+  /*$F876*/ TICK(11);
   s_a = peek((uint16_t)(gbas16() + s_y));
 
   // PLP: only the carry matters to what follows, but the rest is restored
@@ -1434,15 +1453,15 @@ void rom_scrn(void) {
   }
 
   if (upper) {
-    /*$F87B*/ CYCLES_EDGE(0xf87b, 8);
+    /*$F87B*/ TICK(8);
     s_status_c = (uint8_t)((s_a >> 0x03) & 0x01);
     s_a = (uint8_t)(s_a >> 0x04);
   } else {
     // $F879 BCC -- the branch itself, taken here.
-    /*$F879*/ CYCLES_EDGE(0xf879, 1);
+    /*$F879*/ TICK(1);
   }
 
-  /*$F87F*/ CYCLES_EDGE(0xf87f, 8);
+  /*$F87F*/ TICK(8);
   s_a &= 0x0f;
   s_status_not_z = s_a;
   s_status_n = 0x00;
@@ -1464,7 +1483,7 @@ void rom_home(void) {
   (void)branchTarget;
 
 home: /* $FC58 */
-  CYCLES_EDGE(0xfc58, 13);
+  TICK(13);
   s_a = s_wndtop;
   /*$FC5A*/ s_cv = s_wndtop;
   /*$FC5C*/ s_y = 0x00;
@@ -1474,16 +1493,16 @@ home: /* $FC58 */
   // instruction still executes and still pays its own cost every time. The
   // decompiler doesn't do cross-instruction flag proofs either, so it keeps
   // charging this the same way.
-  /*$FC60*/ CYCLES_EDGE(0xfc60, 1);
+  /*$FC60*/ TICK(1);
 
   for (;;) { /* $FC46 -- CLRSC2, one line per pass */
-    CYCLES_EDGE(0xfc46, 9);
+    TICK(9);
     push8(s_a);
     /*$FC47*/ rom_vtabz();
-    /*$FC4A*/ CYCLES_EDGE(0xfc4a, 6);
+    /*$FC4A*/ TICK(6);
     rom_clreolz();
 
-    /*$FC4D*/ CYCLES_EDGE(0xfc4d, 13);
+    /*$FC4D*/ TICK(13);
     s_y = 0x00;
     s_a = pop8();
     if (!s_status_d)
@@ -1495,21 +1514,21 @@ home: /* $FC58 */
     branchTarget = true;
     if (!s_status_c) {
       // $FC54 BCC -- the branch itself, taken here.
-      /*$FC54*/ CYCLES_EDGE(0xfc54, 1);
+      /*$FC54*/ TICK(1);
       continue;
     }
 
-    /*$FC56*/ CYCLES_EDGE(0xfc56, 2);
+    /*$FC56*/ TICK(2);
     branchTarget = true;
     if (!s_status_c)
       goto home; // the BCS's not-taken arm, which cannot be reached
     // $FC56 BCS -- the branch itself, same address as the block above because
     // this is a singleton one-instruction block.
-    /*$FC56*/ CYCLES_EDGE(0xfc56, 1);
+    /*$FC56*/ TICK(1);
     break;
   }
 
-  /*$FC22*/ CYCLES_EDGE(0xfc22, 3); // TABV
+  /*$FC22*/ TICK(3); // TABV
   s_a = s_cv;
   (void)branchTarget;
   rom_vtabz(); // JMP -- a tail call.
@@ -1542,17 +1561,17 @@ void rom_fc68(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$FC68*/ CYCLES_EDGE(0xfc68, 8);
+  /*$FC68*/ TICK(8);
   s_a = s_cv;
   branchTarget = true;
   if (!(s_cv >= s_wndbtm)) {
     // $FC6C BCC -- the branch itself, taken here. Nothing to scroll.
-    /*$FC6C*/ CYCLES_EDGE(0xfc6c, 1);
+    /*$FC6C*/ TICK(1);
     rom_vtabz(); // JMP -- a tail call.
       return;
   }
 
-  /*$FC6E*/ CYCLES_EDGE(0xfc6e, 17);
+  /*$FC6E*/ TICK(17);
   s_cv = (uint8_t)(s_cv - 0x01);
   /*$FC70*/ s_a = s_wndtop;
   /*$FC72*/ push8(s_a);
@@ -1560,7 +1579,7 @@ void rom_fc68(void) {
   branchTarget = true;
 
 scroll: /* $FC76 -- one line up per pass */
-  CYCLES_EDGE(0xfc76, 28);
+  TICK(28);
   /*$FC78*/ s_bas2l = s_basl;
   /*$FC7C*/ s_bas2h = s_bash;
   /*$FC80*/ s_y = (uint8_t)(s_wndwdth - 0x01);
@@ -1578,17 +1597,17 @@ scroll: /* $FC76 -- one line up per pass */
   /*$FC86*/ branchTarget = true;
   if (s_a >= s_wndbtm) {
     // $FC86 BCS -- the branch itself, taken here. That was the last line.
-    /*$FC86*/ CYCLES_EDGE(0xfc86, 1);
+    /*$FC86*/ TICK(1);
     goto last_line;
   }
 
-  /*$FC88*/ CYCLES_EDGE(0xfc88, 9);
+  /*$FC88*/ TICK(9);
   push8(s_a);
   /*$FC89*/ rom_vtabz();
   branchTarget = true;
 
 copy: /* $FC8C -- one character, right to left */
-  CYCLES_EDGE(0xfc8c, 15);
+  TICK(15);
   {
     const uint8_t at = s_y;
     /*$FC8E*/ poke((uint16_t)(bas2_16() + at), peek((uint16_t)(bas16() + at)));
@@ -1598,25 +1617,25 @@ copy: /* $FC8C -- one character, right to left */
     branchTarget = true;
     if (!s_status_n) {
       // $FC91 BPL -- the branch itself, taken here (loop back).
-      /*$FC91*/ CYCLES_EDGE(0xfc91, 1);
+      /*$FC91*/ TICK(1);
       goto copy;
     }
   }
 
-  /*$FC93*/ CYCLES_EDGE(0xfc93, 2);
+  /*$FC93*/ TICK(2);
   branchTarget = true;
   if (s_status_n) {
     // $FC93 BMI -- the branch itself, taken here (outer loop back).
-    /*$FC93*/ CYCLES_EDGE(0xfc93, 1);
+    /*$FC93*/ TICK(1);
     goto scroll;
   }
 
 last_line: /* $FC95 -- blank what the scroll left at the bottom */
-  CYCLES_EDGE(0xfc95, 8);
+  TICK(8);
   s_y = 0x00;
   /*$FC97*/ rom_clreolz();
 
-  /*$FC9A*/ CYCLES_EDGE(0xfc9a, 2);
+  /*$FC9A*/ TICK(2);
   branchTarget = true;
   (void)branchTarget;
   if (!s_status_c) {
@@ -1625,9 +1644,9 @@ last_line: /* $FC95 -- blank what the scroll left at the bottom */
   }
   // $FC9A BCS -- taken here, and it falls into the trampoline charge below
   // before continuing; the not-taken arm above jumps straight out without it.
-  /*$FC9A*/ CYCLES_EDGE(0xfc9a, 1);
+  /*$FC9A*/ TICK(1);
 
-  /*$FC22*/ CYCLES_EDGE(0xfc22, 3); // TABV
+  /*$FC22*/ TICK(3); // TABV
   s_a = s_cv;
   rom_vtabz();
 }
@@ -1687,10 +1706,10 @@ static void rom_coutz(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$FB78*/ CYCLES_EDGE(0xfb78, 4);
+  /*$FB78*/ TICK(4);
   branchTarget = true;
   if (s_a != 0x8d) {
-    /*$FB7A*/ CYCLES_EDGE(0xfb7a, 1);
+    /*$FB7A*/ TICK(1);
     goto emit;
   }
 
@@ -1702,44 +1721,44 @@ static void rom_coutz(void) {
   s_y = io_peek(0xc000);
   branchTarget = true;
   if (!(s_y & 0x80)) {
-    /*$FB7F*/ CYCLES_EDGE(0xfb7f, 1);
+    /*$FB7F*/ TICK(1);
     goto emit;
   }
 
-  /*$FB81*/ CYCLES_EDGE(0xfb81, 4);
+  /*$FB81*/ TICK(4);
   branchTarget = true;
   if (s_y != 0x93) {
-    /*$FB83*/ CYCLES_EDGE(0xfb83, 1);
+    /*$FB83*/ TICK(1);
     goto emit;
   }
 
-  /*$FB85*/ CYCLES_EDGE(0xfb85, 4);
+  /*$FB85*/ TICK(4);
   s_status_v = (uint8_t)((io_peek(0xc010) >> 0x06) & 0x01);
 
   for (;;) { /* $FB88 -- spin until a key is pressed */
-    CYCLES_EDGE(0xfb88, 6);
+    TICK(6);
     s_y = io_peek(0xc000);
     branchTarget = true;
     if (!(s_y & 0x80)) {
-      /*$FB8B*/ CYCLES_EDGE(0xfb8b, 1);
+      /*$FB8B*/ TICK(1);
       continue;
     }
 
-    /*$FB8D*/ CYCLES_EDGE(0xfb8d, 4);
+    /*$FB8D*/ TICK(4);
     branchTarget = true;
     if (s_y == 0x83) {
       // Ctrl-C: leave it latched.
-      /*$FB8F*/ CYCLES_EDGE(0xfb8f, 1);
+      /*$FB8F*/ TICK(1);
       break;
     }
-    /*$FB91*/ CYCLES_EDGE(0xfb91, 4);
+    /*$FB91*/ TICK(4);
     s_status_v = (uint8_t)((io_peek(0xc010) >> 0x06) & 0x01);
     break;
   }
 
 emit: /* $FB94 JMP $FBFD */
-  CYCLES_EDGE(0xfb94, 3);
-  /*$FBFD*/ CYCLES_EDGE(0xfbfd, 4);
+  TICK(3);
+  /*$FBFD*/ TICK(4);
   branchTarget = true;
   if (!(s_a >= 0xa0)) {
     // The not-taken arm jumps straight to the dispatch without the edge charge.
@@ -1747,14 +1766,14 @@ emit: /* $FB94 JMP $FBFD */
   }
   // $FBFF BCS -- taken here, and it falls into the trampoline charge before
   // continuing.
-  /*$FBFF*/ CYCLES_EDGE(0xfbff, 1);
+  /*$FBFF*/ TICK(1);
 
 store: /* $FBF0 -- put the character at the cursor */
-  CYCLES_EDGE(0xfbf0, 9);
+  TICK(9);
   s_y = s_ch;
   /*$FBF2*/ poke((uint16_t)(bas16() + s_y), s_a);
 
-  /*$FBF4*/ CYCLES_EDGE(0xfbf4, 13);
+  /*$FBF4*/ TICK(13);
   s_ch = (uint8_t)(s_ch + 0x01);
   s_a = s_ch;
   {
@@ -1765,49 +1784,49 @@ store: /* $FBF0 -- put the character at the cursor */
     branchTarget = true;
     if (s_status_c) {
       // Off the right edge, so wrap: the same thing a carriage return does.
-      /*$FBFA*/ CYCLES_EDGE(0xfbfa, 1);
+      /*$FBFA*/ TICK(1);
       goto carriage_return;
     }
   }
-  /*$FBFC*/ CYCLES_EDGE(0xfbfc, 6);
+  /*$FBFC*/ TICK(6);
   branchTarget = true;
   goto out;
 
 dispatch: /* $FC01 -- not printable; which control code is it? */
-  CYCLES_EDGE(0xfc01, 4);
+  TICK(4);
   s_y = s_a;
   branchTarget = true;
   if (!(s_a & 0x80)) {
     // Below $80 the monitor stores it anyway, high bit and all.
-    /*$FC02*/ CYCLES_EDGE(0xfc02, 1);
+    /*$FC02*/ TICK(1);
     goto store;
   }
 
-  /*$FC04*/ CYCLES_EDGE(0xfc04, 4);
+  /*$FC04*/ TICK(4);
   branchTarget = true;
   if (s_a == 0x8d) {
-    /*$FC06*/ CYCLES_EDGE(0xfc06, 1);
+    /*$FC06*/ TICK(1);
     goto carriage_return;
   }
 
-  /*$FC08*/ CYCLES_EDGE(0xfc08, 4);
+  /*$FC08*/ TICK(4);
   branchTarget = true;
   if (s_a == 0x8a) {
-    /*$FC0A*/ CYCLES_EDGE(0xfc0a, 1);
+    /*$FC0A*/ TICK(1);
     goto line_feed;
   }
 
-  /*$FC0C*/ CYCLES_EDGE(0xfc0c, 4);
+  /*$FC0C*/ TICK(4);
   s_status_c = (uint8_t)(s_a >= 0x88);
   branchTarget = true;
   if (s_a != 0x88) {
-    /*$FC0E*/ CYCLES_EDGE(0xfc0e, 1);
+    /*$FC0E*/ TICK(1);
     goto bell;
   }
 
   /* $FC10 -- backspace. Off the left edge wraps to the end of the line above,
      which is why it falls into the cursor-up path rather than returning. */
-  /*$FC10*/ CYCLES_EDGE(0xfc10, 7);
+  /*$FC10*/ TICK(7);
   {
     const uint8_t back = (uint8_t)(s_ch - 0x01);
     s_status_not_z = back;
@@ -1815,18 +1834,18 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
     s_ch = back;
     branchTarget = true;
     if (!(back & 0x80)) {
-      /*$FC12*/ CYCLES_EDGE(0xfc12, 1);
-      /*$FBFC*/ CYCLES_EDGE(0xfbfc, 6);
+      /*$FC12*/ TICK(1);
+      /*$FBFC*/ TICK(6);
       branchTarget = true;
       goto out;
     }
   }
 
-  /*$FC14*/ CYCLES_EDGE(0xfc14, 11);
+  /*$FC14*/ TICK(11);
   /*$FC16*/ s_ch = s_wndwdth;
   /*$FC18*/ s_ch = (uint8_t)(s_ch - 0x01);
 
-  /*$FC1A*/ CYCLES_EDGE(0xfc1a, 8);
+  /*$FC1A*/ TICK(8);
   {
     const uint8_t top = s_wndtop;
     s_a = top;
@@ -1837,22 +1856,22 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
     branchTarget = true;
     if (s_status_c) {
       // Already on the window's top line; there is nowhere to go up to.
-      /*$FC1E*/ CYCLES_EDGE(0xfc1e, 1);
-      /*$FC2B*/ CYCLES_EDGE(0xfc2b, 6);
+      /*$FC1E*/ TICK(1);
+      /*$FC2B*/ TICK(6);
       branchTarget = true;
       goto out;
     }
   }
 
-  /*$FC20*/ CYCLES_EDGE(0xfc20, 5);
+  /*$FC20*/ TICK(5);
   s_cv = (uint8_t)(s_cv - 0x01);
-  /*$FC22*/ CYCLES_EDGE(0xfc22, 3); // TABV
+  /*$FC22*/ TICK(3); // TABV
   s_a = s_cv;
   rom_vtabz();
   goto out;
 
 bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
-  CYCLES_EDGE(0xfbd9, 4);
+  TICK(4);
   {
     const uint8_t ch = s_a;
     const uint8_t differs = (uint8_t)(ch != 0x87);
@@ -1862,27 +1881,27 @@ bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
     branchTarget = true;
     if (differs) {
       // Not the bell either. Drop it.
-      /*$FBDB*/ CYCLES_EDGE(0xfbdb, 1);
-      /*$FBEF*/ CYCLES_EDGE(0xfbef, 6);
+      /*$FBDB*/ TICK(1);
+      /*$FBEF*/ TICK(6);
       branchTarget = true;
       goto out;
     }
   }
 
   // A tenth of a second of silence, then 192 clicks of the speaker.
-  /*$FBDD*/ CYCLES_EDGE(0xfbdd, 8);
+  /*$FBDD*/ TICK(8);
   s_a = 0x40;
   /*$FBDF*/ rom_wait();
   branchTarget = true;
-  /*$FBE2*/ CYCLES_EDGE(0xfbe2, 2);
+  /*$FBE2*/ TICK(2);
   s_y = 0xc0;
 
   for (;;) { /* $FBE4 */
-    CYCLES_EDGE(0xfbe4, 8);
+    TICK(8);
     s_a = 0x0c;
     /*$FBE6*/ rom_wait();
     branchTarget = true;
-    /*$FBE9*/ CYCLES_EDGE(0xfbe9, 8);
+    /*$FBE9*/ TICK(8);
     s_a = io_peek(0xc030);
     /*$FBEC*/ s_y = (uint8_t)(s_y - 0x01);
     s_status_not_z = s_y;
@@ -1890,19 +1909,19 @@ bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
     branchTarget = true;
     if (!s_y)
       break;
-    /*$FBED*/ CYCLES_EDGE(0xfbed, 1);
+    /*$FBED*/ TICK(1);
   }
 
-  /*$FBEF*/ CYCLES_EDGE(0xfbef, 6);
+  /*$FBEF*/ TICK(6);
   branchTarget = true;
   goto out;
 
 carriage_return: /* $FC62 -- to the left edge, then down */
-  CYCLES_EDGE(0xfc62, 5);
+  TICK(5);
   /*$FC64*/ s_ch = 0x00;
 
 line_feed: /* $FC66 */
-  CYCLES_EDGE(0xfc66, 5);
+  TICK(5);
   s_cv = (uint8_t)(s_cv + 0x01);
   /*$FC68*/ rom_fc68(); // JMP -- a tail call, and where a scroll happens.
 
@@ -1952,7 +1971,7 @@ void rom_cout(void) {
   (void)branchTarget;
   uint16_t vector;
 
-  /*$FDED*/ CYCLES_EDGE(0xfded, 5);
+  /*$FDED*/ TICK(5);
             vector = csw16(); // JMP ($36)
             branchTarget = true;
             switch (vector) {
@@ -1988,25 +2007,25 @@ static void rom_cout1(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$FDF0*/ CYCLES_EDGE(0xfdf0, 4);
+  /*$FDF0*/ TICK(4);
   const bool printable = s_a >= 0xa0;
   s_status_c = (uint8_t)printable;
 
   if (printable) {
-    /*$FDF4*/ CYCLES_EDGE(0xfdf4, 3);
+    /*$FDF4*/ TICK(3);
     s_a = (uint8_t)(s_a & s_invflg);
   } else {
     // $FDF2 BCC -- the branch itself, taken here.
-    /*$FDF2*/ CYCLES_EDGE(0xfdf2, 1);
+    /*$FDF2*/ TICK(1);
   }
 
-  /*$FDF6*/ CYCLES_EDGE(0xfdf6, 12);
+  /*$FDF6*/ TICK(12);
   s_ysav1 = s_y;
   /*$FDF8*/ push8(s_a);
   branchTarget = true;
   rom_coutz(); // JSR $FB78
 
-  /*$FDFC*/ CYCLES_EDGE(0xfdfc, 13);
+  /*$FDFC*/ TICK(13);
   s_a = pop8();
   /*$FDFD*/ s_y = s_ysav1;
   s_status_not_z = s_y;
@@ -2033,7 +2052,7 @@ void rom_setkbd(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$FE89*/ CYCLES_EDGE(0xfe89, 11);
+  /*$FE89*/ TICK(11);
   s_a2l = 0x00;
   s_x = 0x38;
   s_y = 0x1b;
@@ -2041,29 +2060,29 @@ void rom_setkbd(void) {
   // same reasoning as $FC60 in rom_home: the decompiler doesn't do
   // cross-instruction flag proofs, so the branch still executes and still
   // pays its own cost every time.
-  /*$FE91*/ CYCLES_EDGE(0xfe91, 1);
+  /*$FE91*/ TICK(1);
 
   // $FE9B SETIO. A2L is the slot; slot 0 means the built-in device and the ROM
   // answers page $FD, where its own KEYIN and COUT1 live. A real slot would
   // give $Cn00 instead -- decoded, never taken, because the game never sets
   // one.
-  /*$FE9B*/ CYCLES_EDGE(0xfe9b, 7);
+  /*$FE9B*/ TICK(7);
   /*$FE9D*/ const uint8_t slot = (uint8_t)(s_a2l & 0x0f);
   s_a = slot;
   if (slot) {
-    /*$FEA1*/ CYCLES_EDGE(0xfea1, 6);
+    /*$FEA1*/ TICK(6);
     s_a = (uint8_t)(s_a | 0xc0);
     s_y = 0x00;
     // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
-    /*$FEA5*/ CYCLES_EDGE(0xfea5, 1);
+    /*$FEA5*/ TICK(1);
   } else {
     // $FE9F BEQ -- the branch itself, taken here.
-    /*$FE9F*/ CYCLES_EDGE(0xfe9f, 1);
-    /*$FEA7*/ CYCLES_EDGE(0xfea7, 2);
+    /*$FE9F*/ TICK(1);
+    /*$FEA7*/ TICK(2);
     s_a = 0xfd;
   }
 
-  /*$FEA9*/ CYCLES_EDGE(0xfea9, 14);
+  /*$FEA9*/ TICK(14);
   s_kswl = s_y;
   s_kswh = s_a;
 
@@ -2083,7 +2102,7 @@ void rom_setvid(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$FE93*/ CYCLES_EDGE(0xfe93, 9);
+  /*$FE93*/ TICK(9);
   s_a2l = 0x00;
   s_x = 0x36;
   s_y = 0xf0;
@@ -2092,23 +2111,23 @@ void rom_setvid(void) {
   // answers page $FD, where its own KEYIN and COUT1 live. A real slot would
   // give $Cn00 instead -- decoded, never taken, because the game never sets
   // one.
-  /*$FE9B*/ CYCLES_EDGE(0xfe9b, 7);
+  /*$FE9B*/ TICK(7);
   /*$FE9D*/ const uint8_t slot = (uint8_t)(s_a2l & 0x0f);
   s_a = slot;
   if (slot) {
-    /*$FEA1*/ CYCLES_EDGE(0xfea1, 6);
+    /*$FEA1*/ TICK(6);
     s_a = (uint8_t)(s_a | 0xc0);
     s_y = 0x00;
     // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
-    /*$FEA5*/ CYCLES_EDGE(0xfea5, 1);
+    /*$FEA5*/ TICK(1);
   } else {
     // $FE9F BEQ -- the branch itself, taken here.
-    /*$FE9F*/ CYCLES_EDGE(0xfe9f, 1);
-    /*$FEA7*/ CYCLES_EDGE(0xfea7, 2);
+    /*$FE9F*/ TICK(1);
+    /*$FEA7*/ TICK(2);
     s_a = 0xfd;
   }
 
-  /*$FEA9*/ CYCLES_EDGE(0xfea9, 14);
+  /*$FEA9*/ TICK(14);
   s_cswl = s_y;
   s_cswh = s_a;
 
@@ -2370,7 +2389,7 @@ static void set_snake_head_col(uint8_t col) {
 uint8_t game_start_life(uint8_t head_col) {
   bool branchTarget = true;
   (void)branchTarget;
-  /*$660F*/ CYCLES_EDGE(0x660f, 50);
+  /*$660F*/ TICK(50);
   set_snake_head_col(head_col);
 
   // Opposite corners, converging. The original's nine stores are these two.
@@ -2387,7 +2406,7 @@ uint8_t game_start_life(uint8_t head_col) {
 uint8_t game_load_shape_masks(uint8_t shape) {
   bool branchTarget = true;
   (void)branchTarget;
-  /*$6127*/ CYCLES_EDGE(0x6127, 53);
+  /*$6127*/ TICK(53);
   // Four masks per shape at $6174, and $6060 is where the plotter reads them.
   // Both stay in emulated RAM: $6060 is read by game_draw_cell, which is not
   // converted, and $6174 is part of the loaded binary image.
@@ -2402,7 +2421,7 @@ uint8_t game_load_shape_masks(uint8_t shape) {
 void game_install_cout_vector(void) {
   bool branchTarget = true;
   (void)branchTarget;
-  /*$6641*/ CYCLES_EDGE(0x6641, 16);
+  /*$6641*/ TICK(16);
   // CSWL/CSWH at $36/$37, pointed at $664A.
   s_cswl = 0x4a;
   s_cswh = 0x66;
@@ -2463,104 +2482,104 @@ void bouncer_step(Bouncer *b) {
   unsigned blocked = 0;
 
   if (b->row == 0) {
-    GAME_CYCLES(0x64d2, 6);
+    TICK(6);
     ram_poke(kBounceBlocked, 0x00);
     return;
   }
-  GAME_CYCLES(0x64d0, 1);
+  TICK(1);
 
-  GAME_CYCLES(0x64d3, 36);
+  TICK(36);
   uint8_t want_col = (uint8_t)(b->col + b->dx);
   uint8_t want_row = (uint8_t)(b->row + b->dy);
 
   const bool diagonal_taken = cell_taken(want_col, want_row);
-  GAME_CYCLES(0x64eb, 4);
+  TICK(4);
   if (diagonal_taken) {
     // Which axis actually stopped it? Ask the two cells either side.
-    GAME_CYCLES(0x64ef, 14);
+    TICK(14);
     const bool across_taken = cell_taken(want_col, b->row);
-    GAME_CYCLES(0x64f8, 4);
+    TICK(4);
     if (across_taken) {
-      GAME_CYCLES(0x64fc, 24);
+      TICK(24);
       want_col = b->col;
       b->dx = reflect(b->dx);
       ++blocked;
     } else {
-      GAME_CYCLES(0x64fa, 1);
+      TICK(1);
     }
 
-    GAME_CYCLES(0x650d, 14);
+    TICK(14);
     const bool down_taken = cell_taken(b->col, want_row);
-    GAME_CYCLES(0x6516, 4);
+    TICK(4);
     if (down_taken) {
-      GAME_CYCLES(0x651a, 24);
+      TICK(24);
       want_row = b->row;
       b->dy = reflect(b->dy);
       ++blocked;
     } else {
-      GAME_CYCLES(0x6518, 1);
+      TICK(1);
     }
 
-    GAME_CYCLES(0x652b, 6);
+    TICK(6);
     if (blocked == 0) {
       // An inside corner: only the diagonal is blocked, so go back the way
       // it came.
-      GAME_CYCLES(0x6530, 36);
+      TICK(36);
       want_col = b->col;
       want_row = b->row;
       b->dx = reflect(b->dx);
       b->dy = reflect(b->dy);
     } else {
-      GAME_CYCLES(0x652e, 1);
+      TICK(1);
     }
   } else {
-    GAME_CYCLES(0x64ed, 1);
+    TICK(1);
   }
 
   // Erase where it was. Ink 0 is black, and the shape is whatever the caller
   // last left in $00 -- see the header.
-  GAME_CYCLES(0x654c, 11);
+  TICK(11);
   s_a = 0x00;
   s_ink = 0x00;
   rom_setcol();
 
-  GAME_CYCLES(0x6553, 20);
+  TICK(20);
   plot_at(0x00, (Cell){.col = b->col, .row = b->row});
 
-  GAME_CYCLES(0x6560, 14);
+  TICK(14);
   s_a = b->row;
   s_y = b->col;
   rom_plot();
 
-  GAME_CYCLES(0x6569, 11);
+  TICK(11);
   s_shape = 0x1a;
 
   if (want_row == 0) {
     // Off the board: not redrawn, and the position is not committed.
-    GAME_CYCLES(0x6572, 6);
+    TICK(6);
     ram_poke(kWantCol, want_col);
     ram_poke(kWantRow, want_row);
     ram_poke(kBounceBlocked, (uint8_t)blocked);
     return;
   }
-  GAME_CYCLES(0x6570, 1);
+  TICK(1);
 
-  GAME_CYCLES(0x6573, 29);
+  TICK(29);
   b->row = want_row;
   b->col = want_col;
   s_a = 0x03;
   s_ink = 0x03;
   rom_setcol();
 
-  GAME_CYCLES(0x6587, 6);
+  TICK(6);
   plot_shape_at(0x1a, 0x03, (Cell){.col = b->col, .row = b->row});
 
-  GAME_CYCLES(0x658a, 14);
+  TICK(14);
   s_a = b->row;
   s_y = b->col;
   rom_plot();
 
-  GAME_CYCLES(0x6593, 6);
+  TICK(6);
   ram_poke(kWantCol, want_col);
   ram_poke(kWantRow, want_row);
   ram_poke(kBounceBlocked, (uint8_t)blocked);
@@ -2745,12 +2764,12 @@ void game_promote_high_score(void) {
   }
 
   if (beats_it) {
-    GAME_CYCLES(0x72b5, 32);
+    TICK(32);
     for (unsigned i = 0; i < 4; ++i)
       ram_poke(kBestByte[i], ram_peek(kScoreByte[i]));
   }
 
-  GAME_CYCLES(0x72cd, 6);
+  TICK(6);
 }
 
 /* ========================================================================== */
@@ -2779,59 +2798,59 @@ void game_find_nearest_apple(void) {
   Cell c = {.col = ram_peek(kHeadCol), .row = 1};
   bool found = false;
 
-  GAME_CYCLES(0x69c3, 14);
+  TICK(14);
   for (;;) { // leftwards
-    GAME_CYCLES(0x69ce, 14);
+    TICK(14);
     const uint8_t v = cell_at(c);
-    GAME_CYCLES(0x69d7, 4);
+    TICK(4);
     if (v == kApple) {
-      GAME_CYCLES(0x69d9, 1);
+      TICK(1);
       found = true;
       break;
     }
-    GAME_CYCLES(0x69db, 14);
+    TICK(14);
     if (++c.row != kLastRow) {
-      GAME_CYCLES(0x69e3, 1);
+      TICK(1);
       continue;
     }
-    GAME_CYCLES(0x69e5, 14);
+    TICK(14);
     c.row = 1;
     if (--c.col == 0)
       break;
-    GAME_CYCLES(0x69ed, 1);
+    TICK(1);
   }
 
   if (!found) {
-    GAME_CYCLES(0x69ef, 8);
+    TICK(8);
     c.col = ram_peek(kHeadCol);
 
     for (;;) { // rightwards
-      GAME_CYCLES(0x69f5, 14);
+      TICK(14);
       const uint8_t v = cell_at(c);
-      GAME_CYCLES(0x69fe, 2);
-      GAME_CYCLES(0x6a00, 2);
+      TICK(2);
+      TICK(2);
       if (v == kApple) {
-        GAME_CYCLES(0x6a00, 1);
+        TICK(1);
         break;
       }
-      GAME_CYCLES(0x6a02, 14);
+      TICK(14);
       if (++c.row != kLastRow) {
-        GAME_CYCLES(0x6a0a, 1);
+        TICK(1);
         continue;
       }
-      GAME_CYCLES(0x6a0c, 20);
+      TICK(20);
       c.row = 1;
       if (++c.col == kLastRow) {
-        GAME_CYCLES(0x6a1b, 12);
+        TICK(12);
         c.row = 0;
         c.col = 0x14;
         break;
       }
-      GAME_CYCLES(0x6a19, 1);
+      TICK(1);
     }
   }
 
-  GAME_CYCLES(0x6a25, 22);
+  TICK(22);
   // The cursor is scratch, but ram.probe hashes $6000-$BFFF, so what the
   // original left there is still compared.
   ram_poke(kSearchCol, c.col);
@@ -2867,7 +2886,7 @@ static const struct {
 };
 
 MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
-  GAME_CYCLES(0x6ab8, 42);
+  TICK(42);
 
   // The head plus this direction's deltas.
   const Cell target = {
@@ -2882,24 +2901,24 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
   *cell_out = cell;
 
   // Empty or an apple, and nothing else, may be stepped into.
-  GAME_CYCLES(0x6ad5, 4);
+  TICK(4);
   if (cell != 0x00)
-    GAME_CYCLES(0x6ad9, 2);
+    TICK(2);
   else
-    GAME_CYCLES(0x6ad7, 1);
-  GAME_CYCLES(0x6adb, 2);
+    TICK(1);
+  TICK(2);
   if (cell != 0x00 && cell != 0x0f) {
-    GAME_CYCLES(0x6add, 6);
+    TICK(6);
     return MOVE_TARGET_TAKEN;
   }
-  GAME_CYCLES(0x6adb, 1);
+  TICK(1);
 
-  GAME_CYCLES(0x6ade, 12);
+  TICK(12);
   ram_poke(kBounceBlocked, 0x00);
   if (target.row == 0) {
     // Row 0 is the top border; there is nothing above it to look at.
-    GAME_CYCLES(0x6ae6, 1);
-    GAME_CYCLES(0x6add, 6);
+    TICK(1);
+    TICK(6);
     return MOVE_ROW_ZERO;
   }
 
@@ -2926,13 +2945,13 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
     }
   }
 
-  GAME_CYCLES(0x6b2d, 6);
+  TICK(6);
   if (free_neighbours) {
-    GAME_CYCLES(0x6b32, 8);
+    TICK(8);
     return MOVE_OK;
   }
-  GAME_CYCLES(0x6b30, 1);
-  GAME_CYCLES(0x6b35, 8);
+  TICK(1);
+  TICK(8);
   return MOVE_DEAD_END;
 }
 
@@ -3011,7 +3030,7 @@ static void lores_vline_at(uint8_t col, uint8_t row, uint8_t to_row) {
     bool branchTarget = true;
   (void)branchTarget;
 
-    /*$7000*/ CYCLES_EDGE(0x7000, 6);
+    /*$7000*/ TICK(6);
     const uint8_t restored = game_lores_vline_native((Cell){.col = col, .row = row}, to_row);
     s_a = restored;
     s_status_not_z = restored;
@@ -3034,7 +3053,7 @@ static uint8_t script_byte(uint16_t ret) {
 
 /// Graphics, hi-res, page 2, full screen. The reads are the writes.
 static void select_hires_page2(void) {
-  GAME_CYCLES(0x7048, 32);
+  TICK(32);
   ram_poke(kTonePeriod, 0x00);
   io_peek(0xc050);
   io_peek(0xc057);
@@ -3052,100 +3071,100 @@ static void select_hires_page2(void) {
 /// touches neither, and the column is not read until draw_border writes it.
 static void spin(uint8_t outer, uint8_t middle) {
   for (;;) {
-    GAME_CYCLES(0x7061, 4);
+    TICK(4);
     if (--s_y) {
-      GAME_CYCLES(0x7062, 1);
+      TICK(1);
       continue;
     }
-    GAME_CYCLES(0x7064, 7);
+    TICK(7);
     middle = (uint8_t)(middle - 1);
     if (middle) {
-      GAME_CYCLES(0x7066, 1);
+      TICK(1);
       continue;
     }
-    GAME_CYCLES(0x7068, 7);
+    TICK(7);
     outer = (uint8_t)(outer - 1);
     if (!outer)
       break;
-    GAME_CYCLES(0x706a, 1);
+    TICK(1);
   }
 }
 
 /// Clear the lo-res occupancy map, one full-width row at a time from the
 /// bottom up. Ink 0 is black, so this erases.
 static void wipe_occupancy_map(void) {
-  GAME_CYCLES(0x706c, 13);
+  TICK(13);
   uint8_t at = 0x27;
   set_ink(0x00);
 
   for (;;) {
-    GAME_CYCLES(0x7075, 16);
+    TICK(16);
     s_h2 = 0x27;
     lores_hline(at, 0x00);
 
-    GAME_CYCLES(0x7080, 7);
+    TICK(7);
     const uint8_t row = (uint8_t)(at - 1);
     at = row;
     // BPL: row 0 is drawn, and the loop ends one step later.
     if (row & 0x80)
       break;
-    GAME_CYCLES(0x7082, 1);
+    TICK(1);
   }
 }
 
 /// One gap per bouncer, which is what the difficulty counts.
 static void open_wall_gaps(void) {
-  GAME_CYCLES(0x7093, 6);
+  TICK(6);
   const uint8_t difficulty = ram_peek(kDifficulty);
   if (!difficulty) {
-    GAME_CYCLES(0x7096, 1);
+    TICK(1);
     return;
   }
 
-  GAME_CYCLES(0x7098, 10);
+  TICK(10);
   lores_plot(0x01, 0x01);
 
-  GAME_CYCLES(0x709e, 8);
+  TICK(8);
   if (ram_peek(kDifficulty) == 0x01) {
-    GAME_CYCLES(0x70a3, 1);
+    TICK(1);
     return;
   }
-  GAME_CYCLES(0x70a5, 10);
+  TICK(10);
   lores_plot(0x01, 0x26);
 }
 
 /// The border, in both representations, plus the gap the snake leaves through.
 static void draw_border(void) {
-  GAME_CYCLES(0x70ac, 10);
+  TICK(10);
   lores_hline(0x00, 0x00); // $2C is still $27 from the wipe
 
-  GAME_CYCLES(0x70b3, 10);
+  TICK(10);
   lores_hline(0x27, 0x00);
 
   // The four sides, twice: once on the lo-res occupancy map and once in
   // hi-res. Four of these seven used to leave the endpoint out and inherit
   // $27 from the call above; it is written at each of them now.
-  GAME_CYCLES(0x70ba, 21);
+  TICK(21);
   lores_vline_at(0x00, 0x00, 0x27);
 
-  GAME_CYCLES(0x70c9, 16);
+  TICK(16);
   lores_vline_at(0x27, 0x00, 0x27);
 
-  GAME_CYCLES(0x70d4, 19);
+  TICK(19);
   plot_hline_at(0x00, 0x00, 0x27);
 
-  GAME_CYCLES(0x70e1, 16);
+  TICK(16);
   plot_hline_at(0x00, 0x27, 0x27);
 
-  GAME_CYCLES(0x70ec, 14);
+  TICK(14);
   plot_vline_at(0x00, 0x00, 0x27);
 
-  GAME_CYCLES(0x70f5, 16);
+  TICK(16);
   plot_vline_at(0x27, 0x00, 0x27);
 
   // Ink 3 over columns $12-$16 of the bottom row, on top of the border just
   // laid down: the gap the snake leaves through.
-  GAME_CYCLES(0x7100, 26);
+  TICK(26);
   s_ink = 0x03;
   plot_hline_at(0x12, 0x27, 0x16);
 }
@@ -3153,38 +3172,38 @@ static void draw_border(void) {
 /// Walk the pointer to the current level's script, skipping one whole script
 /// per level below it. DEX first, so level 1 skips nothing.
 static void seek_script(void) {
-  GAME_CYCLES(0x7113, 14);
+  TICK(14);
   s_x = ram_peek(kScriptIndex);
   ram_poke(kScriptPtr, 0x00);
   ram_poke(kScriptPtr + 1, 0x80);
 
   for (;;) {
-    GAME_CYCLES(0x711e, 4);
+    TICK(4);
     if (!--s_x) {
-      GAME_CYCLES(0x711f, 1);
+      TICK(1);
       return;
     }
     for (;;) {
-      GAME_CYCLES(0x7121, 6);
+      TICK(6);
       const uint8_t b = script_byte(0x7123);
-      GAME_CYCLES(0x7124, 4);
+      TICK(4);
       if (b == OP_END) {
-        GAME_CYCLES(0x7126, 1);
+        TICK(1);
         break;
       }
-      GAME_CYCLES(0x7128, 3);
+      TICK(3);
     }
   }
 }
 
 void game_draw_playfield_native(void) {
-  GAME_CYCLES(0x7045, 6);
+  TICK(6);
   game_clear_hgr_native();
   select_hires_page2();
   spin(0x04, 0x00); // the counts $7056 used to store into $02/$03
   wipe_occupancy_map();
 
-  GAME_CYCLES(0x7084, 21);
+  TICK(21);
   s_wndtop = 0x14;
   s_shape = 0x15;
   s_ink = 0x0d;
@@ -3197,105 +3216,105 @@ restart:
   seek_script();
 
   for (;;) {
-    GAME_CYCLES(0x712b, 6);
+    TICK(6);
     const uint8_t op = script_byte(0x712d);
 
-    GAME_CYCLES(0x712e, 4);
+    TICK(4);
     if (op == OP_RESTART) {
-      GAME_CYCLES(0x7132, 9);
+      TICK(9);
       ram_poke(kScriptIndex, 0x01);
       goto restart;
     }
-    GAME_CYCLES(0x7130, 1);
+    TICK(1);
 
-    GAME_CYCLES(0x713a, 4);
+    TICK(4);
     if (op == OP_HLINE) {
-      GAME_CYCLES(0x713e, 6);
+      TICK(6);
       const uint8_t ink = script_byte(0x7140);
-      GAME_CYCLES(0x7141, 9);
+      TICK(9);
       s_ink = ink;
       const uint8_t col = script_byte(0x7145);
-      GAME_CYCLES(0x7146, 9);
+      TICK(9);
       const uint8_t last = script_byte(0x714a);
-      GAME_CYCLES(0x714b, 9);
+      TICK(9);
       const uint8_t row = script_byte(0x714f);
-      GAME_CYCLES(0x7150, 12);
+      TICK(12);
       set_ink(ink);
 
-      GAME_CYCLES(0x7157, 18);
+      TICK(18);
       s_h2 = last;
       lores_hline(row, col);
 
-      GAME_CYCLES(0x7162, 6);
+      TICK(6);
       plot_hline_at(col, row, last);
-      GAME_CYCLES(0x7165, 3);
+      TICK(3);
       continue;
     }
-    GAME_CYCLES(0x713c, 1);
+    TICK(1);
 
-    GAME_CYCLES(0x7168, 4);
+    TICK(4);
     if (op == OP_VLINE) {
-      GAME_CYCLES(0x716c, 6);
+      TICK(6);
       const uint8_t ink = script_byte(0x716e);
-      GAME_CYCLES(0x716f, 9);
+      TICK(9);
       s_ink = ink;
       const uint8_t row = script_byte(0x7173);
-      GAME_CYCLES(0x7174, 9);
+      TICK(9);
       const uint8_t last = script_byte(0x7178);
-      GAME_CYCLES(0x7179, 9);
+      TICK(9);
       const uint8_t col = script_byte(0x717d);
-      GAME_CYCLES(0x717e, 12);
+      TICK(12);
       set_ink(ink);
 
       // The lo-res half puts s_row back where it found it, which is what lets
       // the hi-res half run the same span without restating it.
-      GAME_CYCLES(0x7185, 6);
+      TICK(6);
       lores_vline_at(col, row, last);
-      GAME_CYCLES(0x7188, 6);
+      TICK(6);
       plot_vline_at(col, row, last);
-      GAME_CYCLES(0x718b, 3);
+      TICK(3);
       continue;
     }
-    GAME_CYCLES(0x716a, 1);
+    TICK(1);
 
-    GAME_CYCLES(0x718e, 4);
+    TICK(4);
     if (op == OP_PLOT) {
-      GAME_CYCLES(0x7192, 6);
+      TICK(6);
       const uint8_t ink = script_byte(0x7194);
-      GAME_CYCLES(0x7195, 9);
+      TICK(9);
       const uint8_t col = script_byte(0x7199);
-      GAME_CYCLES(0x719a, 9);
+      TICK(9);
       const uint8_t row = script_byte(0x719e);
-      GAME_CYCLES(0x719f, 12);
+      TICK(12);
       set_ink(ink);
 
-      GAME_CYCLES(0x71a6, 12);
+      TICK(12);
       lores_plot(row, col);
-      GAME_CYCLES(0x71ad, 6);
+      TICK(6);
       game_plot_shape_native(ink, (Cell){.col = col, .row = row});
-      GAME_CYCLES(0x71b0, 3);
+      TICK(3);
       continue;
     }
-    GAME_CYCLES(0x7190, 1);
+    TICK(1);
 
-    GAME_CYCLES(0x71b3, 4);
+    TICK(4);
     if (op == OP_STORE) {
-      GAME_CYCLES(0x71b7, 6);
+      TICK(6);
       const uint8_t v = script_byte(0x71b9);
-      GAME_CYCLES(0x71ba, 7);
+      TICK(7);
       ram_poke(kLevelTime, v);
       continue;
     }
-    GAME_CYCLES(0x71b5, 1);
+    TICK(1);
 
-    GAME_CYCLES(0x71c0, 4);
+    TICK(4);
     if (op == OP_END) {
-      GAME_CYCLES(0x71c2, 1);
-      GAME_CYCLES(0x71c7, 6);
+      TICK(1);
+      TICK(6);
       return;
     }
     // Anything unrecognised is skipped. No script contains one.
-    GAME_CYCLES(0x71c4, 3);
+    TICK(3);
   }
 }
 
@@ -3326,18 +3345,18 @@ static uint8_t dot_index(uint8_t ink, uint8_t scanline, uint8_t col) {
 uint8_t game_draw_cell_native(uint8_t ink, Cell c) {
   bool branchTarget = true;
   (void)branchTarget;
-  /*$60E7*/ CYCLES_EDGE(0x60e7, 0);
+  /*$60E7*/ TICK(0);
   assert_binary_mode("game_draw_cell", 0x60e7);
   uint8_t hgr_hi;
-  GAME_CYCLES(0x60e7, 22);
+  TICK(22);
   uint16_t dest = cell_row_base(c.row);
   hgr_hi = (uint8_t)(dest >> 8);
 
   for (unsigned line = 0; line < 4; ++line) {
-    GAME_CYCLES(0x60f7, 16);
+    TICK(16);
     // Built in $06 in two steps, and written out between them because it is
     // zero page and a probe may sample there.
-    GAME_CYCLES(0x6100, 62);
+    TICK(62);
     const uint8_t idx = dot_index(ink, (uint8_t)line, c.col);
 
     poke(dest + c.col, (uint8_t)(ram_peek(kHgrPattern + idx) & ram_peek(kShapeMask + line)));
@@ -3345,10 +3364,10 @@ uint8_t game_draw_cell_native(uint8_t ink, Cell c) {
     hgr_hi = (uint8_t)(dest >> 8);
 
     if (line != 3)
-      GAME_CYCLES(0x6124, 1);
+      TICK(1);
   }
 
-  GAME_CYCLES(0x6126, 6);
+  TICK(6);
   // What the loop leaves: X counted to 4, Y is the column, A the last
   // destination high byte, and the flags come from CPX #4.
   s_x = 0x04;
@@ -3372,12 +3391,12 @@ uint8_t game_draw_cell_native(uint8_t ink, Cell c) {
 /// bearing.
 uint8_t game_merge_cell_native(uint8_t ink, Cell c) {
   uint8_t hgr_hi;
-  GAME_CYCLES(0x6b96, 22);
+  TICK(22);
   uint16_t dest = cell_row_base(c.row);
   hgr_hi = (uint8_t)(dest >> 8);
 
   for (unsigned line = 0; line < 4; ++line) {
-    GAME_CYCLES(0x6ba6, 85);
+    TICK(85);
     const uint8_t parity = (uint8_t)(line & 1);
     const uint8_t idx =
         (uint8_t)((uint8_t)(((uint8_t)((parity << 7) | (ink >> 1))) << 2) | (c.col & 3));
@@ -3389,38 +3408,38 @@ uint8_t game_merge_cell_native(uint8_t ink, Cell c) {
     hgr_hi = (uint8_t)(dest >> 8);
 
     if (line != 3)
-      GAME_CYCLES(0x6bd7, 1);
+      TICK(1);
   }
 
-  GAME_CYCLES(0x6bd9, 6);
+  TICK(6);
   return hgr_hi;
 }
 
 /// $702B -- zero hi-res page 1, $2000 through $3FFF. The inner loop runs a
 /// full 256 bytes because Y wraps, so the terminating test is on the page.
 void game_clear_hgr_native(void) {
-  GAME_CYCLES(0x702b, 12);
+  TICK(12);
   s_y = 0x00;
 
   for (uint8_t page = 0x20;;) {
     uint8_t y = 0;
     do {
-      GAME_CYCLES(0x7035, 12);
+      TICK(12);
       poke((uint16_t)(page << 8) + y, 0x00);
       ++y;
       s_y = y;
       if (y)
-        GAME_CYCLES(0x703a, 1);
+        TICK(1);
     } while (y);
 
-    GAME_CYCLES(0x703c, 12);
+    TICK(12);
     ++page;
     if (page == 0x40)
       break;
-    GAME_CYCLES(0x7042, 1);
+    TICK(1);
   }
 
-  GAME_CYCLES(0x7044, 6);
+  TICK(6);
 }
 
 /* ========================================================================== */
@@ -3443,7 +3462,7 @@ void game_clear_hgr_native(void) {
 uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
   bool branchTarget = true;
   (void)branchTarget;
-  /*$6148*/ CYCLES_EDGE(0x6148, 6);
+  /*$6148*/ TICK(6);
   {
     const uint8_t mask = game_load_shape_masks(s_shape);
     s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
@@ -3452,18 +3471,18 @@ uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
     s_status_n = (mask & 0x80);
   }
   for (;;) {
-    GAME_CYCLES(0x614b, 6);
+    TICK(6);
     game_draw_cell_native(ink, c);
 
-    GAME_CYCLES(0x614e, 8);
+    TICK(8);
     if (c.col == to_col)
       break;
 
-    GAME_CYCLES(0x6154, 8);
+    TICK(8);
     c.col = (uint8_t)(c.col + 1);
   }
-  GAME_CYCLES(0x6152, 1);
-  GAME_CYCLES(0x6159, 6);
+  TICK(1);
+  TICK(6);
   s_a = c.col;
   s_status_c = 0x01;
   s_status_not_z = 0x00;
@@ -3479,7 +3498,7 @@ uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
 uint8_t game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
   bool branchTarget = true;
   (void)branchTarget;
-  /*$615A*/ CYCLES_EDGE(0x615a, 6);
+  /*$615A*/ TICK(6);
   {
     const uint8_t mask = game_load_shape_masks(s_shape);
     s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
@@ -3488,18 +3507,18 @@ uint8_t game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
     s_status_n = (mask & 0x80);
   }
   for (;;) {
-    GAME_CYCLES(0x615d, 6);
+    TICK(6);
     game_draw_cell_native(ink, c);
 
-    GAME_CYCLES(0x6160, 8);
+    TICK(8);
     if (c.row == to_row)
       break;
 
-    GAME_CYCLES(0x6166, 8);
+    TICK(8);
     c.row = (uint8_t)(c.row + 1);
   }
-  GAME_CYCLES(0x6164, 1);
-  GAME_CYCLES(0x6159, 6);
+  TICK(1);
+  TICK(6);
   s_a = c.row;
   s_status_c = 0x01;
   s_status_not_z = 0x00;
@@ -3516,18 +3535,18 @@ uint8_t game_lores_vline_native(Cell c, uint8_t to_row) {
   push8(c.row);
 
   for (;;) {
-    GAME_CYCLES(0x7003, 12);
+    TICK(12);
     lores_plot(c.row, c.col);
 
-    GAME_CYCLES(0x700a, 8);
+    TICK(8);
     if (c.row == to_row)
       break;
 
-    GAME_CYCLES(0x7010, 8);
+    TICK(8);
     c.row = (uint8_t)(c.row + 1);
   }
-  GAME_CYCLES(0x700e, 1);
-  GAME_CYCLES(0x7015, 13);
+  TICK(1);
+  TICK(13);
   return pop8();
 }
 
@@ -3569,15 +3588,15 @@ static void step_bouncer_slot(int slot, uint16_t block, uint16_t cycles, uint16_
 /// trace caught it; the pinned site count could not, because the count was
 /// right.
 static uint8_t dequeue_key(void) {
-  GAME_CYCLES(0x6200, 10);
+  TICK(10);
   const uint8_t at = ram_peek(kRingRead);
   const uint8_t key = ram_peek(kKeyRing + at);
   if (!(key & 0x80)) {
-    GAME_CYCLES(0x6206, 1);
+    TICK(1);
     return key;
   }
 
-  GAME_CYCLES(0x6208, 24);
+  TICK(24);
   ram_poke(kKeyRing + at, 0x00);
   ram_poke(kRingRead, (uint8_t)((at + 1) & 0x0f));
   // X *is* live out of $6594 -- `apple2tc --ir` says so -- unlike X out of
@@ -3589,22 +3608,22 @@ static uint8_t dequeue_key(void) {
 /// $6594 -- step as many bouncers as the difficulty calls for, then fall into
 /// the key dequeue whose byte is the return value.
 uint8_t game_step_bouncers_native(void) {
-  GAME_CYCLES(0x6594, 6);
+  TICK(6);
   const uint8_t difficulty = ram_peek(kDifficulty);
 
   if (!difficulty) {
-    GAME_CYCLES(0x6599, 3);
+    TICK(3);
     return dequeue_key();
   }
-  GAME_CYCLES(0x6597, 1);
+  TICK(1);
 
   step_bouncer_slot(0, 0x659c, 38, 0x65b6, 0x65b7, 40);
 
   if (ram_peek(kDifficulty) == 0x01) {
-    GAME_CYCLES(0x65d6, 3);
+    TICK(3);
     return dequeue_key();
   }
-  GAME_CYCLES(0x65d4, 1);
+  TICK(1);
 
   step_bouncer_slot(1, 0x65d9, 38, 0x65f3, 0x65f4, 35);
   return dequeue_key();
@@ -3674,143 +3693,143 @@ static bool switch_pressed(uint16_t sw) {
 }
 
 uint8_t game_read_direction_native(uint8_t key) {
-  GAME_CYCLES(0x6c75, 9);
+  TICK(9);
 
   if (attract_mode()) {
-    GAME_CYCLES(0x6c7b, 6);
+    TICK(6);
     if (joystick_selected()) {
-      GAME_CYCLES(0x6c80, 6);
+      TICK(6);
       if (switch_pressed(0xc061)) {
-        GAME_CYCLES(0x6c85, 12);
+        TICK(12);
         return kCodeStop;
       }
-      GAME_CYCLES(0x6c83, 1);
+      TICK(1);
     } else {
-      GAME_CYCLES(0x6c7e, 1);
+      TICK(1);
     }
 
-    GAME_CYCLES(0x6c89, 6);
+    TICK(6);
     if (key & 0x80) {
-      GAME_CYCLES(0x6c8c, 8);
+      TICK(8);
       return kCodeStop;
     }
-    GAME_CYCLES(0x6c8a, 1);
-    GAME_CYCLES(0x6c8f, 6);
+    TICK(1);
+    TICK(6);
     // Not a keypress, so nothing happened -- $00 out of an empty ring.
     return key;
   }
-  GAME_CYCLES(0x6c79, 1);
+  TICK(1);
 
   // Search the bindings from the last slot down, so that if the player has
   // bound the same key twice the higher slot wins.
-  GAME_CYCLES(0x6c90, 6);
+  TICK(6);
   uint8_t code = key;
   int slot = kInputCount - 1;
   for (;;) {
-    GAME_CYCLES(0x6c93, 6);
+    TICK(6);
     if (key == input_key(slot)) {
-      GAME_CYCLES(0x6c96, 1);
-      GAME_CYCLES(0x6c9e, 4);
+      TICK(1);
+      TICK(4);
       code = input_code(slot);
       break;
     }
 
-    GAME_CYCLES(0x6c98, 4);
+    TICK(4);
     if (--slot < 0) {
-      GAME_CYCLES(0x6c9b, 3);
+      TICK(3);
       break;
     }
-    GAME_CYCLES(0x6c99, 1);
+    TICK(1);
   }
   // X is not written back. The original leaves it on the matching slot, or
   // $FF, but nothing reads it: `apple2tc --ir` prints per-function register
   // liveness, and func_6c72's LiveOut is A, Y and the flags. Y is in that set,
   // so the joystick block below does maintain it.
 
-  GAME_CYCLES(0x6ca1, 4);
+  TICK(4);
   if (code == kCodeJoystickOn) {
-    GAME_CYCLES(0x6ca5, 12);
+    TICK(12);
     select_joystick(true);
     return 0x01;
   }
-  GAME_CYCLES(0x6ca3, 1);
+  TICK(1);
 
-  GAME_CYCLES(0x6cab, 4);
+  TICK(4);
   if (code == kCodeJoystickOff) {
-    GAME_CYCLES(0x6caf, 12);
+    TICK(12);
     select_joystick(false);
     return 0x00;
   }
-  GAME_CYCLES(0x6cad, 1);
+  TICK(1);
 
-  GAME_CYCLES(0x6cb5, 4);
+  TICK(4);
   if (code & 0x80) {
     // A direction. Hand it straight back.
-    GAME_CYCLES(0x6cb9, 6);
+    TICK(6);
     return code;
   }
-  GAME_CYCLES(0x6cb7, 1);
+  TICK(1);
 
-  GAME_CYCLES(0x6cba, 6);
+  TICK(6);
   const uint8_t joystick = ram_peek(kJoystick);
   if (!joystick) {
-    GAME_CYCLES(0x6cbf, 8);
+    TICK(8);
     return code;
   }
-  GAME_CYCLES(0x6cbd, 1);
+  TICK(1);
 
   // The joystick is two switch inputs read twice, with annunciator 2
   // selecting the pair -- four directions on two pins. Exactly one has to be
   // active: none or several is ambiguous and rejected.
-  GAME_CYCLES(0x6cc2, 12);
+  TICK(12);
   int pressed = 0;
   uint8_t chosen = 0; // only read when exactly one input turned out active
   io_peek(0xc05b); // annunciator 2 on
   if (switch_pressed(0xc062)) {
-    GAME_CYCLES(0x6ccc, 4);
+    TICK(4);
     chosen = 0;
     ++pressed;
   } else {
-    GAME_CYCLES(0x6cca, 1);
+    TICK(1);
   }
 
-  GAME_CYCLES(0x6ccf, 6);
+  TICK(6);
   if (switch_pressed(0xc063)) {
-    GAME_CYCLES(0x6cd4, 4);
+    TICK(4);
     chosen = 3;
     ++pressed;
   } else {
-    GAME_CYCLES(0x6cd2, 1);
+    TICK(1);
   }
 
-  GAME_CYCLES(0x6cd7, 10);
+  TICK(10);
   io_peek(0xc05a); // annunciator 2 off
   if (switch_pressed(0xc062)) {
-    GAME_CYCLES(0x6cdf, 4);
+    TICK(4);
     chosen = 1;
     ++pressed;
   } else {
-    GAME_CYCLES(0x6cdd, 1);
+    TICK(1);
   }
 
-  GAME_CYCLES(0x6ce2, 6);
+  TICK(6);
   if (switch_pressed(0xc063)) {
-    GAME_CYCLES(0x6ce7, 4);
+    TICK(4);
     chosen = 2;
     ++pressed;
   } else {
-    GAME_CYCLES(0x6ce5, 1);
+    TICK(1);
   }
   // Y, unlike X, is live out of here -- see above.
   s_y = (uint8_t)pressed;
 
-  GAME_CYCLES(0x6cea, 4);
+  TICK(4);
   if (pressed != 1) {
-    GAME_CYCLES(0x6cee, 8);
+    TICK(8);
     return 0x00;
   }
-  GAME_CYCLES(0x6cec, 1);
-  GAME_CYCLES(0x6cf1, 10);
+  TICK(1);
+  TICK(10);
   return input_code(chosen);
 }
 
@@ -3852,34 +3871,34 @@ static void edit_key_blank(uint8_t slot) {
   // The original parks the slot at $0002 for the whole routine, because COUT
   // clobbers X and every step below needs it again. Here it is the parameter,
   // and the glyph blitter no longer has anything to clobber it with.
-  GAME_CYCLES(0x75d1, 23);
+  TICK(23);
   s_ch = slot_col(slot);
   s_cv = slot_row(slot);
   rom_fc68();
 
-  GAME_CYCLES(0x75e0, 11);
+  TICK(11);
   s_x = slot;
   s_a = 0xa0; // space
   s_status_not_z = 0xa0;
   s_status_n = 0x80;
   rom_cout();
 
-  GAME_CYCLES(0x75e7, 2);
+  TICK(2);
   uint8_t x = cout_left_x();
   uint8_t y = 0;
   for (;;) {
-    GAME_CYCLES(0x75e9, 4);
+    TICK(4);
     if (--x) {
-      GAME_CYCLES(0x75ea, 1);
+      TICK(1);
       continue;
     }
     // $75EC is `LDA #$41 / BEQ`, a branch that cannot be taken and a value
     // nothing reads. Four cycles of the delay and nothing else.
-    GAME_CYCLES(0x75ec, 4);
-    GAME_CYCLES(0x75f0, 4);
+    TICK(4);
+    TICK(4);
     if (!--y)
       break;
-    GAME_CYCLES(0x75f1, 1);
+    TICK(1);
   }
 }
 
@@ -3888,13 +3907,13 @@ static void edit_key_blank(uint8_t slot) {
 /// ran out or the key was rejected -- either way the blink starts again, and
 /// no acceptable key is 0.
 static uint8_t edit_key_prompt(uint8_t slot) {
-  GAME_CYCLES(0x75f3, 23);
+  TICK(23);
   s_x = slot;
   s_ch = slot_col(slot);
   s_cv = slot_row(slot);
   rom_fc68();
 
-  GAME_CYCLES(0x7602, 13);
+  TICK(13);
   s_x = slot;
   const uint8_t glyph = slot_glyph(slot);
   s_a = glyph;
@@ -3902,50 +3921,50 @@ static uint8_t edit_key_prompt(uint8_t slot) {
   s_status_n = (glyph & 0x80);
   rom_cout();
 
-  GAME_CYCLES(0x760a, 2);
+  TICK(2);
   uint8_t x = cout_left_x();
   uint8_t y = 0;
   for (;;) {
-    GAME_CYCLES(0x760c, 4);
+    TICK(4);
     if (--x) {
-      GAME_CYCLES(0x760d, 1);
+      TICK(1);
       continue;
     }
 
     GAME_CYCLES_COORD(0x760f, 6);
     const uint8_t key = io_peek(0xc000);
     if (key & 0x80) {
-      GAME_CYCLES(0x7612, 1);
-      GAME_CYCLES(0x761c, 8);
+      TICK(1);
+      TICK(8);
       io_poke(0xc010, key); // clear the strobe
 
       // Anything from $A1 up -- every printable key -- plus the two arrows.
       // The carry the three compares leave is not written back: the caller's
       // next act on it is $7582's `CPX #$06`, which sets it.
       if (key >= 0xa1) {
-        GAME_CYCLES(0x7621, 1);
+        TICK(1);
         return key;
       }
-      GAME_CYCLES(0x7623, 4);
+      TICK(4);
       if (key == 0x88) { // left arrow
-        GAME_CYCLES(0x7625, 1);
+        TICK(1);
         return key;
       }
-      GAME_CYCLES(0x7627, 4);
+      TICK(4);
       if (key == 0x95) { // right arrow
-        GAME_CYCLES(0x7629, 1);
+        TICK(1);
         return key;
       }
-      GAME_CYCLES(0x762b, 6);
+      TICK(6);
       return 0;
     }
 
-    GAME_CYCLES(0x7614, 4);
+    TICK(4);
     if (--y) {
-      GAME_CYCLES(0x7615, 1);
+      TICK(1);
       continue;
     }
-    GAME_CYCLES(0x7617, 6);
+    TICK(6);
     return 0;
   }
 }
@@ -3957,7 +3976,7 @@ uint8_t game_edit_key_native(uint8_t slot) {
     key = edit_key_prompt(slot);
   } while (!key);
 
-  GAME_CYCLES(0x7630, 9);
+  TICK(9);
   return key;
 }
 
@@ -4007,20 +4026,20 @@ static void toggle_sound(void) {
 }
 
 void game_tick_sound_native(void) {
-  GAME_CYCLES(0x6bfb, 6);
+  TICK(6);
   ram_poke(kTonePasses, 0x14); // twenty
 
   for (;;) {
-    GAME_CYCLES(0x6c00, 6);
+    TICK(6);
     const uint8_t period = tone_period();
     if (period) {
-      GAME_CYCLES(0x6c05, 4);
+      TICK(4);
       if (period < 0x80) {
-        GAME_CYCLES(0x6c09, 8);
+        TICK(8);
         const uint8_t left = (uint8_t)(tone_countdown() - 1);
         set_tone_countdown(left);
         if (!left) {
-          GAME_CYCLES(0x6c0e, 28);
+          TICK(28);
           const uint8_t port = ram_peek(kClickPort);
           s_y = port; // live out of this routine; the click is `LDA $C000,Y`
           peek((uint16_t)(0xc000 + port));
@@ -4030,49 +4049,49 @@ void game_tick_sound_native(void) {
           set_tone_period((uint8_t)(tone_period() + 2));
           set_tone_countdown(tone_period());
         } else {
-          GAME_CYCLES(0x6c0c, 1);
+          TICK(1);
         }
       } else {
-        GAME_CYCLES(0x6c07, 1);
+        TICK(1);
       }
     } else {
-      GAME_CYCLES(0x6c03, 1);
+      TICK(1);
     }
 
-    GAME_CYCLES(0x6c20, 8);
+    TICK(8);
     if (tone_period() >= 0x80) {
       // Fallen off the bottom of the range: silence until something restarts
       // it. $80 is reached from below in steps of two, so this is the end of
       // one slide rather than a wrap.
-      GAME_CYCLES(0x6c27, 6);
+      TICK(6);
       set_tone_period(0x00);
     } else {
-      GAME_CYCLES(0x6c25, 1);
+      TICK(1);
     }
 
     // Chosen afresh every pass, and defaulting to inaudible.
-    GAME_CYCLES(0x6c2c, 12);
+    TICK(12);
     set_click_port(0x20);
     if (!attract_mode()) {
-      GAME_CYCLES(0x6c36, 6);
+      TICK(6);
       if (!sound_muted()) {
-        GAME_CYCLES(0x6c3b, 6);
+        TICK(6);
         set_click_port(0x30);
       } else {
-        GAME_CYCLES(0x6c39, 1);
+        TICK(1);
       }
     } else {
-      GAME_CYCLES(0x6c34, 1);
+      TICK(1);
     }
 
-    GAME_CYCLES(0x6c40, 8);
+    TICK(8);
     const uint8_t left = (uint8_t)(ram_peek(kTonePasses) - 1);
     ram_poke(kTonePasses, left);
     if (!left)
       break;
-    GAME_CYCLES(0x6c43, 1);
+    TICK(1);
   }
-  GAME_CYCLES(0x6c45, 6);
+  TICK(6);
 }
 
 /* ========================================================================== */
@@ -4112,56 +4131,56 @@ static void cout_digit(uint8_t digit, uint16_t ret) {
 void game_print_bcd_native(uint8_t byte) {
   const uint8_t high = (uint8_t)(byte >> 4);
 
-  GAME_CYCLES(0x71f3, 15);
+  TICK(15);
   if (!high) {
-    GAME_CYCLES(0x71fa, 1);
+    TICK(1);
   } else {
-    GAME_CYCLES(0x71fc, 3);
+    TICK(3);
     note_digit(high);
   }
 
-  GAME_CYCLES(0x71fe, 8);
+  TICK(8);
   if (digit_seen()) {
-    GAME_CYCLES(0x7201, 1);
-    GAME_CYCLES(0x7207, 14);
+    TICK(1);
+    TICK(14);
     cout_digit(high, 0x720d);
   } else {
     // A leading zero: dropped, and nothing is printed.
-    GAME_CYCLES(0x7203, 7);
+    TICK(7);
   }
 
   const uint8_t low = (uint8_t)(byte & 0x0f);
 
-  GAME_CYCLES(0x720e, 10);
+  TICK(10);
   if (!low) {
-    GAME_CYCLES(0x7213, 1);
+    TICK(1);
   } else {
-    GAME_CYCLES(0x7215, 3);
+    TICK(3);
     note_digit(low);
   }
 
-  GAME_CYCLES(0x7217, 8);
+  TICK(8);
   if (digit_seen()) {
-    GAME_CYCLES(0x721a, 1);
-    GAME_CYCLES(0x721e, 14);
+    TICK(1);
+    TICK(14);
     cout_digit(low, 0x7224);
-    GAME_CYCLES(0x7225, 6);
+    TICK(6);
   } else {
-    GAME_CYCLES(0x721c, 10);
+    TICK(10);
   }
 }
 
 /// $7226 -- called after the last byte of a number: if nothing significant was
 /// printed, the number was zero, and one "0" is printed for the whole of it.
 void game_print_zero_if_blank_native(void) {
-  GAME_CYCLES(0x7226, 5);
+  TICK(5);
   if (digit_seen()) {
-    GAME_CYCLES(0x7228, 1);
-    GAME_CYCLES(0x722f, 6);
+    TICK(1);
+    TICK(6);
     return;
   }
 
-  GAME_CYCLES(0x722a, 5);
+  TICK(5);
   s_a = kCharZero;
   rom_cout(); // JMP $FDED -- a tail call, so no return address.
 }
@@ -4171,7 +4190,7 @@ void game_print_zero_if_blank_native(void) {
 /* ========================================================================== */
 
 void game_add_score_native(void) {
-  GAME_CYCLES(0x7267, 56);
+  TICK(56);
 
   // Decimal mode for the whole run, and adc_dec16 rather than a second
   // hand-written BCD adder: it is the one the emulator and the generated code
@@ -4222,14 +4241,14 @@ void game_add_score_native(void) {
 /// byte the hi-res plotter takes. Here it is the byte, and the adapter asserts
 /// that the flag agreed with it.
 void game_set_ink_native(uint8_t ink) {
-  GAME_CYCLES(0x7024, 2);
+  TICK(2);
   if (!ink) {
-    GAME_CYCLES(0x7024, 1);
+    TICK(1);
   } else {
-    GAME_CYCLES(0x7026, 2);
+    TICK(2);
   }
 
-  GAME_CYCLES(0x7028, 3);
+  TICK(3);
   s_a = ink ? 0x05 : 0x00;
   rom_setcol(); // JMP $F864 -- a tail call.
 }
@@ -4237,19 +4256,19 @@ void game_set_ink_native(uint8_t ink) {
 /// $7019 -- read the byte the $000A pointer addresses and advance it. The
 /// display-list interpreter's only way of reading its script.
 void game_next_byte_native(void) {
-  GAME_CYCLES(0x7019, 14);
+  TICK(14);
   s_y = 0x00;
   s_a = peek(ram_peek16al(kScriptPtr));
 
   const uint8_t lo = (uint8_t)(ram_peek(kScriptPtr) + 1);
   ram_poke(kScriptPtr, lo);
   if (lo) {
-    GAME_CYCLES(0x701f, 1);
+    TICK(1);
   } else {
-    GAME_CYCLES(0x7021, 5);
+    TICK(5);
     ram_poke(kScriptPtr + 1, (uint8_t)(ram_peek(kScriptPtr + 1) + 1));
   }
-  GAME_CYCLES(0x7023, 6);
+  TICK(6);
   // A and Y are live out; N and Z are not.
 }
 
@@ -4270,26 +4289,26 @@ void game_next_byte_native(void) {
 /// straight back to the load -- so a byte at $1800 with bit 7 set would hang
 /// the game. Nothing enforces that; the original simply relies on it.
 uint8_t game_rand_byte_native(void) {
-  GAME_CYCLES(0x6c4b, 7);
+  TICK(7);
   const uint8_t lo = (uint8_t)(ram_peek(kRandPtr) + 1);
   ram_poke(kRandPtr, lo);
   if (lo) {
-    GAME_CYCLES(0x6c4d, 1);
+    TICK(1);
   } else {
-    GAME_CYCLES(0x6c4f, 5);
+    TICK(5);
     ram_poke(kRandPtr + 1, (uint8_t)(ram_peek(kRandPtr + 1) + 1));
   }
 
   for (;;) {
-    GAME_CYCLES(0x6c51, 9);
+    TICK(9);
     const uint8_t b = peek(ram_peek16al(kRandPtr));
     if (!(b & 0x80)) {
-      GAME_CYCLES(0x6c55, 1);
-      GAME_CYCLES(0x6c62, 6);
+      TICK(1);
+      TICK(6);
       return b;
     }
 
-    GAME_CYCLES(0x6c57, 13);
+    TICK(13);
     ram_poke(kRandPtr, 0x00);
     ram_poke(kRandPtr + 1, 0x18);
   }
@@ -4318,37 +4337,37 @@ Cell game_place_apple_native(void) {
   // more work than it looks like.
   Cell at = {0, 0};
   for (;;) {
-    GAME_CYCLES(0x7642, 6);
+    TICK(6);
     at.col = game_rand_byte_native();
 
-    GAME_CYCLES(0x7645, 9);
+    TICK(9);
     at.row = game_rand_byte_native();
 
-    GAME_CYCLES(0x764a, 15);
+    TICK(15);
     const bool taken = cell_taken(at.col, at.row);
 
-    GAME_CYCLES(0x7653, 2);
+    TICK(2);
     if (!taken)
       break;
-    GAME_CYCLES(0x7653, 1);
+    TICK(1);
   }
 
   // White on the occupancy map, so the snake's collision test sees it.
-  GAME_CYCLES(0x7655, 8);
+  TICK(8);
   s_a = 0x0f;
   rom_setcol();
 
-  GAME_CYCLES(0x765a, 12);
+  TICK(12);
   s_a = at.row;
   s_y = at.col;
   rom_plot();
 
-  GAME_CYCLES(0x7661, 16);
+  TICK(16);
   plot_shape_at(0x01, 0x09, at);
 
   // One more apple on screen. $77D0 watches this pair and calls back here when
   // it reaches zero.
-  GAME_CYCLES(0x766c, 32);
+  TICK(32);
   const uint8_t flags = bcd_inc16(kApplesAfield);
   s_status_c = (flags & 0x01);
   s_status_v = ((flags & 0x40) != 0);
@@ -4359,7 +4378,7 @@ Cell game_place_apple_native(void) {
 /// added to itself once per level, in BCD, into $71CB. X is never touched in
 /// the original's loop, which is what makes it the same entry every time.
 void game_set_apple_value_native(void) {
-  GAME_CYCLES(0x71cd, 20);
+  TICK(20);
   ram_poke(kAppleValue, 0x00);
   ram_poke(kAppleValue + 1, 0x00);
   const uint8_t per_apple = ram_peek(kAppleValueTable + ram_peek(kDifficulty));
@@ -4368,7 +4387,7 @@ void game_set_apple_value_native(void) {
 
   uint8_t flags = 0;
   for (;;) {
-    GAME_CYCLES(0x71dc, 28);
+    TICK(28);
     uint16_t r = adc_dec16(per_apple, ram_peek(kAppleValue), 0x00);
     ram_poke(kAppleValue, (uint8_t)r);
 
@@ -4378,10 +4397,10 @@ void game_set_apple_value_native(void) {
 
     if (!--levels)
       break;
-    GAME_CYCLES(0x71ef, 1);
+    TICK(1);
   }
 
-  GAME_CYCLES(0x71f1, 8);
+  TICK(8);
   // V and D are the whole of this routine's live-out set.
   s_status_v = ((flags & 0x40) != 0);
   s_status_d = 0x00;
@@ -4395,10 +4414,10 @@ void game_set_apple_value_native(void) {
 /// the caller has already loaded, and raise the two flags that say it is
 /// there: $0305 for the next draw and $6C46 to start the tone.
 void game_mark_head_native(void) {
-  GAME_CYCLES(0x6bef, 6);
+  TICK(6);
   rom_plot();
 
-  GAME_CYCLES(0x6bf2, 16);
+  TICK(16);
   ram_poke(kHeadMoved, 0x01);
   ram_poke(kTonePeriod, 0x01);
 
@@ -4412,18 +4431,18 @@ void game_mark_head_native(void) {
 /// it, merge shape 1 over the top so the head reads as a head rather than
 /// replacing the body cell underneath. $0305 is consumed here.
 void game_draw_head_native(uint8_t ink, Cell c) {
-  GAME_CYCLES(0x6bda, 6);
+  TICK(6);
   game_plot_shape_native(ink, c);
 
-  GAME_CYCLES(0x6bdd, 6);
+  TICK(6);
   if (ram_peek(kHeadMoved)) {
-    GAME_CYCLES(0x6be2, 11);
+    TICK(11);
     s_shape = 0x01;
     { // was game_plot_shape_merge()
       bool branchTarget = true;
   (void)branchTarget;
 
-      /*$6B93*/ CYCLES_EDGE(0x6b93, 6);
+      /*$6B93*/ TICK(6);
       {
       const uint8_t mask = game_load_shape_masks(s_shape);
       // The original walked the table with INX, so X is left pointing at the
@@ -4452,10 +4471,10 @@ void game_draw_head_native(uint8_t ink, Cell c) {
       s_status_v = ovf8(s_a, (uint8_t)(s_a - 0x04), 0x04);
     }
   } else {
-    GAME_CYCLES(0x6be0, 1);
+    TICK(1);
   }
 
-  GAME_CYCLES(0x6be9, 12);
+  TICK(12);
   ram_poke(kHeadMoved, 0x00);
   // Only V and D are live out, and neither is touched here.
 }
@@ -4468,7 +4487,7 @@ void game_draw_head_native(uint8_t ink, Cell c) {
 /// screen. Nothing about it runs when an apple is eaten; that path is $7743,
 /// and it touches four other counters and not this one.
 void game_award_extra_life_native(void) {
-  GAME_CYCLES(0x7633, 22);
+  TICK(22);
   s_status_d = 0x01;
   const uint16_t r = adc_dec16(lives(), 0x01, 0x00);
   set_lives((uint8_t)r);
@@ -4478,12 +4497,12 @@ void game_award_extra_life_native(void) {
   s_status_d = 0x00;
   game_sound_sweep_native();
 
-  GAME_CYCLES(0x7641, 6);
+  TICK(6);
 }
 
 /// $60E4 -- load a shape and draw it, which is the pair every caller wants.
 void game_plot_shape_native(uint8_t ink, Cell c) {
-  GAME_CYCLES(0x60e4, 6);
+  TICK(6);
   {
     const uint8_t mask = game_load_shape_masks(s_shape);
     // The original walked the table with INX, so X is left pointing at the
@@ -4505,16 +4524,16 @@ void game_plot_shape_native(uint8_t ink, Cell c) {
 /// pitch rises; the second counts X up from 0, so the delay runs 256, 1, 2,
 /// ... 255 and it falls again.
 void game_sound_sweep_native(void) {
-  GAME_CYCLES(0x64a9, 2);
+  TICK(2);
   uint8_t x = 0x00;
 
   do {
-    GAME_CYCLES(0x64ab, 4);
+    TICK(4);
     uint8_t y = x;
     do {
-      GAME_CYCLES(0x64ad, 4);
+      TICK(4);
       if (--y)
-        GAME_CYCLES(0x64ae, 1);
+        TICK(1);
     } while (y);
 
     // The click, at whichever port $6C2C last chose. Neither the Y it loads
@@ -4525,31 +4544,31 @@ void game_sound_sweep_native(void) {
     // mirror the cassette toggle and $C030-$C03F the speaker. But hardcoding
     // $30 here would pass too, and that would be a real bug: the mute would
     // stop working and no oracle in this repo looks at sound.
-    GAME_CYCLES(0x64b0, 12);
+    TICK(12);
     peek((uint16_t)(0xc000 + ram_peek(kClickPort)));
     if (--x)
-      GAME_CYCLES(0x64b7, 1);
+      TICK(1);
   } while (x);
 
   uint8_t port = 0;
   uint8_t last = 0;
   do {
-    GAME_CYCLES(0x64b9, 4);
+    TICK(4);
     uint8_t y = x;
     do {
-      GAME_CYCLES(0x64bb, 4);
+      TICK(4);
       if (--y)
-        GAME_CYCLES(0x64bc, 1);
+        TICK(1);
     } while (y);
 
-    GAME_CYCLES(0x64be, 12);
+    TICK(12);
     port = ram_peek(kClickPort);
     last = peek((uint16_t)(0xc000 + port));
     if (++x)
-      GAME_CYCLES(0x64c5, 1);
+      TICK(1);
   } while (x);
 
-  GAME_CYCLES(0x64c7, 6);
+  TICK(6);
 
   // A, X, Y, N and Z are all live out of $64A9 -- so the last click's port and
   // the byte it read are, oddly, part of this routine's result.
@@ -4565,37 +4584,37 @@ void game_sound_sweep_native(void) {
 /// 'f' and 'g', which is where the arrow shapes live in the game's own font at
 /// $66A9.
 void game_show_key_native(uint8_t slot, uint8_t key) {
-  GAME_CYCLES(0x7590, 7);
+  TICK(7);
 
   uint8_t glyph = key;
   if (key == 0x88) { // left arrow
-    GAME_CYCLES(0x7596, 2);
+    TICK(2);
     glyph = 0xe6;
   } else {
-    GAME_CYCLES(0x7594, 1);
+    TICK(1);
   }
 
-  GAME_CYCLES(0x7598, 4);
+  TICK(4);
   if (glyph == 0x95) { // right arrow
-    GAME_CYCLES(0x759c, 2);
+    TICK(2);
     glyph = 0xe7;
   } else {
-    GAME_CYCLES(0x759a, 1);
+    TICK(1);
   }
 
-  GAME_CYCLES(0x759e, 23);
+  TICK(23);
   s_x = slot; // read back by the COUT hook, which is why it is set here
   s_ch = ram_peek(kKeyCH + slot);
   s_cv = ram_peek(kKeyCV + slot);
   rom_fc68();
 
-  GAME_CYCLES(0x75ac, 10);
+  TICK(10);
   s_a = glyph;
   s_status_not_z = glyph;
   s_status_n = (glyph & 0x80);
   rom_cout();
 
-  GAME_CYCLES(0x75b0, 9);
+  TICK(9);
   s_x = slot;
   s_status_not_z = slot;
   s_status_n = (slot & 0x80);
@@ -4607,10 +4626,10 @@ void game_draw_side_walls_native(void) {
   // The random byte is thrown away. The call is not: $6C4B advances the
   // pointer at $000E, so this is what keeps apple placement from repeating
   // level to level.
-  GAME_CYCLES(0x6b3d, 6);
+  TICK(6);
   (void)game_rand_byte_native();
 
-  GAME_CYCLES(0x6b40, 26);
+  TICK(26);
   s_shape = 0x15;
   s_ink = 0x02; // the upper segment
 
@@ -4618,32 +4637,32 @@ void game_draw_side_walls_native(void) {
   if (seed & 0x80) {
     // A negative seed is clamped, and $6255 reset so the next call starts from
     // a known place.
-    GAME_CYCLES(0x6b55, 8);
+    TICK(8);
     ram_poke(kLifeTimer, 0xff);
     seed = 0x70;
   } else {
-    GAME_CYCLES(0x6b53, 1);
+    TICK(1);
   }
 
   // How far down the upper segment reaches, from the timer: the walls close in
   // as a life runs out.
-  GAME_CYCLES(0x6b5c, 18);
+  TICK(18);
   const uint8_t wall_top = (uint8_t)((seed >> 2) + 1);
   plot_vline_at(0x00, 0x01, wall_top);
 
-  GAME_CYCLES(0x6b65, 16);
+  TICK(16);
   plot_vline_at(0x27, 0x01, wall_top);
 
-  GAME_CYCLES(0x6b70, 30);
+  TICK(30);
   const uint8_t seam = (uint8_t)(wall_top + 1);
   s_ink = 0x0d; // the lower segment
   plot_vline_at(0x27, seam, 0x27);
 
-  GAME_CYCLES(0x6b82, 18);
+  TICK(18);
   plot_vline_at(0x00, seam, 0x27);
 
   // Tail call: SCRN of the bottom-centre cell, whose result the caller reads.
-  GAME_CYCLES(0x6b8c, 7);
+  TICK(7);
   s_a = 0x27;
   s_y = 0x14;
   rom_scrn();
@@ -4671,7 +4690,7 @@ void game_read_key_native(void) {
   s_x = at;
 
   if (key & 0x80) {
-    GAME_CYCLES(0x621f, 21);
+    TICK(21);
     io_poke(0xc010, key); // clear the strobe
     ram_poke(kKeyRing + at, key);
 
@@ -4682,18 +4701,18 @@ void game_read_key_native(void) {
     s_x = (uint8_t)(at + 1);
     s_a = next;
     if (next != ram_peek(kRingRead)) {
-      GAME_CYCLES(0x622e, 10);
+      TICK(10);
       ram_poke(kRingWrite, next);
       return;
     }
-    GAME_CYCLES(0x622c, 1);
+    TICK(1);
   } else {
-    GAME_CYCLES(0x621d, 1);
+    TICK(1);
   }
 
   // The RTS belongs to the routine before this one, and both early exits
   // share it -- as does the key dequeue, whose adapter still emits it.
-  GAME_CYCLES(0x6216, 6);
+  TICK(6);
   // A and X are the live-out set, and both are set above on every path.
 }
 
@@ -4728,12 +4747,12 @@ static uint16_t hires_cursor(void) {
 }
 
 void game_cout_hook_native(uint8_t ch) {
-  GAME_CYCLES(0x664a, 9);
+  TICK(9);
   const uint8_t glyph = (uint8_t)(ch & 0x7f);
 
   if (glyph >= 0x20) {
-    GAME_CYCLES(0x664f, 1);
-    GAME_CYCLES(0x6655, 82);
+    TICK(1);
+    TICK(82);
 
     // The original's SBC/ADC pairs honour the D flag. COUT is never reached in
     // decimal mode -- the ROM clears D at reset and neither BASIC nor the game
@@ -4756,7 +4775,7 @@ void game_cout_hook_native(uint8_t ch) {
     s_x = 0x00;
 
     for (unsigned row = 0; row < 8; ++row) {
-      GAME_CYCLES(0x668b, 33);
+      TICK(33);
       poke(dest, peek((uint16_t)(src + row)));
 
       // One hi-res scanline down within the character cell, which is +$400.
@@ -4765,15 +4784,15 @@ void game_cout_hook_native(uint8_t ch) {
 
       // `INX / CPX #8 / BNE`: the branch is taken on every pass but the last.
       if (row != 7)
-        GAME_CYCLES(0x669d, 1);
+        TICK(1);
     }
 
-    GAME_CYCLES(0x669f, 9);
+    TICK(9);
     s_x = saved_x;
     s_y = saved_y;
   }
 
-  GAME_CYCLES(0x6651, 7);
+  TICK(7);
   s_a = ch; // PLA -- the high bit is still on it
   rom_cout1(); // JMP $FDF0
 }
@@ -4910,42 +4929,42 @@ static void click_speaker(void) {
 /* ========================================================================== */
 
 uint8_t game_pause_or_toggle_sound_native(uint8_t key) {
-  GAME_CYCLES(0x69a9, 4);
+  TICK(4);
   if (key == KEY_ESC) {
     for (;;) {
-      GAME_CYCLES(0x69ad, 6);
+      TICK(6);
       key = io_peek(0xc000);
       if (key & 0x80)
         break;
-      GAME_CYCLES(0x69b0, 1);
+      TICK(1);
     }
-    GAME_CYCLES(0x69b2, 4);
+    TICK(4);
     io_poke(0xc010, key);
   } else {
-    GAME_CYCLES(0x69ab, 1);
+    TICK(1);
   }
 
-  GAME_CYCLES(0x69b5, 4);
+  TICK(4);
   if (key == KEY_CTRL_S) {
-    GAME_CYCLES(0x69b9, 10);
+    TICK(10);
     toggle_sound();
   } else {
-    GAME_CYCLES(0x69b7, 1);
+    TICK(1);
   }
 
-  GAME_CYCLES(0x69c1, 6);
+  TICK(6);
   return key;
 }
 
 LifeEnd game_play_loop_native(uint8_t *cell_out) {
-  GAME_CYCLES(0x6288, 6);
+  TICK(6);
   game_find_nearest_apple();
 
   for (;;) {
     /* --- $628B: a key, and what the game makes of it -------------------- */
-    GAME_CYCLES(0x628b, 6);
+    TICK(6);
     game_read_key_native();
-    GAME_CYCLES(0x628e, 6);
+    TICK(6);
     { // was game_read_direction()
       bool branchTarget = true;
   (void)branchTarget;
@@ -4953,14 +4972,14 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       // The JSR stays here rather than moving into the native routine, because
       // game_step_bouncers's own adapter is what keeps $6216 -- the RTS it shares
       // with the unconverted game_read_key -- a probe site.
-      /*$6C72*/ CYCLES_EDGE(0x6c72, 6);
+      /*$6C72*/ TICK(6);
       const uint8_t key = game_step_bouncers_native();
       // $6216 is an RTS shared with game_read_key, so it stays a probe site even
       // though the routine that used to hold it is gone. Spelled with plain CYCLES
       // rather than GAME_CYCLES_SHARED because site_addrs() does not grep for that
       // form -- it would have kept probing and left the list, which is the silent
       // half of a hole rather than the loud one.
-      CYCLES_EDGE(0x6216, 6);
+      TICK(6);
 
       // The original saves the key on the stack across the $0302 test; here it is
       // an argument. The pushed byte is never observed: nothing between the PHA
@@ -4976,17 +4995,17 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     uint8_t shape;
 
   dispatch: /* $6291 */
-    GAME_CYCLES(0x6291, 2);
+    TICK(2);
     if (!(code & 0x80)) {
-      GAME_CYCLES(0x6291, 1);
+      TICK(1);
       goto autopilot;
     }
 
   steer: /* $6293 -- a key with the high bit on, so the player is steering */
-    GAME_CYCLES(0x6293, 10);
+    TICK(10);
     ram_poke(kClickCount, 0x10);
     if (code == KEY_TURN_CW) {
-      GAME_CYCLES(0x629c, 14);
+      TICK(14);
       shape = (uint8_t)(dir + 0x10);
       // $624E is left one below range here and normalised at $62B8, which is
       // the order the samples see; computing the wrap early would be tidier
@@ -4995,21 +5014,21 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       goto draw;
     }
 
-    GAME_CYCLES(0x629a, 1);
-    GAME_CYCLES(0x6306, 2);
-    GAME_CYCLES(0x6306, 1);
-    GAME_CYCLES(0x631e, 4);
+    TICK(1);
+    TICK(2);
+    TICK(1);
+    TICK(4);
     if (code == KEY_TURN_CCW) {
-      GAME_CYCLES(0x6322, 17);
+      TICK(17);
       shape = (uint8_t)(dir + 0x04);
       ram_poke(kDirection, (uint8_t)(dir + 1));
       goto draw;
     }
 
-    GAME_CYCLES(0x6320, 1);
-    GAME_CYCLES(0x6349, 4);
+    TICK(1);
+    TICK(4);
     if (code == KEY_QUIT) {
-      GAME_CYCLES(0x634d, 12);
+      TICK(12);
       return LIFE_QUIT;
     }
 
@@ -5038,17 +5057,17 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     }
 
     // $639B -- anything else is the pause/mute key.
-    GAME_CYCLES(0x637c, 1);
-    GAME_CYCLES(0x639b, 6);
+    TICK(1);
+    TICK(6);
     (void)game_pause_or_toggle_sound_native(s_a);
-    GAME_CYCLES(0x639e, 3);
+    TICK(3);
     goto pace;
 
   autopilot: /* $6308 -- no steering this step */
-    GAME_CYCLES(0x6308, 6);
+    TICK(6);
     if (ram_peek(kDemoMode)) {
       uint8_t proposal = 0;
-      GAME_CYCLES(0x630d, 6);
+      TICK(6);
       const SteerChoice choice = game_auto_steer(&proposal);
       if (choice == STEER_BOXED_IN) {
         // $6AB3 -- the auto-steer found nothing safe and gave up by jumping
@@ -5056,44 +5075,44 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
         // "carry straight on and take what comes".
         goto straight;
       }
-      GAME_CYCLES(0x6310, 2);
+      TICK(2);
       if (choice == STEER_TURN) {
         // $6312 -- it proposed a turn. Act on it as though it had been typed,
         // re-entering below the high-bit test the way $6312 does.
-        GAME_CYCLES(0x6312, 3);
+        TICK(3);
         code = proposal;
         goto steer;
       }
-      GAME_CYCLES(0x6310, 1);
+      TICK(1);
     } else {
-      GAME_CYCLES(0x630b, 1);
+      TICK(1);
     }
 
   straight: /* $6315 */
-    GAME_CYCLES(0x6315, 11);
+    TICK(11);
     shape = (uint8_t)(dir + 0x08);
 
   draw: /* $62A5 -- draw the head, then step it one cell */
   {
-    GAME_CYCLES(0x62a5, 28);
+    TICK(28);
     const Cell head = {.col = ram_peek(kHeadCol), .row = ram_peek(kHeadRow)};
     s_shape = shape;
     game_draw_head_native(0x0c, head);
 
     // $62B8 -- the direction back into 1..4, and the ink is the direction.
-    GAME_CYCLES(0x62b8, 26);
+    TICK(26);
     dir = (uint8_t)((((uint8_t)(ram_peek(kDirection) - 1)) & 3) + 1);
     ram_poke(kDirection, dir);
     s_a = dir;
     rom_setcol();
 
-    GAME_CYCLES(0x62c8, 14);
+    TICK(14);
     s_a = head.row;
     s_y = head.col;
     rom_plot();
 
     // $62D1 -- advance the head, and see what is there.
-    GAME_CYCLES(0x62d1, 42);
+    TICK(42);
     const Cell next = {
         .col = (uint8_t)(head.col + ram_peek(kColDelta + dir)),
         .row = (uint8_t)(head.row + ram_peek(kRowDelta + dir)),
@@ -5102,60 +5121,60 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     ram_poke(kHeadRow, next.row);
     const uint8_t cell = scrn_cell(next);
 
-    GAME_CYCLES(0x62ee, 25);
+    TICK(25);
     ram_poke(kLifeOutcome, cell);
-    GAME_CYCLES(0x6300, 6);
+    TICK(6);
     plot_shape_at(dir, 0x0c, next);
-    GAME_CYCLES(0x6303, 3);
+    TICK(3);
 
     /* --- $6474: what did it move onto? ------------------------------- */
-    GAME_CYCLES(0x6474, 6);
+    TICK(6);
     if (cell == 0) {
-      GAME_CYCLES(0x6479, 3);
-      GAME_CYCLES(0x632e, 8);
+      TICK(3);
+      TICK(8);
       s_a = 0x07;
       rom_setcol();
-      GAME_CYCLES(0x6333, 14);
+      TICK(14);
       s_a = next.row;
       s_y = next.col;
       rom_plot();
 
       // $633C -- the gate is column $14 of row 0.
-      GAME_CYCLES(0x633c, 8);
+      TICK(8);
       if (next.col == 0x14) {
-        GAME_CYCLES(0x6343, 6);
+        TICK(6);
         if (next.row == 0) {
-          GAME_CYCLES(0x6348, 6);
+          TICK(6);
           return LIFE_GATE;
         }
-        GAME_CYCLES(0x6346, 1);
+        TICK(1);
       } else {
-        GAME_CYCLES(0x6341, 1);
+        TICK(1);
       }
       goto tail;
     }
 
-    GAME_CYCLES(0x6477, 1);
-    GAME_CYCLES(0x647c, 4);
+    TICK(1);
+    TICK(4);
     if (cell == 0x0f) {
       // $6480 -- an apple. Marked here; the caller does the scoring.
-      GAME_CYCLES(0x6480, 14);
+      TICK(14);
       ram_poke(kClickCount, 0x20);
       s_a = 0x07;
       rom_setcol();
-      GAME_CYCLES(0x648a, 14);
+      TICK(14);
       s_a = next.row;
       s_y = next.col;
       game_mark_head_native();
-      GAME_CYCLES(0x6493, 6);
+      TICK(6);
       *cell_out = cell;
       return LIFE_APPLE;
     }
 
     // $6494 -- solid. Pause, buzzing, for a length taken byte by byte out
     // of ROM at $E000: nobody chose those numbers, they were simply there.
-    GAME_CYCLES(0x647e, 1);
-    GAME_CYCLES(0x6494, 6);
+    TICK(1);
+    TICK(6);
     // Both loops are DEY/BNE and DEX/BNE, which test *after* decrementing,
     // so a count of zero means 256 and not none. Ten of the bytes this reads
     // out of $E000 are zero, so that is the common case here rather than a
@@ -5163,34 +5182,34 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     // three quarters of a frame and shifts everything after it.
     uint8_t x = 0xff;
     do {
-      GAME_CYCLES(0x6498, 6);
+      TICK(6);
       uint8_t y = peek(0xe000 + x);
       do {
-        GAME_CYCLES(0x649c, 4);
+        TICK(4);
         --y;
         if (y != 0)
-          GAME_CYCLES(0x649d, 1);
+          TICK(1);
       } while (y != 0);
-      GAME_CYCLES(0x649f, 12);
+      TICK(12);
       click_speaker();
       --x;
       if (x != 0)
-        GAME_CYCLES(0x64a6, 1);
+        TICK(1);
     } while (x != 0);
-    GAME_CYCLES(0x64a8, 6);
+    TICK(6);
     *cell_out = cell;
     return LIFE_CRASH;
   }
 
   tail: /* $63A1 -- trim the tail, unless the snake is still growing */
-    GAME_CYCLES(0x63a1, 6);
+    TICK(6);
     if (ram_peek(kGrowth)) {
-      GAME_CYCLES(0x63a6, 15);
+      TICK(15);
       ram_poke(kGrowth, (uint8_t)(ram_peek(kGrowth) - 1));
       ram_poke(kClickCount, 0x07);
     } else {
-      GAME_CYCLES(0x63a4, 1);
-      GAME_CYCLES(0x63b1, 14);
+      TICK(1);
+      TICK(14);
       const Cell tail = {.col = ram_peek(kTailCol), .row = ram_peek(kTailRow)};
       const uint8_t under = scrn_cell(tail);
 
@@ -5198,20 +5217,20 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       // the emulated stack here too: ram.probe hashes the live stack, and a
       // sample taken inside the plotter would otherwise see a byte on one
       // engine and not the other.
-      GAME_CYCLES(0x63ba, 11);
+      TICK(11);
       push8(under);
       s_a = 0x00;
       rom_setcol();
-      GAME_CYCLES(0x63c0, 14);
+      TICK(14);
       s_a = tail.row;
       s_y = tail.col;
       rom_plot();
-      GAME_CYCLES(0x63c9, 25);
+      TICK(25);
       plot_at(0x00, tail);
 
       // $63DA -- the byte that was under the tail is the direction the tail
       // must follow, so the same delta tables move it on.
-      GAME_CYCLES(0x63da, 44);
+      TICK(44);
       const uint8_t tail_dir = pop8();
       const Cell tail_next = {
           .col = (uint8_t)(tail.col + ram_peek(kColDelta + tail_dir)),
@@ -5221,77 +5240,77 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       ram_poke(kTailRow, tail_next.row);
       const uint8_t ahead = scrn_cell(tail_next);
 
-      GAME_CYCLES(0x63f6, 32);
+      TICK(32);
       plot_shape_at((uint8_t)(ahead + 0x0c), 0x0c, tail_next);
-      GAME_CYCLES(0x640c, 3);
+      TICK(3);
     }
 
   pace: /* $640F -- the timer, the walls, and the delay that sets the speed */
-    GAME_CYCLES(0x640f, 20);
+    TICK(20);
     click_speaker();
     {
       const uint8_t left = (uint8_t)(ram_peek(kLifeTimer) - 1);
       ram_poke(kLifeTimer, left);
       if (left == 0) {
-        GAME_CYCLES(0x641c, 12);
+        TICK(12);
         return LIFE_TIMEOUT;
       }
     }
 
-    GAME_CYCLES(0x641a, 1);
-    GAME_CYCLES(0x6422, 10);
+    TICK(1);
+    TICK(10);
     s_a = 0x27;
     s_y = 0x14;
     game_draw_side_walls_native();
     // The walls routine ends on a SCRN of the bottom-centre cell, and leaves
     // it in A -- that is its second result, and the original reads it here.
-    GAME_CYCLES(0x6429, 4);
+    TICK(4);
     if (s_a == 0) {
       // $642D -- the gate at the bottom is clear, so draw it. No edge charge
       // here: $6429's branch falls through to this and is only *taken* when
       // the cell is occupied.
-      GAME_CYCLES(0x642d, 31);
+      TICK(31);
       s_shape = 0x15;
       s_ink = 0x0d;
       plot_hline_at(0x12, 0x27, 0x16);
-      GAME_CYCLES(0x6444, 8);
+      TICK(8);
       s_a = 0x0d;
       rom_setcol();
-      GAME_CYCLES(0x6449, 10);
+      TICK(10);
       s_a = 0x27;
       s_y = 0x14;
       rom_plot();
     } else {
-      GAME_CYCLES(0x642b, 1);
+      TICK(1);
     }
 
     // $6450 -- the delay that sets the speed. $0300 iterations, each one
     // ticking the falling tone and taking a key, and counting $6473 down for
     // as long as the last move gave it something to say.
     // DEX/BNE again: $0300 of zero would mean 256 passes, not none.
-    GAME_CYCLES(0x6450, 4);
+    TICK(4);
     uint8_t n = ram_peek(kStepDelay);
     do {
-      GAME_CYCLES(0x6453, 6);
+      TICK(6);
       game_tick_sound_native();
-      GAME_CYCLES(0x6456, 11);
+      TICK(11);
       push8(n);
       game_read_key_native();
-      GAME_CYCLES(0x645b, 6);
+      TICK(6);
       if (ram_peek(kClickCount)) {
-        GAME_CYCLES(0x6460, 18);
+        TICK(18);
         click_speaker();
         ram_poke(kClickCount, (uint8_t)(ram_peek(kClickCount) - 1));
       } else {
-        GAME_CYCLES(0x645e, 1);
+        TICK(1);
       }
-      GAME_CYCLES(0x646b, 10);
+      TICK(10);
       n = pop8();
       --n;
       if (n != 0)
-        GAME_CYCLES(0x646e, 1);
+        TICK(1);
     } while (n != 0);
-    GAME_CYCLES(0x6470, 3);
+    TICK(3);
   }
 }
 
@@ -5347,7 +5366,7 @@ static bool steer_try(
     bool branchTarget = true;
   (void)branchTarget;
 
-    /*$6AB8*/ CYCLES_EDGE(0x6ab8, 0);
+    /*$6AB8*/ TICK(0);
     if (s_status_d) {
     fprintf(stderr, "game_move_ok: entered with decimal mode set\n");
     error_handler(0x6ab8);
@@ -5386,7 +5405,7 @@ static bool steer_try(
 }
 
 SteerChoice game_auto_steer(uint8_t *key_out) {
-  GAME_CYCLES(0x6a32, 10);
+  TICK(10);
   const uint8_t apple_row = ram_peek(kAppleRow);
   const uint8_t apple_col = ram_peek(kAppleCol);
   const uint8_t head_row = ram_peek(kHeadRow);
@@ -5398,45 +5417,45 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
   // is a BNE, so its edge is charged when the move is *refused*; every later
   // test is a BEQ to the accept path and charges its edge the other way round.
   if (apple_row != head_row) {
-    GAME_CYCLES(0x6a3a, 4);
+    TICK(4);
     uint8_t dir;
     if (apple_row >= head_row) {
-      GAME_CYCLES(0x6a3c, 1);
+      TICK(1);
       dir = DIR_DOWN;
     } else {
-      GAME_CYCLES(0x6a3e, 2);
+      TICK(2);
       dir = DIR_UP;
     }
     settled = steer_try(dir, 0x6a40, 10, 0x6a45, 0x6a46, 2);
     if (!settled)
-      GAME_CYCLES(0x6a46, 1);
+      TICK(1);
   } else {
-    GAME_CYCLES(0x6a38, 1);
+    TICK(1);
   }
 
   // $6A5A -- the column, toward the apple and then away from it.
   if (!settled) {
-    GAME_CYCLES(0x6a5a, 10);
+    TICK(10);
     if (apple_col >= head_col) {
       settled = steer_try(DIR_RIGHT, 0x6a62, 12, 0x6a69, 0x6a6a, 2);
       if (settled) {
-        GAME_CYCLES(0x6a6a, 1);
+        TICK(1);
       } else {
         settled = steer_try(DIR_LEFT, 0x6a6c, 12, 0x6a73, 0x6a74, 2);
         if (settled)
-          GAME_CYCLES(0x6a74, 1);
+          TICK(1);
         else
-          GAME_CYCLES(0x6a76, 3);
+          TICK(3);
       }
     } else {
-      GAME_CYCLES(0x6a60, 1);
+      TICK(1);
       settled = steer_try(DIR_LEFT, 0x6a79, 12, 0x6a80, 0x6a81, 2);
       if (settled) {
-        GAME_CYCLES(0x6a81, 1);
+        TICK(1);
       } else {
         settled = steer_try(DIR_RIGHT, 0x6a83, 12, 0x6a8a, 0x6a8b, 2);
         if (settled)
-          GAME_CYCLES(0x6a8b, 1);
+          TICK(1);
         // Refused: falls straight into $6A8D, where the other branch had to
         // spend a JMP to get.
       }
@@ -5445,25 +5464,25 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
 
   // $6A8D -- the row again, now as an escape rather than as progress.
   if (!settled) {
-    GAME_CYCLES(0x6a8d, 10);
+    TICK(10);
     if (apple_row >= head_row) {
       settled = steer_try(DIR_DOWN, 0x6a95, 12, 0x6a9c, 0x6a9d, 2);
       if (settled)
-        GAME_CYCLES(0x6a9d, 1);
+        TICK(1);
     } else {
-      GAME_CYCLES(0x6a93, 1);
+      TICK(1);
     }
     if (!settled) {
       settled = steer_try(DIR_UP, 0x6a9f, 12, 0x6aa6, 0x6aa7, 2);
       if (settled) {
-        GAME_CYCLES(0x6aa7, 1);
+        TICK(1);
       } else {
         settled = steer_try(DIR_DOWN, 0x6aa9, 12, 0x6ab0, 0x6ab1, 2);
         if (settled) {
-          GAME_CYCLES(0x6ab1, 1);
+          TICK(1);
         } else {
           // $6AB3 -- nothing is safe.
-          GAME_CYCLES(0x6ab3, 11);
+          TICK(11);
           return STEER_BOXED_IN;
         }
       }
@@ -5472,16 +5491,16 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
 
   // $6A48 -- a direction was accepted. Already going that way means there is
   // nothing to say; otherwise name the key that turns to it.
-  GAME_CYCLES(0x6a48, 10);
+  TICK(10);
   const uint8_t dir = ram_peek(kSteerDir);
   if (dir == ram_peek(kDirection)) {
-    GAME_CYCLES(0x6a4e, 1);
-    GAME_CYCLES(0x6a54, 6);
+    TICK(1);
+    TICK(6);
     *key_out = dir;
     return STEER_STRAIGHT;
   }
-  GAME_CYCLES(0x6a50, 6);
-  GAME_CYCLES(0x6a54, 6);
+  TICK(6);
+  TICK(6);
   *key_out = key_for_direction(dir);
   return STEER_TURN;
 }
@@ -5525,104 +5544,104 @@ static void clear_leading_zero_flag(void) {
 
 void game_status_panel(void) {
   // SCORE, row $14 column $00. Four BCD bytes at $7252, little-endian.
-  GAME_CYCLES(0x72ce, 16);
+  TICK(16);
   s_cv = 0x14;
   s_ch = 0x00;
   game_print_inline_str(0x72d8);
-  GAME_CYCLES(0x72e2, 15);
+  TICK(15);
   clear_leading_zero_flag();
   game_print_bcd_native(ram_peek(kScore + 3));
-  GAME_CYCLES(0x72ec, 10);
+  TICK(10);
   game_print_bcd_native(ram_peek(kScore + 2));
-  GAME_CYCLES(0x72f2, 10);
+  TICK(10);
   game_print_bcd_native(ram_peek(kScore + 1));
-  GAME_CYCLES(0x72f8, 10);
+  TICK(10);
   game_print_bcd_native(ram_peek(kScore));
-  GAME_CYCLES(0x72fe, 6);
+  TICK(6);
   game_print_zero_if_blank_native();
 
   // HI SCORE, same row, column $14. Four bytes at $7256.
-  GAME_CYCLES(0x7301, 11);
+  TICK(11);
   s_ch = 0x14;
   game_print_inline_str(0x7307);
-  GAME_CYCLES(0x7314, 15);
+  TICK(15);
   clear_leading_zero_flag();
   game_print_bcd_native(ram_peek(kHiScore + 3));
-  GAME_CYCLES(0x731e, 10);
+  TICK(10);
   game_print_bcd_native(ram_peek(kHiScore + 2));
-  GAME_CYCLES(0x7324, 10);
+  TICK(10);
   game_print_bcd_native(ram_peek(kHiScore + 1));
-  GAME_CYCLES(0x732a, 10);
+  TICK(10);
   game_print_bcd_native(ram_peek(kHiScore));
-  GAME_CYCLES(0x7330, 6);
+  TICK(6);
   game_print_zero_if_blank_native();
 
   // APPLES LEFT, row $15 column $00. Two bytes at $725A.
-  GAME_CYCLES(0x7333, 16);
+  TICK(16);
   s_ch = 0x00;
   s_cv = 0x15;
   game_print_inline_str(0x733d);
-  GAME_CYCLES(0x734d, 15);
+  TICK(15);
   clear_leading_zero_flag();
   game_print_bcd_native(ram_peek(kApplesLeft + 1));
-  GAME_CYCLES(0x7357, 10);
+  TICK(10);
   game_print_bcd_native(ram_peek(kApplesLeft));
-  GAME_CYCLES(0x735d, 6);
+  TICK(6);
   game_print_zero_if_blank_native();
 
   // A space, which the next field's cursor move immediately overrides. It is
   // there to wipe the character one place past this field, left over from a
   // longer count earlier in the game.
-  GAME_CYCLES(0x7360, 8);
+  TICK(8);
   s_a = 0xa0;
   rom_cout();
 
   // VALUE, same row, column $14. Two bytes at $71CB -- the current worth of an
   // apple, which game_set_apple_value computes per level.
-  GAME_CYCLES(0x7365, 11);
+  TICK(11);
   s_ch = 0x14;
   game_print_inline_str(0x736b);
-  GAME_CYCLES(0x7375, 15);
+  TICK(15);
   clear_leading_zero_flag();
   game_print_bcd_native(ram_peek(kAppleValue + 1));
-  GAME_CYCLES(0x737f, 10);
+  TICK(10);
   game_print_bcd_native(ram_peek(kAppleValue));
-  GAME_CYCLES(0x7385, 6);
+  TICK(6);
   game_print_zero_if_blank_native();
 
   // SNAKES LEFT, row $16 column $00. One byte at $725E, printed as though it
   // were the low half of a two-byte field: the high half is the literal 0
   // below, which prints nothing at all once leading zeros are suppressed. It
   // costs a call to keep the shape of every other field.
-  GAME_CYCLES(0x7388, 16);
+  TICK(16);
   s_cv = 0x16;
   s_ch = 0x00;
   game_print_inline_str(0x7392);
-  GAME_CYCLES(0x73a2, 11);
+  TICK(11);
   clear_leading_zero_flag();
   game_print_bcd_native(0x00);
-  GAME_CYCLES(0x73a9, 10);
+  TICK(10);
   game_print_bcd_native(lives());
-  GAME_CYCLES(0x73af, 6);
+  TICK(6);
   game_print_zero_if_blank_native();
 
   // LEVEL, same row, column $14. One byte at $7265.
-  GAME_CYCLES(0x73b2, 11);
+  TICK(11);
   s_ch = 0x14;
   game_print_inline_str(0x73b8);
-  GAME_CYCLES(0x73c2, 15);
+  TICK(15);
   clear_leading_zero_flag();
   game_print_bcd_native(level());
-  GAME_CYCLES(0x73cc, 6);
+  TICK(6);
   game_print_zero_if_blank_native();
 
   // Home the cursor. This CV write is the one that needs VTAB, because nothing
   // prints after it to recompute the line base.
-  GAME_CYCLES(0x73cf, 11);
+  TICK(11);
   s_a = 0x00;
   s_cv = 0x00;
   rom_fc68();
-  GAME_CYCLES(0x73d6, 6);
+  TICK(6);
 }
 
 /* ========================================================================== */
@@ -5646,7 +5665,7 @@ void game_status_panel(void) {
 
 void game_bonus_screen(void) {
   // $78B3 -- double the apple's value into $78B0/$78B1, in BCD.
-  GAME_CYCLES(0x78b3, 36);
+  TICK(36);
   const uint16_t lo = adc_dec16(ram_peek(kAppleValue), ram_peek(kAppleValue), 0x00);
   ram_poke(kBonusAmount, (uint8_t)lo);
   const uint16_t hi = adc_dec16(ram_peek(kAppleValue + 1), ram_peek(kAppleValue + 1), (uint8_t)(lo >> 8) & 0x01);
@@ -5659,41 +5678,41 @@ void game_bonus_screen(void) {
   // Twice, because the bonus is twice the apple value and game_add_score adds
   // it once.
   game_add_score_native();
-  GAME_CYCLES(0x78cb, 6);
+  TICK(6);
   game_add_score_native();
-  GAME_CYCLES(0x78ce, 6);
+  TICK(6);
   game_status_panel();
 
   // $78D1 -- the frame, in ink 9: top and bottom edges, then both sides.
-  GAME_CYCLES(0x78d1, 31);
+  TICK(31);
   s_shape = 0x01;
   s_ink = 0x09;
   // Columns $0D-$1A, rows $10-$15. The two sides used to inherit their column
   // from the edge above: an hline leaves s_col at its own endpoint, so the
   // first vline ran down $1A, the right edge, and not the $0D it looks like.
   plot_hline_at(0x0d, 0x10, 0x1a);
-  GAME_CYCLES(0x78e8, 16);
+  TICK(16);
   plot_hline_at(0x0d, 0x15, 0x1a);
-  GAME_CYCLES(0x78f3, 16);
+  TICK(16);
   plot_vline_at(0x1a, 0x10, 0x15);
-  GAME_CYCLES(0x78fe, 16);
+  TICK(16);
   plot_vline_at(0x0d, 0x10, 0x15);
 
   // $7909 -- the interior, in ink 0, one row at a time from $11 to $14. The
   // original re-loads $02 each time and increments $03 in place, which is why
   // the rows are not written out as constants.
-  GAME_CYCLES(0x7909, 26);
+  TICK(26);
   s_ink = 0x00;
   plot_hline_at(0x0e, 0x11, 0x19);
-  GAME_CYCLES(0x791c, 16);
+  TICK(16);
   plot_hline_at(0x0e, 0x12, 0x19);
-  GAME_CYCLES(0x7925, 16);
+  TICK(16);
   plot_hline_at(0x0e, 0x13, 0x19);
-  GAME_CYCLES(0x792e, 16);
+  TICK(16);
   plot_hline_at(0x0e, 0x14, 0x19);
 
   // $7937 -- "BONUS: " and the amount, through the hi-res font.
-  GAME_CYCLES(0x7937, 16);
+  TICK(16);
   s_ch = 0x0f;
   s_cv = 0x09;
   game_install_cout_vector();
@@ -5701,17 +5720,17 @@ void game_bonus_screen(void) {
   s_a = 0x66;
   s_status_not_z = 0x66;
   s_status_n = 0x00;
-  GAME_CYCLES(0x7942, 6);
+  TICK(6);
   game_print_inline_str(0x7944);
-  GAME_CYCLES(0x794d, 15);
+  TICK(15);
   s_h2 = 0x00;
   game_print_bcd_native(ram_peek(kBonusAmount + 1));
-  GAME_CYCLES(0x7957, 10);
+  TICK(10);
   game_print_bcd_native(ram_peek(kBonusAmount));
 
   // $795D -- COUT back to the ROM's, and $02 becomes the outermost counter of
   // the pause below.
-  GAME_CYCLES(0x795d, 15);
+  TICK(15);
   s_cswl = 0xf0;
   s_cswh = 0xfd;
   uint8_t passes = 0x20; // $02 was the outermost counter
@@ -5726,29 +5745,29 @@ void game_bonus_screen(void) {
   // are DEX/DEY loops, which test after decrementing -- a count of zero would
   // mean 256, and none of these start at zero.
   do {
-    GAME_CYCLES(0x7969, 2);
+    TICK(2);
     uint8_t x = 0x80;
     do {
-      GAME_CYCLES(0x796b, 4);
+      TICK(4);
       uint8_t y = x;
       do {
-        GAME_CYCLES(0x796d, 4);
+        TICK(4);
         --y;
         if (y != 0)
-          GAME_CYCLES(0x796e, 1);
+          TICK(1);
       } while (y != 0);
-      GAME_CYCLES(0x7970, 12);
+      TICK(12);
       click_speaker();
       --x;
       if (x != 0)
-        GAME_CYCLES(0x7977, 1);
+        TICK(1);
     } while (x != 0);
-    GAME_CYCLES(0x7979, 7);
+    TICK(7);
     passes = (uint8_t)(passes - 1);
     if (passes != 0)
-      GAME_CYCLES(0x797b, 1);
+      TICK(1);
   } while (passes != 0);
-  GAME_CYCLES(0x797d, 6);
+  TICK(6);
 }
 
 /* ========================================================================== */
@@ -5769,12 +5788,12 @@ void game_bonus_screen(void) {
 /* ========================================================================== */
 
 void game_begin_life(void) {
-  GAME_CYCLES(0x6256, 8);
+  TICK(8);
   s_a = game_start_life(0x14);
   s_status_not_z = s_a;
   s_status_n = 0x00;
 
-  GAME_CYCLES(0x625b, 36);
+  TICK(36);
   ram_poke(kTailCol, s_a); // from $6630, by way of $660F
   ram_poke(kHeadRow, 0x27); // the bottom edge
   ram_poke(kTailRow, 0x27); // the same cell
@@ -5787,14 +5806,14 @@ void game_begin_life(void) {
   // count of $0F suggests.
   uint8_t x = 0x0f;
   do {
-    GAME_CYCLES(0x6279, 9);
+    TICK(9);
     ram_poke(kKeyRing + x, 0x00);
     --x;
     if (!(x & 0x80))
-      GAME_CYCLES(0x627d, 1);
+      TICK(1);
   } while (!(x & 0x80));
 
-  GAME_CYCLES(0x627f, 11);
+  TICK(11);
   ram_poke(kRingRead, 0x00);
   ram_poke(kRingWrite, 0x00);
   game_play_one_life();
@@ -5826,28 +5845,28 @@ void game_begin_life(void) {
 
 void game_setup_screen(void) {
   // $7980 -- keep $0E/$0F inside the window game_rand_byte expects.
-  GAME_CYCLES(0x7980, 7);
+  TICK(7);
   const uint8_t hi = ram_peek(kRandPtr + 1);
   bool clamp_lo = hi >= 0x1f;
   if (!clamp_lo) {
-    GAME_CYCLES(0x7986, 4);
+    TICK(4);
     clamp_lo = hi < 0x18;
     if (!clamp_lo)
-      GAME_CYCLES(0x7988, 1);
+      TICK(1);
   } else {
-    GAME_CYCLES(0x7984, 1);
+    TICK(1);
   }
   if (clamp_lo) {
-    GAME_CYCLES(0x798a, 8);
+    TICK(8);
     ram_poke(kRandPtr, (uint8_t)(ram_peek(kRandPtr) & 0xde));
   }
-  GAME_CYCLES(0x7990, 13);
+  TICK(13);
   ram_poke(kRandPtr + 1, (uint8_t)((ram_peek(kRandPtr + 1) & 0x1f) | 0x18));
 
   // $73D8 -- the first call through here never asks anything.
-  GAME_CYCLES(0x73d8, 6);
+  TICK(6);
   if (!ram_peek(kSetupSeen)) {
-    GAME_CYCLES(0x73dd, 20);
+    TICK(20);
     ram_poke(kDemoMode, 0x01);
     ram_poke(kDifficulty, 0x01);
     ram_poke(kSetupSeen, 0x01);
@@ -5856,12 +5875,12 @@ void game_setup_screen(void) {
 
   // $73E9 -- the prompt, and the two counters that time it out. $02 is the
   // outer one and $03 the inner; both count *up* to zero.
-  GAME_CYCLES(0x73db, 1);
-  GAME_CYCLES(0x73e9, 16);
+  TICK(1);
+  TICK(16);
   s_cv = 0x17;
   s_ch = 0x00;
   game_print_inline_str(0x73f3);
-  GAME_CYCLES(0x7414, 10);
+  TICK(10);
   // $02 and $03 time the prompt out: the inner one wraps 256 times per tick of
   // the outer, and when the outer wraps nobody has answered.
   uint8_t outer_count = 0xe8;
@@ -5873,89 +5892,89 @@ wait: /* $741C */
     // $741C -- spin Y round once, then look at the keyboard. This site keeps
     // its probe: it is one of the addresses the replay coordinate counts.
     do {
-      GAME_CYCLES(0x741c, 4);
+      TICK(4);
       s_y = (uint8_t)(s_y + 1);
       if (s_y != 0)
-        GAME_CYCLES(0x741d, 1);
+        TICK(1);
     } while (s_y != 0);
 
     GAME_CYCLES_COORD(0x741f, 6);
     key = io_peek(0xc000);
     if (key & 0x80) {
-      GAME_CYCLES(0x7422, 1);
+      TICK(1);
       break;
     }
 
-    GAME_CYCLES(0x7424, 7);
+    TICK(7);
     const uint8_t inner = (uint8_t)(inner_count + 1);
     inner_count = inner;
     if (inner != 0) {
-      GAME_CYCLES(0x7426, 1);
+      TICK(1);
       continue;
     }
 
     // $7428 -- once the inner counter wraps, try the joystick, if one is
     // selected. Each button stands in for a digit.
-    GAME_CYCLES(0x7428, 6);
+    TICK(6);
     if (ram_peek(kJoystick)) {
-      GAME_CYCLES(0x742d, 10);
+      TICK(10);
       io_peek(0xc05b);
       if (!(io_peek(0xc062) & 0x80)) {
-        GAME_CYCLES(0x7435, 5);
+        TICK(5);
         key = 0xb1;
         break;
       }
-      GAME_CYCLES(0x7433, 1);
-      GAME_CYCLES(0x743a, 10);
+      TICK(1);
+      TICK(10);
       io_peek(0xc05a);
       if (!(io_peek(0xc062) & 0x80)) {
-        GAME_CYCLES(0x7442, 5);
+        TICK(5);
         key = 0xb0;
         break;
       }
-      GAME_CYCLES(0x7440, 1);
-      GAME_CYCLES(0x7447, 6);
+      TICK(1);
+      TICK(6);
       if (!(io_peek(0xc063) & 0x80)) {
-        GAME_CYCLES(0x744c, 5);
+        TICK(5);
         key = 0xb2;
         break;
       }
-      GAME_CYCLES(0x744a, 1);
+      TICK(1);
     } else {
-      GAME_CYCLES(0x742b, 1);
+      TICK(1);
     }
 
     // $7451 -- the outer counter. When it wraps too, nobody is answering.
-    GAME_CYCLES(0x7451, 7);
+    TICK(7);
     const uint8_t outer = (uint8_t)(outer_count + 1);
     outer_count = outer;
     if (outer == 0) {
-      GAME_CYCLES(0x7455, 20);
+      TICK(20);
       ram_poke(kDemoMode, 0x01);
       ram_poke(kDifficulty, 0x01);
       io_poke(0xc010, 0x01);
       return;
     }
-    GAME_CYCLES(0x7453, 1);
+    TICK(1);
   }
 
   // $7461 -- something was pressed. Clear the strobe with it still in A, the
   // way the original does.
-  GAME_CYCLES(0x7461, 8);
+  TICK(8);
   io_poke(0xc010, key);
   if (key != 0xc3) {
-    GAME_CYCLES(0x7468, 4);
+    TICK(4);
     if (key < 0xb0) {
-      GAME_CYCLES(0x746a, 1);
+      TICK(1);
       goto wait;
     }
-    GAME_CYCLES(0x746c, 4);
+    TICK(4);
     if (key >= 0xb3) {
-      GAME_CYCLES(0x746e, 1);
+      TICK(1);
       goto wait;
     }
     // $7470 -- a digit. The subtract is a plain SBC with carry set.
-    GAME_CYCLES(0x7470, 24);
+    TICK(24);
     ram_poke(kDifficulty, (uint8_t)(key - 0xb0));
     ram_poke(kDemoMode, 0x00);
     io_poke(0xc010, 0x00);
@@ -5964,55 +5983,55 @@ wait: /* $741C */
 
   // $747F -- C, so redefine the keys instead. Show the six current bindings,
   // draw the highlight, then walk them again asking for replacements.
-  GAME_CYCLES(0x7466, 1);
-  GAME_CYCLES(0x747f, 6);
+  TICK(1);
+  TICK(6);
   game_clear_hgr_native();
-  GAME_CYCLES(0x7482, 10);
+  TICK(10);
   io_peek(0xc052);
   game_install_cout_vector();
   // The LDA #$4A flags are overwritten by the second load; only these outlive.
   s_a = 0x66;
   s_status_not_z = 0x66;
   s_status_n = 0x00;
-  GAME_CYCLES(0x7488, 11);
+  TICK(11);
   s_cv = 0x01;
   game_print_inline_str(0x748e);
 
-  GAME_CYCLES(0x7541, 2);
+  TICK(2);
   for (uint8_t i = 0; i != 6; ++i) {
-    GAME_CYCLES(0x7543, 10);
+    TICK(10);
     game_show_key_native(i, ram_peek(kKeyTable + i));
-    GAME_CYCLES(0x7549, 6);
+    TICK(6);
     if (i != 5)
-      GAME_CYCLES(0x754c, 1);
+      TICK(1);
   }
 
-  GAME_CYCLES(0x754e, 26);
+  TICK(26);
   plot_shape_at(0x02, 0x0c, (Cell){.col = 0x1e, .row = 0x12});
   // The stem below it, down the same column -- which the original inherited
   // from the plot above rather than restating.
-  GAME_CYCLES(0x7561, 21);
+  TICK(21);
   s_shape = 0x0a;
   plot_vline_at(0x1e, 0x13, 0x1d);
   // At the stem's far end -- the vline above left s_row on $1D.
-  GAME_CYCLES(0x7570, 11);
+  TICK(11);
   s_a = 0x0e;
   plot_shape_at(0x0e, 0x0c, (Cell){.col = 0x1e, .row = 0x1d});
 
-  GAME_CYCLES(0x7577, 2);
+  TICK(2);
   for (uint8_t i = 0; i != 6; ++i) {
-    GAME_CYCLES(0x7579, 6);
+    TICK(6);
     const uint8_t chosen = game_edit_key_native(i);
-    GAME_CYCLES(0x757c, 11);
+    TICK(11);
     ram_poke(kKeyTable + i, chosen);
     game_show_key_native(i, chosen);
-    GAME_CYCLES(0x7582, 6);
+    TICK(6);
     if (i != 5)
-      GAME_CYCLES(0x7585, 1);
+      TICK(1);
   }
 
   // $7587 -- COUT back to the ROM's.
-  GAME_CYCLES(0x7587, 16);
+  TICK(16);
   s_cswl = 0xf0;
   s_cswh = 0xfd;
 }
@@ -6110,7 +6129,7 @@ void game_print_inline_str(uint16_t ret_addr) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$7230*/ CYCLES_EDGE(0x7230, 20);
+  /*$7230*/ TICK(20);
   ram_poke(kStrPtr, (uint8_t)ret_addr);
   ram_poke(kStrPtr + 1, (uint8_t)(ret_addr >> 8));
   rom_fc68(); // VTAB to the current CV
@@ -6118,33 +6137,33 @@ void game_print_inline_str(uint16_t ret_addr) {
   for (;;) {
     // The pointer is stepped before the read, which is why the caller passes
     // the address of the JSR's last byte rather than of the string.
-    /*$7239*/ CYCLES_EDGE(0x7239, 7);
+    /*$7239*/ TICK(7);
     const uint8_t lo = (uint8_t)(ram_peek(kStrPtr) + 1);
     ram_poke(kStrPtr, lo);
     if (!lo) {
-      /*$723D*/ CYCLES_EDGE(0x723d, 5);
+      /*$723D*/ TICK(5);
       ram_poke(kStrPtr + 1, (uint8_t)(ram_peek(kStrPtr + 1) + 1));
     } else {
-      /*$723B*/ CYCLES_EDGE(0x723b, 1);
+      /*$723B*/ TICK(1);
     }
 
-    /*$723F*/ CYCLES_EDGE(0x723f, 9);
+    /*$723F*/ TICK(9);
     const uint8_t ch = peek(ram_peek16al(kStrPtr));
     s_y = 0x00;
     s_a = ch;
     s_status_not_z = ch;
     s_status_n = (ch & 0x80);
     if (!ch) {
-      /*$7243*/ CYCLES_EDGE(0x7243, 1);
+      /*$7243*/ TICK(1);
       break;
     }
 
-    /*$7245*/ CYCLES_EDGE(0x7245, 6);
+    /*$7245*/ TICK(6);
     rom_cout();
-    /*$7248*/ CYCLES_EDGE(0x7248, 3);
+    /*$7248*/ TICK(3);
   }
 
-  /*$724B*/ CYCLES_EDGE(0x724b, 18);
+  /*$724B*/ TICK(18);
 }
 
 
@@ -6445,7 +6464,7 @@ void game_move_bouncer(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$64C8*/ CYCLES_EDGE(0x64c8, 12);
+  /*$64C8*/ TICK(12);
   if (s_status_d) {
     fprintf(stderr, "game_move_bouncer: entered with decimal mode set\n");
     error_handler(0x64c8);
@@ -6622,23 +6641,23 @@ void game_cold_start(void) {
     // probe-acceptance.sh aligns the two builds on -- see GAME_CYCLES_ANCHOR.
     GAME_CYCLES_ANCHOR(0x3750, 2);
     for (unsigned i = 0; i != 256; ++i) {
-      GAME_CYCLES(0x3752, 13);
+      TICK(13);
       poke((uint16_t)(0x1800 + page * 256 + i), peek((uint16_t)(0x3800 + page * 256 + i)));
       if (i != 255)
-        GAME_CYCLES(0x3759, 1);
+        TICK(1);
     }
-    GAME_CYCLES(0x375b, 20);
+    TICK(20);
     ram_poke(kRelocLoadOp, (uint8_t)(ram_peek(kRelocLoadOp) + 1));
     ram_poke(kRelocStoreOp, (uint8_t)(ram_peek(kRelocStoreOp) + 1));
     if (page != 7)
-      GAME_CYCLES(0x3766, 1);
+      TICK(1);
   }
 
-  GAME_CYCLES(0x3768, 6);
+  TICK(6);
   rom_setvid();
-  GAME_CYCLES(0x376b, 6);
+  TICK(6);
   rom_setkbd();
-  GAME_CYCLES(0x376e, 29);
+  TICK(29);
   ram_poke(kStepDelay, 0x52);
   ram_poke(kDifficulty, 0x01);
   ram_poke(kDemoMode, 0x01); // so the first pass plays itself
@@ -6647,12 +6666,12 @@ void game_cold_start(void) {
   goto round;             // $3783: JMP $76C2
 
 new_game: /* $7691 */
-  GAME_CYCLES(0x7691, 6);
+  TICK(6);
   assert_binary_mode("game_setup", 0x7980);
   game_setup_screen();
-  GAME_CYCLES(0x7694, 6);
+  TICK(6);
   game_promote_high_score();
-  GAME_CYCLES(0x7697, 40);
+  TICK(40);
   ram_poke(kScriptIndex, 0x01);
   set_level(0x01);
   ram_poke(kScore, 0x00);
@@ -6663,16 +6682,16 @@ new_game: /* $7691 */
   ram_poke(kApplesAfield, 0x00);
 
 new_level: /* $76B7 */
-  GAME_CYCLES(0x76b7, 14);
+  TICK(14);
   ram_poke(kLivesAtLevelStart, lives());
   ram_poke(kApplesQuota, 0x10);
 
 round: /* $76C2 */
-  GAME_CYCLES(0x76c2, 6);
+  TICK(6);
   ram_poke(kApplesQuota + 1, 0x00);
 
 start_round: /* $76C7 */
-  GAME_CYCLES(0x76c7, 40);
+  TICK(40);
   ram_poke(kApplesAfield, 0x00);
   ram_poke(kApplesAfield + 1, 0x00);
   ram_poke(kApplesEaten, 0x00);
@@ -6680,63 +6699,63 @@ start_round: /* $76C7 */
   ram_poke(kApplesLeft, ram_peek(kApplesQuota));
   ram_poke(kApplesLeft + 1, ram_peek(kApplesQuota + 1));
   game_draw_playfield_native();
-  GAME_CYCLES(0x76e4, 14);
+  TICK(14);
   set_life_time(ram_peek(kLevelTime));
   game_set_apple_value_native();
-  GAME_CYCLES(0x76ed, 14);
+  TICK(14);
   io_peek(0xc054);       // page 1
   s_a = io_peek(0xc053); // mixed text/graphics
   const Cell apple = game_place_apple_native();
-  GAME_CYCLES(0x76f6, 6);
+  TICK(6);
   // $76F6 redraws it, at the cell game_place_apple just chose.
   game_plot_shape_native(0x09, apple);
-  GAME_CYCLES(0x76f9, 8);
+  TICK(8);
   ram_poke(kStepDelay, 0x52);
   s_a = 0x00;
-  GAME_CYCLES(0x7700, 23);
+  TICK(23);
   ram_poke(kHeadMoved, 0x00);
   ram_poke(kLifeTimer, life_time());
   s_wndtop = 0x14; // window top, so HOME clears only the status panel
   rom_home();
-  GAME_CYCLES(0x7710, 6);
+  TICK(6);
   game_status_panel();
-  GAME_CYCLES(0x7713, 6);
+  TICK(6);
   assert_binary_mode("game_start_round", 0x6256);
   game_begin_life();
-  GAME_CYCLES(0x7716, 3);
+  TICK(3);
   goto verdict; // $7716: JMP $7739 -- a fresh round asks the same question
 
 life: /* $7719 */
-  GAME_CYCLES(0x7719, 19);
+  TICK(19);
   ram_poke(kLifeTimer, life_time());
   s_wndtop = 0x14;
   rom_home();
-  GAME_CYCLES(0x7726, 6);
+  TICK(6);
   game_status_panel();
-  GAME_CYCLES(0x7729, 8);
+  TICK(8);
   if (ram_peek(kStepDelay) >= 0x03) {
     // $7730 -- two steps faster each life, but never past 3.
-    GAME_CYCLES(0x7730, 8);
+    TICK(8);
     ram_poke(kStepDelay, (uint8_t)(ram_peek(kStepDelay) - 2));
   } else {
-    GAME_CYCLES(0x772e, 1);
+    TICK(1);
   }
-  GAME_CYCLES(0x7736, 6);
+  TICK(6);
   game_play_one_life();
 
 verdict: /* $7739 -- $6253 says how the life ended */
-  GAME_CYCLES(0x7739, 8);
+  TICK(8);
   if (ram_peek(kLifeOutcome) == 0x0f)
     goto ate_apple;
-  GAME_CYCLES(0x7740, 3);
-  GAME_CYCLES(0x77e6, 4);
+  TICK(3);
+  TICK(4);
   if (ram_peek(kLifeOutcome) != 0x00)
     goto not_apple;
   goto round_cleared;
 
 ate_apple: /* $773E */
-  GAME_CYCLES(0x773e, 1);
-  GAME_CYCLES(0x7743, 76);
+  TICK(1);
+  TICK(76);
   s_status_d = 0x01;
   bcd_sub16_at(kApplesAfield, kApplesAfield + 1, 0x01);
   bcd_sub16_at(kApplesLeft, kApplesLeft + 1, 0x01);
@@ -6746,71 +6765,71 @@ ate_apple: /* $773E */
   // $777B -- points only for the first $11 apples of the round. The high
   // byte must be zero and the low one below $11, both BCD.
   if (ram_peek(kApplesEaten + 1)) {
-    GAME_CYCLES(0x777b, 1);
+    TICK(1);
   } else {
-    GAME_CYCLES(0x777d, 8);
+    TICK(8);
     if (ram_peek(kApplesEaten) >= 0x11) {
-      GAME_CYCLES(0x7782, 1);
+      TICK(1);
     } else {
-      GAME_CYCLES(0x7784, 6);
+      TICK(6);
       game_add_score_native();
     }
   }
 
-  GAME_CYCLES(0x7787, 18);
+  TICK(18);
   ram_poke(kGrowth, (uint8_t)(ram_peek(kGrowth) + 0x0a)); // ten more cells of snake
 
   // $7793 -- anything left in the round?
   if (ram_peek(kApplesLeft)) {
-    GAME_CYCLES(0x7793, 1);
+    TICK(1);
     goto next_apple;
   }
-  GAME_CYCLES(0x7795, 6);
+  TICK(6);
   if (ram_peek(kApplesLeft + 1)) {
-    GAME_CYCLES(0x7798, 1);
+    TICK(1);
     goto next_apple;
   }
 
   /* $779A -- that was the last one. Draw the bar across the bottom, put the
      marker on it, and stop the clock for the run to the gate -- see
      kLifeTime for why $FF stops it rather than lengthening it. */
-  GAME_CYCLES(0x779a, 31);
+  TICK(31);
   s_ink = 0x06;
   s_shape = 0x15;
   plot_hline_at(0x12, 0x00, 0x16);
-  GAME_CYCLES(0x77b1, 16);
+  TICK(16);
   plot_shape_at(0x15, 0x00, (Cell){.col = 0x14, .row = 0x00});
-  GAME_CYCLES(0x77bc, 14);
+  TICK(14);
   set_life_time(0xff);
   s_a = 0x00;
   rom_setcol();
-  GAME_CYCLES(0x77c6, 10);
+  TICK(10);
   s_a = 0x00;
   s_y = 0x14;
   rom_plot();
-  GAME_CYCLES(0x77cd, 3);
+  TICK(3);
   goto life;
 
 next_apple: /* $77D0 -- place one only when both countdown bytes are zero */
-  GAME_CYCLES(0x77d0, 6);
+  TICK(6);
   if (ram_peek(kApplesAfield)) {
-    GAME_CYCLES(0x77d5, 3);
+    TICK(3);
     goto life;
   }
-  GAME_CYCLES(0x77d3, 1);
-  GAME_CYCLES(0x77d8, 6);
+  TICK(1);
+  TICK(6);
   if (ram_peek(kApplesAfield + 1)) {
-    GAME_CYCLES(0x77dd, 3);
+    TICK(3);
     goto life;
   }
-  GAME_CYCLES(0x77db, 1);
-  GAME_CYCLES(0x77e0, 6);
+  TICK(1);
+  TICK(6);
   game_place_apple_native();
-  GAME_CYCLES(0x77e3, 3);
+  TICK(3);
   goto life;
 
 round_cleared: /* $77EA */
-  GAME_CYCLES(0x77ea, 32);
+  TICK(32);
   {
     const uint16_t r = adc_dec16(level(), 0x01, 0x00);
     set_level((uint8_t)r);
@@ -6819,108 +6838,108 @@ round_cleared: /* $77EA */
   ram_poke(kScriptIndex, (uint8_t)(ram_peek(kScriptIndex) + 1));
   // $77F8 -- no life was lost this round, so it earns a bonus.
   if (lives() == ram_peek(kLivesAtLevelStart)) {
-    GAME_CYCLES(0x7800, 6);
+    TICK(6);
     game_bonus_screen();
   } else {
-    GAME_CYCLES(0x77fe, 1);
+    TICK(1);
   }
-  GAME_CYCLES(0x7803, 6);
+  TICK(6);
   game_award_extra_life_native();
-  GAME_CYCLES(0x7806, 3);
+  TICK(3);
   goto new_level;
 
 not_apple: /* $77E8 */
-  GAME_CYCLES(0x77e8, 1);
-  GAME_CYCLES(0x7809, 4);
+  TICK(1);
+  TICK(4);
   if (ram_peek(kLifeOutcome) != 0xfe) {
-    GAME_CYCLES(0x780b, 1);
+    TICK(1);
     goto ended;
   }
-  GAME_CYCLES(0x780d, 6);
+  TICK(6);
   if (ram_peek(kApplesLeft + 1)) {
-    GAME_CYCLES(0x7810, 1);
+    TICK(1);
     goto harder;
   }
-  GAME_CYCLES(0x7812, 6);
+  TICK(6);
   if (!ram_peek(kApplesLeft)) {
-    GAME_CYCLES(0x7815, 1);
+    TICK(1);
     goto ended;
   }
 
 harder: /* $7817 -- three more apples in the round, and three more to come */
-  GAME_CYCLES(0x7817, 54);
+  TICK(54);
   s_status_d = 0x01;
   bcd_add16_at(kApplesQuota, kApplesQuota + 1, 0x03);
   bcd_add16_at(kApplesLeft, kApplesLeft + 1, 0x03);
   s_status_d = 0x00;
   game_place_apple_native();
-  GAME_CYCLES(0x783e, 6);
+  TICK(6);
   game_place_apple_native();
-  GAME_CYCLES(0x7841, 6);
+  TICK(6);
   game_place_apple_native();
-  GAME_CYCLES(0x7844, 3);
+  TICK(3);
   goto life;
 
 ended: /* $7847 */
-  GAME_CYCLES(0x7847, 8);
+  TICK(8);
   if (ram_peek(kLifeOutcome) == 0xff) {
-    GAME_CYCLES(0x784e, 3);
+    TICK(3);
     goto new_game; // the player pressed the quit key
   }
-  GAME_CYCLES(0x784c, 1);
-  GAME_CYCLES(0x7851, 4);
+  TICK(1);
+  TICK(4);
   // $FE means the snake ran out of room rather than died, and that just starts
   // another life. Anything else falls through to the pause. Note the sense:
   // the original *branches away* when it is not $FE, so equality is the
   // fall-through, not the exception.
   if (ram_peek(kLifeOutcome) == 0xfe) {
-    GAME_CYCLES(0x7855, 3);
+    TICK(3);
     goto life;
   }
-  GAME_CYCLES(0x7853, 1);
-  GAME_CYCLES(0x7858, 6);
+  TICK(1);
+  TICK(6);
   if (ram_peek(kDemoMode)) {
-    GAME_CYCLES(0x785b, 1);
+    TICK(1);
     goto lose_life; // the demo does not wait to be told to carry on
   }
 
   /* $785D -- "PRESS SPACE BAR TO CONTINUE", then wait for space or the
      paddle button, whichever the setup screen selected. */
-  GAME_CYCLES(0x785d, 16);
+  TICK(16);
   s_cv = 0x17;
   s_ch = 0x00;
   game_print_inline_str(0x7867);
   for (;;) {
-    GAME_CYCLES(0x7886, 6);
+    TICK(6);
     if (ram_peek(kJoystick)) {
-      GAME_CYCLES(0x788b, 6);
+      TICK(6);
       // The button reads with bit 7 *clear* when pressed on this path.
       if (!(io_peek(0xc061) & 0x80)) {
-        GAME_CYCLES(0x788e, 1);
+        TICK(1);
         break;
       }
     } else {
-      GAME_CYCLES(0x7889, 1);
+      TICK(1);
     }
     // $7890 is on the replay coordinate -- see GAME_CYCLES_COORD.
     GAME_CYCLES_COORD(0x7890, 8);
     const uint8_t key = io_peek(0xc000);
     if (key == 0xa0) {
-      GAME_CYCLES(0x7897, 4);
+      TICK(4);
       io_poke(0xc010, key);
       break;
     }
-    GAME_CYCLES(0x7895, 1);
+    TICK(1);
   }
 
 lose_life: /* $789A */
-  GAME_CYCLES(0x789a, 6);
+  TICK(6);
   if (!lives()) {
-    GAME_CYCLES(0x789f, 3);
+    TICK(3);
     goto new_game;
   }
-  GAME_CYCLES(0x789d, 1);
-  GAME_CYCLES(0x78a2, 19);
+  TICK(1);
+  TICK(19);
   {
     const uint16_t r = sbc_dec16(lives(), 0x01, 0x01);
     set_lives((uint8_t)r);
