@@ -214,12 +214,22 @@ that override the built-in names. **Use this instead of decoding bytes by eye.**
 
 ### Snake Byte (`decoded/snake-byte/`)
 
-Two builds, both verified — do not collapse them into one:
+Five targets, and they are not five copies of the same thing.
+`decoded/snake-byte/README.md` now carries the full file inventory; this is the
+short version.
 
 | Target | Source | Role |
 | --- | --- | --- |
-| `snake-bytec1` | `snake-bytec1.c` | Self-contained reference. ROM decompiled alongside the game; links alone. `play.frames` was recorded from it. |
-| `snake-bytec1-ext` | `snake-byte-ext.c` | ROM entry points supplied by hand-written `a2rom.c` + `game.c`. |
+| `snake-byte-cold` | `snake-byte-cold.c` | **The artifact this work is aimed at.** Entered at `$3750`, no boot, no ROM code. |
+| `snake-bytec1-ext` | `snake-byte-ext.c` | The verified reference. Boots, types `CALL 14160`. ROM entry points from hand-written `a2rom.c` + `game.c`. |
+| `snake-bytec1` | `snake-bytec1.c` | Self-contained control. ROM decompiled alongside the game; links alone. `play.frames` was recorded from it. |
+| `snake-byte-easyc1-ext` | `snake-byte-easy-ext.c` | Test fixture, not a variant: apple quota 16 -> 2. |
+| `snake-byte` | `snake-byte.c` | Historical `--simple-c` output, no longer regenerated. |
+
+**Cold is the better artifact; ext is the better *checked* one.** Cold is
+verified against ext — trace identical over 788,097 blocks, screen at 6,808
+samples — but it is not in `probe-acceptance.sh`'s scenario list, so nothing
+re-checks it on every run. Adding it is the obvious next piece of hygiene.
 
 **The adapters in `game.c` are now mostly scaffolding, not an interface.**
 Measured 2026-08-23: of the 42, only **14 still have a generated caller**
@@ -276,9 +286,16 @@ cmake -G Ninja -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug
 ninja -C cmake-build-debug
 
 cd tests && ./run-tests.sh ../cmake-build-debug     # expect: Success!
-cd decoded/snake-byte && ./verify.sh                # expect: 4x PASS
-./decompile.sh                                      # regenerates both c1 variants
+cd decoded/snake-byte && ./verify.sh ../../cmake-build-debug   # expect: 4x PASS
+./probe-acceptance.sh ../../cmake-build-debug                 # the real gate
+./decompile.sh                                                # regenerates the c1 variants
 ```
+
+`decompile.sh` reproduces the committed generated C exactly: run it at a clean
+HEAD and `git status` comes back empty. `probe-acceptance.sh` checks that before
+it checks anything else, because everything else it does runs the committed
+`.c` files. Note `snake-byte-cold-body.c` is *not* regenerated — it is a
+hand-pruned fork.
 
 `run-tests.sh` is no longer only decompiler regression. It also asserts that
 `a2emu --headless` byte-matches `a2run`, and carries the probe compiler's 4
@@ -366,6 +383,32 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
 1,300 frames, up from 390.
 
 ### Next
+
+Items 1-4 below are all struck through now. What actually remains, in order:
+
+**a. Put `snake-byte-cold` in `probe-acceptance.sh`.** It is verified once, by
+hand, against `snake-bytec1-ext`; nothing re-checks it. Until that is done every
+later change to `game.c` or `game_native.c` is checked on the ext build only,
+and cold can rot silently. Cheapest item here and the one with the worst failure
+mode.
+
+**b. Convert the last 89 blocks.** `func_t001` in `snake-byte-cold-body.c` is
+968 lines of unrewritten decompiler output, and it is the *whole* remainder: the
+`$3750` relocation and `$0300` init, then `$7691-$789F`, the top-level loop.
+Everything it calls is already real C. Doing it leaves the program with no
+decompiler output in it at all — only `s_mem_3750` (the game's data) and
+`s_mem_d000` (ROM bytes the death pause reads at `$E000` as delay lengths).
+
+**c. Then the shape, in this order:** drop the 28 adapters that no longer have a
+generated caller; turn off `--ret-addr` and the emulated stack for the shipped
+artifact; then playbook step 6, moving storage out of emulated RAM. That last
+one costs the `ram.probe` oracle, which is why it is last — see
+`game_native.h`'s header for which oracle dies when.
+
+**d. Loose ends:** 451 unknown nonzero bytes in the coverage report; probe phase
+3 (apple2tc emitting `PROBE_x(...)` sites so a probe can read the generated C's
+own variables); and `robotron`/`bolo`, which have never been regenerated against
+any of this.
 
 1. ~~**The two remaining rejection roots.**~~ — **both done.** `$7230` became
    `--inline-str` (2026-08-17) and `$6A32` became `--alt-exit` (2026-08-18), the

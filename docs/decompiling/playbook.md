@@ -490,6 +490,44 @@ not as one number: this one's control flow is checked (inverting the Ctrl-S
 test fails trace-ext on play-rebind) and its timing is not, and the same
 "84/104 hand-written blocks run" reports both.
 
+**`[process]` Dump the entry state; do not reason about it.** Retargeting an
+entry point needs the machine state the boot would have produced, and that
+state is small and knowable — for the Apple II it is `$0000-$0802`, the
+registers, and one video soft-switch byte. Everything else is the program
+image, the ROM, and uninitialised RAM reading as `$FF`. Reasoning about which
+zero-page locations matter is slower and less reliable than adding a
+capture-at-PC option and diffing two images.
+
+Three traps inside that, each of which cost a debugging cycle:
+
+- **The pristine boot state is the wrong state.** The machine at the BASIC
+  prompt with nothing typed is not the machine at the program's entry: getting
+  there means typing a command, and that leaves the parse state, the stack
+  frames, the input buffer and the echoed text behind — 74 bytes for Snake
+  Byte. Capture from the *booting build's own arrival* at the target address,
+  not from a clean boot.
+- **The host injects state the boot used to hide.** `a2host` pushes a dummy
+  keystroke whenever a key source is present, because the first key before
+  initialisation is otherwise lost. A booting program never notices; the ROM
+  swallows it at the prompt. A cold-started one reads it as the player's first
+  keypress. Anything the *host* does at startup on a program's behalf is part
+  of the state being replaced.
+- **Two boots of the same build differ.** `$4E/$4F` (RNDL/RNDH) count how long
+  KEYIN spun, so they depend on when keys arrived. Harmless here — only the ROM
+  reads them — but it means an entry state is not quite a constant, and a
+  byte-exact diff will show it.
+
+**`[tool]` For reachability, walk the IR, not the emitted C.** `apple2tc --ir`
+prints `Succ(...)` on every block header and every `Call` with its target, which
+is a complete CFG and call graph in text; a walk from any address is a dozen
+lines and needs nothing new from the decompiler. Snake Byte: 1,776 blocks reduce
+to 89 from `$3750`, and all 89 are game code.
+
+The emitted C looks like it would do as well and does not. Scanning it for
+`block_id = N` picks up the digits inside `pop16`, `tmp3_U16` and `sbc_dec16`,
+inventing edges to block 16 and reporting 104 live cases against the true 89. The
+C is a rendering of the IR; the IR is the thing with the edges in it.
+
 **`[process]` A fixture built to reach new code also deepens the code you
 already had.** Snake Byte's `easy` build exists to make the display list
 reachable -- the apple quota lowered so levels change. It turns out to be the
@@ -550,13 +588,27 @@ the whole point of it — see the step itself.
    1. *(executed)* Externalize the entry points the program calls and supply
       them by hand, keeping the original boot path so the existing golden trace
       still verifies every change.
-   2. *(untested)* Only then retarget the entry point to the program's real
-      start. This needs an entry-state snapshot and a re-based trace, because a
-      cold start skips the boot frames the trace opens with.
+   2. *(executed 2026-08-23)* Only then retarget the entry point to the
+      program's real start.
+
+      This was predicted to need "an entry-state snapshot and a re-based
+      trace". The snapshot half was right. **The re-based trace was not needed
+      at all**, and expecting it is what made this look expensive for months:
+      the *existing build is the oracle*. Snapshot it at the target address,
+      start the new build from that, and compare the two directly — block-head
+      trace and screen, at program-defined instants. No golden file is
+      re-recorded, and the comparison is stronger than a golden trace because
+      it is differential.
+
+      Do it in two commits even so: retarget first and delete nothing, so the
+      entry change can be shown to be behaviour-preserving on its own; then
+      delete what is unreachable. Snake Byte's first commit changed one
+      initializer and installed 2KB of state; the second removed 1,686 of 1,775
+      dispatch cases.
 
    Doing both at once forfeits verification for the duration, which is the
    entire reason this is two steps and not one.
-5. **Structural conversion.** *(untested)* Recover the remaining procedures by
+5. **Structural conversion.** *(executed)* Recover the remaining procedures by
    hand, rewriting idiom-based ones. Reloop each function — dominator tree, back
    edges for natural loops, then iterative region matching (sequence / if-then /
    if-then-else / while / do-while). Keep address-derived names throughout.
