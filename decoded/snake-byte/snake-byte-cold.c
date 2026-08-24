@@ -3028,6 +3028,35 @@ static void lores_hline(uint8_t row, uint8_t from_col, uint16_t ret) {
   rom_hline(ret);
 }
 
+/// The three runs, with their endpoints as arguments instead of as four
+/// assignments before the call.
+///
+/// The globals are still where the steppers read them -- game_plot_hline_native
+/// walks s_col up to s_run_end and leaves it there -- so these set them and
+/// call, exactly as plot_shape_at does. What they buy is that a caller states
+/// the whole run in one place, including the endpoint it used to inherit from
+/// whatever ran before it.
+static void plot_hline_at(uint8_t col, uint8_t row, uint8_t to_col, uint16_t ret) {
+  s_col = col;
+  s_row = row;
+  s_run_end = to_col;
+  game_plot_hline(ret);
+}
+
+static void plot_vline_at(uint8_t col, uint8_t row, uint8_t to_row, uint16_t ret) {
+  s_col = col;
+  s_row = row;
+  s_run_end = to_row;
+  game_plot_vline(ret);
+}
+
+static void lores_vline_at(uint8_t col, uint8_t row, uint8_t to_row, uint16_t ret) {
+  s_col = col;
+  s_row = row;
+  s_run_end = to_row;
+  game_lores_vline(ret);
+}
+
 /// The ROM's PLOT.
 static void lores_plot(uint8_t row, uint8_t col, uint16_t ret) {
   s_a = row;
@@ -3131,46 +3160,32 @@ static void draw_border(void) {
   GAME_CYCLES(0x70b3, 10);
   lores_hline(0x27, 0x00, 0x70b9);
 
+  // The four sides, twice: once on the lo-res occupancy map and once in
+  // hi-res. Four of these seven used to leave the endpoint out and inherit
+  // $27 from the call above; it is written at each of them now.
   GAME_CYCLES(0x70ba, 21);
-  s_col = 0x00;
-  s_row = 0x00;
-  s_run_end = 0x27;
-  game_lores_vline(0x70c8);
+  lores_vline_at(0x00, 0x00, 0x27, 0x70c8);
 
   GAME_CYCLES(0x70c9, 16);
-  s_row = 0x00;
-  s_col = 0x27;
-  game_lores_vline(0x70d3);
+  lores_vline_at(0x27, 0x00, 0x27, 0x70d3);
 
   GAME_CYCLES(0x70d4, 19);
-  s_col = 0x00;
-  s_row = 0x00;
-  s_run_end = 0x27;
-  game_plot_hline(0x70e0);
+  plot_hline_at(0x00, 0x00, 0x27, 0x70e0);
 
   GAME_CYCLES(0x70e1, 16);
-  s_col = 0x00;
-  s_row = 0x27;
-  game_plot_hline(0x70eb);
+  plot_hline_at(0x00, 0x27, 0x27, 0x70eb);
 
   GAME_CYCLES(0x70ec, 14);
-  s_col = 0x00;
-  s_row = 0x00;
-  game_plot_vline(0x70f4);
+  plot_vline_at(0x00, 0x00, 0x27, 0x70f4);
 
   GAME_CYCLES(0x70f5, 16);
-  s_row = 0x00;
-  s_col = 0x27;
-  game_plot_vline(0x70ff);
+  plot_vline_at(0x27, 0x00, 0x27, 0x70ff);
 
   // Ink 3 over columns $12-$16 of the bottom row, on top of the border just
   // laid down: the gap the snake leaves through.
   GAME_CYCLES(0x7100, 26);
   s_ink = 0x03;
-  s_row = 0x27;
-  s_col = 0x12;
-  s_run_end = 0x16;
-  game_plot_hline(0x7112);
+  plot_hline_at(0x12, 0x27, 0x16, 0x7112);
 }
 
 /// Walk the pointer to the current level's script, skipping one whole script
@@ -4567,8 +4582,6 @@ void game_draw_side_walls_native(void) {
   GAME_CYCLES(0x6b40, 26);
   s_shape = 0x15;
   s_ink = 0x02; // the upper segment
-  s_col = 0x00; // left wall
-  s_row = 0x01;
 
   uint8_t seed = ram_peek(kLifeTimer);
   if (seed & 0x80) {
@@ -4581,26 +4594,22 @@ void game_draw_side_walls_native(void) {
     GAME_CYCLES(0x6b53, 1);
   }
 
+  // How far down the upper segment reaches, from the timer: the walls close in
+  // as a life runs out.
   GAME_CYCLES(0x6b5c, 18);
-  s_run_end = (uint8_t)((seed >> 2) + 1);
-  game_plot_vline(0x6b64);
+  const uint8_t wall_top = (uint8_t)((seed >> 2) + 1);
+  plot_vline_at(0x00, 0x01, wall_top, 0x6b64);
 
   GAME_CYCLES(0x6b65, 16);
-  s_col = 0x27; // right wall, same rows
-  s_row = 0x01;
-  game_plot_vline(0x6b6f);
+  plot_vline_at(0x27, 0x01, wall_top, 0x6b6f);
 
   GAME_CYCLES(0x6b70, 30);
-  const uint8_t seam = (uint8_t)(s_run_end + 1);
-  s_run_end = 0x27;
-  s_row = seam;
+  const uint8_t seam = (uint8_t)(wall_top + 1);
   s_ink = 0x0d; // the lower segment
-  game_plot_vline(0x6b81);
+  plot_vline_at(0x27, seam, 0x27, 0x6b81);
 
   GAME_CYCLES(0x6b82, 18);
-  s_row = seam;
-  s_col = 0x00;
-  game_plot_vline(0x6b8b);
+  plot_vline_at(0x00, seam, 0x27, 0x6b8b);
 
   // Tail call: SCRN of the bottom-centre cell, whose result the caller reads.
   GAME_CYCLES(0x6b8c, 7);
@@ -5198,10 +5207,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       GAME_CYCLES(0x642d, 31);
       s_shape = 0x15;
       s_ink = 0x0d;
-      s_row = 0x27;
-      s_col = 0x12;
-      s_run_end = 0x16;
-      game_plot_hline(0x6443);
+      plot_hline_at(0x12, 0x27, 0x16, 0x6443);
       GAME_CYCLES(0x6444, 8);
       s_a = 0x0d;
       rom_setcol(0x6448);
@@ -5596,44 +5602,29 @@ void game_bonus_screen(void) {
   GAME_CYCLES(0x78d1, 31);
   s_shape = 0x01;
   s_ink = 0x09;
-  s_col = 0x0d;
-  s_row = 0x10;
-  s_run_end = 0x1a;
-  game_plot_hline(0x78e7);
+  // Columns $0D-$1A, rows $10-$15. The two sides used to inherit their column
+  // from the edge above: an hline leaves s_col at its own endpoint, so the
+  // first vline ran down $1A, the right edge, and not the $0D it looks like.
+  plot_hline_at(0x0d, 0x10, 0x1a, 0x78e7);
   GAME_CYCLES(0x78e8, 16);
-  s_col = 0x0d;
-  s_row = 0x15;
-  game_plot_hline(0x78f2);
+  plot_hline_at(0x0d, 0x15, 0x1a, 0x78f2);
   GAME_CYCLES(0x78f3, 16);
-  s_row = 0x10;
-  s_run_end = 0x15;
-  game_plot_vline(0x78fd);
+  plot_vline_at(0x1a, 0x10, 0x15, 0x78fd);
   GAME_CYCLES(0x78fe, 16);
-  s_col = 0x0d;
-  s_row = 0x10;
-  game_plot_vline(0x7908);
+  plot_vline_at(0x0d, 0x10, 0x15, 0x7908);
 
   // $7909 -- the interior, in ink 0, one row at a time from $11 to $14. The
   // original re-loads $02 each time and increments $03 in place, which is why
   // the rows are not written out as constants.
   GAME_CYCLES(0x7909, 26);
   s_ink = 0x00;
-  s_run_end = 0x19;
-  s_row = 0x11;
-  s_col = 0x0e;
-  game_plot_hline(0x791b);
+  plot_hline_at(0x0e, 0x11, 0x19, 0x791b);
   GAME_CYCLES(0x791c, 16);
-  s_col = 0x0e;
-  s_row = (uint8_t)(s_row + 1);
-  game_plot_hline(0x7924);
+  plot_hline_at(0x0e, 0x12, 0x19, 0x7924);
   GAME_CYCLES(0x7925, 16);
-  s_col = 0x0e;
-  s_row = (uint8_t)(s_row + 1);
-  game_plot_hline(0x792d);
+  plot_hline_at(0x0e, 0x13, 0x19, 0x792d);
   GAME_CYCLES(0x792e, 16);
-  s_col = 0x0e;
-  s_row = (uint8_t)(s_row + 1);
-  game_plot_hline(0x7936);
+  plot_hline_at(0x0e, 0x14, 0x19, 0x7936);
 
   // $7937 -- "BONUS: " and the amount, through the hi-res font.
   GAME_CYCLES(0x7937, 16);
@@ -7241,11 +7232,8 @@ ate_apple: /* $773E */
      kLifeTime for why $FF stops it rather than lengthening it. */
   GAME_CYCLES(0x779a, 31);
   s_ink = 0x06;
-  s_row = 0x00;
-  s_col = 0x12;
-  s_run_end = 0x16;
   s_shape = 0x15;
-  game_plot_hline(0x77b0);
+  plot_hline_at(0x12, 0x00, 0x16, 0x77b0);
   GAME_CYCLES(0x77b1, 16);
   s_ink = 0x00;
   s_col = 0x14;
