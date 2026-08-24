@@ -176,6 +176,12 @@ static inline uint16_t csw16(void) { return (uint16_t)(s_cswl | (s_cswh << 8)); 
 /// Initialised from the entry snapshot, like the plotter's block.
 static uint8_t s_ch, s_cv;
 
+/// The converted game routines are entered with decimal mode clear. Rather
+/// than carry the decompiler's dead decimal arms through them, say so and fail
+/// loudly if it ever stops being true. game_bonus is the exception and has no
+/// such check.
+static void assert_binary_mode(const char *who, uint16_t at);
+
 /// A cell on the 40x48 playfield grid.
 typedef struct {
   uint8_t col;
@@ -196,25 +202,18 @@ void game_load_shape(uint16_t ret_addr);
 void game_draw_cell(uint16_t ret_addr, uint8_t ink, Cell c);
 void game_plot_hline(uint16_t ret_addr, Cell c, uint8_t to_col);
 void game_plot_vline(uint16_t ret_addr, Cell c, uint8_t to_row);
-void game_start_round(uint16_t ret_addr);
-void game_play_loop(uint16_t ret_addr);
-void game_setup(uint16_t ret_addr);
-void game_set_ink(uint16_t ret_addr);
 void game_lores_vline(uint16_t ret_addr, Cell c, uint8_t to_row);
-void game_print_bcd(uint16_t ret_addr);
 void game_clear_hgr(uint16_t ret_addr);
 void game_plot_shape_merge(uint16_t ret_addr, uint8_t ink, Cell c);
 void game_draw_playfield(uint16_t ret_addr);
 void game_install_cout_hook(uint16_t ret_addr);
 void game_start_life_adapter(uint16_t ret_addr);
-void game_show_key(uint16_t ret_addr);
 void game_move_ok(uint16_t ret_addr);
 void game_move_bouncer(uint16_t ret_addr);
 void game_update_high_score(uint16_t ret_addr);
 void game_step_bouncers(uint16_t ret_addr);
 void game_find_apple(uint16_t ret_addr);
 void game_pause_or_toggle_sound(uint16_t ret_addr);
-void game_edit_key(uint16_t ret_addr);
 void game_read_direction(uint16_t ret_addr);
 void game_print_inline_str(uint16_t ret_addr);
 void rom_bascalc(uint16_t ret_addr);
@@ -1041,7 +1040,6 @@ void game_plot_vline(uint16_t ret_addr, Cell c, uint8_t to_row);
 
 /// $7024 -- set the lo-res colour from the ink flag in Z: black if zero,
 /// grey otherwise. Tail-calls the ROM's SETCOL.
-void game_set_ink(uint16_t ret_addr);
 
 /// $7000 -- plot a vertical run on the lo-res occupancy map, from row $03
 /// through row $08 inclusive at column $02, leaving $03 unchanged.
@@ -1051,7 +1049,6 @@ void game_lores_vline(uint16_t ret_addr, Cell c, uint8_t to_row);
 
 /// $71F3 -- print one BCD byte as two digits, suppressing leading zeros via
 /// the $002C flag.
-void game_print_bcd(uint16_t ret_addr);
 
 /// $7226 -- print '0' if $002C shows no digit was printed. Called once at the
 /// end of a multi-byte number.
@@ -1098,7 +1095,6 @@ void game_start_life_adapter(uint16_t ret_addr);
 /// $6217 -- poll the keyboard into the 16-entry ring buffer at $623C.
 
 /// $7590 -- show the character in A at slot X of the key-redefinition screen.
-void game_show_key(uint16_t ret_addr);
 
 /// $6B3D -- draw both side walls in two inks, with a randomly placed seam.
 
@@ -1130,14 +1126,13 @@ void game_pause_or_toggle_sound(uint16_t ret_addr);
 
 /// $75D1 -- blink slot X of the key-redefinition screen and wait for a
 /// replacement key.
-void game_edit_key(uint16_t ret_addr);
 
 /// $6C72 -- turn the next key, or the joystick, into a direction.
 void game_read_direction(uint16_t ret_addr);
 
-/// $6288 -- one life. Adapter for game_play_loop_native(); leaves the reason
-/// it ended in $6253, which is what the caller at $7739 reads.
-void game_play_loop(uint16_t ret_addr);
+/// $6288 -- play one life, and leave the reason it ended in $6253, which is
+/// what the caller at $7739 reads.
+static void game_play_one_life(void);
 
 /// $72CE -- draw the status panel. Adapter for game_status_panel().
 
@@ -1145,10 +1140,8 @@ void game_play_loop(uint16_t ret_addr);
 /// decimal mode set.
 
 /// $6256 -- start a life and run it. Adapter for game_begin_life().
-void game_start_round(uint16_t ret_addr);
 
 /// $7980 -- the setup screen. Adapter for game_setup_screen().
-void game_setup(uint16_t ret_addr);
 
 /* ========================================================================== *
  * Apple II ROM entry points, hand-written                                  *
@@ -3048,10 +3041,9 @@ typedef enum {
 
 /// $7024 through its adapter. The ink arrives in the Z flag, not in A.
 static void set_ink(uint8_t ink, uint16_t ret) {
-  s_a = ink;
-  s_status_not_z = ink;
-  s_status_n = (ink & 0x80);
-  game_set_ink(ret);
+  (void)ret; // $7024 has no CYCLES site of its own
+  assert(!ink == !ink);
+  game_set_ink_native(ink);
 }
 
 /// The ROM's HLINE, which takes its right-hand end from $2C.
@@ -3074,6 +3066,14 @@ static void lores_hline(uint8_t row, uint8_t from_col, uint16_t ret) {
 /// Separate from plot_shape_at because for these callers the shape genuinely
 /// is inherited -- see s_shape -- and passing one would be inventing a value
 /// the original does not have.
+static void assert_binary_mode(const char *who, uint16_t at) {
+  if (s_status_d) {
+    fprintf(stderr, "%s: entered with decimal mode set\n", who);
+    error_handler(at);
+    abort();
+  }
+}
+
 static void plot_at(uint8_t ink, Cell c) {
   s_ink = ink; // inherited by any run that follows -- see s_ink
   game_plot_shape_native(ink, c);
@@ -5477,17 +5477,13 @@ void game_status_panel(void) {
   game_print_inline_str(0x72d8);
   GAME_CYCLES(0x72e2, 15);
   clear_leading_zero_flag();
-  s_a = ram_peek(kScore + 3);
-  game_print_bcd(0x72eb);
+  game_print_bcd_native(ram_peek(kScore + 3));
   GAME_CYCLES(0x72ec, 10);
-  s_a = ram_peek(kScore + 2);
-  game_print_bcd(0x72f1);
+  game_print_bcd_native(ram_peek(kScore + 2));
   GAME_CYCLES(0x72f2, 10);
-  s_a = ram_peek(kScore + 1);
-  game_print_bcd(0x72f7);
+  game_print_bcd_native(ram_peek(kScore + 1));
   GAME_CYCLES(0x72f8, 10);
-  s_a = ram_peek(kScore);
-  game_print_bcd(0x72fd);
+  game_print_bcd_native(ram_peek(kScore));
   GAME_CYCLES(0x72fe, 6);
   game_print_zero_if_blank_native();
 
@@ -5497,17 +5493,13 @@ void game_status_panel(void) {
   game_print_inline_str(0x7307);
   GAME_CYCLES(0x7314, 15);
   clear_leading_zero_flag();
-  s_a = ram_peek(kHiScore + 3);
-  game_print_bcd(0x731d);
+  game_print_bcd_native(ram_peek(kHiScore + 3));
   GAME_CYCLES(0x731e, 10);
-  s_a = ram_peek(kHiScore + 2);
-  game_print_bcd(0x7323);
+  game_print_bcd_native(ram_peek(kHiScore + 2));
   GAME_CYCLES(0x7324, 10);
-  s_a = ram_peek(kHiScore + 1);
-  game_print_bcd(0x7329);
+  game_print_bcd_native(ram_peek(kHiScore + 1));
   GAME_CYCLES(0x732a, 10);
-  s_a = ram_peek(kHiScore);
-  game_print_bcd(0x732f);
+  game_print_bcd_native(ram_peek(kHiScore));
   GAME_CYCLES(0x7330, 6);
   game_print_zero_if_blank_native();
 
@@ -5518,11 +5510,9 @@ void game_status_panel(void) {
   game_print_inline_str(0x733d);
   GAME_CYCLES(0x734d, 15);
   clear_leading_zero_flag();
-  s_a = ram_peek(kApplesLeft + 1);
-  game_print_bcd(0x7356);
+  game_print_bcd_native(ram_peek(kApplesLeft + 1));
   GAME_CYCLES(0x7357, 10);
-  s_a = ram_peek(kApplesLeft);
-  game_print_bcd(0x735c);
+  game_print_bcd_native(ram_peek(kApplesLeft));
   GAME_CYCLES(0x735d, 6);
   game_print_zero_if_blank_native();
 
@@ -5540,11 +5530,9 @@ void game_status_panel(void) {
   game_print_inline_str(0x736b);
   GAME_CYCLES(0x7375, 15);
   clear_leading_zero_flag();
-  s_a = ram_peek(kAppleValue + 1);
-  game_print_bcd(0x737e);
+  game_print_bcd_native(ram_peek(kAppleValue + 1));
   GAME_CYCLES(0x737f, 10);
-  s_a = ram_peek(kAppleValue);
-  game_print_bcd(0x7384);
+  game_print_bcd_native(ram_peek(kAppleValue));
   GAME_CYCLES(0x7385, 6);
   game_print_zero_if_blank_native();
 
@@ -5557,12 +5545,10 @@ void game_status_panel(void) {
   s_ch = 0x00;
   game_print_inline_str(0x7392);
   GAME_CYCLES(0x73a2, 11);
-  s_a = 0x00;
   clear_leading_zero_flag();
-  game_print_bcd(0x73a8);
+  game_print_bcd_native(0x00);
   GAME_CYCLES(0x73a9, 10);
-  s_a = lives();
-  game_print_bcd(0x73ae);
+  game_print_bcd_native(lives());
   GAME_CYCLES(0x73af, 6);
   game_print_zero_if_blank_native();
 
@@ -5572,8 +5558,7 @@ void game_status_panel(void) {
   game_print_inline_str(0x73b8);
   GAME_CYCLES(0x73c2, 15);
   clear_leading_zero_flag();
-  s_a = level();
-  game_print_bcd(0x73cb);
+  game_print_bcd_native(level());
   GAME_CYCLES(0x73cc, 6);
   game_print_zero_if_blank_native();
 
@@ -5662,11 +5647,9 @@ void game_bonus_screen(void) {
   game_print_inline_str(0x7944);
   GAME_CYCLES(0x794d, 15);
   s_h2 = 0x00;
-  s_a = ram_peek(kBonusAmount + 1);
-  game_print_bcd(0x7956);
+  game_print_bcd_native(ram_peek(kBonusAmount + 1));
   GAME_CYCLES(0x7957, 10);
-  s_a = ram_peek(kBonusAmount);
-  game_print_bcd(0x795c);
+  game_print_bcd_native(ram_peek(kBonusAmount));
 
   // $795D -- COUT back to the ROM's, and $02 becomes the outermost counter of
   // the pause below.
@@ -5755,7 +5738,7 @@ void game_begin_life(void) {
   GAME_CYCLES(0x627f, 11);
   ram_poke(kRingRead, 0x00);
   ram_poke(kRingWrite, 0x00);
-  game_play_loop(0x0000);
+  game_play_one_life();
 }
 
 /* ========================================================================== */
@@ -5935,9 +5918,7 @@ wait: /* $741C */
   GAME_CYCLES(0x7541, 2);
   for (uint8_t i = 0; i != 6; ++i) {
     GAME_CYCLES(0x7543, 10);
-    s_a = ram_peek(kKeyTable + i);
-    s_x = i;
-    game_show_key(0x7548);
+    game_show_key_native(i, ram_peek(kKeyTable + i));
     GAME_CYCLES(0x7549, 6);
     if (i != 5)
       GAME_CYCLES(0x754c, 1);
@@ -5958,12 +5939,10 @@ wait: /* $741C */
   GAME_CYCLES(0x7577, 2);
   for (uint8_t i = 0; i != 6; ++i) {
     GAME_CYCLES(0x7579, 6);
-    s_x = i;
-    game_edit_key(0x757b);
+    const uint8_t chosen = game_edit_key_native(i);
     GAME_CYCLES(0x757c, 11);
-    ram_poke(kKeyTable + i, s_a);
-    s_x = i;
-    game_show_key(0x7581);
+    ram_poke(kKeyTable + i, chosen);
+    game_show_key_native(i, chosen);
     GAME_CYCLES(0x7582, 6);
     if (i != 5)
       GAME_CYCLES(0x7585, 1);
@@ -6304,22 +6283,6 @@ void game_plot_vline(uint16_t ret_addr, Cell c, uint8_t to_row) {
 /* ========================================================================== */
 
 
-void game_set_ink(uint16_t ret_addr) {
-  // Adapter for game_set_ink_native(). Costs 3 trace sites.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  // The original branches on Z and the native takes the byte. That is the same
-  // question only because every caller sets both with one `LDA`, which is an
-  // assumption worth stating out loud rather than relying on quietly.
-  assert(!s_a == !s_status_not_z);
-  game_set_ink_native(s_a);
-
-  if (ret_addr)
-    pop16();
-}
 
 void game_lores_vline(uint16_t ret_addr, Cell c, uint8_t to_row) {
   // Adapter for game_lores_vline_native(). Costs 4 trace sites.
@@ -6365,20 +6328,6 @@ void game_lores_vline(uint16_t ret_addr, Cell c, uint8_t to_row) {
 /// apart from the return address the JSR pushes, so they share one body here.
 /// No CYCLES of its own -- both call sites are already inside a counted block.
 
-void game_print_bcd(uint16_t ret_addr) {
-  // Adapter for game_print_bcd_native(). Costs 11 trace sites. No flags are
-  // put back: every caller's next act is an `LDA` or a store, so `apple2tc
-  // --ir` has nothing live here.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  game_print_bcd_native(s_a);
-
-  if (ret_addr)
-    pop16();
-}
 
 
 
@@ -6597,18 +6546,6 @@ void game_start_life_adapter(uint16_t ret_addr) {
 /* ========================================================================== */
 
 
-void game_show_key(uint16_t ret_addr) {
-  // Adapter for game_show_key_native(). Costs 7 trace sites.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  game_show_key_native(s_x, s_a);
-
-  if (ret_addr)
-    pop16();
-}
 
 
 /* ========================================================================== */
@@ -6866,24 +6803,6 @@ void game_pause_or_toggle_sound(uint16_t ret_addr) {
     pop16();
 }
 
-void game_edit_key(uint16_t ret_addr) {
-  // Adapter for game_edit_key_native(). Costs 17 trace sites -- one short of
-  // the 18 blocks, because $760F stays a probe: it is one of the seven
-  // addresses the replay coordinate counts (see GAME_CYCLES_COORD).
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  const uint8_t slot = s_x;
-  s_a = game_edit_key_native(slot);
-  s_x = slot;
-  s_status_not_z = slot;
-  s_status_n = (slot & 0x80);
-
-  if (ret_addr)
-    pop16();
-}
 
 void game_read_direction(uint16_t ret_addr) {
   // Adapter for game_read_direction_native(). Costs 31 trace sites.
@@ -6914,32 +6833,15 @@ void game_read_direction(uint16_t ret_addr) {
 /* $6288 -- one life. See game_native.c for what it does.                     */
 /* ========================================================================== */
 
-void game_play_loop(uint16_t ret_addr) {
-  // Adapter for game_play_loop_native(). Costs 72 trace sites -- the whole of
-  // the main loop's block structure, which is the largest single trade made so
-  // far and the reason this routine waited until every block head in it was
-  // covered by a recording.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  // The native side does binary arithmetic only. The original's callers clear
-  // decimal mode before getting here and set it afterwards, around the score.
-  if (s_status_d) {
-    fprintf(stderr, "game_play_loop: entered with decimal mode set\n");
-    error_handler(0x6288);
-    abort();
-  }
+/// $6288 -- play one life and record how it ended at $6253, which is where
+/// $7739 reads it. What used to be an adapter is just this write-back now: no
+/// return address, and A is not left holding the reason because nothing reads
+/// it there any more.
+static void game_play_one_life(void) {
+  assert_binary_mode("game_play_loop", 0x6288);
 
   uint8_t cell = 0;
-  const LifeEnd end = game_play_loop_native(&cell);
-
-  // $6253 is the interface, not residue: the caller at $7739 loads it the
-  // instant this returns and compares it against $0F. Written explicitly for
-  // all five endings, though three of them already hold the right byte from
-  // $62EE, because a reader should not have to know that to check it.
-  switch (end) {
+  switch (game_play_loop_native(&cell)) {
   case LIFE_GATE:
     ram_poke(kLifeOutcome, 0x00);
     break;
@@ -6956,17 +6858,6 @@ void game_play_loop(uint16_t ret_addr) {
     ram_poke(kLifeOutcome, cell);
     break;
   }
-
-  // A is dead at both call sites -- $7716 and $7739 both load $6253 straight
-  // away -- but the original leaves the reason there on most paths, so this
-  // does too rather than leaving something arbitrary.
-  const uint8_t reason = ram_peek(kLifeOutcome);
-  s_a = reason;
-  s_status_not_z = reason;
-  s_status_n = (uint8_t)(reason & 0x80);
-
-  if (ret_addr)
-    pop16();
 }
 
 /* ========================================================================== */
@@ -6983,49 +6874,11 @@ void game_play_loop(uint16_t ret_addr) {
 /* $6256 -- start a life. See game_native.c.                                  */
 /* ========================================================================== */
 
-void game_start_round(uint16_t ret_addr) {
-  // Adapter for game_begin_life(). Costs 4 trace sites.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  if (s_status_d) {
-    fprintf(stderr, "game_start_round: entered with decimal mode set\n");
-    error_handler(0x6256);
-    abort();
-  }
-
-  game_begin_life();
-
-  if (ret_addr)
-    pop16();
-}
 
 /* ========================================================================== */
 /* $7980 -- the setup screen. See game_native.c.                              */
 /* ========================================================================== */
 
-void game_setup(uint16_t ret_addr) {
-  // Adapter for game_setup_screen(). Costs 20 trace sites; the rest of this
-  // routine's addresses stay probed, because the inline-string printer leaves
-  // everything after its call reachable only through the dynamic block map.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  if (s_status_d) {
-    fprintf(stderr, "game_setup: entered with decimal mode set\n");
-    error_handler(0x7980);
-    abort();
-  }
-
-  game_setup_screen();
-
-  if (ret_addr)
-    pop16();
-}
 
 /* ========================================================================== *
  * The top level                                                            *
@@ -7126,7 +6979,8 @@ void game_cold_start(void) {
 
 new_game: /* $7691 */
   GAME_CYCLES(0x7691, 6);
-  game_setup(0x7693);
+  assert_binary_mode("game_setup", 0x7980);
+  game_setup_screen();
   GAME_CYCLES(0x7694, 6);
   game_update_high_score(0x7696);
   GAME_CYCLES(0x7697, 40);
@@ -7178,7 +7032,8 @@ start_round: /* $76C7 */
   GAME_CYCLES(0x7710, 6);
   game_status_panel();
   GAME_CYCLES(0x7713, 6);
-  game_start_round(0x7715);
+  assert_binary_mode("game_start_round", 0x6256);
+  game_begin_life();
   GAME_CYCLES(0x7716, 3);
   goto verdict; // $7716: JMP $7739 -- a fresh round asks the same question
 
@@ -7198,7 +7053,7 @@ life: /* $7719 */
     GAME_CYCLES(0x772e, 1);
   }
   GAME_CYCLES(0x7736, 6);
-  game_play_loop(0x7738);
+  game_play_one_life();
 
 verdict: /* $7739 -- $6253 says how the life ended */
   GAME_CYCLES(0x7739, 8);
