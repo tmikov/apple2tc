@@ -2664,3 +2664,48 @@ not change that; only sampling more often would, and there is nothing to catch.
 What still covers the cursor is the screen, at both sample sites. A cursor that
 is wrong puts characters in the wrong place, which is the whole of what CH and
 CV do.
+
+## 2026-08-24 (later) — The last five decompiler-shaped routines become C
+
+`FUNC_BASCALC`, `FUNC_VTABZ`, `FUNC_CLREOL`, `FUNC_CLREOLZ` and `FUNC_MON_WAIT`
+are `rom_bascalc`, `rom_vtabz`, `rom_clreol`, `rom_clreolz` and `rom_wait`.
+214 lines of `bb_N:`/`goto`/`tmpN_U8` became loops and ifs, and the `bb_` label
+count in the file fell from 141 to 112 — what is left is inside the other ROM
+entry points, which are the same job not yet done.
+
+They were the routines the previous entry's category error was protecting.
+There was nothing to protect: they are BASCALC, VTABZ, CLREOL and WAIT, four of
+the best-documented routines on the machine, and reading them as C takes about
+as long as reading the switch did.
+
+### Decimal mode is not asserted away here
+
+The converted game routines assert `D` is clear and drop the decompiler's
+decimal arms, on the argument that the game never enters them in decimal mode.
+That argument does not transfer. `game_bonus_screen` *is* entered with `D` set —
+the playbook already says so — and it prints, so COUT can reach BASCALC and
+VTABZ with decimal mode on. Both arms are kept, written as an `if (s_status_d)`
+over the same `adc_dec16`/`sbc_dec16` helpers the rest of the file uses.
+
+Keeping them costs four `if`s and needs no argument at all, which is the right
+trade for code on a path nothing measures.
+
+### Two of the five are decoded and not verified, and say so
+
+Coverage was measured rather than assumed, which is the rule the cold-gate
+episode produced. Probed at their entry addresses across both cold scenarios:
+
+| routine | play | hires |
+| --- | --- | --- |
+| `rom_bascalc` | 26 | 119 |
+| `rom_vtabz` | 26 | 119 |
+| `rom_clreolz` | 8 | 24 |
+| `rom_clreol` | **0** | **0** |
+| `rom_wait` | **0** | **0** |
+
+`rom_clreol`'s only caller is `$FC9A` on the scroll path and nothing in the
+recordings scrolls; `rom_wait`'s are inside BELL1 and nothing outputs a Ctrl-G.
+Both carry a comment saying so. No coverage was lost — the generated versions
+were equally unreached — but an error in either transcription would not be
+caught, and that is now written where someone will read it rather than inferred
+from a table of block counts.

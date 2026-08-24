@@ -198,11 +198,11 @@ void game_pause_or_toggle_sound(uint16_t ret_addr);
 void game_edit_key(uint16_t ret_addr);
 void game_read_direction(uint16_t ret_addr);
 void game_print_inline_str(uint16_t ret_addr);
-void FUNC_BASCALC(uint16_t ret_addr);
-void FUNC_VTABZ(uint16_t ret_addr);
-void FUNC_CLREOL(uint16_t ret_addr);
-void FUNC_CLREOLZ(uint16_t ret_addr);
-void FUNC_MON_WAIT(uint16_t ret_addr);
+void rom_bascalc(uint16_t ret_addr);
+void rom_vtabz(uint16_t ret_addr);
+void rom_clreol(uint16_t ret_addr);
+void rom_clreolz(uint16_t ret_addr);
+void rom_wait(uint16_t ret_addr);
 
 /// The program starts here. There used to be a func_t001 in between -- the
 /// generated dispatch -- and by the end it was a stub that called this.
@@ -288,227 +288,236 @@ static void emulated_entry_point(void) {
 
 
 
-void FUNC_BASCALC(uint16_t ret_addr) {
+/// $FBC1 BASCALC. Turn a text line number in A into that line's base address
+/// in BASL/BASH.
+///
+/// The Apple II text screen is three interleaved bands of eight lines. The ROM
+/// does not use a table: bit 0 of the line picks the band's second half, bits
+/// 1-2 pick the band, and bits 3-4 pick the line within it, folded in by the
+/// `ADC #$7F` and the two shifts below.
+///
+/// A and the flags are left as the original leaves them, because COUT1 and
+/// CLREOLZ both read BASL straight afterwards and the monitor's callers are
+/// not all in this file's control.
+void rom_bascalc(uint16_t ret_addr) {
   bool branchTarget = true;
-  uint8_t tmp1_U8;
-  uint8_t tmp2_U8;
-  uint16_t tmp3_U16;
-  uint16_t tmp4_U16;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$FBC1*/ CYCLES(0xfbc1, 20);
-            tmp1_U8 = s_a;
-            push8(tmp1_U8);
-  /*$FBC2*/ tmp2_U8 = tmp1_U8 & 0x01;
-            s_status_c = tmp2_U8;
-  /*$FBC7*/ ram_poke(kBASH, (((tmp1_U8 >> 0x01) & 0x03) | 0x04));
-  /*$FBC9*/ tmp1_U8 = pop8();
-  /*$FBCA*/ s_a = (tmp1_U8 & 0x18);
-            branchTarget = true;
-            if (tmp2_U8)
-              goto bb_2;
-bb_1:
-  /*$FBCC*/ CYCLES_EDGE(0xfbcc, 1);
-            branchTarget = true;
-            goto bb_6;
-bb_2:
-  /*$FBCE*/ CYCLES(0xfbce, 2);
-            if (s_status_d)
-              goto bb_4;
-bb_3:
-  /*$FBCE*/ tmp3_U16 = s_a;
-            tmp4_U16 = (tmp3_U16 + 0x007f) + s_status_c;
-            s_status_v = ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0x007f);
-            s_a = ((uint8_t)tmp4_U16);
-            goto bb_5;
-bb_4:
-  /*$FBCE*/ tmp4_U16 = adc_dec16(s_a, 0x7f, s_status_c);
-            s_a = ((uint8_t)tmp4_U16);
-            s_status_v = (((uint8_t)(tmp4_U16 >> 8) & 0x40) != 0);
-bb_5:
-bb_6:
+  const uint8_t line = s_a;
+  // LSR: the carry is the line's low bit, and it is what decides the ADC below.
+  const uint8_t odd = line & 0x01;
+  s_status_c = odd;
+  ram_poke(kBASH, (uint8_t)(((line >> 1) & 0x03) | 0x04));
+  s_a = line & 0x18;
+
+  if (!odd) {
+    /*$FBCC*/ CYCLES_EDGE(0xfbcc, 1);
+  } else {
+    /*$FBCE*/ CYCLES(0xfbce, 2);
+    // ADC #$7F with carry set, i.e. +$80: the second half of the band.
+    if (!s_status_d) {
+      const uint16_t r = (uint16_t)(s_a + 0x007f) + s_status_c;
+      s_status_v = ovf8((uint8_t)r, s_a, 0x7f);
+      s_a = (uint8_t)r;
+    } else {
+      const uint16_t r = adc_dec16(s_a, 0x7f, s_status_c);
+      s_a = (uint8_t)r;
+      s_status_v = (((uint8_t)(r >> 8) & 0x40) != 0);
+    }
+  }
+  branchTarget = true;
+
   /*$FBD0*/ CYCLES(0xfbd0, 19);
-            tmp2_U8 = s_a;
-            ram_poke(kBASL, tmp2_U8);
-  /*$FBD3*/ tmp4_U16 = tmp2_U8 << 0x02;
-            s_status_c = (uint8_t)((tmp4_U16 & 0x01ff) >> 8);
-  /*$FBD4*/ tmp2_U8 = ((uint8_t)tmp4_U16) | ram_peek(kBASL);
-            s_status_not_z = tmp2_U8;
-            s_status_n = (tmp2_U8 & 0x80);
-            s_a = tmp2_U8;
-  /*$FBD6*/ ram_poke(kBASL, tmp2_U8);
-  /*$FBD8*/ if (ret_addr) pop16(); return;
+  ram_poke(kBASL, s_a);
+  // ASL twice, then OR the original back in. The second shift's carry out is
+  // the one the original leaves behind.
+  const uint16_t shifted = (uint16_t)(s_a << 0x02);
+  s_status_c = (uint8_t)((shifted & 0x01ff) >> 8);
+  const uint8_t addr_lo = (uint8_t)shifted | ram_peek(kBASL);
+  s_status_not_z = addr_lo;
+  s_status_n = (addr_lo & 0x80);
+  s_a = addr_lo;
+  ram_poke(kBASL, addr_lo);
+
+  (void)branchTarget;
+  if (ret_addr) pop16();
 }
 
-
-void FUNC_VTABZ(uint16_t ret_addr) {
+/// $FC24 VTABZ. BASCALC for the line in A, then shift the base right by the
+/// window's left edge, so BASL points at the first column of the window rather
+/// than of the screen.
+void rom_vtabz(uint16_t ret_addr) {
   bool branchTarget = true;
-  uint16_t tmp1_U16;
-  uint16_t tmp2_U16;
-  uint16_t tmp3_U16;
-  uint8_t tmp4_U8;
+  (void)branchTarget;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$FC24*/ CYCLES(0xfc24, 6);
-            FUNC_BASCALC(0xfc26);
+  rom_bascalc(0xfc26);
+
   /*$FC27*/ CYCLES(0xfc27, 6);
-            if (s_status_d)
-              goto bb_2;
-bb_1:
-  /*$FC27*/ tmp1_U16 = s_a;
-            tmp2_U16 = ram_peek(kWNDLFT);
-            tmp3_U16 = (tmp1_U16 + tmp2_U16) + s_status_c;
-            s_status_c = (uint8_t)(tmp3_U16 >> 8);
-            s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp1_U16, (uint8_t)tmp2_U16);
-            tmp4_U8 = (uint8_t)tmp3_U16;
-            s_status_not_z = tmp4_U8;
-            s_status_n = (tmp4_U8 & 0x80);
-            s_a = tmp4_U8;
-            goto bb_3;
-bb_2:
-  /*$FC27*/ tmp3_U16 = adc_dec16(s_a, ram_peek(kWNDLFT), s_status_c);
-            s_a = ((uint8_t)tmp3_U16);
-            tmp4_U8 = (uint8_t)(tmp3_U16 >> 8);
-            s_status_c = (tmp4_U8 & 0x01);
-            s_status_not_z = (~tmp4_U8 & 2);
-            s_status_v = ((tmp4_U8 & 0x40) != 0);
-            s_status_n = (tmp4_U8 & 0x80);
-bb_3:
-  /*$FC29*/ ram_poke(kBASL, s_a);
+  if (!s_status_d) {
+    const uint8_t left = ram_peek(kWNDLFT);
+    const uint16_t r = ((uint16_t)s_a + left) + s_status_c;
+    s_status_c = (uint8_t)(r >> 8);
+    s_status_v = ovf8((uint8_t)r, s_a, left);
+    s_a = (uint8_t)r;
+    s_status_not_z = s_a;
+    s_status_n = (s_a & 0x80);
+  } else {
+    const uint16_t r = adc_dec16(s_a, ram_peek(kWNDLFT), s_status_c);
+    s_a = (uint8_t)r;
+    const uint8_t flags = (uint8_t)(r >> 8);
+    s_status_c = (flags & 0x01);
+    s_status_not_z = (uint8_t)(~flags & 2);
+    s_status_v = ((flags & 0x40) != 0);
+    s_status_n = (flags & 0x80);
+  }
+  ram_poke(kBASL, s_a);
+
   /*$FC2B*/ CYCLES(0xfc2b, 6);
-            if (ret_addr) pop16(); return;
+  if (ret_addr) pop16();
 }
 
-
-void FUNC_CLREOL(uint16_t ret_addr) {
+/// $FC9C CLREOL. Blank from the cursor to the right edge of the window.
+///
+/// **Decoded from the binary and not verified.** Neither cold scenario reaches
+/// it: probed at $FC9C, it fires 0 times in play and 0 in hires, because its
+/// only caller is $FC9A on the scroll path and nothing in the recordings
+/// scrolls. The body is three instructions and its tail call is the routine
+/// below, which *is* exercised, so what is unchecked is the LDY and the jump.
+void rom_clreol(uint16_t ret_addr) {
   bool branchTarget = true;
+  (void)branchTarget;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$FC9C*/ CYCLES(0xfc9c, 3);
-            s_y = s_ch;
-            FUNC_CLREOLZ(0x0000);
-            if (ret_addr) pop16(); return;
+  s_y = s_ch;
+  rom_clreolz(0x0000); // JMP -- a tail call.
+
+  if (ret_addr) pop16();
 }
 
-
-void FUNC_CLREOLZ(uint16_t ret_addr) {
+/// $FC9E CLREOLZ. The same, from column Y rather than from the cursor. Writes
+/// spaces up to but not including the window's width.
+///
+/// Y is left at the width and the carry set, which is how the original exits
+/// the loop; both are still written because the monitor's callers read them.
+void rom_clreolz(uint16_t ret_addr) {
   bool branchTarget = true;
-  uint8_t tmp1_U8;
-  uint8_t tmp2_U8;
-  uint8_t tmp3_U8;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$FC9E*/ CYCLES(0xfc9e, 2);
-            s_a = 0xa0;
-bb_1:
-  /*$FCA0*/ CYCLES(0xfca0, 13);
-            tmp1_U8 = s_y;
-            poke((ram_peek16al(kBASL) + tmp1_U8), s_a);
-  /*$FCA2*/ tmp1_U8 = (uint8_t)(tmp1_U8 + 0x01);
-            s_y = tmp1_U8;
-  /*$FCA3*/ tmp2_U8 = ram_peek(kWNDWDTH);
-            s_status_not_z = (tmp1_U8 != tmp2_U8);
-            tmp3_U8 = tmp1_U8 >= tmp2_U8;
-            s_status_c = tmp3_U8;
-            s_status_n = ((uint8_t)(tmp1_U8 - tmp2_U8) & 0x80);
-            branchTarget = true;
-            if (tmp3_U8)
-              goto bb_3;
-bb_2:
-  /*$FCA5*/ CYCLES_EDGE(0xfca5, 1);
-            branchTarget = true;
-            goto bb_1;
-bb_3:
+  s_a = 0xa0; // a space, high bit set
+
+  for (;;) {
+    /*$FCA0*/ CYCLES(0xfca0, 13);
+    const uint8_t col = s_y;
+    poke((uint16_t)(ram_peek16al(kBASL) + col), s_a);
+
+    const uint8_t next = (uint8_t)(col + 1);
+    s_y = next;
+
+    const uint8_t width = ram_peek(kWNDWDTH);
+    s_status_not_z = (next != width);
+    s_status_c = (next >= width);
+    s_status_n = (uint8_t)((uint8_t)(next - width) & 0x80);
+    branchTarget = true;
+    if (next >= width)
+      break;
+
+    /*$FCA5*/ CYCLES_EDGE(0xfca5, 1);
+    branchTarget = true;
+  }
+
   /*$FCA7*/ CYCLES(0xfca7, 6);
-            if (ret_addr) pop16(); return;
+  (void)branchTarget;
+  if (ret_addr) pop16();
 }
 
-
-void FUNC_MON_WAIT(uint16_t ret_addr) {
+/// $FCA8 WAIT. The monitor's delay: two nested `SBC #$01 / BNE` loops around
+/// the value in A, which BELL uses to time its tone.
+///
+/// **Decoded from the binary and not verified.** Probed at $FCA8, it fires 0
+/// times in both cold scenarios. Its only callers are $FBDF and $FBE6 inside
+/// BELL1, and nothing in the recordings outputs a Ctrl-G. That was already
+/// true of the version the decompiler emitted, so no coverage was lost here --
+/// but an error in the transcription would not be caught either.
+///
+/// A comes back as 0 and the carry set. The inner loop counts A down to zero
+/// from a copy on the stack, and the outer one counts the original down, so
+/// the total is quadratic in A rather than linear.
+void rom_wait(uint16_t ret_addr) {
   bool branchTarget = true;
-  uint16_t tmp1_U16;
-  uint8_t tmp2_U8;
-  uint16_t tmp3_U16;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$FCA8*/ CYCLES(0xfca8, 2);
-            s_status_c = 0x01;
-bb_1:
-  /*$FCA9*/ CYCLES(0xfca9, 3);
-            push8(s_a);
-bb_2:
-  /*$FCAA*/ CYCLES(0xfcaa, 4);
-            if (s_status_d)
-              goto bb_4;
-bb_3:
-  /*$FCAA*/ tmp1_U16 = (s_a - 0x0001) - (uint8_t)(0x01 - s_status_c);
-            s_status_c = (uint8_t)(0x01 - ((uint8_t)(tmp1_U16 >> 8) & 0x01));
-            tmp2_U8 = (uint8_t)tmp1_U16;
-            s_status_not_z = tmp2_U8;
-            s_a = tmp2_U8;
-            goto bb_5;
-bb_4:
-  /*$FCAA*/ tmp3_U16 = sbc_dec16(s_a, 0x01, s_status_c);
-            s_a = ((uint8_t)tmp3_U16);
-            tmp2_U8 = (uint8_t)(tmp3_U16 >> 8);
-            s_status_c = (tmp2_U8 & 0x01);
-            s_status_not_z = (~tmp2_U8 & 2);
-bb_5:
-            branchTarget = true;
-            if (!s_status_not_z)
-              goto bb_7;
-bb_6:
-  /*$FCAC*/ CYCLES_EDGE(0xfcac, 1);
-            branchTarget = true;
-            goto bb_2;
-bb_7:
-  /*$FCAE*/ CYCLES(0xfcae, 8);
-            tmp2_U8 = pop8();
-            s_a = tmp2_U8;
-            if (s_status_d)
-              goto bb_9;
-bb_8:
-  /*$FCAF*/ tmp1_U16 = s_a;
-            tmp3_U16 = (tmp1_U16 - 0x0001) - (uint8_t)(0x01 - s_status_c);
-            s_status_c = (uint8_t)(0x01 - ((uint8_t)(tmp3_U16 >> 8) & 0x01));
-            s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp1_U16, (uint8_t)0xfffe);
-            tmp2_U8 = (uint8_t)tmp3_U16;
-            s_status_not_z = tmp2_U8;
-            s_a = tmp2_U8;
-            goto bb_10;
-bb_9:
-  /*$FCAF*/ tmp3_U16 = sbc_dec16(s_a, 0x01, s_status_c);
-            s_a = ((uint8_t)tmp3_U16);
-            tmp2_U8 = (uint8_t)(tmp3_U16 >> 8);
-            s_status_c = (tmp2_U8 & 0x01);
-            s_status_not_z = (~tmp2_U8 & 2);
-            s_status_v = ((tmp2_U8 & 0x40) != 0);
-bb_10:
-            branchTarget = true;
-            if (!s_status_not_z)
-              goto bb_12;
-bb_11:
-  /*$FCB1*/ CYCLES_EDGE(0xfcb1, 1);
-            branchTarget = true;
-            goto bb_1;
-bb_12:
+  s_status_c = 0x01;
+
+  for (;;) {
+    /*$FCA9*/ CYCLES(0xfca9, 3);
+    push8(s_a);
+
+    // The inner loop: A down to zero, one SBC per pass.
+    for (;;) {
+      /*$FCAA*/ CYCLES(0xfcaa, 4);
+      if (!s_status_d) {
+        const uint16_t r = (uint16_t)(s_a - 0x0001) - (uint8_t)(0x01 - s_status_c);
+        s_status_c = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
+        s_a = (uint8_t)r;
+        s_status_not_z = s_a;
+      } else {
+        const uint16_t r = sbc_dec16(s_a, 0x01, s_status_c);
+        s_a = (uint8_t)r;
+        const uint8_t flags = (uint8_t)(r >> 8);
+        s_status_c = (flags & 0x01);
+        s_status_not_z = (uint8_t)(~flags & 2);
+      }
+      branchTarget = true;
+      if (!s_status_not_z)
+        break;
+      /*$FCAC*/ CYCLES_EDGE(0xfcac, 1);
+      branchTarget = true;
+    }
+
+    // The outer one: the copy off the stack, down by one.
+    /*$FCAE*/ CYCLES(0xfcae, 8);
+    s_a = pop8();
+    if (!s_status_d) {
+      const uint8_t before = s_a;
+      const uint16_t r = (uint16_t)(before - 0x0001) - (uint8_t)(0x01 - s_status_c);
+      s_status_c = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
+      s_status_v = ovf8((uint8_t)r, before, 0xfe);
+      s_a = (uint8_t)r;
+      s_status_not_z = s_a;
+    } else {
+      const uint16_t r = sbc_dec16(s_a, 0x01, s_status_c);
+      s_a = (uint8_t)r;
+      const uint8_t flags = (uint8_t)(r >> 8);
+      s_status_c = (flags & 0x01);
+      s_status_not_z = (uint8_t)(~flags & 2);
+      s_status_v = ((flags & 0x40) != 0);
+    }
+    branchTarget = true;
+    if (!s_status_not_z)
+      break;
+    /*$FCB1*/ CYCLES_EDGE(0xfcb1, 1);
+    branchTarget = true;
+  }
+
   /*$FCB3*/ CYCLES(0xfcb3, 6);
-            if (ret_addr) pop16(); return;
+  (void)branchTarget;
+  if (ret_addr) pop16();
 }
 
 /* ========================================================================== *
@@ -1160,8 +1169,8 @@ void game_setup(uint16_t ret_addr);
 /// `error_handler` have external linkage (declared in `apple2tc/system.h`).
 ///
 /// A separate `.c` file therefore cannot see the CPU state at all. In addition,
-/// this file calls the still-generated helpers `FUNC_VTABZ`, `FUNC_CLREOLZ`,
-/// `FUNC_CLREOL` and `FUNC_MON_WAIT` and uses `ovf8()` / `adc_dec16()`, which
+/// this file calls the still-generated helpers `rom_vtabz`, `rom_clreolz`,
+/// `rom_clreol` and `rom_wait` and uses `ovf8()` / `adc_dec16()`, which
 /// the decompiler emits as `static` in the generated file.
 ///
 /// Consequently this file must be textually included into the same translation
@@ -1186,10 +1195,10 @@ void game_setup(uint16_t ret_addr);
 
 /* Helpers that remain in the generated code. Redeclared here so that this file
    reads standalone; C permits identical redeclarations. */
-void FUNC_VTABZ(uint16_t ret_addr);
-void FUNC_CLREOLZ(uint16_t ret_addr);
-void FUNC_CLREOL(uint16_t ret_addr);
-void FUNC_MON_WAIT(uint16_t ret_addr);
+void rom_vtabz(uint16_t ret_addr);
+void rom_clreolz(uint16_t ret_addr);
+void rom_clreol(uint16_t ret_addr);
+void rom_wait(uint16_t ret_addr);
 
 /* $FDF0 COUT1, defined below. `rom_cout` dispatches to it, and so does the
    game's own $664A handler in game.c once it has drawn its glyph. */
@@ -1515,14 +1524,14 @@ bb_0:
 bb_1:
   /*$FC22*/ CYCLES(0xfc22, 3);
             s_a = s_cv;
-            FUNC_VTABZ(0x0000);
+            rom_vtabz(0x0000);
             if (ret_addr) pop16(); return;
 bb_2:
   /*$FC46*/ CYCLES(0xfc46, 9);
             push8(s_a);
-  /*$FC47*/ FUNC_VTABZ(0xfffe);
+  /*$FC47*/ rom_vtabz(0xfffe);
   /*$FC4A*/ CYCLES(0xfc4a, 6);
-            FUNC_CLREOLZ(0xfffe);
+            rom_clreolz(0xfffe);
   /*$FC4D*/ CYCLES(0xfc4d, 13);
             s_y = 0x00;
   /*$FC4F*/ tmp1_U8 = pop8();
@@ -1595,7 +1604,7 @@ bb_1:
   /*$FC70*/ tmp1_U8 = ram_peek(kWNDTOP);
             s_a = tmp1_U8;
   /*$FC72*/ push8(tmp1_U8);
-  /*$FC73*/ FUNC_VTABZ(0xfffe);
+  /*$FC73*/ rom_vtabz(0xfffe);
             branchTarget = true;
 bb_2:
   /*$FC76*/ CYCLES(0xfc76, 28);
@@ -1623,7 +1632,7 @@ bb_5:
 bb_6:
   /*$FC88*/ CYCLES(0xfc88, 9);
             push8(s_a);
-  /*$FC89*/ FUNC_VTABZ(0xfffe);
+  /*$FC89*/ rom_vtabz(0xfffe);
             branchTarget = true;
 bb_7:
   /*$FC8C*/ CYCLES(0xfc8c, 15);
@@ -1645,7 +1654,7 @@ bb_8:
 bb_9:
   /*$FC95*/ CYCLES(0xfc95, 8);
             s_y = 0x00;
-  /*$FC97*/ FUNC_CLREOLZ(0xfffe);
+  /*$FC97*/ rom_clreolz(0xfffe);
   /*$FC9A*/ CYCLES(0xfc9a, 2);
             branchTarget = true;
             if (!s_status_c)
@@ -1657,16 +1666,16 @@ bb_9:
 bb_12:
   /*$FC22*/ CYCLES(0xfc22, 3);
             s_a = s_cv;
-            FUNC_VTABZ(0x0000);
+            rom_vtabz(0x0000);
             if (ret_addr) pop16(); return;
 bb_10:
   // $FC6C BCC -- the branch itself, taken here.
   /*$FC6C*/ CYCLES_EDGE(0xfc6c, 1);
-            FUNC_VTABZ(0x0000);
+            rom_vtabz(0x0000);
             branchTarget = true;
             if (ret_addr) pop16(); return;
 bb_11:
-  /*$FC9A*/ FUNC_CLREOL(0x0000);
+  /*$FC9A*/ rom_clreol(0x0000);
             branchTarget = true;
             if (ret_addr) pop16(); return;
 bb_13:
@@ -1847,7 +1856,7 @@ bb_17:
             s_cv = (uint8_t)(s_cv - 0x01);
   /*$FC22*/ CYCLES(0xfc22, 3);
             s_a = s_cv;
-            FUNC_VTABZ(0x0000);
+            rom_vtabz(0x0000);
             if (ret_addr) pop16(); return;
 bb_18:
   /*$FC2B*/ CYCLES(0xfc2b, 6);
@@ -1866,7 +1875,7 @@ bb_22:
 bb_23:
   /*$FBDD*/ CYCLES(0xfbdd, 8);
             s_a = 0x40;
-  /*$FBDF*/ FUNC_MON_WAIT(0xfffe);
+  /*$FBDF*/ rom_wait(0xfffe);
             branchTarget = true;
 bb_24:
   /*$FBE2*/ CYCLES(0xfbe2, 2);
@@ -1874,7 +1883,7 @@ bb_24:
 bb_25:
   /*$FBE4*/ CYCLES(0xfbe4, 8);
             s_a = 0x0c;
-  /*$FBE6*/ FUNC_MON_WAIT(0xfffe);
+  /*$FBE6*/ rom_wait(0xfffe);
             branchTarget = true;
   /*$FBE9*/ CYCLES(0xfbe9, 8);
             tmp1_U8 = io_peek(0xc030);
