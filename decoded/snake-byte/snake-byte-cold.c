@@ -2361,6 +2361,98 @@ void bouncer_step(Bouncer *b) {
   ram_poke(0x6c4a, (uint8_t)blocked);
 }
 
+/* --- The scoreboard: $7252-$7266 ------------------------------------------ */
+/*
+ * Eleven fields, every one of them BCD, and every multi-byte one least
+ * significant first. Six are what game_status_panel prints, and the labels it
+ * prints beside them are where those six names come from -- see the $72CE
+ * header for the layout.
+ *
+ * Named as constants rather than accessor functions because most of them are
+ * *used* as addresses: the BCD helpers below take a low/high pair, and the
+ * original's own add-and-carry shape survives in the converted code. The three
+ * single-byte fields get accessors as well, since those read as values.
+ */
+enum {
+  /// SCORE, four bytes. game_add_score adds an apple's worth into it;
+  /// game_promote_high_score copies it over the high score at the end of a game.
+  kScore = 0x7252,
+  /// HI SCORE, four bytes, the same shape.
+  kHiScore = 0x7256,
+  /// APPLES LEFT -- what remains of this round's quota. start_round loads it
+  /// from kApplesQuota and each apple eaten takes one off; both bytes zero is
+  /// what ends the round.
+  kApplesLeft = 0x725a,
+  /// SNAKES LEFT -- lives. $7691 sets it to 2 for a new game.
+  kLives = 0x725e,
+  /// Apples on the playfield *right now* -- not, as this pair was commented
+  /// before it was named, a countdown to the next one. game_place_apple ends
+  /// by BCD-incrementing it ($766C) and $7743 decrements it when one is
+  /// eaten; $77D0 places a replacement exactly when it reaches zero, which is
+  /// why the field normally holds one apple and the timeout path's three
+  /// arrive together. Measured on play-hires: it is $01 at every apple eaten,
+  /// and $77D0 fires and places one every time.
+  kApplesAfield = 0x725f,
+  /// Apples eaten this round. Only the first $11 of them score -- $777B tests
+  /// the high byte and $7780 compares the low against $11.
+  kApplesEaten = 0x7261,
+  /// The round's quota, copied into kApplesLeft by start_round. $10 for a
+  /// fresh level, and the timeout path at $7817 adds three to both.
+  kApplesQuota = 0x7263,
+  /// LEVEL, one BCD byte.
+  kLevel = 0x7265,
+  /// What $6255, the life timer, is loaded with when a life begins. Comes from
+  /// $0304, the level's own allowance.
+  ///
+  /// $77BC sets it to $FF once the round's last apple is gone, which stops the
+  /// timer rather than lengthening it: $6255 counts down one per pace, but
+  /// game_draw_side_walls reads any value with bit 7 set as out of range,
+  /// clamps the wall height and writes $FF back ($6B55), so the count never
+  /// reaches zero and the run to the gate is untimed. Decoded from $641C and
+  /// $6B55, not observed -- all three recordings seed it $64 and never reach
+  /// the clamp.
+  kLifeTime = 0x7266,
+};
+
+/// $0304 -- the level's time allowance, which seeds kLifeTime at the start of
+/// every life. Set by the display list's 'T' command (see run_script), and
+/// $64 until one says otherwise. It is *not* the apple value, which is
+/// kAppleValue and is computed by game_set_apple_value from the difficulty
+/// and the level number; that routine never reads this byte.
+enum { kLevelTime = 0x0304 };
+
+/// VALUE -- what one apple is worth on this level, two BCD bytes.
+/// game_set_apple_value recomputes it per level.
+enum { kAppleValue = 0x71cb };
+
+/// The bonus screen's own two-byte BCD scratch, and the lives count it
+/// compares against to decide whether the round earned a bonus at all.
+enum { kBonusAmount = 0x78b0, kLivesAtLevelStart = 0x78b2 };
+
+static uint8_t lives(void) {
+  return ram_peek(kLives);
+}
+
+static void set_lives(uint8_t v) {
+  ram_poke(kLives, v);
+}
+
+static uint8_t level(void) {
+  return ram_peek(kLevel);
+}
+
+static void set_level(uint8_t v) {
+  ram_poke(kLevel, v);
+}
+
+static uint8_t life_time(void) {
+  return ram_peek(kLifeTime);
+}
+
+static void set_life_time(uint8_t v) {
+  ram_poke(kLifeTime, v);
+}
+
 /* ========================================================================== */
 /* $728D -- the high score                                                    */
 /*                                                                            */
@@ -2375,8 +2467,8 @@ void bouncer_step(Bouncer *b) {
 /* ========================================================================== */
 
 /// Most significant first.
-static const uint16_t kScoreByte[4] = {0x7255, 0x7254, 0x7253, 0x7252};
-static const uint16_t kBestByte[4] = {0x7259, 0x7258, 0x7257, 0x7256};
+static const uint16_t kScoreByte[4] = {kScore + 3, kScore + 2, kScore + 1, kScore};
+static const uint16_t kBestByte[4] = {kHiScore + 3, kHiScore + 2, kHiScore + 1, kHiScore};
 static const uint16_t kCmpBlock[4] = {0x728d, 0x7297, 0x72a1, 0x72ab};
 static const uint16_t kBelowEdge[4] = {0x7293, 0x729d, 0x72a7, 0x72b1};
 static const uint16_t kEqualBlock[4] = {0x7295, 0x729f, 0x72a9, 0x72b3};
@@ -2915,7 +3007,7 @@ restart:
       GAME_CYCLES(0x71b7, 6);
       const uint8_t v = script_byte(0x71b9);
       GAME_CYCLES(0x71ba, 7);
-      ram_poke(0x0304, v);
+      ram_poke(kLevelTime, v);
       continue;
     }
     GAME_CYCLES(0x71b5, 1);
@@ -3779,10 +3871,10 @@ void game_add_score_native(void) {
   unsigned carry = 0;
   uint8_t flags = 0;
   for (int i = 0; i < 4; ++i) {
-    const uint8_t a = i < 2 ? ram_peek(0x71cb + i) : ram_peek(0x7252 + i);
-    const uint8_t m = i < 2 ? ram_peek(0x7252 + i) : 0x00;
+    const uint8_t a = i < 2 ? ram_peek(kAppleValue + i) : ram_peek(kScore + i);
+    const uint8_t m = i < 2 ? ram_peek(kScore + i) : 0x00;
     const uint16_t r = adc_dec16(a, m, carry);
-    ram_poke(0x7252 + i, (uint8_t)r);
+    ram_poke(kScore + i, (uint8_t)r);
     flags = (uint8_t)(r >> 8);
     carry = flags & 0x01;
   }
@@ -3944,7 +4036,7 @@ void game_place_apple_native(void) {
   // One more apple on screen. $77D0 watches this pair and calls back here when
   // it reaches zero.
   GAME_CYCLES(0x766c, 32);
-  const uint8_t flags = bcd_inc16(0x725f);
+  const uint8_t flags = bcd_inc16(kApplesAfield);
   s_status_c = (flags & 0x01);
   s_status_v = ((flags & 0x40) != 0);
 }
@@ -3954,8 +4046,8 @@ void game_place_apple_native(void) {
 /// the original's loop, which is what makes it the same entry every time.
 void game_set_apple_value_native(void) {
   GAME_CYCLES(0x71cd, 20);
-  ram_poke(0x71cb, 0x00);
-  ram_poke(0x71cc, 0x00);
+  ram_poke(kAppleValue, 0x00);
+  ram_poke(kAppleValue + 1, 0x00);
   const uint8_t per_apple = ram_peek(0x71c8 + ram_peek(0x0301));
   uint8_t levels = ram_peek(0x0303);
   s_status_d = 0x01;
@@ -3963,11 +4055,11 @@ void game_set_apple_value_native(void) {
   uint8_t flags = 0;
   for (;;) {
     GAME_CYCLES(0x71dc, 28);
-    uint16_t r = adc_dec16(per_apple, ram_peek(0x71cb), 0x00);
-    ram_poke(0x71cb, (uint8_t)r);
+    uint16_t r = adc_dec16(per_apple, ram_peek(kAppleValue), 0x00);
+    ram_poke(kAppleValue, (uint8_t)r);
 
-    r = adc_dec16(ram_peek(0x71cc), 0x00, (uint8_t)(r >> 8) & 0x01);
-    ram_poke(0x71cc, (uint8_t)r);
+    r = adc_dec16(ram_peek(kAppleValue + 1), 0x00, (uint8_t)(r >> 8) & 0x01);
+    ram_poke(kAppleValue + 1, (uint8_t)r);
     flags = (uint8_t)(r >> 8);
 
     if (!--levels)
@@ -4028,8 +4120,8 @@ void game_draw_head_native(void) {
 void game_eat_apple_native(void) {
   GAME_CYCLES(0x7633, 22);
   s_status_d = 0x01;
-  const uint16_t r = adc_dec16(ram_peek(0x725e), 0x01, 0x00);
-  ram_poke(0x725e, (uint8_t)r);
+  const uint16_t r = adc_dec16(lives(), 0x01, 0x00);
+  set_lives((uint8_t)r);
   const uint8_t flags = (uint8_t)(r >> 8);
   s_status_c = (flags & 0x01);
   s_status_v = ((flags & 0x40) != 0);
@@ -5040,16 +5132,16 @@ void game_status_panel(void) {
   game_print_inline_str(0x72d8);
   GAME_CYCLES(0x72e2, 15);
   clear_leading_zero_flag();
-  s_a = ram_peek(0x7255);
+  s_a = ram_peek(kScore + 3);
   game_print_bcd(0x72eb);
   GAME_CYCLES(0x72ec, 10);
-  s_a = ram_peek(0x7254);
+  s_a = ram_peek(kScore + 2);
   game_print_bcd(0x72f1);
   GAME_CYCLES(0x72f2, 10);
-  s_a = ram_peek(0x7253);
+  s_a = ram_peek(kScore + 1);
   game_print_bcd(0x72f7);
   GAME_CYCLES(0x72f8, 10);
-  s_a = ram_peek(0x7252);
+  s_a = ram_peek(kScore);
   game_print_bcd(0x72fd);
   GAME_CYCLES(0x72fe, 6);
   game_print_zero_if_blank_native();
@@ -5060,16 +5152,16 @@ void game_status_panel(void) {
   game_print_inline_str(0x7307);
   GAME_CYCLES(0x7314, 15);
   clear_leading_zero_flag();
-  s_a = ram_peek(0x7259);
+  s_a = ram_peek(kHiScore + 3);
   game_print_bcd(0x731d);
   GAME_CYCLES(0x731e, 10);
-  s_a = ram_peek(0x7258);
+  s_a = ram_peek(kHiScore + 2);
   game_print_bcd(0x7323);
   GAME_CYCLES(0x7324, 10);
-  s_a = ram_peek(0x7257);
+  s_a = ram_peek(kHiScore + 1);
   game_print_bcd(0x7329);
   GAME_CYCLES(0x732a, 10);
-  s_a = ram_peek(0x7256);
+  s_a = ram_peek(kHiScore);
   game_print_bcd(0x732f);
   GAME_CYCLES(0x7330, 6);
   game_print_zero_if_blank_native();
@@ -5081,10 +5173,10 @@ void game_status_panel(void) {
   game_print_inline_str(0x733d);
   GAME_CYCLES(0x734d, 15);
   clear_leading_zero_flag();
-  s_a = ram_peek(0x725b);
+  s_a = ram_peek(kApplesLeft + 1);
   game_print_bcd(0x7356);
   GAME_CYCLES(0x7357, 10);
-  s_a = ram_peek(0x725a);
+  s_a = ram_peek(kApplesLeft);
   game_print_bcd(0x735c);
   GAME_CYCLES(0x735d, 6);
   game_print_zero_if_blank_native();
@@ -5103,10 +5195,10 @@ void game_status_panel(void) {
   game_print_inline_str(0x736b);
   GAME_CYCLES(0x7375, 15);
   clear_leading_zero_flag();
-  s_a = ram_peek(0x71cc);
+  s_a = ram_peek(kAppleValue + 1);
   game_print_bcd(0x737e);
   GAME_CYCLES(0x737f, 10);
-  s_a = ram_peek(0x71cb);
+  s_a = ram_peek(kAppleValue);
   game_print_bcd(0x7384);
   GAME_CYCLES(0x7385, 6);
   game_print_zero_if_blank_native();
@@ -5124,7 +5216,7 @@ void game_status_panel(void) {
   clear_leading_zero_flag();
   game_print_bcd(0x73a8);
   GAME_CYCLES(0x73a9, 10);
-  s_a = ram_peek(0x725e);
+  s_a = lives();
   game_print_bcd(0x73ae);
   GAME_CYCLES(0x73af, 6);
   game_print_zero_if_blank_native();
@@ -5135,7 +5227,7 @@ void game_status_panel(void) {
   game_print_inline_str(0x73b8);
   GAME_CYCLES(0x73c2, 15);
   clear_leading_zero_flag();
-  s_a = ram_peek(0x7265);
+  s_a = level();
   game_print_bcd(0x73cb);
   GAME_CYCLES(0x73cc, 6);
   game_print_zero_if_blank_native();
@@ -5171,10 +5263,10 @@ void game_status_panel(void) {
 void game_bonus_screen(void) {
   // $78B3 -- double the apple's value into $78B0/$78B1, in BCD.
   GAME_CYCLES(0x78b3, 36);
-  const uint16_t lo = adc_dec16(ram_peek(0x71cb), ram_peek(0x71cb), 0x00);
-  ram_poke(0x78b0, (uint8_t)lo);
-  const uint16_t hi = adc_dec16(ram_peek(0x71cc), ram_peek(0x71cc), (uint8_t)(lo >> 8) & 0x01);
-  ram_poke(0x78b1, (uint8_t)hi);
+  const uint16_t lo = adc_dec16(ram_peek(kAppleValue), ram_peek(kAppleValue), 0x00);
+  ram_poke(kBonusAmount, (uint8_t)lo);
+  const uint16_t hi = adc_dec16(ram_peek(kAppleValue + 1), ram_peek(kAppleValue + 1), (uint8_t)(lo >> 8) & 0x01);
+  ram_poke(kBonusAmount + 1, (uint8_t)hi);
   s_a = (uint8_t)hi;
   s_status_c = (uint8_t)(hi >> 8) & 0x01;
   s_status_v = ((uint8_t)(hi >> 8) & 0x40) != 0;
@@ -5240,10 +5332,10 @@ void game_bonus_screen(void) {
   game_print_inline_str(0x7944);
   GAME_CYCLES(0x794d, 15);
   ram_poke(0x002c, 0x00);
-  s_a = ram_peek(0x78b1);
+  s_a = ram_peek(kBonusAmount + 1);
   game_print_bcd(0x7956);
   GAME_CYCLES(0x7957, 10);
-  s_a = ram_peek(0x78b0);
+  s_a = ram_peek(kBonusAmount);
   game_print_bcd(0x795c);
 
   // $795D -- COUT back to the ROM's, and $02 becomes the outermost counter of
@@ -6355,7 +6447,7 @@ void game_update_high_score(uint16_t ret_addr) {
   // What the original leaves in A and the flags depends on where it stopped:
   // the last byte it compared, or the top score byte if it copied. Both are
   // reproduced from memory rather than threaded out of the C.
-  const uint8_t top = ram_peek(0x7255);
+  const uint8_t top = ram_peek(kScore + 3);
   s_a = top;
   s_status_not_z = top;
   s_status_n = (top & 0x80);
@@ -6707,7 +6799,7 @@ void game_cold_start(void) {
   ram_poke(0x0301, 0x01); // difficulty
   ram_poke(0x0302, 0x01); // demo mode, so the first pass plays itself
   ram_poke(0x0303, 0x01); // level script index
-  ram_poke(0x0304, 0x64); // apple value
+  ram_poke(kLevelTime, 0x64);
   goto round;             // $3783: JMP $76C2
 
 new_game: /* $7691 */
@@ -6717,34 +6809,34 @@ new_game: /* $7691 */
   game_update_high_score(0x7696);
   GAME_CYCLES(0x7697, 40);
   ram_poke(0x0303, 0x01);
-  ram_poke(0x7265, 0x01); // level number, BCD
-  ram_poke(0x7252, 0x00); // score, four BCD bytes
-  ram_poke(0x7253, 0x00);
-  ram_poke(0x7254, 0x00);
-  ram_poke(0x7255, 0x00);
-  ram_poke(0x725e, 0x02); // lives
-  ram_poke(0x725f, 0x00);
+  set_level(0x01);
+  ram_poke(kScore, 0x00);
+  ram_poke(kScore + 1, 0x00);
+  ram_poke(kScore + 2, 0x00);
+  ram_poke(kScore + 3, 0x00);
+  set_lives(0x02);
+  ram_poke(kApplesAfield, 0x00);
 
 new_level: /* $76B7 */
   GAME_CYCLES(0x76b7, 14);
-  ram_poke(0x78b2, ram_peek(0x725e)); // game_bonus compares against this
-  ram_poke(0x7263, 0x10);             // apples this round, BCD
+  ram_poke(kLivesAtLevelStart, lives());
+  ram_poke(kApplesQuota, 0x10);
 
 round: /* $76C2 */
   GAME_CYCLES(0x76c2, 6);
-  ram_poke(0x7264, 0x00);
+  ram_poke(kApplesQuota + 1, 0x00);
 
 start_round: /* $76C7 */
   GAME_CYCLES(0x76c7, 40);
-  ram_poke(0x725f, 0x00);
-  ram_poke(0x7260, 0x00);
-  ram_poke(0x7261, 0x00);
-  ram_poke(0x7262, 0x00);
-  ram_poke(0x725a, ram_peek(0x7263));
-  ram_poke(0x725b, ram_peek(0x7264));
+  ram_poke(kApplesAfield, 0x00);
+  ram_poke(kApplesAfield + 1, 0x00);
+  ram_poke(kApplesEaten, 0x00);
+  ram_poke(kApplesEaten + 1, 0x00);
+  ram_poke(kApplesLeft, ram_peek(kApplesQuota));
+  ram_poke(kApplesLeft + 1, ram_peek(kApplesQuota + 1));
   game_draw_playfield(0x76e3);
   GAME_CYCLES(0x76e4, 14);
-  ram_poke(0x7266, ram_peek(0x0304));
+  set_life_time(ram_peek(kLevelTime));
   game_set_apple_value_native();
   GAME_CYCLES(0x76ed, 14);
   io_peek(0xc054);       // page 1
@@ -6757,7 +6849,7 @@ start_round: /* $76C7 */
   s_a = 0x00;
   GAME_CYCLES(0x7700, 23);
   ram_poke(0x0305, 0x00);
-  ram_poke(0x6255, ram_peek(0x7266));
+  ram_poke(0x6255, life_time());
   ram_poke(0x0022, 0x14); // window top, so HOME clears only the status panel
   rom_home(0x770f);
   GAME_CYCLES(0x7710, 6);
@@ -6769,7 +6861,7 @@ start_round: /* $76C7 */
 
 life: /* $7719 */
   GAME_CYCLES(0x7719, 19);
-  ram_poke(0x6255, ram_peek(0x7266));
+  ram_poke(0x6255, life_time());
   ram_poke(0x0022, 0x14);
   rom_home(0x7725);
   GAME_CYCLES(0x7726, 6);
@@ -6799,17 +6891,18 @@ ate_apple: /* $773E */
   GAME_CYCLES(0x773e, 1);
   GAME_CYCLES(0x7743, 76);
   s_status_d = 0x01;
-  bcd_sub16_at(0x725f, 0x7260, 0x01); // apples until the next one appears
-  bcd_sub16_at(0x725a, 0x725b, 0x01); // apples left in the round
-  bcd_add16_at(0x7261, 0x7262, 0x01); // apples eaten
+  bcd_sub16_at(kApplesAfield, kApplesAfield + 1, 0x01);
+  bcd_sub16_at(kApplesLeft, kApplesLeft + 1, 0x01);
+  bcd_add16_at(kApplesEaten, kApplesEaten + 1, 0x01);
   s_status_d = 0x00;
 
-  // $777B -- points only for the first $110 apples.
-  if (ram_peek(0x7262)) {
+  // $777B -- points only for the first $11 apples of the round. The high
+  // byte must be zero and the low one below $11, both BCD.
+  if (ram_peek(kApplesEaten + 1)) {
     GAME_CYCLES(0x777b, 1);
   } else {
     GAME_CYCLES(0x777d, 8);
-    if (ram_peek(0x7261) >= 0x11) {
+    if (ram_peek(kApplesEaten) >= 0x11) {
       GAME_CYCLES(0x7782, 1);
     } else {
       GAME_CYCLES(0x7784, 6);
@@ -6821,19 +6914,19 @@ ate_apple: /* $773E */
   ram_poke(0x6254, (uint8_t)(ram_peek(0x6254) + 0x0a)); // ten more cells of snake
 
   // $7793 -- anything left in the round?
-  if (ram_peek(0x725a)) {
+  if (ram_peek(kApplesLeft)) {
     GAME_CYCLES(0x7793, 1);
     goto next_apple;
   }
   GAME_CYCLES(0x7795, 6);
-  if (ram_peek(0x725b)) {
+  if (ram_peek(kApplesLeft + 1)) {
     GAME_CYCLES(0x7798, 1);
     goto next_apple;
   }
 
-  /* $779A -- that was the last one. Draw the bar across the bottom and put
-     the marker on it, then blank the apple value so the next round re-reads
-     it from $0304. */
+  /* $779A -- that was the last one. Draw the bar across the bottom, put the
+     marker on it, and stop the clock for the run to the gate -- see
+     kLifeTime for why $FF stops it rather than lengthening it. */
   GAME_CYCLES(0x779a, 31);
   ram_poke(0x0001, 0x06);
   ram_poke(0x0003, 0x00);
@@ -6846,7 +6939,7 @@ ate_apple: /* $773E */
   ram_poke(0x0002, 0x14);
   game_plot_shape_native();
   GAME_CYCLES(0x77bc, 14);
-  ram_poke(0x7266, 0xff);
+  set_life_time(0xff);
   s_a = 0x00;
   rom_setcol(0x77c5);
   GAME_CYCLES(0x77c6, 10);
@@ -6858,13 +6951,13 @@ ate_apple: /* $773E */
 
 next_apple: /* $77D0 -- place one only when both countdown bytes are zero */
   GAME_CYCLES(0x77d0, 6);
-  if (ram_peek(0x725f)) {
+  if (ram_peek(kApplesAfield)) {
     GAME_CYCLES(0x77d5, 3);
     goto life;
   }
   GAME_CYCLES(0x77d3, 1);
   GAME_CYCLES(0x77d8, 6);
-  if (ram_peek(0x7260)) {
+  if (ram_peek(kApplesAfield + 1)) {
     GAME_CYCLES(0x77dd, 3);
     goto life;
   }
@@ -6877,13 +6970,13 @@ next_apple: /* $77D0 -- place one only when both countdown bytes are zero */
 round_cleared: /* $77EA */
   GAME_CYCLES(0x77ea, 32);
   {
-    const uint16_t r = adc_dec16(ram_peek(0x7265), 0x01, 0x00); // level, BCD
-    ram_poke(0x7265, (uint8_t)r);
+    const uint16_t r = adc_dec16(level(), 0x01, 0x00);
+    set_level((uint8_t)r);
   }
   s_status_d = 0x00;
   ram_poke(0x0303, (uint8_t)(ram_peek(0x0303) + 1)); // next level script
   // $77F8 -- no life was lost this round, so it earns a bonus.
-  if (ram_peek(0x725e) == ram_peek(0x78b2)) {
+  if (lives() == ram_peek(kLivesAtLevelStart)) {
     GAME_CYCLES(0x7800, 6);
     game_bonus_screen();
   } else {
@@ -6902,12 +6995,12 @@ not_apple: /* $77E8 */
     goto ended;
   }
   GAME_CYCLES(0x780d, 6);
-  if (ram_peek(0x725b)) {
+  if (ram_peek(kApplesLeft + 1)) {
     GAME_CYCLES(0x7810, 1);
     goto harder;
   }
   GAME_CYCLES(0x7812, 6);
-  if (!ram_peek(0x725a)) {
+  if (!ram_peek(kApplesLeft)) {
     GAME_CYCLES(0x7815, 1);
     goto ended;
   }
@@ -6915,8 +7008,8 @@ not_apple: /* $77E8 */
 harder: /* $7817 -- three more apples in the round, and three more to come */
   GAME_CYCLES(0x7817, 54);
   s_status_d = 0x01;
-  bcd_add16_at(0x7263, 0x7264, 0x03);
-  bcd_add16_at(0x725a, 0x725b, 0x03);
+  bcd_add16_at(kApplesQuota, kApplesQuota + 1, 0x03);
+  bcd_add16_at(kApplesLeft, kApplesLeft + 1, 0x03);
   s_status_d = 0x00;
   game_place_apple_native();
   GAME_CYCLES(0x783e, 6);
@@ -6980,15 +7073,15 @@ ended: /* $7847 */
 
 lose_life: /* $789A */
   GAME_CYCLES(0x789a, 6);
-  if (!ram_peek(0x725e)) {
+  if (!lives()) {
     GAME_CYCLES(0x789f, 3);
     goto new_game;
   }
   GAME_CYCLES(0x789d, 1);
   GAME_CYCLES(0x78a2, 19);
   {
-    const uint16_t r = sbc_dec16(ram_peek(0x725e), 0x01, 0x01);
-    ram_poke(0x725e, (uint8_t)r);
+    const uint16_t r = sbc_dec16(lives(), 0x01, 0x01);
+    set_lives((uint8_t)r);
   }
   s_status_d = 0x00;
   goto start_round;

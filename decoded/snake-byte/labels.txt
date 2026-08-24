@@ -35,6 +35,38 @@
 624C var_key_mask
 624D var_key_index
 
+# --- the scoreboard --------------------------------------------------------
+# $7252-$7266, all BCD, multi-byte fields least significant first. Six of them
+# are what the status panel at $72CE prints, and its on-screen labels are the
+# evidence for those six names.
+7252 var_score          # SCORE, 4 bytes
+7256 var_hi_score       # HI SCORE, 4 bytes
+725A var_apples_left    # APPLES LEFT, 2 bytes -- the round's quota, counting down
+725E var_lives          # SNAKES LEFT, 1 byte; $7691 sets it to 2
+725F var_apples_afield  # 2 bytes: apples on the playfield now. $7642 increments
+                        # it on placing one ($766C), $7743 decrements it on
+                        # eating one, and $77D0 places a replacement exactly
+                        # when it hits zero. Measured $01 at every apple eaten
+                        # in play-hires, with $77D0 firing each time.
+7261 var_apples_eaten   # 2 bytes, this round; only the first $11 score ($777B)
+7263 var_apples_quota   # 2 bytes, copied into var_apples_left by $76C7
+7265 var_level          # LEVEL, 1 BCD byte
+7266 var_life_time      # what $6255 is loaded with when a life starts
+71CB var_apple_value    # VALUE, 2 bytes; $71CD recomputes it per level
+78B0 var_bonus_amount   # the bonus screen's 2-byte BCD scratch
+78B2 var_lives_at_level # lives when the level began; $77F8 compares to decide
+                        # whether the round earned a bonus
+6255 var_life_timer     # counts down one per pace; $641C ends the life at zero.
+                        # $6B55 also reads it as the side-wall height seed, and
+                        # rewrites it to $FF whenever bit 7 is set -- which is
+                        # what makes a $FF seed an untimed life rather than a
+                        # long one.
+0304 var_level_time     # the level's allowance, seeding var_life_time. Written
+                        # by the display list's 'T' command. NOT the apple
+                        # value: $71CD never reads it.
+0300 var_step_delay     # snake speed; $772E takes 2 off each life, floor 3
+0301 var_difficulty     # indexes the per-apple table at $71C8
+
 # --- text output -----------------------------------------------------------
 6641 install_cout_hook # LDA #$4A / STA $36 / LDA #$66 / STA $37 -- points CSWL at cout_hires
 664A cout_hires        # the game's own COUT: hi-res glyph blitter, then ROM COUT1

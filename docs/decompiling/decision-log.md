@@ -2353,3 +2353,76 @@ baseline is **20, all of it ROM in `a2rom.c`**, and the number can no longer say
 anything about the game at all. The per-routine comments took over that job, and
 they are prose that nothing checks. That is now stated in the file rather than
 implied by it.
+
+## 2026-08-23 — Step 2 begins: naming the scoreboard, and two comments it caught
+
+The cleanup plan's step 2 is a pure rename — 115 addresses that stand in for
+variables become names — chosen to go first because the block-head trace checks
+it at full strength and nothing about storage moves. The first slice is the
+scoreboard, `$7252-$7266` plus `$71CB`, `$78B0-$78B2`, `$0300`, `$0301` and
+`$0304`: 19 fields, 92 substitutions.
+
+### The oracle for a rename is not the gate
+
+The gate was run and is green, but it is not the interesting check. A rename
+that is genuinely a rename must compile to the *same object*, so that is what
+was checked: `-O2`, where the new one-line accessors inline away, and the
+disassembly diffed against `HEAD`. Four lines differ, and all four are the same
+two `__LINE__` immediates for assertions, displaced by the lines the accessor
+block added.
+
+This is strictly stronger than any behavioural gate, it costs one compile, and
+it applies to every remaining slice of step 2. It stops applying at step 3,
+which is where storage starts moving — and that is the point at which the memory
+probe added in step 0 becomes the oracle instead.
+
+The same check was what made the earlier `.inc` split defensible: moving 2,020
+lines of hex out of `snake-byte-cold.c` should be provably inert, and it was.
+
+### Naming forced two comments to be checked, and both were wrong
+
+Neither would have been caught by any gate, because a comment cannot fail a
+test. Both had been sitting in converted, verified, hand-written C.
+
+**`$725F/$7260` was commented "apples until the next one appears".** It is the
+opposite: the number of apples on the playfield *right now*. `game_place_apple`
+ends by BCD-incrementing the pair at `$766C`, `$7743` decrements it when one is
+eaten, and `$77D0` places a replacement exactly when it reaches zero. Read the
+old way the arithmetic is nonsense — the pair is zeroed at `start_round`, so the
+first apple eaten would take it to `$9999` and no apple would ever be placed
+again.
+
+That reading was tested rather than argued. A probe at `$7743`, `$77D0` and
+`$7642` over all three scenarios: `play` and `play-rebind` never eat an apple at
+all, and `play-hires` eats four — `$725F` is `$01` at every one of them, and
+`$77D0` fires and places a replacement every time. The disassembly at `$766C`
+then says why.
+
+Worth noting how close the wrong version came to surviving: the *converted*
+`game_place_apple_native` already carries the correct comment ("One more apple
+on screen"), three thousand lines away from the top level's wrong one. Two
+comments about one pair of bytes, disagreeing, both hand-written.
+
+**`$0304` was commented "apple value" in two places.** It is the level's time
+allowance: the display list's `'T'` command writes it, it seeds `$7266` which
+seeds `$6255`, and `$6255` is the life timer that `$641C` runs out. The apple
+value is `$71CB`, computed by `$71CD` from the difficulty and the level number
+— and `$71CD` never reads `$0304`. The confusion is understandable, since
+`start_round` copies `$0304` and then immediately calls `$71CD`.
+
+A third comment said scoring stops after "the first `$110` apples". `$777B`
+tests the high byte for zero and `$7780` compares the low against `$11`, so it
+is the first `$11`.
+
+### One thing named but not verified
+
+`$77BC` sets `$7266` to `$FF` once the round's last apple is gone. That does not
+lengthen the timer, it stops it: `$6255` counts down one per pace, but
+`game_draw_side_walls` treats any value with bit 7 set as out of range, clamps
+the wall height, and writes `$FF` back at `$6B55` — so the count never reaches
+zero and the run to the gate is untimed.
+
+This is decoded from the two call sites, not observed. A probe at `$6B55` and
+`$641C` shows all three recordings seed the timer `$64` and never reach the
+clamp. Under the standing no-new-recordings agreement that is fine, and the
+comment on `kLifeTime` says which half is which.
