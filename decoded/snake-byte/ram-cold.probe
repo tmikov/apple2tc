@@ -1,0 +1,47 @@
+# Memory equivalence between the cold-start build and the booting one.
+#
+# ram.probe's counterpart, and deliberately not the same program: it drops the
+# stack.
+#
+# ram.probe compares SP and the live stack because the two *engines* it checks
+# are running the same 6502 program and must agree about it byte for byte. The
+# cold build is not that. It is on its way to having no emulated stack at all --
+# the fake return addresses the adapters push exist only to keep a 6502 shape
+# that the conversion is removing -- so comparing the stack here would pin the
+# scaffolding rather than the game, and would go red on the first adapter
+# deleted rather than on the first bug.
+#
+# What is left is what actually matters: zero page, the $02xx/$03xx flags, the
+# text page, the buffers, and the game's own data at $6000-$BFFF. Those are the
+# game's state, and they have to survive every step of the cleanup.
+#
+# Zero page is hashed in two pieces to skip $4E/$4F, RNDL and RNDH. The ROM's
+# KEYIN increments them while it spins, so their value records how long the
+# boot waited for a keystroke -- which makes them differ between two boots of
+# the *same* build, never mind between one that boots and one that does not.
+# Nothing but KEYIN reads them and the cold build never runs it. Measured: they
+# are the only two bytes below $C000 that differ, and they differ in all 6,808
+# samples.
+#
+# Sampled at $6217 like the others, which is in-game only, so there is no boot
+# prefix to align away.
+counter n
+
+probe kb() {
+  inc n
+  key n
+}
+
+probe mem(
+    zp_lo = hash($0000, $004D),
+    zp_hi = hash($0050, $00FF),
+    low = hash($0200, $03FF),
+    txt = hash($0400, $07FF),
+    aux = hash($0800, $1FFF),
+    hgr = hash($2000, $5FFF),
+    game = hash($6000, $BFFF)) {
+  printf("%08X %08X %08X %08X %08X %08X %08X\n", zp_lo, zp_hi, low, txt, aux, hgr, game)
+}
+
+install kb at $FD1B, $741F, $7890, $6217, $760F, $FB7C, $FD26
+install mem at $6217

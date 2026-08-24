@@ -445,18 +445,52 @@ comparable block-for-block against the generated original. Take the edges out
 first: the original's `CYCLES_EDGE` addresses must stay unprobed or they show as
 phantom differences.
 
-**b2. `func_t001` is pure indirection now.** Forward-declared, called once by
-`emulated_entry_point`, and defined as a stub that discards its `ret_addr` and
-calls `game_cold_start()`. It survives only because it is the name the
-generated entry point called. Not quite a pure deletion: `game_cold_start` is
-declared at line 2820 and `emulated_entry_point` sits at 152, so either the
-declaration moves up or the entry function moves down.
+### Cleaning up the C
 
-**c. Then the shape, in this order:** drop the 28 adapters that no longer have a
-generated caller; turn off `--ret-addr` and the emulated stack for the shipped
-artifact; then playbook step 6, moving storage out of emulated RAM. That last
-one costs the `ram.probe` oracle, which is why it is last — see
-`game_native.h`'s header for which oracle dies when.
+`snake-byte-cold.c` is the decompilation, and it is not yet good C: values are
+passed in `s_a` (203 uses), 115 distinct addresses stand in for variables, 40
+functions still take a `uint16_t ret_addr` they mostly ignore, and there are
+842 `CYCLES` sites to maintain. The plan below is ordered by *which oracle each
+step spends*, cheapest-and-fully-checked first.
+
+**~~Step 0 — strengthen the cold gate first.~~** Done 2026-08-23. It compared
+trace and screen but not memory, and most of what follows moves values without
+moving pixels. `ram-cold.probe` adds the memory comparison. It deliberately
+drops the stack — the cold build is heading for no emulated stack at all, so
+comparing it would pin the scaffolding and go red on the first adapter deleted
+rather than on the first bug. It also skips `$4E/$4F`: RNDL/RNDH record how
+long the ROM's KEYIN spun, so they differ between two boots of the same build,
+and they are measurably the only two bytes below `$C000` that do.
+
+**~~Step 1 — the free deletions.~~** Done 2026-08-23. `func_t001` and the 15
+adapters that were nothing but `push16`/call/`pop16`. No cycle sites, no
+marshalling; the site count stayed at 120 and all three checks stayed green.
+`plot_shape_at` lost a `ret` parameter that existed only to feed one of them,
+which is the cascade to expect from the rest.
+
+**Step 2 — names.** All 115 addresses, `ram_peek(0x6253)` -> `life_outcome()`.
+Pure rename: same cycles, same blocks, so the trace checks it at full strength.
+Do it while the trace is strongest, sliced by subsystem, a commit each. Biggest
+readability win at the lowest risk, and it is where the remaining "what *is*
+`$725A`?" knowledge stops being re-derived.
+
+**Step 3 — real parameters.** `$0000-$0003` and `$0024/$0025` are the plotter's
+argument block and the cursor, and the five most-touched addresses in the file
+(63, 55, 26, 25, 23 uses). They are parameters passed through fixed memory
+because the 6502 had no other way. This is the step that moves storage, so it
+is the one that spends Step 0's memory oracle — retire it explicitly here.
+
+**Step 4 — return values instead of `s_a` and the flags.** As callers stop
+reading `s_a`, the 23 remaining marshalling adapters empty out and follow the
+first 15.
+
+**Step 5 — drop `ret_addr` and the emulated stack.** 40 signatures, mechanical,
+with one trap: `game_print_inline_str` finds its string by *reading* the pushed
+return address. It has to take a real string parameter before the stack goes,
+or it breaks silently.
+
+**Step 6 — `CYCLES`.** Last. It is what the trace oracle is made of, so after
+this the screen is the only check left.
 
 **d. Loose ends:** 451 unknown nonzero bytes in the coverage report; probe phase
 3 (apple2tc emitting `PROBE_x(...)` sites so a probe can read the generated C's

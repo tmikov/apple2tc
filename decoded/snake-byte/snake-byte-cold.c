@@ -93,7 +93,7 @@ static uint16_t sbc_dec16(uint8_t a, uint8_t b, uint8_t cf) {
   return res.result | (res.status << 8);
 }
 
-void func_t001(uint16_t ret_addr);
+void game_cold_start(void);
 void rom_plot(uint16_t ret_addr);
 void rom_hline(uint16_t ret_addr);
 void rom_setcol(uint16_t ret_addr);
@@ -105,38 +105,23 @@ void rom_setkbd(uint16_t ret_addr);
 void rom_setvid(uint16_t ret_addr);
 void game_load_shape(uint16_t ret_addr);
 void game_draw_cell(uint16_t ret_addr);
-void game_plot_shape(uint16_t ret_addr);
 void game_plot_hline(uint16_t ret_addr);
 void game_plot_vline(uint16_t ret_addr);
 void game_start_round(uint16_t ret_addr);
 void game_play_loop(uint16_t ret_addr);
-void game_draw_status(uint16_t ret_addr);
-void game_bonus(uint16_t ret_addr);
 void game_setup(uint16_t ret_addr);
-void game_next_byte(uint16_t ret_addr);
 void game_set_ink(uint16_t ret_addr);
 void game_lores_vline(uint16_t ret_addr);
 void game_print_bcd(uint16_t ret_addr);
-void game_print_zero_if_blank(uint16_t ret_addr);
-void game_add_score(uint16_t ret_addr);
 void game_clear_hgr(uint16_t ret_addr);
 void game_plot_shape_merge(uint16_t ret_addr);
 void game_draw_playfield(uint16_t ret_addr);
 void game_install_cout_hook(uint16_t ret_addr);
 void game_start_life_adapter(uint16_t ret_addr);
-void game_mark_head(uint16_t ret_addr);
-void game_draw_head(uint16_t ret_addr);
-void game_set_apple_value(uint16_t ret_addr);
-void game_place_apple(uint16_t ret_addr);
-void game_sound_sweep(uint16_t ret_addr);
-void game_eat_apple(uint16_t ret_addr);
-void game_read_key(uint16_t ret_addr);
 void game_show_key(uint16_t ret_addr);
-void game_draw_side_walls(uint16_t ret_addr);
 void game_move_ok(uint16_t ret_addr);
 void game_move_bouncer(uint16_t ret_addr);
 void game_update_high_score(uint16_t ret_addr);
-void game_tick_sound(uint16_t ret_addr);
 void game_step_bouncers(uint16_t ret_addr);
 void game_find_apple(uint16_t ret_addr);
 void game_pause_or_toggle_sound(uint16_t ret_addr);
@@ -149,8 +134,10 @@ void FUNC_CLREOL(uint16_t ret_addr);
 void FUNC_CLREOLZ(uint16_t ret_addr);
 void FUNC_MON_WAIT(uint16_t ret_addr);
 
+/// The program starts here. There used to be a func_t001 in between -- the
+/// generated dispatch -- and by the end it was a stub that called this.
 static void emulated_entry_point(void) {
-  func_t001(false);
+  game_cold_start();
 }
 
 
@@ -2979,7 +2966,6 @@ void game_draw_cell(uint16_t ret_addr);
 
 /// $60E4 -- load the shape for $00, then draw it. The form nearly every
 /// caller uses.
-void game_plot_shape(uint16_t ret_addr);
 
 /// $6148 -- plot a horizontal run of cells, from column $02 through column
 /// $08 inclusive, along row $03.
@@ -2993,7 +2979,6 @@ void game_plot_vline(uint16_t ret_addr);
 
 /// $7019 -- fetch the next byte of the display list into A and advance the
 /// $0A/$0B pointer.
-void game_next_byte(uint16_t ret_addr);
 
 /// $7024 -- set the lo-res colour from the ink flag in Z: black if zero,
 /// grey otherwise. Tail-calls the ROM's SETCOL.
@@ -3011,10 +2996,8 @@ void game_print_bcd(uint16_t ret_addr);
 
 /// $7226 -- print '0' if $002C shows no digit was printed. Called once at the
 /// end of a multi-byte number.
-void game_print_zero_if_blank(uint16_t ret_addr);
 
 /// $7267 -- add $71CC:$71CB to the four-byte BCD score at $7252.
-void game_add_score(uint16_t ret_addr);
 
 /// $702B -- zero hi-res page 1, $2000 through $3FFF.
 void game_clear_hgr(uint16_t ret_addr);
@@ -3039,34 +3022,26 @@ void game_install_cout_hook(uint16_t ret_addr);
 void game_start_life_adapter(uint16_t ret_addr);
 
 /// $6BEF -- PLOT the head onto the lo-res map and raise $0305 and $6C46.
-void game_mark_head(uint16_t ret_addr);
 
 /// $6BDA -- draw the caller's cell, merging shape 1 over it when $0305 is set.
-void game_draw_head(uint16_t ret_addr);
 
 /// $71CD -- set the per-apple score at $71CB/$71CC to $71C8[difficulty] times
 /// the level, in BCD.
-void game_set_apple_value(uint16_t ret_addr);
 
 /* --- apples and sound ---------------------------------------------------- */
 
 /// $7642 -- place a new apple on a free cell, found by rejection sampling.
-void game_place_apple(uint16_t ret_addr);
 
 /// $64A9 -- a rising then falling pitch sweep, clicked through $6C49.
-void game_sound_sweep(uint16_t ret_addr);
 
 /// $7633 -- count one apple eaten and play the sweep.
-void game_eat_apple(uint16_t ret_addr);
 
 /// $6217 -- poll the keyboard into the 16-entry ring buffer at $623C.
-void game_read_key(uint16_t ret_addr);
 
 /// $7590 -- show the character in A at slot X of the key-redefinition screen.
 void game_show_key(uint16_t ret_addr);
 
 /// $6B3D -- draw both side walls in two inks, with a randomly placed seam.
-void game_draw_side_walls(uint16_t ret_addr);
 
 /// $6AB8 -- can the snake step in direction $6B38? Returns A = 0 / Z set for
 /// yes, and refuses dead ends one move early.
@@ -3081,7 +3056,6 @@ void game_move_bouncer(uint16_t ret_addr);
 void game_update_high_score(uint16_t ret_addr);
 
 /// $6BFB -- twenty passes of a falling tone, driven by the period at $6C46.
-void game_tick_sound(uint16_t ret_addr);
 
 /// $6594 -- step the bouncers the difficulty calls for, then return the next
 /// queued key in A.
@@ -3107,11 +3081,9 @@ void game_read_direction(uint16_t ret_addr);
 void game_play_loop(uint16_t ret_addr);
 
 /// $72CE -- draw the status panel. Adapter for game_status_panel().
-void game_draw_status(uint16_t ret_addr);
 
 /// $78B3 -- the bonus screen. Adapter for game_bonus_screen(). Entered with
 /// decimal mode set.
-void game_bonus(uint16_t ret_addr);
 
 /// $6256 -- start a life and run it. Adapter for game_begin_life().
 void game_start_round(uint16_t ret_addr);
@@ -4364,7 +4336,7 @@ void bouncer_step(Bouncer *b) {
   GAME_CYCLES(0x6553, 20);
   ram_poke(0x0002, b->col);
   ram_poke(0x0003, b->row);
-  game_plot_shape(0x655f);
+  game_plot_shape_native();
 
   GAME_CYCLES(0x6560, 14);
   s_a = b->row;
@@ -4394,7 +4366,7 @@ void bouncer_step(Bouncer *b) {
   rom_setcol(0x6586);
 
   GAME_CYCLES(0x6587, 6);
-  game_plot_shape(0x6589);
+  game_plot_shape_native();
 
   GAME_CYCLES(0x658a, 14);
   s_a = b->row;
@@ -4688,7 +4660,7 @@ static void lores_plot(uint8_t row, uint8_t col, uint16_t ret) {
 
 /// $7019 through its adapter: the next display-list byte.
 static uint8_t script_byte(uint16_t ret) {
-  game_next_byte(ret);
+  game_next_byte_native();
   return s_a;
 }
 
@@ -4950,7 +4922,7 @@ restart:
       GAME_CYCLES(0x71a6, 12);
       lores_plot(ram_peek(0x0003), ram_peek(0x0002), 0x71ac);
       GAME_CYCLES(0x71ad, 6);
-      game_plot_shape(0x71af);
+      game_plot_shape_native();
       GAME_CYCLES(0x71b0, 3);
       continue;
     }
@@ -5985,7 +5957,7 @@ void game_place_apple_native(void) {
   GAME_CYCLES(0x7661, 16);
   ram_poke(0x0000, 0x01); // shape 1
   ram_poke(0x0001, 0x09); // ink 9
-  game_plot_shape(0x766b);
+  game_plot_shape_native();
 
   // One more apple on screen. $77D0 watches this pair and calls back here when
   // it reaches zero.
@@ -6053,7 +6025,7 @@ void game_mark_head_native(void) {
 /// replacing the body cell underneath. $0305 is consumed here.
 void game_draw_head_native(void) {
   GAME_CYCLES(0x6bda, 6);
-  game_plot_shape(0x6bdc);
+  game_plot_shape_native();
 
   GAME_CYCLES(0x6bdd, 6);
   if (ram_peek(0x0305)) {
@@ -6080,7 +6052,7 @@ void game_eat_apple_native(void) {
   s_status_c = (flags & 0x01);
   s_status_v = ((flags & 0x40) != 0);
   s_status_d = 0x00;
-  game_sound_sweep(0x7640);
+  game_sound_sweep_native();
 
   GAME_CYCLES(0x7641, 6);
 }
@@ -6458,12 +6430,12 @@ static uint8_t turn_for_key(uint8_t key, uint8_t dir) {
 
 /// Draw \p shape into \p c with ink \p ink, through the plotter's zero-page
 /// argument block.
-static void plot_shape_at(uint8_t shape, uint8_t ink, Cell c, uint16_t ret) {
+static void plot_shape_at(uint8_t shape, uint8_t ink, Cell c) {
   ram_poke(0x0000, shape);
   ram_poke(0x0001, ink);
   ram_poke(0x0002, c.col);
   ram_poke(0x0003, c.row);
-  game_plot_shape(ret);
+  game_plot_shape_native();
 }
 
 /// SCRN one cell.
@@ -6548,7 +6520,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
   for (;;) {
     /* --- $628B: a key, and what the game makes of it -------------------- */
     GAME_CYCLES(0x628b, 6);
-    game_read_key(0x628d);
+    game_read_key_native();
     GAME_CYCLES(0x628e, 6);
     game_read_direction(0x6290);
     uint8_t code = s_a;
@@ -6662,7 +6634,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     ram_poke(0x0001, 0x0c);
     ram_poke(0x0002, head.col);
     ram_poke(0x0003, head.row);
-    game_draw_head(0x62b7);
+    game_draw_head_native();
 
     // $62B8 -- the direction back into 1..4, and the ink is the direction.
     GAME_CYCLES(0x62b8, 26);
@@ -6689,7 +6661,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     GAME_CYCLES(0x62ee, 25);
     ram_poke(0x6253, cell);
     GAME_CYCLES(0x6300, 6);
-    plot_shape_at(dir, 0x0c, next, 0x6302);
+    plot_shape_at(dir, 0x0c, next);
     GAME_CYCLES(0x6303, 3);
 
     /* --- $6474: what did it move onto? ------------------------------- */
@@ -6730,7 +6702,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       GAME_CYCLES(0x648a, 14);
       s_a = next.row;
       s_y = next.col;
-      game_mark_head(0x6492);
+      game_mark_head_native();
       GAME_CYCLES(0x6493, 6);
       *cell_out = cell;
       return LIFE_APPLE;
@@ -6794,7 +6766,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       ram_poke(0x0001, 0x00);
       ram_poke(0x0003, tail.row);
       ram_poke(0x0002, tail.col);
-      game_plot_shape(0x63d9);
+      game_plot_shape_native();
 
       // $63DA -- the byte that was under the tail is the direction the tail
       // must follow, so the same delta tables move it on.
@@ -6809,7 +6781,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       const uint8_t ahead = scrn_cell(tail_next, 0x63f5);
 
       GAME_CYCLES(0x63f6, 32);
-      plot_shape_at((uint8_t)(ahead + 0x0c), 0x0c, tail_next, 0x640b);
+      plot_shape_at((uint8_t)(ahead + 0x0c), 0x0c, tail_next);
       GAME_CYCLES(0x640c, 3);
     }
 
@@ -6829,7 +6801,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     GAME_CYCLES(0x6422, 10);
     s_a = 0x27;
     s_y = 0x14;
-    game_draw_side_walls(0x6428);
+    game_draw_side_walls_native();
     // The walls routine ends on a SCRN of the bottom-centre cell, and leaves
     // it in A -- that is its second result, and the original reads it here.
     GAME_CYCLES(0x6429, 4);
@@ -6863,10 +6835,10 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     uint8_t n = ram_peek(0x0300);
     do {
       GAME_CYCLES(0x6453, 6);
-      game_tick_sound(0x6455);
+      game_tick_sound_native();
       GAME_CYCLES(0x6456, 11);
       push8(n);
-      game_read_key(0x645a);
+      game_read_key_native();
       GAME_CYCLES(0x645b, 6);
       if (ram_peek(0x6473)) {
         GAME_CYCLES(0x6460, 18);
@@ -7098,7 +7070,7 @@ void game_status_panel(void) {
   s_a = ram_peek(0x7252);
   game_print_bcd(0x72fd);
   GAME_CYCLES(0x72fe, 6);
-  game_print_zero_if_blank(0x7300);
+  game_print_zero_if_blank_native();
 
   // HI SCORE, same row, column $14. Four bytes at $7256.
   GAME_CYCLES(0x7301, 11);
@@ -7118,7 +7090,7 @@ void game_status_panel(void) {
   s_a = ram_peek(0x7256);
   game_print_bcd(0x732f);
   GAME_CYCLES(0x7330, 6);
-  game_print_zero_if_blank(0x7332);
+  game_print_zero_if_blank_native();
 
   // APPLES LEFT, row $15 column $00. Two bytes at $725A.
   GAME_CYCLES(0x7333, 16);
@@ -7133,7 +7105,7 @@ void game_status_panel(void) {
   s_a = ram_peek(0x725a);
   game_print_bcd(0x735c);
   GAME_CYCLES(0x735d, 6);
-  game_print_zero_if_blank(0x735f);
+  game_print_zero_if_blank_native();
 
   // A space, which the next field's cursor move immediately overrides. It is
   // there to wipe the character one place past this field, left over from a
@@ -7155,7 +7127,7 @@ void game_status_panel(void) {
   s_a = ram_peek(0x71cb);
   game_print_bcd(0x7384);
   GAME_CYCLES(0x7385, 6);
-  game_print_zero_if_blank(0x7387);
+  game_print_zero_if_blank_native();
 
   // SNAKES LEFT, row $16 column $00. One byte at $725E, printed as though it
   // were the low half of a two-byte field: the high half is the literal 0
@@ -7173,7 +7145,7 @@ void game_status_panel(void) {
   s_a = ram_peek(0x725e);
   game_print_bcd(0x73ae);
   GAME_CYCLES(0x73af, 6);
-  game_print_zero_if_blank(0x73b1);
+  game_print_zero_if_blank_native();
 
   // LEVEL, same row, column $14. One byte at $7265.
   GAME_CYCLES(0x73b2, 11);
@@ -7184,7 +7156,7 @@ void game_status_panel(void) {
   s_a = ram_peek(0x7265);
   game_print_bcd(0x73cb);
   GAME_CYCLES(0x73cc, 6);
-  game_print_zero_if_blank(0x73ce);
+  game_print_zero_if_blank_native();
 
   // Home the cursor. This CV write is the one that needs VTAB, because nothing
   // prints after it to recompute the line base.
@@ -7228,11 +7200,11 @@ void game_bonus_screen(void) {
 
   // Twice, because the bonus is twice the apple value and game_add_score adds
   // it once.
-  game_add_score(0x78ca);
+  game_add_score_native();
   GAME_CYCLES(0x78cb, 6);
-  game_add_score(0x78cd);
+  game_add_score_native();
   GAME_CYCLES(0x78ce, 6);
-  game_draw_status(0x78d0);
+  game_status_panel();
 
   // $78D1 -- the frame, in ink 9: top and bottom edges, then both sides.
   GAME_CYCLES(0x78d1, 31);
@@ -7571,7 +7543,7 @@ wait: /* $741C */
   ram_poke(0x0000, 0x02);
   ram_poke(0x0003, 0x12);
   ram_poke(0x0002, 0x1e);
-  game_plot_shape(0x7560);
+  game_plot_shape_native();
   GAME_CYCLES(0x7561, 21);
   ram_poke(0x0003, 0x13);
   ram_poke(0x0008, 0x1d);
@@ -7580,7 +7552,7 @@ wait: /* $741C */
   GAME_CYCLES(0x7570, 11);
   s_a = 0x0e;
   ram_poke(0x0000, 0x0e);
-  game_plot_shape(0x7576);
+  game_plot_shape_native();
 
   GAME_CYCLES(0x7577, 2);
   for (uint8_t i = 0; i != 6; ++i) {
@@ -7839,18 +7811,6 @@ void game_draw_cell(uint16_t ret_addr) {
     pop16();
 }
 
-void game_plot_shape(uint16_t ret_addr) {
-  // Adapter for game_plot_shape_native(). Costs 1 trace sites.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  game_plot_shape_native();
-
-  if (ret_addr)
-    pop16();
-}
 
 /* ========================================================================== */
 /* $6148, $615A -- runs of cells.                                             */
@@ -7944,18 +7904,6 @@ void game_plot_vline(uint16_t ret_addr) {
 /* cost of drawing everything twice.                                          */
 /* ========================================================================== */
 
-void game_next_byte(uint16_t ret_addr) {
-  // Adapter for game_next_byte_native(). Costs 3 trace sites.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  game_next_byte_native();
-
-  if (ret_addr)
-    pop16();
-}
 
 void game_set_ink(uint16_t ret_addr) {
   // Adapter for game_set_ink_native(). Costs 3 trace sites.
@@ -8035,31 +7983,7 @@ void game_print_bcd(uint16_t ret_addr) {
     pop16();
 }
 
-void game_print_zero_if_blank(uint16_t ret_addr) {
-  // Adapter for game_print_zero_if_blank_native(). Costs 3 trace sites.
-  bool branchTarget = true;
 
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  game_print_zero_if_blank_native();
-
-  if (ret_addr)
-    pop16();
-}
-
-void game_add_score(uint16_t ret_addr) {
-  // Adapter for game_add_score_native(). Costs 1 trace site.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  game_add_score_native();
-
-  if (ret_addr)
-    pop16();
-}
 
 void game_clear_hgr(uint16_t ret_addr) {
   // Adapter for game_clear_hgr_native(). Costs 3 trace sites.
@@ -8255,44 +8179,8 @@ void game_start_life_adapter(uint16_t ret_addr) {
     pop16();
 }
 
-void game_mark_head(uint16_t ret_addr) {
-  // Adapter for game_mark_head_native(). Costs 2 trace sites.
-  bool branchTarget = true;
 
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
-  game_mark_head_native();
-
-  if (ret_addr)
-    pop16();
-}
-
-void game_draw_head(uint16_t ret_addr) {
-  // Adapter for game_draw_head_native(). Costs 4 trace sites.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  game_draw_head_native();
-
-  if (ret_addr)
-    pop16();
-}
-
-void game_set_apple_value(uint16_t ret_addr) {
-  // Adapter for game_set_apple_value_native(). Costs 3 trace sites.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  game_set_apple_value_native();
-
-  if (ret_addr)
-    pop16();
-}
 
 /* ========================================================================== */
 /* $7642, $64A9, $7633 -- apples, and the sound trick.                        */
@@ -8305,63 +8193,13 @@ void game_set_apple_value(uint16_t ret_addr) {
 /* the hot path, and muting cannot alter the game's speed.                    */
 /* ========================================================================== */
 
-void game_place_apple(uint16_t ret_addr) {
-  // Adapter for game_place_apple_native(). Costs 8 trace sites.
-  bool branchTarget = true;
 
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
 
-  game_place_apple_native();
-
-  if (ret_addr)
-    pop16();
-}
-
-void game_sound_sweep(uint16_t ret_addr) {
-  // Adapter for game_sound_sweep_native(). Costs 8 trace sites.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  game_sound_sweep_native();
-
-  if (ret_addr)
-    pop16();
-}
-
-void game_eat_apple(uint16_t ret_addr) {
-  // Adapter for game_eat_apple_native(). Costs 2 trace sites.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  game_eat_apple_native();
-
-  if (ret_addr)
-    pop16();
-}
 
 /* ========================================================================== */
 /* $6217, $7590, $6B3D                                                        */
 /* ========================================================================== */
 
-void game_read_key(uint16_t ret_addr) {
-  // Adapter for game_read_key_native(). Costs 2 trace sites: $6217 keeps its
-  // probe because the replay coordinate counts it, and $6216 because the key
-  // dequeue's adapter still emits it.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  game_read_key_native();
-
-  if (ret_addr)
-    pop16();
-}
 
 void game_show_key(uint16_t ret_addr) {
   // Adapter for game_show_key_native(). Costs 7 trace sites.
@@ -8376,18 +8214,6 @@ void game_show_key(uint16_t ret_addr) {
     pop16();
 }
 
-void game_draw_side_walls(uint16_t ret_addr) {
-  // Adapter for game_draw_side_walls_native(). Costs 8 trace sites.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  game_draw_side_walls_native();
-
-  if (ret_addr)
-    pop16();
-}
 
 /* ========================================================================== */
 /* $6AB8 -- is the next cell in direction $6B38 worth moving into?            */
@@ -8556,18 +8382,6 @@ void game_update_high_score(uint16_t ret_addr) {
     pop16();
 }
 
-void game_tick_sound(uint16_t ret_addr) {
-  // Adapter for game_tick_sound_native(). Costs 12 trace sites.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  game_tick_sound_native();
-
-  if (ret_addr)
-    pop16();
-}
 
 /* ========================================================================== */
 /* $6594, $69C3                                                               */
@@ -8763,40 +8577,11 @@ void game_play_loop(uint16_t ret_addr) {
 /* $72CE -- the status panel. See game_native.c.                              */
 /* ========================================================================== */
 
-void game_draw_status(uint16_t ret_addr) {
-  // Adapter for game_status_panel(). Costs 30 trace sites; the routine is
-  // straight-line, so all of them are its own and none is shared.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  game_status_panel();
-
-  if (ret_addr)
-    pop16();
-}
 
 /* ========================================================================== */
 /* $78B3 -- the bonus screen. See game_native.c.                              */
 /* ========================================================================== */
 
-void game_bonus(uint16_t ret_addr) {
-  // Adapter for game_bonus_screen(). Costs 22 trace sites.
-  //
-  // No decimal-mode assertion here, unlike the other adapters: this routine is
-  // *supposed* to be entered with D set, does its BCD arithmetic, and clears it
-  // at $78C7.
-  bool branchTarget = true;
-
-  if (ret_addr)
-    push16(ret_addr); // Fake return address.
-
-  game_bonus_screen();
-
-  if (ret_addr)
-    pop16();
-}
 
 /* ========================================================================== */
 /* $6256 -- start a life. See game_native.c.                                  */
@@ -8978,13 +8763,13 @@ start_round: /* $76C7 */
   game_draw_playfield(0x76e3);
   GAME_CYCLES(0x76e4, 14);
   ram_poke(0x7266, ram_peek(0x0304));
-  game_set_apple_value(0x76ec);
+  game_set_apple_value_native();
   GAME_CYCLES(0x76ed, 14);
   io_peek(0xc054);       // page 1
   s_a = io_peek(0xc053); // mixed text/graphics
-  game_place_apple(0x76f5);
+  game_place_apple_native();
   GAME_CYCLES(0x76f6, 6);
-  game_plot_shape(0x76f8);
+  game_plot_shape_native();
   GAME_CYCLES(0x76f9, 8);
   ram_poke(0x0300, 0x52);
   s_a = 0x00;
@@ -8994,7 +8779,7 @@ start_round: /* $76C7 */
   ram_poke(0x0022, 0x14); // window top, so HOME clears only the status panel
   rom_home(0x770f);
   GAME_CYCLES(0x7710, 6);
-  game_draw_status(0x7712);
+  game_status_panel();
   GAME_CYCLES(0x7713, 6);
   game_start_round(0x7715);
   GAME_CYCLES(0x7716, 3);
@@ -9006,7 +8791,7 @@ life: /* $7719 */
   ram_poke(0x0022, 0x14);
   rom_home(0x7725);
   GAME_CYCLES(0x7726, 6);
-  game_draw_status(0x7728);
+  game_status_panel();
   GAME_CYCLES(0x7729, 8);
   if (ram_peek(0x0300) >= 0x03) {
     // $7730 -- two steps faster each life, but never past 3.
@@ -9046,7 +8831,7 @@ ate_apple: /* $773E */
       GAME_CYCLES(0x7782, 1);
     } else {
       GAME_CYCLES(0x7784, 6);
-      game_add_score(0x7786);
+      game_add_score_native();
     }
   }
 
@@ -9077,7 +8862,7 @@ ate_apple: /* $773E */
   GAME_CYCLES(0x77b1, 16);
   ram_poke(0x0001, 0x00);
   ram_poke(0x0002, 0x14);
-  game_plot_shape(0x77bb);
+  game_plot_shape_native();
   GAME_CYCLES(0x77bc, 14);
   ram_poke(0x7266, 0xff);
   s_a = 0x00;
@@ -9103,7 +8888,7 @@ next_apple: /* $77D0 -- place one only when both countdown bytes are zero */
   }
   GAME_CYCLES(0x77db, 1);
   GAME_CYCLES(0x77e0, 6);
-  game_place_apple(0x77e2);
+  game_place_apple_native();
   GAME_CYCLES(0x77e3, 3);
   goto life;
 
@@ -9118,12 +8903,12 @@ round_cleared: /* $77EA */
   // $77F8 -- no life was lost this round, so it earns a bonus.
   if (ram_peek(0x725e) == ram_peek(0x78b2)) {
     GAME_CYCLES(0x7800, 6);
-    game_bonus(0x7802);
+    game_bonus_screen();
   } else {
     GAME_CYCLES(0x77fe, 1);
   }
   GAME_CYCLES(0x7803, 6);
-  game_eat_apple(0x7805);
+  game_eat_apple_native();
   GAME_CYCLES(0x7806, 3);
   goto new_level;
 
@@ -9151,11 +8936,11 @@ harder: /* $7817 -- three more apples in the round, and three more to come */
   bcd_add16_at(0x7263, 0x7264, 0x03);
   bcd_add16_at(0x725a, 0x725b, 0x03);
   s_status_d = 0x00;
-  game_place_apple(0x783d);
+  game_place_apple_native();
   GAME_CYCLES(0x783e, 6);
-  game_place_apple(0x7840);
+  game_place_apple_native();
   GAME_CYCLES(0x7841, 6);
-  game_place_apple(0x7843);
+  game_place_apple_native();
   GAME_CYCLES(0x7844, 3);
   goto life;
 
@@ -9450,13 +9235,3 @@ void init_emulated(void) {
   io_poke(0xc010, 0);
 }
 
-/// The generated dispatch is gone; this is what is left of it.
-///
-/// snake-byte-cold-body.c still declares func_t001 and its emulated_entry_point
-/// still calls it, because that is how a generated program starts. The body it
-/// used to have -- 968 lines of block-id switch -- is now
-/// game_cold_start() in game_native.c.
-void func_t001(uint16_t ret_addr) {
-  (void)ret_addr; // nothing calls this but the entry point, with 0
-  game_cold_start();
-}

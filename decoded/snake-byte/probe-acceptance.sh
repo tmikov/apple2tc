@@ -115,7 +115,7 @@ keys="${KEYS:-$here/play.pkeys}"
 # the same drift hazard the trace.probe/trace-ext.probe check covers, so it is
 # checked the same way: asserted, not trusted.
 coord=$(grep -h '^install kb at ' "$here/rec.probe")
-for p in play.probe trace.probe trace-ext.probe trace-easy.probe trace-cold.probe ram.probe screen.probe; do
+for p in play.probe trace.probe trace-ext.probe trace-easy.probe trace-cold.probe ram.probe ram-cold.probe screen.probe; do
   if [ "$(grep -h '^install kb at ' "$here/$p")" != "$coord" ]; then
     echo "FAIL: $p installs the coordinate differently from rec.probe" >&2
     echo "  rec.probe: $coord" >&2
@@ -750,6 +750,26 @@ if ! cmp -s /tmp/pkeys-cold-scr-p.txt /tmp/pkeys-cold-scr-cold.txt; then
   exit 1
 fi
 echo "[cold] PASS: screen identical at $scr_n in-game samples"
+
+# And memory, minus the stack -- see ram-cold.probe for why the stack is out.
+# The screen alone would miss a wrong byte that has not been drawn yet, and
+# most of the cleanup ahead moves values around without moving pixels.
+"$ext_prog"  --key-file="$here/play.pkeys"      --probe="$here/ram-cold.probe" \
+  --probe-out=/tmp/pkeys-cold-mem-ext.txt  --frames=1300 > /dev/null 2>&1
+"$cold_prog" --key-file="$here/play-cold.pkeys" --probe="$here/ram-cold.probe" \
+  --probe-out=/tmp/pkeys-cold-mem-cold.txt --frames=1150 > /dev/null 2>&1
+mem_n=$(wc -l < /tmp/pkeys-cold-mem-cold.txt)
+if [ "$mem_n" -lt 6000 ]; then
+  echo "FAIL [cold]: only $mem_n memory samples; the run did not get far" >&2
+  exit 1
+fi
+head -n "$mem_n" /tmp/pkeys-cold-mem-ext.txt > /tmp/pkeys-cold-mem-p.txt
+if ! cmp -s /tmp/pkeys-cold-mem-p.txt /tmp/pkeys-cold-mem-cold.txt; then
+  echo "FAIL [cold]: memory differs from the booting build" >&2
+  diff /tmp/pkeys-cold-mem-p.txt /tmp/pkeys-cold-mem-cold.txt | head -4 >&2
+  exit 1
+fi
+echo "[cold] PASS: memory identical at $mem_n in-game samples"
 
 echo "--- coverage over all scenarios ---"
 coverage_report trace "$here/blocks.txt" 0
