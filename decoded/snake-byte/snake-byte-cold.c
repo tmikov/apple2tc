@@ -3019,14 +3019,17 @@ static void select_hires_page2(void) {
   io_peek(0xc057);
   io_peek(0xc055);
   io_peek(0xc052);
-  s_plot[kCol] = 0x04;
-  s_plot[kRow] = 0x00;
 }
 
-/// A plain three-deep delay. Y is whatever the caller left in it; the original
-/// does not initialise it, and the counters live in zero page because there is
-/// nowhere else to put them.
-static void spin(void) {
+/// A plain three-deep delay. Y is the innermost counter and is whatever the
+/// caller left in it -- the original does not initialise it.
+///
+/// The other two were the plotter's column and row, borrowed because zero page
+/// was the only place to put them; $7056 loaded them and $7061 counted them
+/// down. They are parameters. Nothing reads what the loop leaves behind:
+/// wipe_occupancy_map overwrites the row on its first line, open_wall_gaps
+/// touches neither, and the column is not read until draw_border writes it.
+static void spin(uint8_t outer, uint8_t middle) {
   for (;;) {
     GAME_CYCLES(0x7061, 4);
     if (--s_y) {
@@ -3034,14 +3037,14 @@ static void spin(void) {
       continue;
     }
     GAME_CYCLES(0x7064, 7);
-    s_plot[kRow] = (uint8_t)(s_plot[kRow] - 1);
-    if (s_plot[kRow]) {
+    middle = (uint8_t)(middle - 1);
+    if (middle) {
       GAME_CYCLES(0x7066, 1);
       continue;
     }
     GAME_CYCLES(0x7068, 7);
-    s_plot[kCol] = (uint8_t)(s_plot[kCol] - 1);
-    if (!s_plot[kCol])
+    outer = (uint8_t)(outer - 1);
+    if (!outer)
       break;
     GAME_CYCLES(0x706a, 1);
   }
@@ -3171,7 +3174,7 @@ void game_draw_playfield_native(void) {
   GAME_CYCLES(0x7045, 6);
   game_clear_hgr(0x7047);
   select_hires_page2();
-  spin();
+  spin(0x04, 0x00); // the counts $7056 used to store into $02/$03
   wipe_occupancy_map();
 
   GAME_CYCLES(0x7084, 21);
