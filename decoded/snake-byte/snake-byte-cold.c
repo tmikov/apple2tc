@@ -303,8 +303,9 @@ static void emulated_entry_point(void) {
 /// not all in this file's control.
 void rom_bascalc(void) {
   bool branchTarget = true;
+  (void)branchTarget;
 
-  /*$FBC1*/ CYCLES(0xfbc1, 20);
+  /*$FBC1*/ CYCLES_EDGE(0xfbc1, 20);
   const uint8_t line = s_a;
   // LSR: the carry is the line's low bit, and it is what decides the ADC below.
   const uint8_t odd = line & 0x01;
@@ -315,7 +316,7 @@ void rom_bascalc(void) {
   if (!odd) {
     /*$FBCC*/ CYCLES_EDGE(0xfbcc, 1);
   } else {
-    /*$FBCE*/ CYCLES(0xfbce, 2);
+    /*$FBCE*/ CYCLES_EDGE(0xfbce, 2);
     // ADC #$7F with carry set, i.e. +$80: the second half of the band.
     if (!s_status_d) {
       const uint16_t r = (uint16_t)(s_a + 0x007f) + s_status_c;
@@ -329,7 +330,7 @@ void rom_bascalc(void) {
   }
   branchTarget = true;
 
-  /*$FBD0*/ CYCLES(0xfbd0, 19);
+  /*$FBD0*/ CYCLES_EDGE(0xfbd0, 19);
   s_basl = s_a;
   // ASL twice, then OR the original back in. The second shift's carry out is
   // the one the original leaves behind.
@@ -351,10 +352,10 @@ void rom_vtabz(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$FC24*/ CYCLES(0xfc24, 6);
+  /*$FC24*/ CYCLES_EDGE(0xfc24, 6);
   rom_bascalc();
 
-  /*$FC27*/ CYCLES(0xfc27, 6);
+  /*$FC27*/ CYCLES_EDGE(0xfc27, 6);
   if (!s_status_d) {
     const uint8_t left = s_wndlft;
     const uint16_t r = ((uint16_t)s_a + left) + s_status_c;
@@ -374,7 +375,7 @@ void rom_vtabz(void) {
   }
   s_basl = s_a;
 
-  /*$FC2B*/ CYCLES(0xfc2b, 6);
+  /*$FC2B*/ CYCLES_EDGE(0xfc2b, 6);
 }
 
 /// $FC9C CLREOL. Blank from the cursor to the right edge of the window.
@@ -388,7 +389,7 @@ void rom_clreol(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$FC9C*/ CYCLES(0xfc9c, 3);
+  /*$FC9C*/ CYCLES_EDGE(0xfc9c, 3);
   s_y = s_ch;
   rom_clreolz(); // JMP -- a tail call.
 
@@ -401,12 +402,13 @@ void rom_clreol(void) {
 /// the loop; both are still written because the monitor's callers read them.
 void rom_clreolz(void) {
   bool branchTarget = true;
+  (void)branchTarget;
 
-  /*$FC9E*/ CYCLES(0xfc9e, 2);
+  /*$FC9E*/ CYCLES_EDGE(0xfc9e, 2);
   s_a = 0xa0; // a space, high bit set
 
   for (;;) {
-    /*$FCA0*/ CYCLES(0xfca0, 13);
+    /*$FCA0*/ CYCLES_EDGE(0xfca0, 13);
     const uint8_t col = s_y;
     poke((uint16_t)(bas16() + col), s_a);
 
@@ -425,7 +427,7 @@ void rom_clreolz(void) {
     branchTarget = true;
   }
 
-  /*$FCA7*/ CYCLES(0xfca7, 6);
+  /*$FCA7*/ CYCLES_EDGE(0xfca7, 6);
   (void)branchTarget;
 }
 
@@ -443,17 +445,18 @@ void rom_clreolz(void) {
 /// the total is quadratic in A rather than linear.
 void rom_wait(void) {
   bool branchTarget = true;
+  (void)branchTarget;
 
-  /*$FCA8*/ CYCLES(0xfca8, 2);
+  /*$FCA8*/ CYCLES_EDGE(0xfca8, 2);
   s_status_c = 0x01;
 
   for (;;) {
-    /*$FCA9*/ CYCLES(0xfca9, 3);
+    /*$FCA9*/ CYCLES_EDGE(0xfca9, 3);
     push8(s_a);
 
     // The inner loop: A down to zero, one SBC per pass.
     for (;;) {
-      /*$FCAA*/ CYCLES(0xfcaa, 4);
+      /*$FCAA*/ CYCLES_EDGE(0xfcaa, 4);
       if (!s_status_d) {
         const uint16_t r = (uint16_t)(s_a - 0x0001) - (uint8_t)(0x01 - s_status_c);
         s_status_c = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
@@ -474,7 +477,7 @@ void rom_wait(void) {
     }
 
     // The outer one: the copy off the stack, down by one.
-    /*$FCAE*/ CYCLES(0xfcae, 8);
+    /*$FCAE*/ CYCLES_EDGE(0xfcae, 8);
     s_a = pop8();
     if (!s_status_d) {
       const uint8_t before = s_a;
@@ -498,7 +501,7 @@ void rom_wait(void) {
     branchTarget = true;
   }
 
-  /*$FCB3*/ CYCLES(0xfcb3, 6);
+  /*$FCB3*/ CYCLES_EDGE(0xfcb3, 6);
   (void)branchTarget;
 }
 
@@ -1181,8 +1184,9 @@ static void rom_cout1(void);
 /// the lo-res page instead.
 static void rom_gbascalc(void) {
   bool branchTarget = true;
+  (void)branchTarget;
 
-  /*$F847*/ CYCLES(0xf847, 20);
+  /*$F847*/ CYCLES_EDGE(0xf847, 20);
   const uint8_t row = s_a;
   const uint8_t odd = (uint8_t)(row & 0x01);
   s_status_c = odd;
@@ -1190,7 +1194,7 @@ static void rom_gbascalc(void) {
   /*$F850*/ s_a = (uint8_t)(row & 0x18);
 
   if (odd) {
-    /*$F854*/ CYCLES(0xf854, 2);
+    /*$F854*/ CYCLES_EDGE(0xf854, 2);
     if (!s_status_d)
       s_a = (uint8_t)((s_a + 0x7f) + s_status_c);
     else
@@ -1204,7 +1208,7 @@ static void rom_gbascalc(void) {
   branchTarget = true;
   (void)branchTarget;
 
-  /*$F856*/ CYCLES(0xf856, 19);
+  /*$F856*/ CYCLES_EDGE(0xf856, 19);
   s_gbasl = s_a;
   /*$F85C*/ s_gbasl = (uint8_t)((uint8_t)(s_a << 0x02) | s_gbasl);
 
@@ -1220,7 +1224,7 @@ static void rom_plot1(void) {
   // One lo-res cell: replace the half of the byte MASK selects with the
   // matching half of COLOR, leaving the other half alone. `(old ^ colour) &
   // mask ^ old` is the ROM's way of saying that in three instructions.
-  /*$F80E*/ CYCLES(0xf80e, 28);
+  /*$F80E*/ CYCLES_EDGE(0xf80e, 28);
   const uint16_t at = (uint16_t)(gbas16() + s_y);
   const uint8_t old = peek(at);
   const uint8_t mixed = (uint8_t)(((old ^ s_color) & s_mask) ^ old);
@@ -1245,8 +1249,9 @@ static void rom_plot1(void) {
 /// row can make the difference, so the sum is one of the two masks.
 void rom_plot(void) {
   bool branchTarget = true;
+  (void)branchTarget;
 
-  /*$F800*/ CYCLES(0xf800, 11);
+  /*$F800*/ CYCLES_EDGE(0xf800, 11);
   const uint8_t row = s_a;
   const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
@@ -1256,7 +1261,7 @@ void rom_plot(void) {
                             (half & 0x80)));
   /*$F802*/ rom_gbascalc();
 
-  /*$F805*/ CYCLES(0xf805, 8);
+  /*$F805*/ CYCLES_EDGE(0xf805, 8);
   {
     const uint8_t saved = pop8();
     s_status_c = (uint8_t)(saved & 0x01);
@@ -1268,7 +1273,7 @@ void rom_plot(void) {
   /*$F806*/ s_a = 0x0f;
 
   if (upper) {
-    /*$F80A*/ CYCLES(0xf80a, 2);
+    /*$F80A*/ CYCLES_EDGE(0xf80a, 2);
     if (!s_status_d) {
       const uint16_t r = ((uint16_t)s_a + 0x00e0) + s_status_c;
       s_status_c = (uint8_t)(r >> 8);
@@ -1288,7 +1293,7 @@ void rom_plot(void) {
   branchTarget = true;
   (void)branchTarget;
 
-  /*$F80C*/ CYCLES(0xf80c, 3);
+  /*$F80C*/ CYCLES_EDGE(0xf80c, 3);
   s_mask = s_a;
   rom_plot1(); // JMP -- a tail call.
 
@@ -1311,13 +1316,14 @@ void rom_plot(void) {
 /// without a flag that the original does not have.
 void rom_hline(void) {
   bool branchTarget = true;
+  (void)branchTarget;
 
-  /*$F819*/ CYCLES(0xf819, 6);
+  /*$F819*/ CYCLES_EDGE(0xf819, 6);
   rom_plot();
   branchTarget = true;
 
 across: /* $F81C -- one column at a time, up to H2 */
-  CYCLES(0xf81c, 5);
+  CYCLES_EDGE(0xf81c, 5);
   s_status_c = (uint8_t)(s_y >= s_h2);
   branchTarget = true;
   if (s_status_c) {
@@ -1326,10 +1332,10 @@ across: /* $F81C -- one column at a time, up to H2 */
     goto done;
   }
 
-  /*$F820*/ CYCLES(0xf820, 8);
+  /*$F820*/ CYCLES_EDGE(0xf820, 8);
   s_y = (uint8_t)(s_y + 0x01);
   /*$F821*/ rom_plot1();
-  /*$F824*/ CYCLES(0xf824, 2);
+  /*$F824*/ CYCLES_EDGE(0xf824, 2);
   branchTarget = true;
   if (!s_status_c) {
     // $F824 BCC -- the branch itself, taken here.
@@ -1338,7 +1344,7 @@ across: /* $F81C -- one column at a time, up to H2 */
   }
 
 down: /* $F826 -- one row at a time, up to V2 */
-  CYCLES(0xf826, 2);
+  CYCLES_EDGE(0xf826, 2);
   if (!s_status_d) {
     const uint16_t r = ((uint16_t)s_a + 0x0001) + s_status_c;
     s_status_v = ovf8((uint8_t)r, s_a, 0x01);
@@ -1349,10 +1355,10 @@ down: /* $F826 -- one row at a time, up to V2 */
     s_status_v = (((uint8_t)(r >> 8) & 0x40) != 0);
   }
 
-  /*$F828*/ CYCLES(0xf828, 9);
+  /*$F828*/ CYCLES_EDGE(0xf828, 9);
   push8(s_a);
   /*$F829*/ rom_plot();
-  /*$F82C*/ CYCLES(0xf82c, 9);
+  /*$F82C*/ CYCLES_EDGE(0xf82c, 9);
   s_a = pop8();
   /*$F82D*/ s_status_c = (uint8_t)(s_a >= s_v2);
   branchTarget = true;
@@ -1363,7 +1369,7 @@ down: /* $F826 -- one row at a time, up to V2 */
   }
 
 done:
-  /*$F831*/ CYCLES(0xf831, 6);
+  /*$F831*/ CYCLES_EDGE(0xf831, 6);
   (void)branchTarget;
 }
 
@@ -1378,7 +1384,7 @@ void rom_setcol(void) {
   // The lo-res colour is stored in both nibbles, so a PLOT can take whichever
   // half MASK selects without shifting. Four ASLs and an ORA get there; the
   // carry the original leaves is the top bit shifted out of the low nibble.
-  /*$F864*/ CYCLES(0xf864, 25);
+  /*$F864*/ CYCLES_EDGE(0xf864, 25);
   const uint8_t low = (uint8_t)(s_a & 0x0f);
   s_color = low;
   const uint16_t shifted = (uint16_t)(low << 0x04);
@@ -1403,7 +1409,7 @@ void rom_scrn(void) {
   // The row's low bit says which half of the byte holds this cell, and the
   // ROM keeps it across GBASCALC on the stack -- as the whole status
   // register, because LSR put it in the carry and PHP is one byte.
-  /*$F871*/ CYCLES(0xf871, 11);
+  /*$F871*/ CYCLES_EDGE(0xf871, 11);
   const uint8_t row = s_a;
   const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
@@ -1413,7 +1419,7 @@ void rom_scrn(void) {
                             (half & 0x80)));
   /*$F873*/ rom_gbascalc();
 
-  /*$F876*/ CYCLES(0xf876, 11);
+  /*$F876*/ CYCLES_EDGE(0xf876, 11);
   s_a = peek((uint16_t)(gbas16() + s_y));
 
   // PLP: only the carry matters to what follows, but the rest is restored
@@ -1428,7 +1434,7 @@ void rom_scrn(void) {
   }
 
   if (upper) {
-    /*$F87B*/ CYCLES(0xf87b, 8);
+    /*$F87B*/ CYCLES_EDGE(0xf87b, 8);
     s_status_c = (uint8_t)((s_a >> 0x03) & 0x01);
     s_a = (uint8_t)(s_a >> 0x04);
   } else {
@@ -1436,7 +1442,7 @@ void rom_scrn(void) {
     /*$F879*/ CYCLES_EDGE(0xf879, 1);
   }
 
-  /*$F87F*/ CYCLES(0xf87f, 8);
+  /*$F87F*/ CYCLES_EDGE(0xf87f, 8);
   s_a &= 0x0f;
   s_status_not_z = s_a;
   s_status_n = 0x00;
@@ -1455,9 +1461,10 @@ void rom_scrn(void) {
 /// CLREOLZ each destroy A.
 void rom_home(void) {
   bool branchTarget = true;
+  (void)branchTarget;
 
 home: /* $FC58 */
-  CYCLES(0xfc58, 13);
+  CYCLES_EDGE(0xfc58, 13);
   s_a = s_wndtop;
   /*$FC5A*/ s_cv = s_wndtop;
   /*$FC5C*/ s_y = 0x00;
@@ -1470,13 +1477,13 @@ home: /* $FC58 */
   /*$FC60*/ CYCLES_EDGE(0xfc60, 1);
 
   for (;;) { /* $FC46 -- CLRSC2, one line per pass */
-    CYCLES(0xfc46, 9);
+    CYCLES_EDGE(0xfc46, 9);
     push8(s_a);
     /*$FC47*/ rom_vtabz();
-    /*$FC4A*/ CYCLES(0xfc4a, 6);
+    /*$FC4A*/ CYCLES_EDGE(0xfc4a, 6);
     rom_clreolz();
 
-    /*$FC4D*/ CYCLES(0xfc4d, 13);
+    /*$FC4D*/ CYCLES_EDGE(0xfc4d, 13);
     s_y = 0x00;
     s_a = pop8();
     if (!s_status_d)
@@ -1492,7 +1499,7 @@ home: /* $FC58 */
       continue;
     }
 
-    /*$FC56*/ CYCLES(0xfc56, 2);
+    /*$FC56*/ CYCLES_EDGE(0xfc56, 2);
     branchTarget = true;
     if (!s_status_c)
       goto home; // the BCS's not-taken arm, which cannot be reached
@@ -1502,7 +1509,7 @@ home: /* $FC58 */
     break;
   }
 
-  /*$FC22*/ CYCLES(0xfc22, 3); // TABV
+  /*$FC22*/ CYCLES_EDGE(0xfc22, 3); // TABV
   s_a = s_cv;
   (void)branchTarget;
   rom_vtabz(); // JMP -- a tail call.
@@ -1533,8 +1540,9 @@ home: /* $FC58 */
 /// the source line's base in BASL and the destination's in BAS2L.
 void rom_fc68(void) {
   bool branchTarget = true;
+  (void)branchTarget;
 
-  /*$FC68*/ CYCLES(0xfc68, 8);
+  /*$FC68*/ CYCLES_EDGE(0xfc68, 8);
   s_a = s_cv;
   branchTarget = true;
   if (!(s_cv >= s_wndbtm)) {
@@ -1544,7 +1552,7 @@ void rom_fc68(void) {
       return;
   }
 
-  /*$FC6E*/ CYCLES(0xfc6e, 17);
+  /*$FC6E*/ CYCLES_EDGE(0xfc6e, 17);
   s_cv = (uint8_t)(s_cv - 0x01);
   /*$FC70*/ s_a = s_wndtop;
   /*$FC72*/ push8(s_a);
@@ -1552,7 +1560,7 @@ void rom_fc68(void) {
   branchTarget = true;
 
 scroll: /* $FC76 -- one line up per pass */
-  CYCLES(0xfc76, 28);
+  CYCLES_EDGE(0xfc76, 28);
   /*$FC78*/ s_bas2l = s_basl;
   /*$FC7C*/ s_bas2h = s_bash;
   /*$FC80*/ s_y = (uint8_t)(s_wndwdth - 0x01);
@@ -1574,13 +1582,13 @@ scroll: /* $FC76 -- one line up per pass */
     goto last_line;
   }
 
-  /*$FC88*/ CYCLES(0xfc88, 9);
+  /*$FC88*/ CYCLES_EDGE(0xfc88, 9);
   push8(s_a);
   /*$FC89*/ rom_vtabz();
   branchTarget = true;
 
 copy: /* $FC8C -- one character, right to left */
-  CYCLES(0xfc8c, 15);
+  CYCLES_EDGE(0xfc8c, 15);
   {
     const uint8_t at = s_y;
     /*$FC8E*/ poke((uint16_t)(bas2_16() + at), peek((uint16_t)(bas16() + at)));
@@ -1595,7 +1603,7 @@ copy: /* $FC8C -- one character, right to left */
     }
   }
 
-  /*$FC93*/ CYCLES(0xfc93, 2);
+  /*$FC93*/ CYCLES_EDGE(0xfc93, 2);
   branchTarget = true;
   if (s_status_n) {
     // $FC93 BMI -- the branch itself, taken here (outer loop back).
@@ -1604,11 +1612,11 @@ copy: /* $FC8C -- one character, right to left */
   }
 
 last_line: /* $FC95 -- blank what the scroll left at the bottom */
-  CYCLES(0xfc95, 8);
+  CYCLES_EDGE(0xfc95, 8);
   s_y = 0x00;
   /*$FC97*/ rom_clreolz();
 
-  /*$FC9A*/ CYCLES(0xfc9a, 2);
+  /*$FC9A*/ CYCLES_EDGE(0xfc9a, 2);
   branchTarget = true;
   (void)branchTarget;
   if (!s_status_c) {
@@ -1619,7 +1627,7 @@ last_line: /* $FC95 -- blank what the scroll left at the bottom */
   // before continuing; the not-taken arm above jumps straight out without it.
   /*$FC9A*/ CYCLES_EDGE(0xfc9a, 1);
 
-  /*$FC22*/ CYCLES(0xfc22, 3); // TABV
+  /*$FC22*/ CYCLES_EDGE(0xfc22, 3); // TABV
   s_a = s_cv;
   rom_vtabz();
 }
@@ -1677,8 +1685,9 @@ last_line: /* $FC95 -- blank what the scroll left at the bottom */
 /// twice.
 static void rom_coutz(void) {
   bool branchTarget = true;
+  (void)branchTarget;
 
-  /*$FB78*/ CYCLES(0xfb78, 4);
+  /*$FB78*/ CYCLES_EDGE(0xfb78, 4);
   branchTarget = true;
   if (s_a != 0x8d) {
     /*$FB7A*/ CYCLES_EDGE(0xfb7a, 1);
@@ -1697,18 +1706,18 @@ static void rom_coutz(void) {
     goto emit;
   }
 
-  /*$FB81*/ CYCLES(0xfb81, 4);
+  /*$FB81*/ CYCLES_EDGE(0xfb81, 4);
   branchTarget = true;
   if (s_y != 0x93) {
     /*$FB83*/ CYCLES_EDGE(0xfb83, 1);
     goto emit;
   }
 
-  /*$FB85*/ CYCLES(0xfb85, 4);
+  /*$FB85*/ CYCLES_EDGE(0xfb85, 4);
   s_status_v = (uint8_t)((io_peek(0xc010) >> 0x06) & 0x01);
 
   for (;;) { /* $FB88 -- spin until a key is pressed */
-    CYCLES(0xfb88, 6);
+    CYCLES_EDGE(0xfb88, 6);
     s_y = io_peek(0xc000);
     branchTarget = true;
     if (!(s_y & 0x80)) {
@@ -1716,21 +1725,21 @@ static void rom_coutz(void) {
       continue;
     }
 
-    /*$FB8D*/ CYCLES(0xfb8d, 4);
+    /*$FB8D*/ CYCLES_EDGE(0xfb8d, 4);
     branchTarget = true;
     if (s_y == 0x83) {
       // Ctrl-C: leave it latched.
       /*$FB8F*/ CYCLES_EDGE(0xfb8f, 1);
       break;
     }
-    /*$FB91*/ CYCLES(0xfb91, 4);
+    /*$FB91*/ CYCLES_EDGE(0xfb91, 4);
     s_status_v = (uint8_t)((io_peek(0xc010) >> 0x06) & 0x01);
     break;
   }
 
 emit: /* $FB94 JMP $FBFD */
-  CYCLES(0xfb94, 3);
-  /*$FBFD*/ CYCLES(0xfbfd, 4);
+  CYCLES_EDGE(0xfb94, 3);
+  /*$FBFD*/ CYCLES_EDGE(0xfbfd, 4);
   branchTarget = true;
   if (!(s_a >= 0xa0)) {
     // The not-taken arm jumps straight to the dispatch without the edge charge.
@@ -1741,11 +1750,11 @@ emit: /* $FB94 JMP $FBFD */
   /*$FBFF*/ CYCLES_EDGE(0xfbff, 1);
 
 store: /* $FBF0 -- put the character at the cursor */
-  CYCLES(0xfbf0, 9);
+  CYCLES_EDGE(0xfbf0, 9);
   s_y = s_ch;
   /*$FBF2*/ poke((uint16_t)(bas16() + s_y), s_a);
 
-  /*$FBF4*/ CYCLES(0xfbf4, 13);
+  /*$FBF4*/ CYCLES_EDGE(0xfbf4, 13);
   s_ch = (uint8_t)(s_ch + 0x01);
   s_a = s_ch;
   {
@@ -1760,12 +1769,12 @@ store: /* $FBF0 -- put the character at the cursor */
       goto carriage_return;
     }
   }
-  /*$FBFC*/ CYCLES(0xfbfc, 6);
+  /*$FBFC*/ CYCLES_EDGE(0xfbfc, 6);
   branchTarget = true;
   goto out;
 
 dispatch: /* $FC01 -- not printable; which control code is it? */
-  CYCLES(0xfc01, 4);
+  CYCLES_EDGE(0xfc01, 4);
   s_y = s_a;
   branchTarget = true;
   if (!(s_a & 0x80)) {
@@ -1774,21 +1783,21 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
     goto store;
   }
 
-  /*$FC04*/ CYCLES(0xfc04, 4);
+  /*$FC04*/ CYCLES_EDGE(0xfc04, 4);
   branchTarget = true;
   if (s_a == 0x8d) {
     /*$FC06*/ CYCLES_EDGE(0xfc06, 1);
     goto carriage_return;
   }
 
-  /*$FC08*/ CYCLES(0xfc08, 4);
+  /*$FC08*/ CYCLES_EDGE(0xfc08, 4);
   branchTarget = true;
   if (s_a == 0x8a) {
     /*$FC0A*/ CYCLES_EDGE(0xfc0a, 1);
     goto line_feed;
   }
 
-  /*$FC0C*/ CYCLES(0xfc0c, 4);
+  /*$FC0C*/ CYCLES_EDGE(0xfc0c, 4);
   s_status_c = (uint8_t)(s_a >= 0x88);
   branchTarget = true;
   if (s_a != 0x88) {
@@ -1798,7 +1807,7 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
 
   /* $FC10 -- backspace. Off the left edge wraps to the end of the line above,
      which is why it falls into the cursor-up path rather than returning. */
-  /*$FC10*/ CYCLES(0xfc10, 7);
+  /*$FC10*/ CYCLES_EDGE(0xfc10, 7);
   {
     const uint8_t back = (uint8_t)(s_ch - 0x01);
     s_status_not_z = back;
@@ -1807,17 +1816,17 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
     branchTarget = true;
     if (!(back & 0x80)) {
       /*$FC12*/ CYCLES_EDGE(0xfc12, 1);
-      /*$FBFC*/ CYCLES(0xfbfc, 6);
+      /*$FBFC*/ CYCLES_EDGE(0xfbfc, 6);
       branchTarget = true;
       goto out;
     }
   }
 
-  /*$FC14*/ CYCLES(0xfc14, 11);
+  /*$FC14*/ CYCLES_EDGE(0xfc14, 11);
   /*$FC16*/ s_ch = s_wndwdth;
   /*$FC18*/ s_ch = (uint8_t)(s_ch - 0x01);
 
-  /*$FC1A*/ CYCLES(0xfc1a, 8);
+  /*$FC1A*/ CYCLES_EDGE(0xfc1a, 8);
   {
     const uint8_t top = s_wndtop;
     s_a = top;
@@ -1829,21 +1838,21 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
     if (s_status_c) {
       // Already on the window's top line; there is nowhere to go up to.
       /*$FC1E*/ CYCLES_EDGE(0xfc1e, 1);
-      /*$FC2B*/ CYCLES(0xfc2b, 6);
+      /*$FC2B*/ CYCLES_EDGE(0xfc2b, 6);
       branchTarget = true;
       goto out;
     }
   }
 
-  /*$FC20*/ CYCLES(0xfc20, 5);
+  /*$FC20*/ CYCLES_EDGE(0xfc20, 5);
   s_cv = (uint8_t)(s_cv - 0x01);
-  /*$FC22*/ CYCLES(0xfc22, 3); // TABV
+  /*$FC22*/ CYCLES_EDGE(0xfc22, 3); // TABV
   s_a = s_cv;
   rom_vtabz();
   goto out;
 
 bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
-  CYCLES(0xfbd9, 4);
+  CYCLES_EDGE(0xfbd9, 4);
   {
     const uint8_t ch = s_a;
     const uint8_t differs = (uint8_t)(ch != 0x87);
@@ -1854,26 +1863,26 @@ bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
     if (differs) {
       // Not the bell either. Drop it.
       /*$FBDB*/ CYCLES_EDGE(0xfbdb, 1);
-      /*$FBEF*/ CYCLES(0xfbef, 6);
+      /*$FBEF*/ CYCLES_EDGE(0xfbef, 6);
       branchTarget = true;
       goto out;
     }
   }
 
   // A tenth of a second of silence, then 192 clicks of the speaker.
-  /*$FBDD*/ CYCLES(0xfbdd, 8);
+  /*$FBDD*/ CYCLES_EDGE(0xfbdd, 8);
   s_a = 0x40;
   /*$FBDF*/ rom_wait();
   branchTarget = true;
-  /*$FBE2*/ CYCLES(0xfbe2, 2);
+  /*$FBE2*/ CYCLES_EDGE(0xfbe2, 2);
   s_y = 0xc0;
 
   for (;;) { /* $FBE4 */
-    CYCLES(0xfbe4, 8);
+    CYCLES_EDGE(0xfbe4, 8);
     s_a = 0x0c;
     /*$FBE6*/ rom_wait();
     branchTarget = true;
-    /*$FBE9*/ CYCLES(0xfbe9, 8);
+    /*$FBE9*/ CYCLES_EDGE(0xfbe9, 8);
     s_a = io_peek(0xc030);
     /*$FBEC*/ s_y = (uint8_t)(s_y - 0x01);
     s_status_not_z = s_y;
@@ -1884,16 +1893,16 @@ bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
     /*$FBED*/ CYCLES_EDGE(0xfbed, 1);
   }
 
-  /*$FBEF*/ CYCLES(0xfbef, 6);
+  /*$FBEF*/ CYCLES_EDGE(0xfbef, 6);
   branchTarget = true;
   goto out;
 
 carriage_return: /* $FC62 -- to the left edge, then down */
-  CYCLES(0xfc62, 5);
+  CYCLES_EDGE(0xfc62, 5);
   /*$FC64*/ s_ch = 0x00;
 
 line_feed: /* $FC66 */
-  CYCLES(0xfc66, 5);
+  CYCLES_EDGE(0xfc66, 5);
   s_cv = (uint8_t)(s_cv + 0x01);
   /*$FC68*/ rom_fc68(); // JMP -- a tail call, and where a scroll happens.
 
@@ -1940,9 +1949,10 @@ out:
 /// font onto the wrong page, undetectably.
 void rom_cout(void) {
   bool branchTarget = true;
+  (void)branchTarget;
   uint16_t vector;
 
-  /*$FDED*/ CYCLES(0xfded, 5);
+  /*$FDED*/ CYCLES_EDGE(0xfded, 5);
             vector = csw16(); // JMP ($36)
             branchTarget = true;
             switch (vector) {
@@ -1976,26 +1986,27 @@ void rom_cout(void) {
 /// are let through unmasked, since mangling them would change what they mean.
 static void rom_cout1(void) {
   bool branchTarget = true;
+  (void)branchTarget;
 
-  /*$FDF0*/ CYCLES(0xfdf0, 4);
+  /*$FDF0*/ CYCLES_EDGE(0xfdf0, 4);
   const bool printable = s_a >= 0xa0;
   s_status_c = (uint8_t)printable;
 
   if (printable) {
-    /*$FDF4*/ CYCLES(0xfdf4, 3);
+    /*$FDF4*/ CYCLES_EDGE(0xfdf4, 3);
     s_a = (uint8_t)(s_a & s_invflg);
   } else {
     // $FDF2 BCC -- the branch itself, taken here.
     /*$FDF2*/ CYCLES_EDGE(0xfdf2, 1);
   }
 
-  /*$FDF6*/ CYCLES(0xfdf6, 12);
+  /*$FDF6*/ CYCLES_EDGE(0xfdf6, 12);
   s_ysav1 = s_y;
   /*$FDF8*/ push8(s_a);
   branchTarget = true;
   rom_coutz(); // JSR $FB78
 
-  /*$FDFC*/ CYCLES(0xfdfc, 13);
+  /*$FDFC*/ CYCLES_EDGE(0xfdfc, 13);
   s_a = pop8();
   /*$FDFD*/ s_y = s_ysav1;
   s_status_not_z = s_y;
@@ -2022,7 +2033,7 @@ void rom_setkbd(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$FE89*/ CYCLES(0xfe89, 11);
+  /*$FE89*/ CYCLES_EDGE(0xfe89, 11);
   s_a2l = 0x00;
   s_x = 0x38;
   s_y = 0x1b;
@@ -2036,11 +2047,11 @@ void rom_setkbd(void) {
   // answers page $FD, where its own KEYIN and COUT1 live. A real slot would
   // give $Cn00 instead -- decoded, never taken, because the game never sets
   // one.
-  /*$FE9B*/ CYCLES(0xfe9b, 7);
+  /*$FE9B*/ CYCLES_EDGE(0xfe9b, 7);
   /*$FE9D*/ const uint8_t slot = (uint8_t)(s_a2l & 0x0f);
   s_a = slot;
   if (slot) {
-    /*$FEA1*/ CYCLES(0xfea1, 6);
+    /*$FEA1*/ CYCLES_EDGE(0xfea1, 6);
     s_a = (uint8_t)(s_a | 0xc0);
     s_y = 0x00;
     // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
@@ -2048,11 +2059,11 @@ void rom_setkbd(void) {
   } else {
     // $FE9F BEQ -- the branch itself, taken here.
     /*$FE9F*/ CYCLES_EDGE(0xfe9f, 1);
-    /*$FEA7*/ CYCLES(0xfea7, 2);
+    /*$FEA7*/ CYCLES_EDGE(0xfea7, 2);
     s_a = 0xfd;
   }
 
-  /*$FEA9*/ CYCLES(0xfea9, 14);
+  /*$FEA9*/ CYCLES_EDGE(0xfea9, 14);
   s_kswl = s_y;
   s_kswh = s_a;
 
@@ -2072,7 +2083,7 @@ void rom_setvid(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
-  /*$FE93*/ CYCLES(0xfe93, 9);
+  /*$FE93*/ CYCLES_EDGE(0xfe93, 9);
   s_a2l = 0x00;
   s_x = 0x36;
   s_y = 0xf0;
@@ -2081,11 +2092,11 @@ void rom_setvid(void) {
   // answers page $FD, where its own KEYIN and COUT1 live. A real slot would
   // give $Cn00 instead -- decoded, never taken, because the game never sets
   // one.
-  /*$FE9B*/ CYCLES(0xfe9b, 7);
+  /*$FE9B*/ CYCLES_EDGE(0xfe9b, 7);
   /*$FE9D*/ const uint8_t slot = (uint8_t)(s_a2l & 0x0f);
   s_a = slot;
   if (slot) {
-    /*$FEA1*/ CYCLES(0xfea1, 6);
+    /*$FEA1*/ CYCLES_EDGE(0xfea1, 6);
     s_a = (uint8_t)(s_a | 0xc0);
     s_y = 0x00;
     // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
@@ -2093,11 +2104,11 @@ void rom_setvid(void) {
   } else {
     // $FE9F BEQ -- the branch itself, taken here.
     /*$FE9F*/ CYCLES_EDGE(0xfe9f, 1);
-    /*$FEA7*/ CYCLES(0xfea7, 2);
+    /*$FEA7*/ CYCLES_EDGE(0xfea7, 2);
     s_a = 0xfd;
   }
 
-  /*$FEA9*/ CYCLES(0xfea9, 14);
+  /*$FEA9*/ CYCLES_EDGE(0xfea9, 14);
   s_cswl = s_y;
   s_cswh = s_a;
 
@@ -2359,7 +2370,7 @@ static void set_snake_head_col(uint8_t col) {
 uint8_t game_start_life(uint8_t head_col) {
   bool branchTarget = true;
   (void)branchTarget;
-  /*$660F*/ CYCLES(0x660f, 50);
+  /*$660F*/ CYCLES_EDGE(0x660f, 50);
   set_snake_head_col(head_col);
 
   // Opposite corners, converging. The original's nine stores are these two.
@@ -2376,7 +2387,7 @@ uint8_t game_start_life(uint8_t head_col) {
 uint8_t game_load_shape_masks(uint8_t shape) {
   bool branchTarget = true;
   (void)branchTarget;
-  /*$6127*/ CYCLES(0x6127, 53);
+  /*$6127*/ CYCLES_EDGE(0x6127, 53);
   // Four masks per shape at $6174, and $6060 is where the plotter reads them.
   // Both stay in emulated RAM: $6060 is read by game_draw_cell, which is not
   // converted, and $6174 is part of the loaded binary image.
@@ -2391,7 +2402,7 @@ uint8_t game_load_shape_masks(uint8_t shape) {
 void game_install_cout_vector(void) {
   bool branchTarget = true;
   (void)branchTarget;
-  /*$6641*/ CYCLES(0x6641, 16);
+  /*$6641*/ CYCLES_EDGE(0x6641, 16);
   // CSWL/CSWH at $36/$37, pointed at $664A.
   s_cswl = 0x4a;
   s_cswh = 0x66;
@@ -2998,8 +3009,9 @@ static void plot_vline_at(uint8_t col, uint8_t row, uint8_t to_row) {
 static void lores_vline_at(uint8_t col, uint8_t row, uint8_t to_row) {
   { // was game_lores_vline()
     bool branchTarget = true;
+  (void)branchTarget;
 
-    /*$7000*/ CYCLES(0x7000, 6);
+    /*$7000*/ CYCLES_EDGE(0x7000, 6);
     const uint8_t restored = game_lores_vline_native((Cell){.col = col, .row = row}, to_row);
     s_a = restored;
     s_status_not_z = restored;
@@ -3314,7 +3326,7 @@ static uint8_t dot_index(uint8_t ink, uint8_t scanline, uint8_t col) {
 uint8_t game_draw_cell_native(uint8_t ink, Cell c) {
   bool branchTarget = true;
   (void)branchTarget;
-  /*$60E7*/ CYCLES(0x60e7, 0);
+  /*$60E7*/ CYCLES_EDGE(0x60e7, 0);
   assert_binary_mode("game_draw_cell", 0x60e7);
   uint8_t hgr_hi;
   GAME_CYCLES(0x60e7, 22);
@@ -3431,7 +3443,7 @@ void game_clear_hgr_native(void) {
 uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
   bool branchTarget = true;
   (void)branchTarget;
-  /*$6148*/ CYCLES(0x6148, 6);
+  /*$6148*/ CYCLES_EDGE(0x6148, 6);
   {
     const uint8_t mask = game_load_shape_masks(s_shape);
     s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
@@ -3467,7 +3479,7 @@ uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
 uint8_t game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
   bool branchTarget = true;
   (void)branchTarget;
-  /*$615A*/ CYCLES(0x615a, 6);
+  /*$615A*/ CYCLES_EDGE(0x615a, 6);
   {
     const uint8_t mask = game_load_shape_masks(s_shape);
     s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
@@ -4409,8 +4421,9 @@ void game_draw_head_native(uint8_t ink, Cell c) {
     s_shape = 0x01;
     { // was game_plot_shape_merge()
       bool branchTarget = true;
+  (void)branchTarget;
 
-      /*$6B93*/ CYCLES(0x6b93, 6);
+      /*$6B93*/ CYCLES_EDGE(0x6b93, 6);
       {
       const uint8_t mask = game_load_shape_masks(s_shape);
       // The original walked the table with INX, so X is left pointing at the
@@ -4680,7 +4693,7 @@ void game_read_key_native(void) {
 
   // The RTS belongs to the routine before this one, and both early exits
   // share it -- as does the key dequeue, whose adapter still emits it.
-  GAME_CYCLES_SHARED(0x6216, 6);
+  GAME_CYCLES(0x6216, 6);
   // A and X are the live-out set, and both are set above on every path.
 }
 
@@ -4935,18 +4948,19 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     GAME_CYCLES(0x628e, 6);
     { // was game_read_direction()
       bool branchTarget = true;
+  (void)branchTarget;
 
       // The JSR stays here rather than moving into the native routine, because
       // game_step_bouncers's own adapter is what keeps $6216 -- the RTS it shares
       // with the unconverted game_read_key -- a probe site.
-      /*$6C72*/ CYCLES(0x6c72, 6);
+      /*$6C72*/ CYCLES_EDGE(0x6c72, 6);
       const uint8_t key = game_step_bouncers_native();
       // $6216 is an RTS shared with game_read_key, so it stays a probe site even
       // though the routine that used to hold it is gone. Spelled with plain CYCLES
       // rather than GAME_CYCLES_SHARED because site_addrs() does not grep for that
       // form -- it would have kept probing and left the list, which is the silent
       // half of a hole rather than the loud one.
-      CYCLES(0x6216, 6);
+      CYCLES_EDGE(0x6216, 6);
 
       // The original saves the key on the stack across the $0302 test; here it is
       // an argument. The pushed byte is never observed: nothing between the PHA
@@ -5331,8 +5345,9 @@ static bool steer_try(
   ram_poke(kSteerDir, dir);
   { // was game_move_ok()
     bool branchTarget = true;
+  (void)branchTarget;
 
-    /*$6AB8*/ CYCLES(0x6ab8, 0);
+    /*$6AB8*/ CYCLES_EDGE(0x6ab8, 0);
     if (s_status_d) {
     fprintf(stderr, "game_move_ok: entered with decimal mode set\n");
     error_handler(0x6ab8);
@@ -6093,8 +6108,9 @@ wait: /* $741C */
 /// original left.
 void game_print_inline_str(uint16_t ret_addr) {
   bool branchTarget = true;
+  (void)branchTarget;
 
-  /*$7230*/ CYCLES(0x7230, 20);
+  /*$7230*/ CYCLES_EDGE(0x7230, 20);
   ram_poke(kStrPtr, (uint8_t)ret_addr);
   ram_poke(kStrPtr + 1, (uint8_t)(ret_addr >> 8));
   rom_fc68(); // VTAB to the current CV
@@ -6102,17 +6118,17 @@ void game_print_inline_str(uint16_t ret_addr) {
   for (;;) {
     // The pointer is stepped before the read, which is why the caller passes
     // the address of the JSR's last byte rather than of the string.
-    /*$7239*/ CYCLES(0x7239, 7);
+    /*$7239*/ CYCLES_EDGE(0x7239, 7);
     const uint8_t lo = (uint8_t)(ram_peek(kStrPtr) + 1);
     ram_poke(kStrPtr, lo);
     if (!lo) {
-      /*$723D*/ CYCLES(0x723d, 5);
+      /*$723D*/ CYCLES_EDGE(0x723d, 5);
       ram_poke(kStrPtr + 1, (uint8_t)(ram_peek(kStrPtr + 1) + 1));
     } else {
       /*$723B*/ CYCLES_EDGE(0x723b, 1);
     }
 
-    /*$723F*/ CYCLES(0x723f, 9);
+    /*$723F*/ CYCLES_EDGE(0x723f, 9);
     const uint8_t ch = peek(ram_peek16al(kStrPtr));
     s_y = 0x00;
     s_a = ch;
@@ -6123,12 +6139,12 @@ void game_print_inline_str(uint16_t ret_addr) {
       break;
     }
 
-    /*$7245*/ CYCLES(0x7245, 6);
+    /*$7245*/ CYCLES_EDGE(0x7245, 6);
     rom_cout();
-    /*$7248*/ CYCLES(0x7248, 3);
+    /*$7248*/ CYCLES_EDGE(0x7248, 3);
   }
 
-  /*$724B*/ CYCLES(0x724b, 18);
+  /*$724B*/ CYCLES_EDGE(0x724b, 18);
 }
 
 
@@ -6427,8 +6443,9 @@ void game_move_bouncer(void) {
   // literally a load and a store of the struct its caller already copies in
   // and out by hand.
   bool branchTarget = true;
+  (void)branchTarget;
 
-  /*$64C8*/ CYCLES(0x64c8, 12);
+  /*$64C8*/ CYCLES_EDGE(0x64c8, 12);
   if (s_status_d) {
     fprintf(stderr, "game_move_bouncer: entered with decimal mode set\n");
     error_handler(0x64c8);

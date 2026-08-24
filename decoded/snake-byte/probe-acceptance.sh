@@ -730,8 +730,8 @@ for a in $(grep -ohE 'GAME_CYCLES_SHARED\(0x[0-9a-f]+' "$here/snake-byte-cold.c"
   fi
 done
 cold_sites=$(wc -l < "$here/blocks-cold.txt")
-if [ "$cold_sites" -ne 113 ]; then
-  echo "FAIL [cold]: site list has $cold_sites block heads, expected exactly 113" >&2
+if [ "$cold_sites" -ne 6 ]; then
+  echo "FAIL [cold]: site list has $cold_sites block heads, expected exactly 6" >&2
   echo "  Converting a routine lowers this deliberately; anything else is a regression." >&2
   exit 1
 fi
