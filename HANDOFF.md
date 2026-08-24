@@ -226,9 +226,24 @@ short version.
 | `snake-byte-easyc1-ext` | `snake-byte-easy-ext.c` | Test fixture, not a variant: apple quota 16 -> 2. |
 | `snake-byte` | `snake-byte.c` | Historical `--simple-c` output, no longer regenerated. |
 
-**Both are gated now.** `probe-acceptance.sh` compares cold against ext on every
-run — **421,789 block heads, 6,808 screen samples and 6,808 memory samples**,
-aligned at the first `$3750`. The control is ext rather than the interpreter because there is no
+**Both are gated now.** `probe-acceptance.sh` compares cold against ext over
+**two scenarios, six checks**, aligned at the first `$3750`:
+
+| | play | hires |
+| --- | --- | --- |
+| block-head trace | 421,789 | 95,468 |
+| screen | 6,808 samples | 9,524 |
+| memory (`ram-cold.probe`) | 6,808 | 9,524 |
+
+`hires` was added 2026-08-23 and is not optional decoration: without it the
+cold build ran `game_cout_hook_native` **zero** times under the gate. Its keys
+are derived, not recorded — `make-cold-keys.sh play-hires.pkeys
+play-hires-cold.pkeys 181207`.
+
+Both probes sample at `$6217` **and `$760F`**. `$6217` is the in-game keyboard
+ingest and `$760F` is the redefinition screen's; sampling only the first meant
+the whole hi-res path was traced but never sampled, and a mutation that drew
+205 wrong glyphs passed every check. Do not drop either site. The control is ext rather than the interpreter because there is no
 interpreter that starts at `$3750`; ext earns the role by being checked against
 the interpreter a few dozen lines earlier in the same script.
 
@@ -420,6 +435,17 @@ to stay safe for builds still running a generated dispatch over the same
 addresses — the top-level conversion had already had to be split into a separate
 file for exactly that reason. Cold owns its code now, and the gate is what says
 whether the game still behaves.
+
+**The gate is only as wide as its scenarios, and this was measured the hard
+way.** Before 2026-08-23 the cold gate ran `play` only, which never presses
+`C` — so `$664A` and the whole redefinition path ran zero times under it, and
+a mutation there was caught by nothing. Adding `hires` was half the fix; the
+other half was that both state probes sampled only at `$6217`, an address that
+path never reaches, so the new scenario bought trace coverage and no state
+coverage. **Before trusting the gate on a routine, check that a scenario runs
+it *and* that a sample point fires while it does.** A probe with plenty of
+output, all of it from the states you were not worried about, reads exactly
+like coverage.
 
 **Know which half of the gate a change spends.** The cold gate compares against
 `snake-bytec1-ext`, which still shares the originals. Refactoring inside the
