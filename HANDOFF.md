@@ -530,19 +530,22 @@ bb_N: labels                        0        was 141
 tmpN_U8 temporaries                 0
 ret_addr parameters                 0        was 117; push16/pop16 unused
 compiler warnings of its own        0        at -Wall
-adapters left                      16        was 42
+adapters left                       5        was 42
 ```
 
 What remains, in order of how well-defined it is:
 
-1. **Step 4's last 16 adapters.** Each needs its A/flags write-back checked
-   against its callers, its cycle charge moved into the native if it is
-   non-zero, and the pinned site count lowered by hand. Five are charged zero
-   and are therefore cheapest: `game_cout_hook`, `game_draw_cell`,
-   `game_move_ok`, `game_step_bouncers` (its `$6594` half) and
-   `game_pause_or_toggle_sound`. The ones with the most write-back —
-   `game_draw_cell` at 10 and `game_move_ok` at 11 — are the ones to leave
-   until last.
+1. **Step 4's last 5 adapters** — `game_draw_cell`, `game_lores_vline`,
+   `game_plot_shape_merge`, `game_move_ok`, `game_move_bouncer`,
+   `game_read_direction`.
+
+   **Merge them, do not delete them.** That is the lesson of the last six: an
+   adapter deleted costs the trace its site and lowers the pin; an adapter
+   *merged into its native* — charge, `CYCLES` site and machine-state
+   write-back all moving inside — costs nothing at all. Five went that way with
+   the pin fixed at 113 and the block-head counts identical to the digit. The
+   question for each is only where its write-back belongs, and the answer is
+   usually "inside the routine it describes".
 2. **Step 6**, on the terms in its entry.
 3. **Loose ends:** 451 unknown nonzero bytes in `coverage.txt`, probe phase 3,
    and `robotron`/`bolo`, which have never been regenerated against any of this.
