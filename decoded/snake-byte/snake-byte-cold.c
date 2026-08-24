@@ -199,8 +199,6 @@ void rom_cout(void);
 void rom_setkbd(void);
 void rom_setvid(void);
 void game_draw_cell(uint8_t ink, Cell c);
-void game_plot_hline(Cell c, uint8_t to_col);
-void game_plot_vline(Cell c, uint8_t to_row);
 void game_lores_vline(Cell c, uint8_t to_row);
 void game_plot_shape_merge(uint8_t ink, Cell c);
 void game_move_ok(void);
@@ -1002,11 +1000,9 @@ void game_draw_cell(uint8_t ink, Cell c);
 
 /// $6148 -- plot a horizontal run of cells, from column $02 through column
 /// $08 inclusive, along row $03.
-void game_plot_hline(Cell c, uint8_t to_col);
 
 /// $615A -- plot a vertical run of cells, from row $03 through row $08
 /// inclusive, down column $02.
-void game_plot_vline(Cell c, uint8_t to_row);
 
 /* --- $7000/$7019/$7024: the screen-script primitives ---------------------- */
 
@@ -3007,11 +3003,11 @@ static void plot_at(uint8_t ink, Cell c) {
 }
 
 static void plot_hline_at(uint8_t col, uint8_t row, uint8_t to_col) {
-  game_plot_hline((Cell){.col = col, .row = row}, to_col);
+  game_plot_hline_native(s_ink, (Cell){.col = col, .row = row}, to_col);
 }
 
 static void plot_vline_at(uint8_t col, uint8_t row, uint8_t to_row) {
-  game_plot_vline((Cell){.col = col, .row = row}, to_row);
+  game_plot_vline_native(s_ink, (Cell){.col = col, .row = row}, to_row);
 }
 
 static void lores_vline_at(uint8_t col, uint8_t row, uint8_t to_row) {
@@ -3428,6 +3424,16 @@ void game_clear_hgr_native(void) {
 /// to draw. Threading it means restructuring the steppers and both cell
 /// drawers together.
 uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
+  bool branchTarget = true;
+  (void)branchTarget;
+  /*$6148*/ CYCLES(0x6148, 6);
+  {
+    const uint8_t mask = game_load_shape_masks(s_shape);
+    s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
+    s_a = mask;
+    s_status_not_z = mask;
+    s_status_n = (mask & 0x80);
+  }
   for (;;) {
     GAME_CYCLES(0x614b, 6);
     game_draw_cell(ink, c);
@@ -3441,11 +3447,29 @@ uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
   }
   GAME_CYCLES(0x6152, 1);
   GAME_CYCLES(0x6159, 6);
-  return c.col; // where the CMP that ended the loop found it
+  s_a = c.col;
+  s_status_c = 0x01;
+  s_status_not_z = 0x00;
+  s_status_n = 0x00;
+  s_a = c.col;
+  s_status_c = 0x01;
+  s_status_not_z = 0x00;
+  s_status_n = 0x00;
+  return c.col;
 }
 
 /// $615A -- the same down a column: rows $03 through $08 in column $02.
 uint8_t game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
+  bool branchTarget = true;
+  (void)branchTarget;
+  /*$615A*/ CYCLES(0x615a, 6);
+  {
+    const uint8_t mask = game_load_shape_masks(s_shape);
+    s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
+    s_a = mask;
+    s_status_not_z = mask;
+    s_status_n = (mask & 0x80);
+  }
   for (;;) {
     GAME_CYCLES(0x615d, 6);
     game_draw_cell(ink, c);
@@ -3459,6 +3483,10 @@ uint8_t game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
   }
   GAME_CYCLES(0x6164, 1);
   GAME_CYCLES(0x6159, 6);
+  s_a = c.row;
+  s_status_c = 0x01;
+  s_status_not_z = 0x00;
+  s_status_n = 0x00;
   return c.row;
 }
 
@@ -6104,53 +6132,7 @@ void game_draw_cell(uint8_t ink, Cell c) {
 /* every time a caller changes.                                               */
 /* ========================================================================== */
 
-void game_plot_hline(Cell c, uint8_t to_col) {
-  // Adapter for game_plot_hline_native(). The shape load stays here: it is the
-  // routine's own first block and keeps its probe site.
-  bool branchTarget = true;
 
-  /*$6148*/ CYCLES(0x6148, 6);
-  {
-    const uint8_t mask = game_load_shape_masks(s_shape);
-    // The original walked the table with INX, so X is left pointing at the
-    // last entry rather than one past it.
-    s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
-    s_a = mask;
-    s_status_not_z = mask;
-    s_status_n = (mask & 0x80);
-  }
-  const uint8_t at = game_plot_hline_native(s_ink, c, to_col);
-
-  // The CMP that ended the loop, and the coordinate it compared.
-  s_a = at;
-  s_status_c = 0x01;
-  s_status_not_z = 0x00;
-  s_status_n = 0x00;
-}
-
-void game_plot_vline(Cell c, uint8_t to_row) {
-  // Adapter for game_plot_vline_native(). The shape load stays here: it is the
-  // routine's own first block and keeps its probe site.
-  bool branchTarget = true;
-
-  /*$615A*/ CYCLES(0x615a, 6);
-  {
-    const uint8_t mask = game_load_shape_masks(s_shape);
-    // The original walked the table with INX, so X is left pointing at the
-    // last entry rather than one past it.
-    s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
-    s_a = mask;
-    s_status_not_z = mask;
-    s_status_n = (mask & 0x80);
-  }
-  const uint8_t at = game_plot_vline_native(s_ink, c, to_row);
-
-  // The CMP that ended the loop, and the coordinate it compared.
-  s_a = at;
-  s_status_c = 0x01;
-  s_status_not_z = 0x00;
-  s_status_n = 0x00;
-}
 
 /* ========================================================================== */
 /* $7019, $7024, $7000 -- the screen-script primitives.                       */
