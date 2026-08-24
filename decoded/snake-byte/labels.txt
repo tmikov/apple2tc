@@ -20,6 +20,23 @@
 376E init_0300         # writes $52/$01/$01/$01/$64 to $0300-$0304
 76C2 main              # target of the JMP at $3785
 
+# --- the plotter's argument block -------------------------------------------
+# $0000-$0008: nine bytes of zero page the drawing routines pass arguments in.
+# $664A, the glyph blitter, reuses all nine for something unrelated -- it is a
+# hand-written union, and the second set of names below is the other arm.
+0000 var_shape         # which shape; hgr_set_masks turns it into the $6060 masks
+0001 var_ink           # lo-res colour 0..15, 0 erases
+0002 var_col           # the cell, on the 40x48 grid
+0003 var_row
+0004 var_hgr_dest      # 16-bit: the hi-res byte being written, +$400 per scanline
+0006 var_dot_index     # entry in tbl_hgr_pattern
+0007 var_scanline      # which of the cell's four, 0..3
+0008 var_run_end       # last column of an hline / last row of a vline, inclusive
+# The $664A arm, at the same addresses:
+#   $0000 glyph source pointer into tbl_font
+#   $0002 / $0003 the caller's X and Y, restored at $669F
+#   $0008 the character, $20..$7F
+
 # --- hi-res drawing --------------------------------------------------------
 60E4 hgr_draw          # uses the tables below; 4 sub-rows, +$400 each
 6127 hgr_set_masks     # fills $6060-$6063 from the table at $6174
