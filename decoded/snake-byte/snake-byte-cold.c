@@ -3261,14 +3261,14 @@ restart:
       const uint8_t row = script_byte(0x714f);
       GAME_CYCLES(0x7150, 12);
       s_row = row;
-      set_ink(s_ink, 0x7156);
+      set_ink(ink, 0x7156);
 
       GAME_CYCLES(0x7157, 18);
-      s_h2 = s_run_end;
-      lores_hline(s_row, s_col, 0x7161);
+      s_h2 = last;
+      lores_hline(row, col, 0x7161);
 
       GAME_CYCLES(0x7162, 6);
-      game_plot_hline(0x7164);
+      plot_hline_at(col, row, last, 0x7164);
       GAME_CYCLES(0x7165, 3);
       continue;
     }
@@ -3289,12 +3289,14 @@ restart:
       const uint8_t col = script_byte(0x717d);
       GAME_CYCLES(0x717e, 12);
       s_col = col;
-      set_ink(s_ink, 0x7184);
+      set_ink(ink, 0x7184);
 
+      // The lo-res half puts s_row back where it found it, which is what lets
+      // the hi-res half run the same span without restating it.
       GAME_CYCLES(0x7185, 6);
-      game_lores_vline(0x7187);
+      lores_vline_at(col, row, last, 0x7187);
       GAME_CYCLES(0x7188, 6);
-      game_plot_vline(0x718a);
+      plot_vline_at(col, row, last, 0x718a);
       GAME_CYCLES(0x718b, 3);
       continue;
     }
@@ -5916,16 +5918,12 @@ wait: /* $741C */
   }
 
   GAME_CYCLES(0x754e, 26);
-  s_ink = 0x0c;
-  s_shape = 0x02;
-  s_row = 0x12;
-  s_col = 0x1e;
-  game_plot_shape_native();
+  plot_shape_at(0x02, 0x0c, (Cell){.col = 0x1e, .row = 0x12});
+  // The stem below it, down the same column -- which the original inherited
+  // from the plot above rather than restating.
   GAME_CYCLES(0x7561, 21);
-  s_row = 0x13;
-  s_run_end = 0x1d;
   s_shape = 0x0a;
-  game_plot_vline(0x756f);
+  plot_vline_at(0x1e, 0x13, 0x1d, 0x756f);
   GAME_CYCLES(0x7570, 11);
   s_a = 0x0e;
   s_shape = 0x0e;
