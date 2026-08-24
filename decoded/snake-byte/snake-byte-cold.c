@@ -832,10 +832,10 @@ void game_lores_vline_native(void);
 uint8_t game_step_bouncers_native(void);
 
 /// $60E7 -- draw the loaded shape into cell \p c in ink \p ink, replacing.
-void game_draw_cell_native(uint8_t ink, Cell c);
+uint8_t game_draw_cell_native(uint8_t ink, Cell c);
 
 /// $6B93 -- the same, merged into what is already there.
-void game_merge_cell_native(uint8_t ink, Cell c);
+uint8_t game_merge_cell_native(uint8_t ink, Cell c);
 
 /// $702B -- zero hi-res page 1.
 void game_clear_hgr_native(void);
@@ -2242,7 +2242,7 @@ enum {
   kHgrLineLo = 0x6000,      ///< 48 hi-res line addresses, low bytes
   kHgrLineHi = 0x6030,      ///< and high bytes
   kShapeMask = 0x6060,      ///< the loaded shape's four scanline masks
-  kHgrPattern = 0x6064,     ///< dot patterns, indexed by s_dot_index
+  kHgrPattern = 0x6064,     ///< dot patterns, indexed by the dot index
   kShapeMaskTable = 0x6174, ///< four masks per shape; the source for kShapeMask
   kSteerKey = 0x6a55,       ///< direction -> the key that turns to it
   kAppleValueTable = 0x71c8, ///< per-apple value, indexed by kDifficulty
@@ -2340,15 +2340,10 @@ static uint8_t s_shape;
 static uint8_t s_ink;       ///< lo-res colour, 0..15; zero erases
 static uint8_t s_col;       ///< the cell to draw into, on the 40x48 grid
 static uint8_t s_row;
-static uint8_t s_hgr_lo, s_hgr_hi; ///< the hi-res byte being written
-static uint8_t s_dot_index; ///< the entry in tbl_hgr_pattern this dot lands on
-static uint8_t s_scanline;  ///< which of the cell's four, 0..3
 static uint8_t s_run_end;   ///< last column of a horizontal run, or last row
                             ///< of a vertical one; the steppers go up to it
                             ///< inclusive
 
-/// The hi-res destination, low byte first, as ram_peek16al read it.
-static inline uint16_t hgr16(void) { return (uint16_t)(s_hgr_lo | (s_hgr_hi << 8)); }
 
 /// Plot the loaded shape, or a named one, into a cell. Defined further down,
 /// next to the run helpers; declared here because the bouncers and the snake
@@ -3384,33 +3379,36 @@ static uint8_t dot_index(uint8_t ink, uint8_t scanline, uint8_t col) {
 }
 
 /// $60E7 -- draw the loaded shape into one cell, replacing what was there.
-void game_draw_cell_native(uint8_t ink, Cell c) {
+uint8_t game_draw_cell_native(uint8_t ink, Cell c) {
+  uint8_t scanline, dot_idx, hgr_lo, hgr_hi;
   GAME_CYCLES(0x60e7, 22);
   uint16_t dest = cell_row_base(c.row);
-  s_scanline = 0x00;
-  s_hgr_lo = (uint8_t)dest;
-  s_hgr_hi = (uint8_t)(dest >> 8);
+  scanline = 0x00;
+  hgr_lo = (uint8_t)dest;
+  hgr_hi = (uint8_t)(dest >> 8);
 
   for (unsigned line = 0; line < 4; ++line) {
     GAME_CYCLES(0x60f7, 16);
     // Built in $06 in two steps, and written out between them because it is
     // zero page and a probe may sample there.
-    s_dot_index = (uint8_t)((ink << 1) | (line & 1));
+    dot_idx = (uint8_t)((ink << 1) | (line & 1));
     GAME_CYCLES(0x6100, 62);
     const uint8_t idx = dot_index(ink, (uint8_t)line, c.col);
-    s_dot_index = idx;
+    dot_idx = idx;
 
     poke(dest + c.col, (uint8_t)(ram_peek(kHgrPattern + idx) & ram_peek(kShapeMask + line)));
 
-    s_scanline = (uint8_t)(line + 1);
+    scanline = (uint8_t)(line + 1);
     dest += 0x0400; // one scanline down, i.e. +4 on the high byte
-    s_hgr_hi = (uint8_t)(dest >> 8);
+    hgr_hi = (uint8_t)(dest >> 8);
 
     if (line != 3)
       GAME_CYCLES(0x6124, 1);
   }
 
   GAME_CYCLES(0x6126, 6);
+  // The high byte the loop ended on. Its caller's caller puts it in A.
+  return hgr_hi;
 }
 
 /// $6B93 -- the same cell, merged instead of replaced: only bits are set, and
@@ -3422,41 +3420,44 @@ void game_draw_cell_native(uint8_t ink, Cell c) {
 /// The index degenerates to (ink >> 1) * 4 + (col & 3). Changing it to match
 /// $60F7 fails the screen check, so whatever the author meant, it is load
 /// bearing.
-void game_merge_cell_native(uint8_t ink, Cell c) {
+uint8_t game_merge_cell_native(uint8_t ink, Cell c) {
+  uint8_t scanline, dot_idx, hgr_lo, hgr_hi;
   GAME_CYCLES(0x6b96, 22);
   uint16_t dest = cell_row_base(c.row);
-  s_scanline = 0x00;
-  s_hgr_lo = (uint8_t)dest;
-  s_hgr_hi = (uint8_t)(dest >> 8);
+  scanline = 0x00;
+  hgr_lo = (uint8_t)dest;
+  hgr_hi = (uint8_t)(dest >> 8);
 
   for (unsigned line = 0; line < 4; ++line) {
     GAME_CYCLES(0x6ba6, 85);
     const uint8_t parity = (uint8_t)(line & 1);
     const uint8_t idx =
         (uint8_t)((uint8_t)(((uint8_t)((parity << 7) | (ink >> 1))) << 2) | (c.col & 3));
-    s_dot_index = idx;
+    dot_idx = idx;
 
     const uint16_t at = dest + c.col;
     poke(at,
          (uint8_t)(((ram_peek(kHgrPattern + idx) ^ 0x7f) & ram_peek(kShapeMask + line)) | peek(at)));
 
-    s_scanline = (uint8_t)(line + 1);
+    scanline = (uint8_t)(line + 1);
     dest += 0x0400;
-    s_hgr_hi = (uint8_t)(dest >> 8);
+    hgr_hi = (uint8_t)(dest >> 8);
 
     if (line != 3)
       GAME_CYCLES(0x6bd7, 1);
   }
 
   GAME_CYCLES(0x6bd9, 6);
+  return hgr_hi;
 }
 
 /// $702B -- zero hi-res page 1, $2000 through $3FFF. The inner loop runs a
 /// full 256 bytes because Y wraps, so the terminating test is on the page.
 void game_clear_hgr_native(void) {
+  uint8_t hgr_lo, hgr_hi;
   GAME_CYCLES(0x702b, 12);
-  s_hgr_lo = 0x00;
-  s_hgr_hi = 0x20;
+  hgr_lo = 0x00;
+  hgr_hi = 0x20;
   s_y = 0x00;
 
   for (uint8_t page = 0x20;;) {
@@ -3472,7 +3473,7 @@ void game_clear_hgr_native(void) {
 
     GAME_CYCLES(0x703c, 12);
     ++page;
-    s_hgr_hi = page;
+    hgr_hi = page;
     if (page == 0x40)
       break;
     GAME_CYCLES(0x7042, 1);
@@ -6180,13 +6181,13 @@ void game_draw_cell(uint16_t ret_addr) {
   }
 
   const Cell c = {.col = s_col, .row = s_row};
-  game_draw_cell_native(s_ink, c);
+  const uint8_t last_hi = game_draw_cell_native(s_ink, c);
 
   // What the loop leaves: X counted to 4, Y is the column, A the last
   // destination high byte, and the flags come from CPX #4.
   s_x = 0x04;
   s_y = c.col;
-  s_a = s_hgr_hi;
+  s_a = last_hi;
   s_status_c = 0x01;
   s_status_not_z = 0x00;
   s_status_n = 0x00;
@@ -6434,11 +6435,11 @@ void game_plot_shape_merge(uint16_t ret_addr) {
 
   const Cell c = {.col = s_col, .row = s_row};
   s_y = c.row; // LDY $03 at $6B98, before the loop overwrites it
-  game_merge_cell_native(s_ink, c);
+  const uint8_t last_hi = game_merge_cell_native(s_ink, c);
 
   s_x = 0x04;
   s_y = c.col;
-  s_a = s_hgr_hi;
+  s_a = last_hi;
   s_status_c = 0x01;
   s_status_not_z = 0x00;
   s_status_n = 0x00;
@@ -7580,10 +7581,6 @@ void init_emulated(void) {
   s_ink = kSnakeByteEntryRam[0x01];
   s_col = kSnakeByteEntryRam[0x02];
   s_row = kSnakeByteEntryRam[0x03];
-  s_hgr_lo = kSnakeByteEntryRam[0x04];
-  s_hgr_hi = kSnakeByteEntryRam[0x05];
-  s_dot_index = kSnakeByteEntryRam[0x06];
-  s_scanline = kSnakeByteEntryRam[0x07];
   s_run_end = kSnakeByteEntryRam[0x08];
   s_ch = kSnakeByteEntryRam[0x24];
   s_cv = kSnakeByteEntryRam[0x25];
