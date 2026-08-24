@@ -4,6 +4,20 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
+**Start here (2026-08-24).** All six cleanup steps in "Cleaning up the C" are
+done. **That is not the same as the artifact being finished**, and the gap is
+the first thing to understand: the six steps moved the *plotter's* argument
+block and the *monitor's* zero page out of emulated RAM, killed all 42
+adapters, dropped `ret_addr` and the emulated call stack, and took every
+address out of the cycle charges. They never touched **the game's own state**,
+which is still 314 `ram_peek`/`ram_poke` calls into `s_ram` behind named
+constants, plus 222 status-flag references. See item 0 under "What is left".
+
+The gate changed underneath all of that and is weaker than it was. Read "Where
+things stand" before trusting a green run: the block-head trace now compares
+six addresses rather than 113, so control flow inside the game is not compared
+at all. The screen and memory at 6,808 and 9,524 samples are the gate.
+
 **Last commit:** run `git log -1`; this line has been stale before. As of
 2026-08-22 the tree is clean and nothing is pushed. The most recent work is
 `$69A9` — the last emulator-shaped game routine — becoming real C, on a
@@ -231,7 +245,7 @@ short version.
 
 | | play | hires |
 | --- | --- | --- |
-| block-head trace | 421,789 | 95,468 |
+| block-head trace | 371,352 | 10,085 |
 | screen | 6,808 samples | 9,524 |
 | memory (`ram-cold.probe`) | 6,808 | 9,524 |
 
