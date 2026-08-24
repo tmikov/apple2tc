@@ -93,22 +93,6 @@ static uint16_t sbc_dec16(uint8_t a, uint8_t b, uint8_t cf) {
   return res.result | (res.status << 8);
 }
 
-static int cmp_map_addr(const void *a, const void *b) {
-  return *((const int *)a) - *((const int *)b);
-}
-
-static unsigned
-addr_to_block_id(uint16_t from_pc, uint16_t addr, const unsigned *block_map, size_t length) {
-  unsigned uaddr = addr;
-  const unsigned *p =
-      (const unsigned *)bsearch(&uaddr, block_map, length, sizeof(unsigned) * 2, cmp_map_addr);
-  if (p)
-    return p[1];
-  fprintf(stderr, "Unknown address $%04X\n", addr);
-  error_handler(from_pc);
-  abort();
-};
-
 void func_t001(uint16_t ret_addr);
 void rom_plot(uint16_t ret_addr);
 void rom_hline(uint16_t ret_addr);
@@ -8544,19 +8528,6 @@ void game_move_bouncer(uint16_t ret_addr) {
 /* ========================================================================== */
 /* $728D, $6BFB                                                               */
 /* ========================================================================== */
-
-/// One `LDA score / CMP best` pair of $728D. Returns false when the score
-/// byte is below the high-score byte. No CYCLES: all four call sites sit
-/// inside a counted block already.
-static bool game_hi_cmp(uint16_t score, uint16_t best) {
-  const uint8_t mine = ram_peek(score);
-  const uint8_t high = ram_peek(best);
-  s_a = mine;
-  s_status_not_z = (mine != high);
-  s_status_c = (mine >= high);
-  s_status_n = ((uint8_t)(mine - high) & 0x80);
-  return mine >= high;
-}
 
 void game_update_high_score(uint16_t ret_addr) {
   // Adapter for game_promote_high_score(). Costs 9 trace sites.
