@@ -1366,75 +1366,77 @@ void rom_plot(uint16_t ret_addr) {
 /* $F819 HLINE                                                                */
 /* ========================================================================== */
 
+/// $F819 HLINE, and $F826 VLINEZ, which share this body.
+///
+/// HLINE plots along row A from column Y to H2. Its loop ends by falling out
+/// of the bottom into VLINEZ's, which walks rows from A down to V2 in column
+/// Y -- so one entry point draws a horizontal run and the other a vertical
+/// one, out of the same six instructions.
+///
+/// The labels keep their addresses rather than becoming nested loops, for the
+/// same reason game_cold_start's do: the two loops are entered at different
+/// depths and leave through each other, which C's loop forms cannot say
+/// without a flag that the original does not have.
 void rom_hline(uint16_t ret_addr) {
   bool branchTarget = true;
-  uint8_t tmp1_U8;
-  uint16_t tmp2_U16;
-  uint16_t tmp3_U16;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$F819*/ CYCLES(0xf819, 6);
-            rom_plot(0xfffe);
-            branchTarget = true;
-bb_1:
-  /*$F81C*/ CYCLES(0xf81c, 5);
-            tmp1_U8 = s_y >= s_h2;
-            s_status_c = tmp1_U8;
-            branchTarget = true;
-            if (tmp1_U8)
-              goto bb_11;
-bb_2:
+  rom_plot(0xfffe);
+  branchTarget = true;
+
+across: /* $F81C -- one column at a time, up to H2 */
+  CYCLES(0xf81c, 5);
+  s_status_c = (uint8_t)(s_y >= s_h2);
+  branchTarget = true;
+  if (s_status_c) {
+    // $F81E BCS -- the branch itself, taken here.
+    /*$F81E*/ CYCLES_EDGE(0xf81e, 1);
+    goto done;
+  }
+
   /*$F820*/ CYCLES(0xf820, 8);
-            s_y = (uint8_t)(s_y + 0x01);
+  s_y = (uint8_t)(s_y + 0x01);
   /*$F821*/ rom_plot1(0xfffe);
   /*$F824*/ CYCLES(0xf824, 2);
-            branchTarget = true;
-            if (!s_status_c)
-              goto bb_12;
-bb_3:
-  /*$F826*/ CYCLES(0xf826, 2);
-            if (s_status_d)
-              goto bb_5;
-bb_4:
-  /*$F826*/ tmp2_U16 = s_a;
-            tmp3_U16 = (tmp2_U16 + 0x0001) + s_status_c;
-            s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp2_U16, (uint8_t)0x0001);
-            s_a = ((uint8_t)tmp3_U16);
-            goto bb_6;
-bb_5:
-  /*$F826*/ tmp3_U16 = adc_dec16(s_a, 0x01, s_status_c);
-            s_a = ((uint8_t)tmp3_U16);
-            s_status_v = (((uint8_t)(tmp3_U16 >> 8) & 0x40) != 0);
-bb_6:
+  branchTarget = true;
+  if (!s_status_c) {
+    // $F824 BCC -- the branch itself, taken here.
+    /*$F824*/ CYCLES_EDGE(0xf824, 1);
+    goto across;
+  }
+
+down: /* $F826 -- one row at a time, up to V2 */
+  CYCLES(0xf826, 2);
+  if (!s_status_d) {
+    const uint16_t r = ((uint16_t)s_a + 0x0001) + s_status_c;
+    s_status_v = ovf8((uint8_t)r, s_a, 0x01);
+    s_a = (uint8_t)r;
+  } else {
+    const uint16_t r = adc_dec16(s_a, 0x01, s_status_c);
+    s_a = (uint8_t)r;
+    s_status_v = (((uint8_t)(r >> 8) & 0x40) != 0);
+  }
+
   /*$F828*/ CYCLES(0xf828, 9);
-            push8(s_a);
+  push8(s_a);
   /*$F829*/ rom_plot(0xfffe);
   /*$F82C*/ CYCLES(0xf82c, 9);
-            tmp1_U8 = pop8();
-            s_a = tmp1_U8;
-  /*$F82D*/ tmp1_U8 = tmp1_U8 >= s_v2;
-            s_status_c = tmp1_U8;
-            branchTarget = true;
-            if (!tmp1_U8)
-              goto bb_13;
-bb_7:
+  s_a = pop8();
+  /*$F82D*/ s_status_c = (uint8_t)(s_a >= s_v2);
+  branchTarget = true;
+  if (!s_status_c) {
+    // $F82F BCC -- the branch itself, taken here.
+    /*$F82F*/ CYCLES_EDGE(0xf82f, 1);
+    goto down;
+  }
+
+done:
   /*$F831*/ CYCLES(0xf831, 6);
-            if (ret_addr) pop16(); return;
-bb_11:
-  // $F81E BCS -- the branch itself, taken here.
-  /*$F81E*/ CYCLES_EDGE(0xf81e, 1);
-            goto bb_7;
-bb_12:
-  // $F824 BCC -- the branch itself, taken here.
-  /*$F824*/ CYCLES_EDGE(0xf824, 1);
-            goto bb_1;
-bb_13:
-  // $F82F BCC -- the branch itself, taken here.
-  /*$F82F*/ CYCLES_EDGE(0xf82f, 1);
-            goto bb_3;
+  (void)branchTarget;
+  if (ret_addr) pop16();
 }
 
 /* ========================================================================== */
@@ -2056,43 +2058,44 @@ void rom_cout(uint16_t ret_addr) {
 
 /// $FDF0 COUT1 -- the ROM's own character output: mask to the current text
 /// mode, then COUTZ for the actual placement and cursor bookkeeping.
+/// $FDF0 COUT1. Put a character on the text screen, then restore Y.
+///
+/// Printable characters ($A0 and up) are masked with INVFLG, which is how the
+/// monitor does inverse and flashing -- $FF leaves them alone. Control codes
+/// are let through unmasked, since mangling them would change what they mean.
 static void rom_cout1(uint16_t ret_addr) {
   bool branchTarget = true;
-  uint8_t tmp1_U8;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_1:
   /*$FDF0*/ CYCLES(0xfdf0, 4);
-            tmp1_U8 = s_a >= 0xa0;
-            s_status_c = tmp1_U8;
-  /*$FDF2*/ branchTarget = true;
-            if (!tmp1_U8)
-              goto bb_5;
-bb_2:
-  /*$FDF4*/ CYCLES(0xfdf4, 3);
-            s_a = (s_a & s_invflg);
-bb_3:
+  const bool printable = s_a >= 0xa0;
+  s_status_c = (uint8_t)printable;
+
+  if (printable) {
+    /*$FDF4*/ CYCLES(0xfdf4, 3);
+    s_a = (uint8_t)(s_a & s_invflg);
+  } else {
+    // $FDF2 BCC -- the branch itself, taken here.
+    /*$FDF2*/ CYCLES_EDGE(0xfdf2, 1);
+  }
+
   /*$FDF6*/ CYCLES(0xfdf6, 12);
-            s_ysav1 = s_y;
+  s_ysav1 = s_y;
   /*$FDF8*/ push8(s_a);
-  /*$FDF9*/ branchTarget = true;
-            rom_coutz(0xfdfb); // JSR $FB78
-bb_4:
+  branchTarget = true;
+  rom_coutz(0xfdfb); // JSR $FB78
+
   /*$FDFC*/ CYCLES(0xfdfc, 13);
-            tmp1_U8 = pop8();
-            s_a = tmp1_U8;
-  /*$FDFD*/ tmp1_U8 = s_ysav1;
-            s_status_not_z = tmp1_U8;
-            s_status_n = (tmp1_U8 & 0x80);
-            s_y = tmp1_U8;
-  /*$FDFF*/ branchTarget = true;
-            if (ret_addr) pop16(); return;
-bb_5:
-  // $FDF2 BCS -- the branch itself, taken here.
-  /*$FDF2*/ CYCLES_EDGE(0xfdf2, 1);
-            goto bb_3;
+  s_a = pop8();
+  /*$FDFD*/ s_y = s_ysav1;
+  s_status_not_z = s_y;
+  s_status_n = (s_y & 0x80);
+
+  branchTarget = true;
+  (void)branchTarget;
+  /*$FDFF*/ if (ret_addr) pop16();
 }
 
 /* ========================================================================== */
