@@ -140,6 +140,7 @@ static uint8_t s_color;   ///< the lo-res colour, both nibbles
 static uint8_t s_invflg;  ///< COUT1 ANDs the character with this: $FF normal
 static uint8_t s_ysav1;   ///< where COUT1 parks Y
 static uint8_t s_cswl, s_cswh; ///< the character output vector the game repoints
+static uint8_t s_kswl, s_kswh; ///< the character input vector; nothing reads it
 static uint8_t s_a2l;     ///< SETKBD/SETVID scratch
 
 /// $002C, and still one byte doing two jobs.
@@ -2097,91 +2098,101 @@ bb_5:
 /* is duplicated into each function exactly as the decompiler emitted it.      */
 /* ========================================================================== */
 
+/// $FE89 SETKBD. Point the character *input* vector at the built-in keyboard.
+///
+/// The vector it writes, KSWL/KSWH, is not read by anything in this build --
+/// nothing dispatches input through it -- but the routine runs at startup and
+/// its cycles count, so it is here in full.
 void rom_setkbd(uint16_t ret_addr) {
   bool branchTarget = true;
-  uint8_t tmp1_U8;
+  (void)branchTarget;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$FE89*/ CYCLES(0xfe89, 11);
-  /*$FE8B*/ s_a2l = 0x00;
-  /*$FE8D*/ s_x = 0x38;
-  /*$FE8F*/ s_y = 0x1b;
-            // $FE91 BNE -- provably always taken (Y was just loaded #$1B,
-            // nonzero), same reasoning as $FC60 in rom_home: the decompiler
-            // doesn't do cross-instruction flag proofs, so the branch still
-            // executes and still pays its own cost every time.
+  s_a2l = 0x00;
+  s_x = 0x38;
+  s_y = 0x1b;
+  // $FE91 BNE -- provably always taken (Y was just loaded #$1B, nonzero),
+  // same reasoning as $FC60 in rom_home: the decompiler doesn't do
+  // cross-instruction flag proofs, so the branch still executes and still
+  // pays its own cost every time.
   /*$FE91*/ CYCLES_EDGE(0xfe91, 1);
+
+  // $FE9B SETIO. A2L is the slot; slot 0 means the built-in device and the ROM
+  // answers page $FD, where its own KEYIN and COUT1 live. A real slot would
+  // give $Cn00 instead -- decoded, never taken, because the game never sets
+  // one.
   /*$FE9B*/ CYCLES(0xfe9b, 7);
-  /*$FE9D*/ tmp1_U8 = s_a2l & 0x0f;
-            s_a = tmp1_U8;
-            branchTarget = true;
-            if (!tmp1_U8)
-              goto bb_4;
-bb_1:
-  /*$FEA1*/ CYCLES(0xfea1, 6);
-            s_a = (s_a | 0xc0);
-  /*$FEA3*/ s_y = 0x00;
-            branchTarget = true;
-            // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
-  /*$FEA5*/ CYCLES_EDGE(0xfea5, 1);
-            goto bb_3;
-bb_2:
-  /*$FEA7*/ CYCLES(0xfea7, 2);
-            s_a = 0xfd;
-bb_3:
+  /*$FE9D*/ const uint8_t slot = (uint8_t)(s_a2l & 0x0f);
+  s_a = slot;
+  if (slot) {
+    /*$FEA1*/ CYCLES(0xfea1, 6);
+    s_a = (uint8_t)(s_a | 0xc0);
+    s_y = 0x00;
+    // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
+    /*$FEA5*/ CYCLES_EDGE(0xfea5, 1);
+  } else {
+    // $FE9F BEQ -- the branch itself, taken here.
+    /*$FE9F*/ CYCLES_EDGE(0xfe9f, 1);
+    /*$FEA7*/ CYCLES(0xfea7, 2);
+    s_a = 0xfd;
+  }
+
   /*$FEA9*/ CYCLES(0xfea9, 14);
-            tmp1_U8 = s_x;
-            ram_poke(tmp1_U8, s_y);
-  /*$FEAB*/ ram_poke((uint8_t)(0x01 + tmp1_U8), s_a);
-  /*$FEAD*/ if (ret_addr) pop16(); return;
-bb_4:
-  // $FE9F BEQ -- the branch itself, taken here.
-  /*$FE9F*/ CYCLES_EDGE(0xfe9f, 1);
-            goto bb_2;
+  s_kswl = s_y;
+  s_kswh = s_a;
+
+  /*$FEAD*/ if (ret_addr) pop16();
 }
 
+/// $FE93 SETVID. Point COUT's vector back at the ROM's own COUT1.
+///
+/// This is how the game gets out of its hi-res text hook -- or would be. It
+/// writes CSWL/CSWH, which up to 2026-08-24 meant zero page $36/$37, and now
+/// means the two variables those became. Between the move and this commit the
+/// store went to RAM and was read by nobody, which nothing caught: the entry
+/// snapshot already holds $FDF0 there, and the game only calls SETVID once, at
+/// startup, before it has repointed anything. Had it ever called it after
+/// installing the hook, COUT would have stayed hooked.
 void rom_setvid(uint16_t ret_addr) {
   bool branchTarget = true;
-  uint8_t tmp1_U8;
+  (void)branchTarget;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$FE93*/ CYCLES(0xfe93, 9);
-  /*$FE95*/ s_a2l = 0x00;
-  /*$FE97*/ s_x = 0x36;
-  /*$FE99*/ s_y = 0xf0;
+  s_a2l = 0x00;
+  s_x = 0x36;
+  s_y = 0xf0;
+
+  // $FE9B SETIO. A2L is the slot; slot 0 means the built-in device and the ROM
+  // answers page $FD, where its own KEYIN and COUT1 live. A real slot would
+  // give $Cn00 instead -- decoded, never taken, because the game never sets
+  // one.
   /*$FE9B*/ CYCLES(0xfe9b, 7);
-  /*$FE9D*/ tmp1_U8 = s_a2l & 0x0f;
-            s_a = tmp1_U8;
-            branchTarget = true;
-            if (!tmp1_U8)
-              goto bb_4;
-bb_1:
-  /*$FEA1*/ CYCLES(0xfea1, 6);
-            s_a = (s_a | 0xc0);
-  /*$FEA3*/ s_y = 0x00;
-            branchTarget = true;
-            // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
-  /*$FEA5*/ CYCLES_EDGE(0xfea5, 1);
-            goto bb_3;
-bb_2:
-  /*$FEA7*/ CYCLES(0xfea7, 2);
-            s_a = 0xfd;
-bb_3:
+  /*$FE9D*/ const uint8_t slot = (uint8_t)(s_a2l & 0x0f);
+  s_a = slot;
+  if (slot) {
+    /*$FEA1*/ CYCLES(0xfea1, 6);
+    s_a = (uint8_t)(s_a | 0xc0);
+    s_y = 0x00;
+    // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
+    /*$FEA5*/ CYCLES_EDGE(0xfea5, 1);
+  } else {
+    // $FE9F BEQ -- the branch itself, taken here.
+    /*$FE9F*/ CYCLES_EDGE(0xfe9f, 1);
+    /*$FEA7*/ CYCLES(0xfea7, 2);
+    s_a = 0xfd;
+  }
+
   /*$FEA9*/ CYCLES(0xfea9, 14);
-            tmp1_U8 = s_x;
-            ram_poke(tmp1_U8, s_y);
-  /*$FEAB*/ ram_poke((uint8_t)(0x01 + tmp1_U8), s_a);
-  /*$FEAD*/ if (ret_addr) pop16(); return;
-bb_4:
-  // $FE9F BEQ -- the branch itself, taken here.
-  /*$FE9F*/ CYCLES_EDGE(0xfe9f, 1);
-            goto bb_2;
+  s_cswl = s_y;
+  s_cswh = s_a;
+
+  /*$FEAD*/ if (ret_addr) pop16();
 }
 
 /* ========================================================================== *
@@ -7609,6 +7620,8 @@ void init_emulated(void) {
   s_ysav1 = kSnakeByteEntryRam[0x35];
   s_cswl = kSnakeByteEntryRam[0x36];
   s_cswh = kSnakeByteEntryRam[0x37];
+  s_kswl = kSnakeByteEntryRam[0x38];
+  s_kswh = kSnakeByteEntryRam[0x39];
   s_a2l = kSnakeByteEntryRam[0x3e];
 
   /* Registers. SP matters most -- the live stack bytes above are meaningless

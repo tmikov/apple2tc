@@ -2709,3 +2709,47 @@ Both carry a comment saying so. No coverage was lost — the generated versions
 were equally unreached — but an error in either transcription would not be
 caught, and that is now written where someone will read it rather than inferred
 from a table of block counts.
+
+## 2026-08-24 (last) — SETVID had been writing to nowhere for four commits
+
+Converting `rom_setkbd` and `rom_setvid` out of `bb_N` form turned up a bug the
+conversion did not cause and the gate could not see.
+
+Both routines end in the shared SETIO tail, which stores the vector with
+`ram_poke(s_x, s_y)` / `ram_poke(s_x + 1, s_a)` — X being `$36` for SETVID and
+`$38` for SETKBD. When the monitor's zero page moved out of emulated RAM,
+`$36/$37` became `s_cswl`/`s_cswh` and every *named* use moved with them. This
+one is not named: the address is in a register. So SETVID kept writing RAM `$36`
+and `rom_cout` kept reading `s_cswl`, and the two had nothing to do with each
+other.
+
+### Why nothing caught it
+
+Two accidents, both of which will recur:
+
+The entry snapshot already holds `$FDF0` at `$36/$37`, so `s_cswl` was correct
+before SETVID ran and correct after it did nothing. And the game calls SETVID
+exactly once, at `$376A`, before it has repointed COUT at anything. The dead
+store therefore had no effect *on this program* — but it is the routine whose
+whole job is getting out of the hi-res hook, so a second call after
+`game_install_cout_vector` would have left COUT hooked forever.
+
+The general shape is worth naming: **moving storage out of an addressed space
+is only mechanical for the references that name the address.** A store through a
+register, an indexed table, or a computed pointer keeps compiling and stops
+meaning anything. Grep found all twenty-one named uses and could not have found
+this one.
+
+### The mutation that shows it
+
+Direct assertion, not inference. Break the entry state so only SETVID can put
+the vector right — `s_cswl = 0x00` instead of the snapshot byte:
+
+| | broken entry state |
+| --- | --- |
+| with the fix (writes `s_cswl`) | **6/6 cold checks pass** — SETVID repairs it |
+| with the dead store (`ram_poke(0x36, …)`) | **0/6 pass** |
+
+So the store is live now and demonstrably was not before. The same trick is the
+general way to test a store nothing currently depends on: remove the other
+source of the value and see whether the store can stand alone.
