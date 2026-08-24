@@ -286,6 +286,15 @@ It takes a build directory and an optional output directory
 (`decompile.sh [build-dir] [out-dir]`), reads its inputs relative to the script
 rather than the caller's cwd, and defaults to regenerating in place.
 
+**There is no such thing as decompiler-generated code here** (2026-08-24). It
+was treated as a category once, as a reason to defer moving `$0024/$0025` until
+the ROM helpers were "owned"; that was wrong and the plan reads better without
+it. Everything in `snake-byte-cold.c` is a decompilation of one binary, and a
+routine still emitted as a switch over block ids is a less finished one, not a
+different kind. The five that were left — BASCALC, VTABZ, CLREOL, CLREOLZ,
+WAIT — are C now. The `bb_N:` count is **112**, all of it inside the other ROM
+entry points, and that is a work list rather than a boundary.
+
 `a2rom.c` and `game.c` are **`#include`d, never compiled separately**.
 `system2-inc.h` defines the machine state (`s_ram`, `s_a`, the `CYCLES` macro)
 with internal linkage, so a second translation unit would get its *own* copy of

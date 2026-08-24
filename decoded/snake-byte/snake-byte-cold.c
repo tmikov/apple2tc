@@ -39,7 +39,13 @@
 ///     the font, the tables -- and it stays.
 ///   - `s_mem_d000`, the Apple II ROM image. Not for its code: the death pause
 ///     reads delay lengths out of ROM *as data* at $E000.
-///   - five ROM routines that a2rom.c calls and that were never converted.
+///   - the Apple II ROM's own entry points, as C. They are the machine's, not
+///     the game's, but they are decompiled on the same terms as everything
+///     else here: there is no category of code in this file that belongs to
+///     someone else. The last five still shaped like the decompiler left them
+///     -- BASCALC, VTABZ, CLREOL, CLREOLZ and WAIT -- were converted on
+///     2026-08-24; what is still `bb_N:` and `goto` is the remaining entry
+///     points, which is the same job unfinished.
 ///   - the entry state, $0000-$0802 plus registers and one soft switch,
 ///     captured with --snapshot-at. See make-entry-state.sh.
 ///
