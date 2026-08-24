@@ -60,6 +60,34 @@ here=$(dirname "$0")
 [ -x "$a2run" ] || { echo "Error: not found: $a2run" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
+# Before that: are the binaries under test actually built from the sources in
+# the tree?
+#
+# Everything below runs programs out of the build directory. If one of them is
+# older than the source it came from, every check still runs and every check
+# still passes -- against the previous build. That is not hypothetical either:
+# it happened twice on 2026-08-24, once because ninja decided it had no work to
+# do for a file it had just been handed, and once because the build had failed
+# and the old executable was still sitting there. Both times this script
+# reported six green cold checks about code that was not being run.
+#
+# Cheap to rule out: every program is newer than every source that can change
+# what it does.
+stale=0
+for prog_src in     "snake-byte-cold-run:snake-byte-cold.c game-image.inc rom-image.inc"     "snake-bytec1-ext-run:snake-bytec1-ext.c snake-byte-ext.c a2rom.c game.c game_native.c"     "snake-byte-easyc1-ext-run:snake-byte-easyc1-ext.c snake-byte-easy-ext.c a2rom.c game.c game_native.c"     "snake-bytec1-run:snake-bytec1.c"; do
+  prog="$bin/decoded/snake-byte/${prog_src%%:*}"
+  [ -x "$prog" ] || continue
+  for src in ${prog_src#*:}; do
+    [ -f "$here/$src" ] || continue
+    if [ "$here/$src" -nt "$prog" ]; then
+      echo "FAIL: $(basename "$prog") is older than $src -- rebuild before trusting this" >&2
+      stale=1
+    fi
+  done
+done
+[ "$stale" -eq 0 ] || exit 1
+
+# ---------------------------------------------------------------------------
 # Before anything else: is the committed generated C what decompile.sh
 # produces?
 #
