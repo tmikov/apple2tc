@@ -226,10 +226,15 @@ short version.
 | `snake-byte-easyc1-ext` | `snake-byte-easy-ext.c` | Test fixture, not a variant: apple quota 16 -> 2. |
 | `snake-byte` | `snake-byte.c` | Historical `--simple-c` output, no longer regenerated. |
 
-**Cold is the better artifact; ext is the better *checked* one.** Cold is
-verified against ext — trace identical over 788,097 blocks, screen at 6,808
-samples — but it is not in `probe-acceptance.sh`'s scenario list, so nothing
-re-checks it on every run. Adding it is the obvious next piece of hygiene.
+**Both are gated now.** `probe-acceptance.sh` compares cold against ext on every
+run — 788,097 block heads and 6,808 screen samples, aligned at the first
+`$3750`. The control is ext rather than the interpreter because there is no
+interpreter that starts at `$3750`; ext earns the role by being checked against
+the interpreter a few dozen lines earlier in the same script.
+
+That pair checks only what is cold-specific — entry state, pruning, key offset.
+Both builds share `game.c` and `game_native.c`, so a bug in the game's own C
+changes both identically and is caught upstream, not here.
 
 **The adapters in `game.c` are now mostly scaffolding, not an interface.**
 Measured 2026-08-23: of the 42, only **14 still have a generated caller**
@@ -386,11 +391,7 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
 
 Items 1-4 below are all struck through now. What actually remains, in order:
 
-**a. Put `snake-byte-cold` in `probe-acceptance.sh`.** It is verified once, by
-hand, against `snake-bytec1-ext`; nothing re-checks it. Until that is done every
-later change to `game.c` or `game_native.c` is checked on the ext build only,
-and cold can rot silently. Cheapest item here and the one with the worst failure
-mode.
+**a. ~~Put `snake-byte-cold` in `probe-acceptance.sh`.~~** Done 2026-08-23.
 
 **b. Convert the last 89 blocks.** `func_t001` in `snake-byte-cold-body.c` is
 968 lines of unrewritten decompiler output, and it is the *whole* remainder: the

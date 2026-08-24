@@ -115,7 +115,7 @@ keys="${KEYS:-$here/play.pkeys}"
 # the same drift hazard the trace.probe/trace-ext.probe check covers, so it is
 # checked the same way: asserted, not trusted.
 coord=$(grep -h '^install kb at ' "$here/rec.probe")
-for p in play.probe trace.probe trace-ext.probe trace-easy.probe ram.probe screen.probe; do
+for p in play.probe trace.probe trace-ext.probe trace-easy.probe trace-cold.probe ram.probe screen.probe; do
   if [ "$(grep -h '^install kb at ' "$here/$p")" != "$coord" ]; then
     echo "FAIL: $p installs the coordinate differently from rec.probe" >&2
     echo "  rec.probe: $coord" >&2
@@ -471,7 +471,7 @@ strip_probe() {
   # Drop comments, blank lines and the install lines, leaving the program.
   grep -vE '^\s*(#|install\b|$)' "$1"
 }
-for other in trace-ext trace-easy; do
+for other in trace-ext trace-easy trace-cold; do
   if ! diff -q <(strip_probe "$here/trace.probe") <(strip_probe "$here/$other.probe") \
        > /dev/null; then
     echo "FAIL: trace.probe and $other.probe are not the same program" >&2
@@ -637,6 +637,120 @@ check_backend trace-easy "$bin/decoded/snake-byte/snake-byte-easyc1-ext-run" \
 check_screen easy "$bin/decoded/snake-byte/snake-byte-easyc1-ext-run"
 
 cat "/tmp/pkeys-cover-trace-easy.txt" >> "/tmp/pkeys-cover-trace-ext.txt"
+
+# ---------------------------------------------------------------------------
+# The cold-start build, against the booting one.
+#
+# Every other check in this file compares a generated build against the
+# interpreter, because the interpreter runs the original binary and is ground
+# truth. That is not available here: a2run boots an Apple II, and the whole
+# point of snake-byte-cold is that it does not. There is no interpreter that
+# starts at $3750.
+#
+# So the control is snake-bytec1-ext -- itself checked against the interpreter
+# a few dozen lines above, which is what makes it usable as one. The two run
+# different code (one boots and types CALL 14160, the other installs the state
+# that would have produced and starts at $3750) and must agree block for block
+# from $3750 onward.
+#
+# Aligning is the whole trick: drop everything in the booting build's trace
+# before its *first* $3750. First, not any: $3750 is re-entered eight times by
+# the relocation loop that copies the level data down to $1800.
+#
+# What this does NOT cover, because it is easy to overestimate: both builds
+# include the same game.c, game_native.c and a2rom.c, so a bug in the game's own
+# C changes both identically and passes here. That is checked above, against the
+# interpreter. This pair checks only what is cold-specific -- the entry state,
+# the pruning, and the key offset -- which is exactly what nothing else can see.
+#
+# Mutation-tested, 2026-08-23:
+#   entry state not installed        -> FAIL (trace)
+#   key offset 181207 -> 181200      -> FAIL (trace)
+#   a reachable case deleted         -> FAIL (site count)
+# Two byte-level mutations of the entry state passed and are worth knowing
+# about: $0000 is scratch the game overwrites, and $0036 is reinstalled by
+# game_install_cout_hook before anything prints. Most of the 2,051 bytes do not
+# matter; the state is captured whole because that is cheaper and safer than
+# working out which ones do.
+echo "--- cold-start build vs the booting build ---"
+
+cold_prog="$bin/decoded/snake-byte/snake-byte-cold-run"
+ext_prog="$bin/decoded/snake-byte/snake-bytec1-ext-run"
+[ -x "$cold_prog" ] || { echo "Error: not found: $cold_prog" >&2; exit 1; }
+
+# The cold build's own block-head set. It is much smaller than the ext build's
+# -- the ROM is gone -- so it gets its own list rather than reusing one.
+site_addrs "$here/snake-byte-cold-body.c" "$here/a2rom.c" "$here/game.c" \
+  "$here/game_native.c" > "$here/blocks-cold.txt"
+cold_sites=$(wc -l < "$here/blocks-cold.txt")
+if [ "$cold_sites" -ne 186 ]; then
+  echo "FAIL [cold]: site list has $cold_sites block heads, expected exactly 186" >&2
+  echo "  Converting a routine lowers this deliberately; anything else is a regression." >&2
+  exit 1
+fi
+echo "[cold] site list: $cold_sites block heads"
+
+# Both builds run the *same* probe, installed at the cold build's block heads.
+# The alternative -- give each its own list and filter afterwards -- was tried
+# and is a trap: the lists are lowercase and the trace prints uppercase, so the
+# filter silently dropped every address containing a letter and the comparison
+# still looked almost right.
+#
+# Installing the cold list into the ext build is only sound because the cold
+# heads are a subset of the ext ones; a probe at an address that is not a block
+# head in the binary under test does not fire and does not say so.
+if ! comm -23 <(sort "$here/blocks-cold.txt") <(sort "$here/blocks-ext.txt") \
+     | grep -q .; then :; else
+  echo "FAIL [cold]: cold block heads are not a subset of the ext build's" >&2
+  comm -23 <(sort "$here/blocks-cold.txt") <(sort "$here/blocks-ext.txt") >&2
+  exit 1
+fi
+
+"$ext_prog"  --key-file="$here/play.pkeys"      --probe="$here/trace-cold.probe" \
+  --probe-out=/tmp/pkeys-cold-ext.txt  --frames=1300 > /dev/null 2>&1
+"$cold_prog" --key-file="$here/play-cold.pkeys" --probe="$here/trace-cold.probe" \
+  --probe-out=/tmp/pkeys-cold-cold.txt --frames=1150 > /dev/null 2>&1
+
+# Align at the *first* $3750: it is re-entered eight times by the relocation
+# loop that copies the level data down to $1800.
+awk 'f { print } /^3750$/ && !f { f = 1; print }' /tmp/pkeys-cold-ext.txt \
+  > /tmp/pkeys-cold-ext-al.txt
+
+ext_n=$(wc -l < /tmp/pkeys-cold-ext-al.txt)
+cold_n=$(wc -l < /tmp/pkeys-cold-cold.txt)
+if [ "$ext_n" -lt 100000 ]; then
+  echo "FAIL [cold]: only $ext_n blocks after aligning at \$3750 -- alignment is wrong" >&2
+  exit 1
+fi
+if [ "$cold_n" -lt "$ext_n" ]; then
+  echo "FAIL [cold]: cold produced $cold_n blocks, fewer than the $ext_n to compare against" >&2
+  echo "  Raise its --frames, or it stopped early." >&2
+  exit 1
+fi
+head -n "$ext_n" /tmp/pkeys-cold-cold.txt > /tmp/pkeys-cold-cold-p.txt
+if ! cmp -s /tmp/pkeys-cold-ext-al.txt /tmp/pkeys-cold-cold-p.txt; then
+  echo "FAIL [cold]: the cold and booting builds disagree from \$3750 onward" >&2
+  diff /tmp/pkeys-cold-ext-al.txt /tmp/pkeys-cold-cold-p.txt | head -20 >&2
+  exit 1
+fi
+echo "[cold] PASS: $ext_n block heads match the booting build from \$3750"
+
+# And the screen, which is the oracle meant to outlive the trace.
+"$ext_prog"  --key-file="$here/play.pkeys"      --probe="$here/screen.probe" \
+  --probe-out=/tmp/pkeys-cold-scr-ext.txt  --frames=1300 > /dev/null 2>&1
+"$cold_prog" --key-file="$here/play-cold.pkeys" --probe="$here/screen.probe" \
+  --probe-out=/tmp/pkeys-cold-scr-cold.txt --frames=1150 > /dev/null 2>&1
+scr_n=$(wc -l < /tmp/pkeys-cold-scr-cold.txt)
+if [ "$scr_n" -lt 6000 ]; then
+  echo "FAIL [cold]: only $scr_n screen samples; the run did not get far" >&2
+  exit 1
+fi
+head -n "$scr_n" /tmp/pkeys-cold-scr-ext.txt > /tmp/pkeys-cold-scr-p.txt
+if ! cmp -s /tmp/pkeys-cold-scr-p.txt /tmp/pkeys-cold-scr-cold.txt; then
+  echo "FAIL [cold]: screen differs from the booting build" >&2
+  exit 1
+fi
+echo "[cold] PASS: screen identical at $scr_n in-game samples"
 
 echo "--- coverage over all scenarios ---"
 coverage_report trace "$here/blocks.txt" 0

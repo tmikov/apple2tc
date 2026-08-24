@@ -1,0 +1,18 @@
+# The acceptance test's probe for the snake-bytec1-ext back end: same program
+# as trace.probe, over the block-head set snake-byte-cold-body.c, a2rom.c and
+# game.c can probe (the three sources stitched into one TU by
+# snake-byte-ext.c -- see that file's header for why). probe-acceptance.sh
+# checks that this stays identical to trace.probe apart from the site list.
+counter n
+
+probe kb() {
+  inc n
+  key n
+}
+
+probe trace(site = pc) {
+  printf("%04X\n", site)
+}
+
+install kb at $FD1B, $741F, $7890, $6217, $760F, $FB7C, $FD26
+install trace at @"blocks-cold.txt"
