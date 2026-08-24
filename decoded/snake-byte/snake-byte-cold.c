@@ -1275,24 +1275,24 @@ bb_6:
 /// by MASK ($2E) at GBASL/GBASH ($26) + Y.
 static void rom_plot1(uint16_t ret_addr) {
   bool branchTarget = true;
-  uint8_t tmp1_U8;
-  uint8_t tmp2_U8;
-  uint8_t tmp3_U8;
+  (void)branchTarget;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
+  // One lo-res cell: replace the half of the byte MASK selects with the
+  // matching half of COLOR, leaving the other half alone. `(old ^ colour) &
+  // mask ^ old` is the ROM's way of saying that in three instructions.
   /*$F80E*/ CYCLES(0xf80e, 28);
-            tmp1_U8 = s_y;
-            tmp2_U8 = peek((gbas16() + tmp1_U8));
-  /*$F814*/ tmp3_U8 = peek((gbas16() + tmp1_U8));
-            tmp2_U8 = ((tmp2_U8 ^ s_color) & s_mask) ^ tmp3_U8;
-            s_status_not_z = tmp2_U8;
-            s_status_n = (tmp2_U8 & 0x80);
-            s_a = tmp2_U8;
-  /*$F816*/ poke((gbas16() + tmp1_U8), tmp2_U8);
-  /*$F818*/ if (ret_addr) pop16(); return;
+  const uint16_t at = (uint16_t)(gbas16() + s_y);
+  const uint8_t old = peek(at);
+  const uint8_t mixed = (uint8_t)(((old ^ s_color) & s_mask) ^ old);
+  s_status_not_z = mixed;
+  s_status_n = (mixed & 0x80);
+  s_a = mixed;
+  /*$F816*/ poke(at, mixed);
+
+  /*$F818*/ if (ret_addr) pop16();
 }
 
 /* ========================================================================== */
@@ -1438,24 +1438,26 @@ bb_13:
 
 void rom_setcol(uint16_t ret_addr) {
   bool branchTarget = true;
-  uint8_t tmp1_U8;
-  uint16_t tmp2_U16;
+  (void)branchTarget;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
+  // The lo-res colour is stored in both nibbles, so a PLOT can take whichever
+  // half MASK selects without shifting. Four ASLs and an ORA get there; the
+  // carry the original leaves is the top bit shifted out of the low nibble.
   /*$F864*/ CYCLES(0xf864, 25);
-            tmp1_U8 = s_a & 0x0f;
-  /*$F866*/ s_color = tmp1_U8;
-  /*$F86B*/ tmp2_U16 = tmp1_U8 << 0x04;
-            s_status_c = (uint8_t)((tmp2_U16 & 0x01ff) >> 8);
-  /*$F86C*/ tmp1_U8 = ((uint8_t)tmp2_U16) | s_color;
-            s_status_not_z = tmp1_U8;
-            s_status_n = (tmp1_U8 & 0x80);
-            s_a = tmp1_U8;
-  /*$F86E*/ s_color = tmp1_U8;
-  /*$F870*/ if (ret_addr) pop16(); return;
+  const uint8_t low = (uint8_t)(s_a & 0x0f);
+  s_color = low;
+  const uint16_t shifted = (uint16_t)(low << 0x04);
+  s_status_c = (uint8_t)((shifted & 0x01ff) >> 8);
+  const uint8_t both = (uint8_t)((uint8_t)shifted | s_color);
+  s_status_not_z = both;
+  s_status_n = (both & 0x80);
+  s_a = both;
+  s_color = both;
+
+  /*$F870*/ if (ret_addr) pop16();
 }
 
 /* ========================================================================== */
@@ -1464,48 +1466,53 @@ bb_0:
 
 void rom_scrn(uint16_t ret_addr) {
   bool branchTarget = true;
-  uint8_t tmp1_U8;
-  uint8_t tmp2_U8;
+  (void)branchTarget;
 
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
+  // The row's low bit says which half of the byte holds this cell, and the
+  // ROM keeps it across GBASCALC on the stack -- as the whole status
+  // register, because LSR put it in the carry and PHP is one byte.
   /*$F871*/ CYCLES(0xf871, 11);
-            tmp1_U8 = s_a;
-            tmp2_U8 = tmp1_U8 >> 0x01;
-            s_a = tmp2_U8;
-  /*$F872*/ push8(((tmp1_U8 & 0x01) | ((tmp2_U8 == 0) << 1) | (s_status_i << 2) | (s_status_d << 3) | STATUS_B | (s_status_v << 6) | (tmp2_U8 & 0x80)));
+  const uint8_t row = s_a;
+  const uint8_t half = (uint8_t)(row >> 0x01);
+  const bool upper = (row & 0x01) != 0;
+  s_a = half;
+  /*$F872*/ push8((uint8_t)((row & 0x01) | ((half == 0) << 1) | (s_status_i << 2) |
+                            (s_status_d << 3) | STATUS_B | (s_status_v << 6) |
+                            (half & 0x80)));
   /*$F873*/ rom_gbascalc(0xfffe);
+
   /*$F876*/ CYCLES(0xf876, 11);
-            tmp1_U8 = peek((gbas16() + s_y));
-            s_a = tmp1_U8;
-  /*$F878*/ tmp1_U8 = pop8();
-            tmp2_U8 = tmp1_U8 & 0x01;
-            s_status_c = tmp2_U8;
-            s_status_i = ((tmp1_U8 & 0x04) != 0);
-            s_status_d = ((tmp1_U8 & 0x08) != 0);
-            s_status_b = 0x00;
-            s_status_v = ((tmp1_U8 & 0x40) != 0);
-            branchTarget = true;
-            if (!tmp2_U8)
-              goto bb_3;
-bb_1:
-  /*$F87B*/ CYCLES(0xf87b, 8);
-            tmp2_U8 = s_a;
-  /*$F87E*/ s_status_c = ((tmp2_U8 >> 0x03) & 0x01);
-            s_a = (tmp2_U8 >> 0x04);
-bb_2:
+  s_a = peek((uint16_t)(gbas16() + s_y));
+
+  // PLP: only the carry matters to what follows, but the rest is restored
+  // because the original restores it.
+  /*$F878*/ {
+    const uint8_t saved = pop8();
+    s_status_c = (uint8_t)(saved & 0x01);
+    s_status_i = ((saved & 0x04) != 0);
+    s_status_d = ((saved & 0x08) != 0);
+    s_status_b = 0x00;
+    s_status_v = ((saved & 0x40) != 0);
+  }
+
+  if (upper) {
+    /*$F87B*/ CYCLES(0xf87b, 8);
+    s_status_c = (uint8_t)((s_a >> 0x03) & 0x01);
+    s_a = (uint8_t)(s_a >> 0x04);
+  } else {
+    // $F879 BCC -- the branch itself, taken here.
+    /*$F879*/ CYCLES_EDGE(0xf879, 1);
+  }
+
   /*$F87F*/ CYCLES(0xf87f, 8);
-            tmp2_U8 = s_a & 0x0f;
-            s_status_not_z = tmp2_U8;
-            s_status_n = 0x00;
-            s_a = tmp2_U8;
-  /*$F881*/ if (ret_addr) pop16(); return;
-bb_3:
-  // $F879 BCC -- the branch itself, taken here.
-  /*$F879*/ CYCLES_EDGE(0xf879, 1);
-            goto bb_2;
+  s_a &= 0x0f;
+  s_status_not_z = s_a;
+  s_status_n = 0x00;
+
+  /*$F881*/ if (ret_addr) pop16();
 }
 
 /* ========================================================================== */
