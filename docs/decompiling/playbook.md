@@ -594,6 +594,86 @@ end — usually the next code address — before writing down its shape.
 
 ---
 
+### What "converted" is worth, and how to report it
+
+*(added 2026-08-24, after taking one game through the whole cleanup)*
+
+The measures that make a conversion look finished are mostly measures of the
+wrong thing. Four that were used here, and what each is actually worth:
+
+| Measure | Worth |
+| --- | --- |
+| `bb_N:` labels remaining | real — it is the decompiler's shape, and zero means every routine has been read |
+| `ram_peek(0x...)` with a hex literal | **almost nothing** — it goes to zero the moment addresses get names, and `ram_peek(kApplesLeft)` is the same emulated-RAM access |
+| adapters remaining | real, but only if they are *merged* rather than deleted; see below |
+| `CYCLES` sites remaining | depends entirely on which kind, and the two kinds do different jobs |
+
+Report the count that would embarrass you, not the one that reads well. "Zero
+`ram_peek(0x...)`" was stated here while 314 `ram_peek(kFoo)` calls remained;
+the number was true and the impression it gave was false.
+
+**The order that actually matters** is not the order the plan had. Naming
+addresses, giving routines parameters and deleting adapters are all worth
+doing, and none of them moves the game's own state out of the emulated machine.
+That is the thing a reader notices, it is bigger than everything else combined,
+and it is easy to leave until last by accident because every other step
+produces a satisfying number.
+
+### Merging an adapter beats deleting one
+
+An adapter exists to marshal machine state for a caller that no longer exists.
+The instinct is to delete it, and deleting it costs the block-head trace the
+adapter's `CYCLES` site — a real comparison point, gone.
+
+Merging it into the routine it describes costs nothing: the charge, the site
+and the write-back all move inside, the site is still emitted and still probed,
+and the pinned count does not change. Forty-two adapters went this way with the
+pin fixed and the trace hit counts identical to the digit.
+
+The question an adapter poses is therefore not "can I afford to drop this
+site" but "where does this write-back belong", and the answer is nearly always
+"inside the routine it describes".
+
+### `CYCLES` is two mechanisms, and a plan that says otherwise will mislead you
+
+A per-block cycle macro in generated code does two unrelated jobs: it dispatches
+the probe that makes the block-head trace, and it advances the emulated clock
+that the host's frame loop runs on. A plan that describes it as one of those
+will produce a step that cannot be executed as written.
+
+Separate them before touching either:
+
+- **Retiring the trace** — stop the sites probing. Cheap, and it spends the
+  strongest oracle you have while changing no code.
+- **Removing the addresses** — replace `CYCLES(addr, n)` with a charge that
+  names no address. The clock needs the *counts*; nothing needs the address once
+  the trace is gone. Timing comes out bit-identical, which is exactly what makes
+  the change checkable against the build you are comparing with.
+- **Removing the clock** — needs the artifact to pace itself some other way, and
+  it ends the comparison method, because comparison means running the same
+  emulated program twice.
+
+The middle one is where the maintenance burden actually lives, and it is safe.
+It was nearly skipped here on the belief that the charges could not go — which
+was true of the *counts* and false of the *addresses*.
+
+### Deriving a scenario instead of recording one
+
+A gate covers what its scenarios execute. Ask which routines a scenario never
+reaches before trusting it: here the cold-start gate ran one scenario that never
+pressed the key leading to half the program, so an entire routine ran **zero**
+times under it and a mutation there was caught by nothing.
+
+Adding a scenario need not mean recording one. If replay is stamped on a
+program-defined coordinate rather than on cycles, an existing recording can be
+re-stamped for a different entry point by a constant — measure the coordinate at
+the new entry, drop the keys below it, subtract it from the rest.
+
+And adding the scenario is only half. Check that a *sample point fires while the
+new code runs*: the probes here sampled at an address that path never reached,
+so the new scenario bought trace coverage and no state coverage at all, and the
+same mutation still passed everything.
+
 ## Procedure
 
 Each step carries its own status. Executed steps have been revised from what
@@ -602,6 +682,11 @@ rather than preserving them.
 
 Step 4 is deliberately two steps, and only the first has been run. That split is
 the whole point of it — see the step itself.
+
+The cleanup that follows conversion has its own six steps, and one game has now
+been through all of them; they live in `HANDOFF.md` rather than here because
+their order turned out to be game-independent but their *costs* were not. What
+transfers is in "What 'converted' is worth" above.
 
 1. **Scope.** *(executed)* Count blocks by address range. Identify the
    ROM/library share and the distinct entry points crossing into it. Decide the
