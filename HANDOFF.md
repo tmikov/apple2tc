@@ -524,8 +524,17 @@ phantom differences.
 Step 6 is characterised but deliberately not started — see its entry for why it
 is two steps and why neither is what unblocks the adapters.
 
+**Read this count honestly.** "Zero `ram_peek(0x...)`" was reported at one
+point as if the emulated machine had gone. It had not: that number counts *hex
+literals only*. `ram_peek(kApplesLeft)` is the same emulated-RAM access with a
+name on it, and there are still 314 of them. The steps below are done as
+written; the artifact is not finished.
+
 ```
-ram_peek(0x...) / ram_poke(0x...)   0        was 115 distinct addresses
+ram_peek/ram_poke, any form         314      the game's variables still live in s_ram
+s_status_* references               222      c 62, not_z 46, n 42, d 36, v 28, i 5, b 3
+s_a / s_x / s_y references          307      about half inside rom_*, where they are the ABI
+ram_peek(0x...) with a hex literal    0        was 115 distinct addresses
 bb_N: labels                        0        was 141
 tmpN_U8 temporaries                 0
 ret_addr parameters                 0        was 117; push16/pop16 unused
@@ -534,6 +543,23 @@ adapters left                       0        was 42
 ```
 
 What remains, in order of how well-defined it is:
+
+0. **What the plan's six steps did not cover, and what a reader notices first.**
+   The game's variables are still in `s_ram`, reached through named constants
+   rather than being C variables: `kBouncer` (16 uses), `kAppleValue` (13),
+   `kScore` (11), `kLifeOutcome` (11), `kRandPtr` (11), `kDifficulty` (9) and a
+   long tail. Moving them is the same move the plotter block and the monitor's
+   zero page already made -- and the same oracle cost, one narrowing of
+   `ram-cold.probe` per range.
+
+   The 6502 status flags are the other half: 222 references, and `s_status_c`
+   alone is 62. Most are written by a routine because the original left them
+   set, and read by nobody. Each needs its live-out checked the way
+   `game_pause_or_toggle_sound`'s was; `apple2tc --ir` prints `LiveOut:` per
+   routine and is the tool for it.
+
+   Neither is a step in the plan above. Both are what "C worth maintaining"
+   means, and they are bigger than steps 2 through 6 put together.
 
 1. ~~**Step 4's adapters.**~~ **Done 2026-08-24 — there are none left.** The
    last six merged into their natives or inlined at their single call site;
