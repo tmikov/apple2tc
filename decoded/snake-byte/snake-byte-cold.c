@@ -203,16 +203,12 @@ void game_draw_cell(uint8_t ink, Cell c);
 void game_plot_hline(Cell c, uint8_t to_col);
 void game_plot_vline(Cell c, uint8_t to_row);
 void game_lores_vline(Cell c, uint8_t to_row);
-void game_clear_hgr(void);
 void game_plot_shape_merge(uint8_t ink, Cell c);
-void game_draw_playfield(void);
 void game_install_cout_hook(void);
 void game_start_life_adapter(void);
 void game_move_ok(void);
 void game_move_bouncer(void);
-void game_update_high_score(void);
 void game_step_bouncers(void);
-void game_find_apple(void);
 void game_pause_or_toggle_sound(void);
 void game_read_direction(void);
 void game_print_inline_str(uint16_t ret_addr);
@@ -1042,7 +1038,6 @@ void game_lores_vline(Cell c, uint8_t to_row);
 /// $7267 -- add $71CC:$71CB to the four-byte BCD score at $7252.
 
 /// $702B -- zero hi-res page 1, $2000 through $3FFF.
-void game_clear_hgr(void);
 
 /* --- $6B93 --------------------------------------------------------------- */
 
@@ -1052,7 +1047,6 @@ void game_plot_shape_merge(uint8_t ink, Cell c);
 
 /// $7045 -- clear the screen, draw the border, then interpret the current
 /// level's display list at $8000. See game.c for the opcodes.
-void game_draw_playfield(void);
 
 /* --- snake state and scoring setup --------------------------------------- */
 
@@ -1094,7 +1088,6 @@ void game_move_bouncer(void);
 
 /// $728D -- copy the score at $7252 over the high score at $7256 if it beats
 /// it, comparing BCD bytes most significant first.
-void game_update_high_score(void);
 
 /// $6BFB -- twenty passes of a falling tone, driven by the period at $6C46.
 
@@ -1104,7 +1097,6 @@ void game_step_bouncers(void);
 
 /// $69C3 -- find an apple by sweeping columns outward from the snake, leaving
 /// the result at $6B3B/$6B3C.
-void game_find_apple(void);
 
 /// $69A9 -- adapter for game_pause_or_toggle_sound_native(): ESC pauses until
 /// a key, Ctrl-S toggles the sound flag at $69C2.
@@ -3188,7 +3180,7 @@ static void seek_script(void) {
 
 void game_draw_playfield_native(void) {
   GAME_CYCLES(0x7045, 6);
-  game_clear_hgr();
+  game_clear_hgr_native();
   select_hires_page2();
   spin(0x04, 0x00); // the counts $7056 used to store into $02/$03
   wipe_occupancy_map();
@@ -4880,7 +4872,7 @@ uint8_t game_pause_or_toggle_sound_native(uint8_t key) {
 
 LifeEnd game_play_loop_native(uint8_t *cell_out) {
   GAME_CYCLES(0x6288, 6);
-  game_find_apple();
+  game_find_nearest_apple();
 
   for (;;) {
     /* --- $628B: a key, and what the game makes of it -------------------- */
@@ -5844,7 +5836,7 @@ wait: /* $741C */
   // draw the highlight, then walk them again asking for replacements.
   GAME_CYCLES(0x7466, 1);
   GAME_CYCLES(0x747f, 6);
-  game_clear_hgr();
+  game_clear_hgr_native();
   GAME_CYCLES(0x7482, 10);
   io_peek(0xc052);
   game_install_cout_hook();
@@ -6232,17 +6224,6 @@ void game_lores_vline(Cell c, uint8_t to_row) {
 
 
 
-void game_clear_hgr(void) {
-  // Adapter for game_clear_hgr_native(). Costs 3 trace sites.
-  bool branchTarget = true;
-
-  /*$702B*/ CYCLES(0x702b, 0);
-  game_clear_hgr_native();
-
-  s_status_c = 0x01;
-  s_status_not_z = 0x00;
-  s_status_n = 0x00;
-}
 
 /* ========================================================================== */
 /* $6B93 -- the merging cell plotter.                                         */
@@ -6338,19 +6319,6 @@ void game_plot_shape_merge(uint8_t ink, Cell c) {
 /* game_cout_hook already does at $669F.                                      */
 /* ========================================================================== */
 
-void game_draw_playfield(void) {
-  // Adapter for game_draw_playfield_native(). The largest single conversion:
-  // 61 trace sites, a fifth of what game.c had. $7045 itself survives, charged
-  // zero here and for real inside.
-  //
-  // Nothing of the machine state outlives it that a caller reads -- the
-  // routine ends in an RTS after a comparison whose result nothing consults --
-  // so the adapter marshals nothing back.
-  bool branchTarget = true;
-
-  /*$7045*/ CYCLES(0x7045, 0);
-  game_draw_playfield_native();
-}
 
 /* ========================================================================== */
 /* $6641, $660F, $6BEF, $6BDA, $71CD -- snake state and scoring setup.        */
@@ -6547,26 +6515,6 @@ void game_move_bouncer(void) {
 /* $728D, $6BFB                                                               */
 /* ========================================================================== */
 
-void game_update_high_score(void) {
-  // Adapter for game_promote_high_score(). Costs 9 trace sites.
-  //
-  // $728D itself survives as a probe site: CYCLES(addr, 0) below still sets
-  // s_pc and dispatches, while the block's real 10 cycles are charged inside
-  // game_promote_high_score by GAME_CYCLES. So a converted routine can keep
-  // its entry site for nothing, which is worth doing every time.
-  bool branchTarget = true;
-
-  /*$728D*/ CYCLES(0x728d, 0);
-  game_promote_high_score();
-
-  // What the original leaves in A and the flags depends on where it stopped:
-  // the last byte it compared, or the top score byte if it copied. Both are
-  // reproduced from memory rather than threaded out of the C.
-  const uint8_t top = ram_peek(kScore + 3);
-  s_a = top;
-  s_status_not_z = top;
-  s_status_n = (top & 0x80);
-}
 
 
 /* ========================================================================== */
@@ -6587,20 +6535,6 @@ void game_step_bouncers(void) {
   s_status_n = (key & 0x80);
 }
 
-void game_find_apple(void) {
-  // Adapter for game_find_nearest_apple(). Costs 12 trace sites; $69C3 itself
-  // survives, charged zero here and for real inside -- see
-  // game_update_high_score above for why that works.
-  bool branchTarget = true;
-
-  /*$69C3*/ CYCLES(0x69c3, 0);
-  game_find_nearest_apple();
-
-  const uint8_t row = ram_peek(kSearchRow);
-  s_a = row;
-  s_status_not_z = row;
-  s_status_n = (row & 0x80);
-}
 
 /* ========================================================================== */
 /* $69A9, $75D1, $6C72 -- the rest of the input path.                         */
@@ -6811,7 +6745,7 @@ new_game: /* $7691 */
   assert_binary_mode("game_setup", 0x7980);
   game_setup_screen();
   GAME_CYCLES(0x7694, 6);
-  game_update_high_score();
+  game_promote_high_score();
   GAME_CYCLES(0x7697, 40);
   ram_poke(kScriptIndex, 0x01);
   set_level(0x01);
@@ -6839,7 +6773,7 @@ start_round: /* $76C7 */
   ram_poke(kApplesEaten + 1, 0x00);
   ram_poke(kApplesLeft, ram_peek(kApplesQuota));
   ram_poke(kApplesLeft + 1, ram_peek(kApplesQuota + 1));
-  game_draw_playfield();
+  game_draw_playfield_native();
   GAME_CYCLES(0x76e4, 14);
   set_life_time(ram_peek(kLevelTime));
   game_set_apple_value_native();
