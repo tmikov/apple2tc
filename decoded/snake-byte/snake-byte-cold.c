@@ -2488,11 +2488,10 @@ void game_install_cout_vector(void) {
 /* the values are computed as locals here and mirrored at the end. Those       */
 /* writes go away when the memory oracle does, and not before.                */
 /*                                                                            */
-/* The plotter still takes its arguments in zero page, so the draw calls set   */
-/* $00-$03 by hand. Note the erase at $654C deliberately does *not* set $00:   */
-/* it reuses whatever shape is already there, and the mask that shape selects  */
-/* decides which pixels get cleared. Tidying that away would change the        */
-/* screen.                                                                    */
+/* The plots go through plot_at and plot_shape_at. Which one a call uses is    */
+/* the point: the erase at $654C deliberately does *not* name a shape. It      */
+/* reuses whatever s_shape holds, and the mask that shape selects decides      */
+/* which pixels get cleared. Tidying that away would change the screen.        */
 /* ========================================================================== */
 
 /// Reflect a delta.
@@ -3509,9 +3508,14 @@ void game_clear_hgr_native(void) {
 /* wraps through 255; nothing guards against it and nothing needs to.          */
 /* ========================================================================== */
 
-/// $6148 -- a horizontal run of hi-res cells, columns $02 through $08 on row
-/// $03. The coordinate stays in zero page because game_draw_cell's adapter
-/// reads it from there.
+/// $6148 -- a horizontal run of hi-res cells, from s_col to s_run_end along
+/// row s_row.
+///
+/// The coordinate stays a global rather than becoming a parameter because it
+/// is read back on the way out: this loop leaves s_col on its endpoint, which
+/// the adapter returns in A, and game_draw_cell reads s_col/s_row as the cell
+/// to draw. Threading it means restructuring the steppers and both cell
+/// drawers together.
 void game_plot_hline_native(void) {
   for (;;) {
     GAME_CYCLES(0x614b, 6);
@@ -4709,10 +4713,10 @@ void game_read_key_native(void) {
 /* on to $FDF0, which is what keeps the cursor, scrolling and the rest of      */
 /* COUT's behaviour working underneath.                                       */
 /*                                                                            */
-/* Everything below $0009 is scratch, and stays in zero page: ram.probe        */
-/* hashes $0000-$00FF, so the residue this leaves has to be the residue the    */
-/* original left, down to the loop counter's last value. They become locals    */
-/* when that oracle goes.                                                     */
+/* Everything the original parked below $0009 is a local here. It used to have */
+/* to stay in emulated RAM, because ram.probe hashed $0000-$00FF and the       */
+/* residue had to match the original's down to the loop counter's last value;  */
+/* that range left the hash when the storage moved, on 2026-08-23.             */
 /* ========================================================================== */
 
 /// Where glyph \p glyph's eight rows live. The font starts at $66A9 and the
@@ -6131,15 +6135,16 @@ void game_cout_hook(uint16_t ret_addr) {
 /* $3080, ... -- and successive scanlines within a cell are $400 apart, which */
 /* is why walking down a cell is just +4 on the high byte.                    */
 /*                                                                            */
-/* Arguments, in zero page:                                                   */
-/*   $00  shape index; picks four AND masks from the table at $6174           */
-/*   $01  ink: 0 erases, 1 draws                                              */
-/*   $02  column -- the byte offset within the cell row                       */
-/*   $03  cell row, 0-47                                                      */
-/* Scratch, also in zero page and so still written faithfully:                */
-/*   $04/$05  destination pointer, advanced one scanline per iteration        */
-/*   $06      index into the dot-pattern table at $6064                       */
-/*   $07      scanline counter, 0-3                                           */
+/* Arguments, which the original passed in zero page and this file passes in   */
+/* variables of the same name:                                                */
+/*   s_shape  picks four AND masks from the table at $6174 ($00)              */
+/*   s_ink    0 erases, 1 draws ($01)                                         */
+/*   s_col    the byte offset within the cell row ($02)                       */
+/*   s_row    cell row, 0-47 ($03)                                            */
+/* Scratch, which was $04-$07 and is now four locals:                          */
+/*   the destination pointer, advanced one scanline per iteration             */
+/*   the index into the dot-pattern table at $6064                            */
+/*   the scanline counter, 0-3                                                */
 /*                                                                            */
 /* $6064 is a 128-byte dot-pattern table, $6064-$60E3, immediately before the */
 /* plotter code. It is 16 inks of 8 bytes, and the index the original builds  */
