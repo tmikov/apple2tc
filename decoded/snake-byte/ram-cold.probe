@@ -15,7 +15,8 @@
 # text page, the buffers, and the game's own data at $6000-$BFFF. Those are the
 # game's state, and they have to survive every step of the cleanup.
 #
-# $0000-$0008 is skipped, and that is the first oracle this cleanup has spent.
+# $0000-$0008 and $0024/$0025 are skipped. That is the oracle this cleanup has
+# spent so far, and the reason is the same for both.
 # The plotter's argument block used to live there; it is a C object in the cold
 # build now (s_plot), so the bytes it left in RAM are stale in one build and
 # current in the other. Nothing is wrong -- the values still exist and still
@@ -32,7 +33,15 @@
 # here would fail on every run and teach whoever sees it to ignore the memory
 # check.
 #
-# The rest of zero page is hashed in two pieces to skip $4E/$4F, RNDL and RNDH. The ROM's
+# $0024/$0025 are CH and CV, the text cursor, and they went the same way for
+# the same reason. They belonged to the ROM rather than to the game, which is
+# not a distinction that survives: the ROM is being decompiled too, and there is
+# no version of this artifact in which the monitor keeps its state in a 64K
+# array. What still covers them is the screen -- a cursor that is wrong puts
+# characters in the wrong place, at both sample sites.
+#
+# The rest of zero page is hashed in three pieces, to skip those two and
+# $4E/$4F, RNDL and RNDH. The ROM's
 # KEYIN increments them while it spins, so their value records how long the
 # boot waited for a keystroke -- which makes them differ between two boots of
 # the *same* build, never mind between one that boots and one that does not.
@@ -50,14 +59,15 @@ probe kb() {
 }
 
 probe mem(
-    zp_lo = hash($0009, $004D),
+    zp_a = hash($0009, $0023),
+    zp_b = hash($0026, $004D),
     zp_hi = hash($0050, $00FF),
     low = hash($0200, $03FF),
     txt = hash($0400, $07FF),
     aux = hash($0800, $1FFF),
     hgr = hash($2000, $5FFF),
     game = hash($6000, $BFFF)) {
-  printf("%08X %08X %08X %08X %08X %08X %08X\n", zp_lo, zp_hi, low, txt, aux, hgr, game)
+  printf("%08X %08X %08X %08X %08X %08X %08X %08X\n", zp_a, zp_b, zp_hi, low, txt, aux, hgr, game)
 }
 
 install kb at $FD1B, $741F, $7890, $6217, $760F, $FB7C, $FD26

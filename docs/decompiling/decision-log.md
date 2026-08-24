@@ -2627,3 +2627,40 @@ attempted first. The reasoning that would have justified it — "every path from
 a hook install to a shape read passes through `start_round`" — is sound as far
 as it goes, but it would have been checked by a gate that could not see the
 routine in question at all. Strengthen the oracle, then spend it.
+
+## 2026-08-24 — Step 3d: the cursor, and a category that was never real
+
+`$0024/$0025` — CH and CV — are `s_ch` and `s_cv`. 43 accesses, no 16-bit or
+computed reads, so the move was mechanical.
+
+What is worth recording is the reasoning that nearly deferred it. The cursor was
+set apart from the rest of step 3 on the grounds that it belongs to the ROM
+rather than to the game: the monitor's routines compute with it, five of them
+are still decompiler-generated in this file, and the game writes it as the
+documented interface to COUT. The conclusion drawn from that was to wait until
+those five were hand-written, so the change would land in "owned" code.
+
+That is wrong, and the error is worth naming because it will recur. **There is
+no such category as decompiler-generated code here.** Everything in this
+artifact is a decompilation of the same binary; a routine still emitted as a
+switch over block ids is a less finished one, not a different kind. Treating
+the ROM as someone else's code invents a boundary the project does not have,
+and the plan reads better without it — the five remaining generated helpers are
+work items, not a reason to route around them.
+
+### The oracle, third narrowing
+
+`ram-cold.probe`'s zero page is three pieces now: `$0009-$0023`, `$0026-$004D`,
+`$0050-$00FF`. Same order as before — move first, watch the gate read *trace
+PASS, screen PASS, memory FAIL*, then narrow, then mutate.
+
+Both new edges were mutation-tested and one of them says something useful.
+`$0023` is caught. `$0040` is caught. **`$0026` is not**, and that is not a
+hole in the hash: GBASL is recomputed by GBASCALC before every use, so a stray
+write is overwritten long before either sample point sees it. The byte is
+covered and the value is simply not observable at rest. Widening the hash would
+not change that; only sampling more often would, and there is nothing to catch.
+
+What still covers the cursor is the screen, at both sample sites. A cursor that
+is wrong puts characters in the wrong place, which is the whole of what CH and
+CV do.

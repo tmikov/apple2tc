@@ -123,8 +123,6 @@ enum {
   kWNDWDTH = 0x0021,
   kWNDTOP = 0x0022,
   kWNDBTM = 0x0023,
-  kCH = 0x0024,      ///< the cursor, column and line
-  kCV = 0x0025,
   kGBASL = 0x0026,   ///< lo-res line base, computed by GBASCALC from V2
   kGBASH = 0x0027,
   kBASL = 0x0028,    ///< text line base, computed by BASCALC from CV
@@ -140,6 +138,21 @@ enum {
   kCSWH = 0x0037,
   kA2L = 0x003e,     ///< SETKBD/SETVID scratch
 };
+
+/// $0024/$0025 -- CH and CV, the text cursor, out of emulated RAM.
+///
+/// The last two addresses in this block that anything still *computes* with.
+/// The ROM's BASCALC turns CV into BASL/BASH, CLREOL and COUT1 step CH along a
+/// line, and the game sets both before every field it prints. All of that is
+/// C now; the bytes at $24/$25 are no longer read by anybody.
+///
+/// Moved even though the ROM owns them, because the ROM is being decompiled
+/// too -- a routine that is still emitted as a switch over block ids is not a
+/// different kind of code, only a less finished one. There is no version of
+/// this artifact in which the monitor keeps its state in a 64K array.
+///
+/// Initialised from the entry snapshot, like the plotter's block.
+static uint8_t s_ch, s_cv;
 
 /// $002C is two things, in two different callers.
 ///
@@ -381,7 +394,7 @@ void FUNC_CLREOL(uint16_t ret_addr) {
 
 bb_0:
   /*$FC9C*/ CYCLES(0xfc9c, 3);
-            s_y = ram_peek(kCH);
+            s_y = s_ch;
             FUNC_CLREOLZ(0x0000);
             if (ret_addr) pop16(); return;
 }
@@ -1489,9 +1502,9 @@ bb_0:
   /*$FC58*/ CYCLES(0xfc58, 13);
             tmp1_U8 = ram_peek(kWNDTOP);
             s_a = tmp1_U8;
-  /*$FC5A*/ ram_poke(kCV, tmp1_U8);
+  /*$FC5A*/ s_cv = tmp1_U8;
   /*$FC5C*/ s_y = 0x00;
-  /*$FC5E*/ ram_poke(kCH, 0x00);
+  /*$FC5E*/ s_ch = 0x00;
             branchTarget = true;
             // $FC60 BEQ -- provably always taken (Y was just loaded 0), but
             // the branch instruction still executes and still pays its own
@@ -1501,7 +1514,7 @@ bb_0:
             goto bb_2;
 bb_1:
   /*$FC22*/ CYCLES(0xfc22, 3);
-            s_a = ram_peek(kCV);
+            s_a = s_cv;
             FUNC_VTABZ(0x0000);
             if (ret_addr) pop16(); return;
 bb_2:
@@ -1571,14 +1584,14 @@ void rom_fc68(uint16_t ret_addr) {
 
 bb_0:
   /*$FC68*/ CYCLES(0xfc68, 8);
-            tmp1_U8 = ram_peek(kCV);
+            tmp1_U8 = s_cv;
             s_a = tmp1_U8;
   /*$FC6C*/ branchTarget = true;
             if (!(tmp1_U8 >= ram_peek(kWNDBTM)))
               goto bb_10;
 bb_1:
   /*$FC6E*/ CYCLES(0xfc6e, 17);
-            ram_poke(kCV, (uint8_t)(ram_peek(kCV) - 0x01));
+            s_cv = (uint8_t)(s_cv - 0x01);
   /*$FC70*/ tmp1_U8 = ram_peek(kWNDTOP);
             s_a = tmp1_U8;
   /*$FC72*/ push8(tmp1_U8);
@@ -1643,7 +1656,7 @@ bb_9:
   /*$FC9A*/ CYCLES_EDGE(0xfc9a, 1);
 bb_12:
   /*$FC22*/ CYCLES(0xfc22, 3);
-            s_a = ram_peek(kCV);
+            s_a = s_cv;
             FUNC_VTABZ(0x0000);
             if (ret_addr) pop16(); return;
 bb_10:
@@ -1759,13 +1772,13 @@ bb_7:
   /*$FBFF*/ CYCLES_EDGE(0xfbff, 1);
 bb_8:
   /*$FBF0*/ CYCLES(0xfbf0, 9);
-            tmp1_U8 = ram_peek(kCH);
+            tmp1_U8 = s_ch;
             s_y = tmp1_U8;
   /*$FBF2*/ poke((ram_peek16al(kBASL) + tmp1_U8), s_a);
 bb_9:
   /*$FBF4*/ CYCLES(0xfbf4, 13);
-            ram_poke(kCH, (uint8_t)(ram_peek(kCH) + 0x01));
-  /*$FBF6*/ tmp1_U8 = ram_peek(kCH);
+            s_ch = (uint8_t)(s_ch + 0x01);
+  /*$FBF6*/ tmp1_U8 = s_ch;
             s_a = tmp1_U8;
   /*$FBF8*/ tmp2_U8 = ram_peek(kWNDWDTH);
             s_status_not_z = (tmp1_U8 != tmp2_U8);
@@ -1805,23 +1818,23 @@ bb_13:
               goto bb_37;
 bb_14:
   /*$FC10*/ CYCLES(0xfc10, 7);
-            tmp3_U8 = (uint8_t)(ram_peek(kCH) - 0x01);
+            tmp3_U8 = (uint8_t)(s_ch - 0x01);
             s_status_not_z = tmp3_U8;
             tmp2_U8 = tmp3_U8 & 0x80;
             s_status_n = tmp2_U8;
-            ram_poke(kCH, tmp3_U8);
+            s_ch = tmp3_U8;
   /*$FC12*/ branchTarget = true;
             if (!tmp2_U8)
               goto bb_38;
 bb_15:
   /*$FC14*/ CYCLES(0xfc14, 11);
-  /*$FC16*/ ram_poke(kCH, ram_peek(kWNDWDTH));
-  /*$FC18*/ ram_poke(kCH, (uint8_t)(ram_peek(kCH) - 0x01));
+  /*$FC16*/ s_ch = ram_peek(kWNDWDTH);
+  /*$FC18*/ s_ch = (uint8_t)(s_ch - 0x01);
 bb_16:
   /*$FC1A*/ CYCLES(0xfc1a, 8);
             tmp2_U8 = ram_peek(kWNDTOP);
             s_a = tmp2_U8;
-  /*$FC1C*/ tmp3_U8 = ram_peek(kCV);
+  /*$FC1C*/ tmp3_U8 = s_cv;
             s_status_not_z = (tmp2_U8 != tmp3_U8);
             tmp1_U8 = tmp2_U8 >= tmp3_U8;
             s_status_c = tmp1_U8;
@@ -1831,9 +1844,9 @@ bb_16:
               goto bb_39;
 bb_17:
   /*$FC20*/ CYCLES(0xfc20, 5);
-            ram_poke(kCV, (uint8_t)(ram_peek(kCV) - 0x01));
+            s_cv = (uint8_t)(s_cv - 0x01);
   /*$FC22*/ CYCLES(0xfc22, 3);
-            s_a = ram_peek(kCV);
+            s_a = s_cv;
             FUNC_VTABZ(0x0000);
             if (ret_addr) pop16(); return;
 bb_18:
@@ -1879,10 +1892,10 @@ bb_26:
             if (ret_addr) pop16(); return;
 bb_20:
   /*$FC62*/ CYCLES(0xfc62, 5);
-  /*$FC64*/ ram_poke(kCH, 0x00);
+  /*$FC64*/ s_ch = 0x00;
 bb_21:
   /*$FC66*/ CYCLES(0xfc66, 5);
-            ram_poke(kCV, (uint8_t)(ram_peek(kCV) + 0x01));
+            s_cv = (uint8_t)(s_cv + 0x01);
   /*$FC68*/ rom_fc68(0x0000);
             if (ret_addr) pop16(); return;
 
@@ -3813,8 +3826,8 @@ static void edit_key_blank(uint8_t slot) {
   // and every step below needs it again.
   GAME_CYCLES(0x75d1, 23);
   s_plot[kCol] = slot;
-  ram_poke(kCH, slot_col(slot));
-  ram_poke(kCV, slot_row(slot));
+  s_ch = slot_col(slot);
+  s_cv = slot_row(slot);
   rom_fc68(0x75df);
 
   GAME_CYCLES(0x75e0, 11);
@@ -3850,8 +3863,8 @@ static void edit_key_blank(uint8_t slot) {
 static uint8_t edit_key_prompt(uint8_t slot) {
   GAME_CYCLES(0x75f3, 23);
   s_x = slot;
-  ram_poke(kCH, slot_col(slot));
-  ram_poke(kCV, slot_row(slot));
+  s_ch = slot_col(slot);
+  s_cv = slot_row(slot);
   rom_fc68(0x7601);
 
   GAME_CYCLES(0x7602, 13);
@@ -4509,8 +4522,8 @@ void game_show_key_native(uint8_t slot, uint8_t key) {
 
   GAME_CYCLES(0x759e, 23);
   s_x = slot; // read back by the COUT hook, which is why it is set here
-  ram_poke(kCH, ram_peek(kKeyCH + slot));
-  ram_poke(kCV, ram_peek(kKeyCV + slot));
+  s_ch = ram_peek(kKeyCH + slot);
+  s_cv = ram_peek(kKeyCV + slot);
   rom_fc68(0x75ab);
 
   GAME_CYCLES(0x75ac, 10);
@@ -4653,7 +4666,7 @@ static uint16_t glyph_rows(uint8_t glyph) {
 /// `+ $1C`, which maps $04xx (text page 1) onto $20xx (hi-res page 1).
 static uint16_t hires_cursor(void) {
   const uint8_t hi = (uint8_t)(ram_peek(kBASH) - 0x04 + 0x20);
-  const uint8_t lo = (uint8_t)(ram_peek(kBASL) + ram_peek(kCH));
+  const uint8_t lo = (uint8_t)(ram_peek(kBASL) + s_ch);
   return (uint16_t)(lo | (hi << 8));
 }
 
@@ -5409,8 +5422,8 @@ static void clear_leading_zero_flag(void) {
 void game_status_panel(void) {
   // SCORE, row $14 column $00. Four BCD bytes at $7252, little-endian.
   GAME_CYCLES(0x72ce, 16);
-  ram_poke(kCV, 0x14);
-  ram_poke(kCH, 0x00);
+  s_cv = 0x14;
+  s_ch = 0x00;
   game_print_inline_str(0x72d8);
   GAME_CYCLES(0x72e2, 15);
   clear_leading_zero_flag();
@@ -5430,7 +5443,7 @@ void game_status_panel(void) {
 
   // HI SCORE, same row, column $14. Four bytes at $7256.
   GAME_CYCLES(0x7301, 11);
-  ram_poke(kCH, 0x14);
+  s_ch = 0x14;
   game_print_inline_str(0x7307);
   GAME_CYCLES(0x7314, 15);
   clear_leading_zero_flag();
@@ -5450,8 +5463,8 @@ void game_status_panel(void) {
 
   // APPLES LEFT, row $15 column $00. Two bytes at $725A.
   GAME_CYCLES(0x7333, 16);
-  ram_poke(kCH, 0x00);
-  ram_poke(kCV, 0x15);
+  s_ch = 0x00;
+  s_cv = 0x15;
   game_print_inline_str(0x733d);
   GAME_CYCLES(0x734d, 15);
   clear_leading_zero_flag();
@@ -5473,7 +5486,7 @@ void game_status_panel(void) {
   // VALUE, same row, column $14. Two bytes at $71CB -- the current worth of an
   // apple, which game_set_apple_value computes per level.
   GAME_CYCLES(0x7365, 11);
-  ram_poke(kCH, 0x14);
+  s_ch = 0x14;
   game_print_inline_str(0x736b);
   GAME_CYCLES(0x7375, 15);
   clear_leading_zero_flag();
@@ -5490,8 +5503,8 @@ void game_status_panel(void) {
   // below, which prints nothing at all once leading zeros are suppressed. It
   // costs a call to keep the shape of every other field.
   GAME_CYCLES(0x7388, 16);
-  ram_poke(kCV, 0x16);
-  ram_poke(kCH, 0x00);
+  s_cv = 0x16;
+  s_ch = 0x00;
   game_print_inline_str(0x7392);
   GAME_CYCLES(0x73a2, 11);
   s_a = 0x00;
@@ -5505,7 +5518,7 @@ void game_status_panel(void) {
 
   // LEVEL, same row, column $14. One byte at $7265.
   GAME_CYCLES(0x73b2, 11);
-  ram_poke(kCH, 0x14);
+  s_ch = 0x14;
   game_print_inline_str(0x73b8);
   GAME_CYCLES(0x73c2, 15);
   clear_leading_zero_flag();
@@ -5518,7 +5531,7 @@ void game_status_panel(void) {
   // prints after it to recompute the line base.
   GAME_CYCLES(0x73cf, 11);
   s_a = 0x00;
-  ram_poke(kCV, 0x00);
+  s_cv = 0x00;
   rom_fc68(0x73d5);
   GAME_CYCLES(0x73d6, 6);
 }
@@ -5607,8 +5620,8 @@ void game_bonus_screen(void) {
 
   // $7937 -- "BONUS: " and the amount, through the hi-res font.
   GAME_CYCLES(0x7937, 16);
-  ram_poke(kCH, 0x0f);
-  ram_poke(kCV, 0x09);
+  s_ch = 0x0f;
+  s_cv = 0x09;
   game_install_cout_hook(0x7941);
   GAME_CYCLES(0x7942, 6);
   game_print_inline_str(0x7944);
@@ -5769,8 +5782,8 @@ void game_setup_screen(void) {
   // outer one and $03 the inner; both count *up* to zero.
   GAME_CYCLES(0x73db, 1);
   GAME_CYCLES(0x73e9, 16);
-  ram_poke(kCV, 0x17);
-  ram_poke(kCH, 0x00);
+  s_cv = 0x17;
+  s_ch = 0x00;
   game_print_inline_str(0x73f3);
   GAME_CYCLES(0x7414, 10);
   s_plot[kCol] = 0xe8;
@@ -5880,7 +5893,7 @@ wait: /* $741C */
   io_peek(0xc052);
   game_install_cout_hook(0x7487);
   GAME_CYCLES(0x7488, 11);
-  ram_poke(kCV, 0x01);
+  s_cv = 0x01;
   game_print_inline_str(0x748e);
 
   GAME_CYCLES(0x7541, 2);
@@ -7327,8 +7340,8 @@ ended: /* $7847 */
   /* $785D -- "PRESS SPACE BAR TO CONTINUE", then wait for space or the
      paddle button, whichever the setup screen selected. */
   GAME_CYCLES(0x785d, 16);
-  ram_poke(kCV, 0x17);
-  ram_poke(kCH, 0x00);
+  s_cv = 0x17;
+  s_ch = 0x00;
   game_print_inline_str(0x7867);
   for (;;) {
     GAME_CYCLES(0x7886, 6);
@@ -7555,6 +7568,8 @@ void init_emulated(void) {
   for (unsigned i = 0; i != sizeof s_plot; ++i)
     s_plot[i] = kSnakeByteEntryRam[i];
   s_shape = kSnakeByteEntryRam[0];
+  s_ch = kSnakeByteEntryRam[0x24];
+  s_cv = kSnakeByteEntryRam[0x25];
 
   /* Registers. SP matters most -- the live stack bytes above are meaningless
      without it. The flags are $A0: N set, everything else clear. */

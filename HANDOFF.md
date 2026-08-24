@@ -593,14 +593,20 @@ not.
 The order that worked: readers first (there are far fewer than writers), then
 ask which reader gets its value from a caller and which from whatever ran last.
 
-**The cursor (`$0024/$0025`) is a different question and worth deciding
-deliberately.** Every other address in step 3 is the game's own. CH and CV are
-not: the ROM routines read them, five of which are still decompiler-generated
-in this file, and the game writes them as the monitor's documented interface —
-`game_status_panel` and `game_show_key_native` both set them before calling
-COUT. Moving them means the emulated ROM stops keeping its own state in
-emulated RAM, which is a change to what "the emulated machine" is here, not
-just to where a variable lives.
+**3d: the cursor.** `$0024/$0025` — CH and CV — are `s_ch` and `s_cv`, 43
+accesses moved. That they belong to the ROM rather than to the game was raised
+as a reason to defer and is not one: **"decompiler-generated" is not a category
+that means anything here.** The ROM is being decompiled too, a routine still
+emitted as a switch over block ids is a less finished one rather than a
+different kind, and there is no version of this artifact in which the monitor
+keeps its state in a 64K array. Everything gets decompiled — ROM, game,
+whatever — and the plan should be read that way throughout.
+
+`ram-cold.probe`'s zero page is three pieces now: `$0009-$0023`, `$0026-$004D`,
+`$0050-$00FF`. Both new edges were mutation-tested. `$0023` is caught; so is
+`$0040`. `$0026` is *not*, and that is not a hole — GBASL is recomputed by
+GBASCALC before every use, so a stray write there is overwritten before the
+next sample can see it. Do not "fix" that by widening the hash.
 
 **Step 4 — return values instead of `s_a` and the flags.** As callers stop
 reading `s_a`, the 23 remaining marshalling adapters empty out and follow the
