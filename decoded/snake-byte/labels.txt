@@ -31,9 +31,31 @@
 
 # --- input -----------------------------------------------------------------
 6217 kbd_scan          # reads $C000, buffers into $623C,X
-623C buf_keys          # circular key buffer
-624C var_key_mask
-624D var_key_index
+6232 tbl_col_delta     # column delta per direction 1..4: +1 0 -1 0
+6237 tbl_row_delta     # row delta per direction 1..4: 0 -1 0 +1. Entry 0 of
+                       # both is $00 and unreachable -- direction 0 means
+                       # "no key". Matches DIR_RIGHT/UP/LEFT/DOWN = 1/2/3/4.
+623C buf_keys          # the 16-entry key ring
+624C var_ring_read     # where the play loop reads next ($6200). Was recorded
+                       # here as var_key_mask, which it is not: $6208 masks the
+                       # *incremented* cursor with $0F and stores it back.
+624D var_ring_write    # where the scan writes next ($6217). It refuses to
+                       # advance onto var_ring_read, which is the ring's only
+                       # full test.
+624E var_direction     # DIR_RIGHT..DIR_DOWN
+624F var_head_col
+6250 var_head_row
+6251 var_tail_col
+6252 var_tail_row      # the snake's body is not stored anywhere: the lo-res
+                       # screen is the occupancy map, and the tail reads the
+                       # colour it finds to work out which way the body went
+6253 var_life_outcome  # $00 gate, $0F apple, $FF quit, $FE timer, else the
+                       # occupancy byte the head hit. $7739 reads it.
+6254 var_growth        # segments still owed; while nonzero the tail is not
+                       # trimmed. Ten at the start of a life, ten more per apple
+6473 var_click_count   # clicks the current sound effect still owes; the pace
+                       # loop spends one per pass. $20 apple, $10 steer, $07 grow
+6C49 var_click_port    # $30 speaker, $20 cassette output -- i.e. muted
 
 # --- the scoreboard --------------------------------------------------------
 # $7252-$7266, all BCD, multi-byte fields least significant first. Six of them

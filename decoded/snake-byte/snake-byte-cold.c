@@ -2157,13 +2157,58 @@ void bouncer_store(int i, Bouncer b) {
   ram_poke(kBouncerAddr[i].dy, (uint8_t)b.dy);
 }
 
+/* --- The snake, the key ring, and the click counter ----------------------- */
+/*
+ * $6232-$6255, one contiguous run holding everything a life consists of. The
+ * storage stays where it is; these are names for it.
+ */
+enum {
+  /// Column and row deltas, indexed by direction 1..4. Entry 0 is $00 in both
+  /// and is never reached, since a direction of 0 means "no key".
+  /// Measured against DIR_RIGHT..DIR_DOWN: columns are +1/0/-1/0 and rows are
+  /// 0/-1/0/+1, so right is +column and up is -row, screen order.
+  kColDelta = 0x6232,
+  kRowDelta = 0x6237,
+  /// The sixteen-entry ring the keyboard scan fills and the play loop drains.
+  kKeyRing = 0x623c,
+  /// Where the play loop reads next, and where the scan writes next. The scan
+  /// refuses to advance the write cursor onto the read one, which is the
+  /// ring's only full test. Both wrap with `& $0F`.
+  kRingRead = 0x624c,
+  kRingWrite = 0x624d,
+  /// The direction the snake is travelling, DIR_RIGHT..DIR_DOWN.
+  kDirection = 0x624e,
+  /// The head's cell, and the tail's. The snake itself is not stored -- the
+  /// lo-res screen is the occupancy map, and the tail walks it by reading the
+  /// colour it finds to work out which way the body went.
+  kHeadCol = 0x624f,
+  kHeadRow = 0x6250,
+  kTailCol = 0x6251,
+  kTailRow = 0x6252,
+  /// How the life ended, which $7739 reads the moment the play loop returns:
+  /// $00 the gate, $0F an apple, $FF the quit key, $FE the timer, anything
+  /// else the occupancy byte the head ran into. See LifeEnd, which is this
+  /// byte with names on.
+  kLifeOutcome = 0x6253,
+  /// Segments still owed. While it is nonzero the tail is not trimmed, so the
+  /// snake grows; a life starts with ten and each apple adds ten more.
+  kGrowth = 0x6254,
+  /// The life timer -- see kLifeTime for what seeds it and why $FF stops it.
+  kLifeTimer = 0x6255,
+};
+
+/// $6473 -- how many more clicks the current sound effect owes. The pace loop
+/// spends one per pass while it is nonzero, so the value is a duration:
+/// $20 for eating an apple, $10 for a steering input, $07 for growing.
+enum { kClickCount = 0x6473 };
+
 /* ========================================================================== */
 /* Converted routines                                                         */
 /* ========================================================================== */
 
 /// The snake's head column. Still at $624F: the generated dispatch reads it.
 static void set_snake_head_col(uint8_t col) {
-  ram_poke(0x624f, col);
+  ram_poke(kHeadCol, col);
 }
 
 uint8_t game_start_life(uint8_t head_col) {
@@ -2526,7 +2571,7 @@ void game_find_nearest_apple(void) {
   static const uint8_t kApple = 0x0f;
   static const uint8_t kLastRow = 0x27;
 
-  Cell c = {.col = ram_peek(0x624f), .row = 1};
+  Cell c = {.col = ram_peek(kHeadCol), .row = 1};
   bool found = false;
 
   GAME_CYCLES(0x69c3, 14);
@@ -2553,7 +2598,7 @@ void game_find_nearest_apple(void) {
 
   if (!found) {
     GAME_CYCLES(0x69ef, 8);
-    c.col = ram_peek(0x624f);
+    c.col = ram_peek(kHeadCol);
 
     for (;;) { // rightwards
       GAME_CYCLES(0x69f5, 14);
@@ -2621,10 +2666,10 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
 
   // The head plus this direction's deltas.
   const Cell target = {
-      .col = (uint8_t)(ram_peek(0x6232 + dir) + ram_peek(0x624f)),
-      .row = (uint8_t)(ram_peek(0x6237 + dir) + ram_peek(0x6250)),
+      .col = (uint8_t)(ram_peek(kColDelta + dir) + ram_peek(kHeadCol)),
+      .row = (uint8_t)(ram_peek(kRowDelta + dir) + ram_peek(kHeadRow)),
   };
-  s_status_v = ovf8(target.row, ram_peek(0x6237 + dir), ram_peek(0x6250));
+  s_status_v = ovf8(target.row, ram_peek(kRowDelta + dir), ram_peek(kHeadRow));
   ram_poke(0x6637, target.col);
   ram_poke(0x6638, target.row);
 
@@ -3254,16 +3299,16 @@ static void step_bouncer_slot(int slot, uint16_t block, uint16_t cycles, uint16_
 /// right.
 static uint8_t dequeue_key(void) {
   GAME_CYCLES(0x6200, 10);
-  const uint8_t at = ram_peek(0x624c);
-  const uint8_t key = ram_peek(0x623c + at);
+  const uint8_t at = ram_peek(kRingRead);
+  const uint8_t key = ram_peek(kKeyRing + at);
   if (!(key & 0x80)) {
     GAME_CYCLES(0x6206, 1);
     return key;
   }
 
   GAME_CYCLES(0x6208, 24);
-  ram_poke(0x623c + at, 0x00);
-  ram_poke(0x624c, (uint8_t)((at + 1) & 0x0f));
+  ram_poke(kKeyRing + at, 0x00);
+  ram_poke(kRingRead, (uint8_t)((at + 1) & 0x0f));
   // X *is* live out of $6594 -- `apple2tc --ir` says so -- unlike X out of
   // $6C72, where the same check let the write go. So it is maintained.
   s_x = (uint8_t)(at + 1);
@@ -4259,12 +4304,12 @@ void game_draw_side_walls_native(void) {
   ram_poke(0x0002, 0x00); // left wall
   ram_poke(0x0003, 0x01);
 
-  uint8_t seed = ram_peek(0x6255);
+  uint8_t seed = ram_peek(kLifeTimer);
   if (seed & 0x80) {
     // A negative seed is clamped, and $6255 reset so the next call starts from
     // a known place.
     GAME_CYCLES(0x6b55, 8);
-    ram_poke(0x6255, 0xff);
+    ram_poke(kLifeTimer, 0xff);
     seed = 0x70;
   } else {
     GAME_CYCLES(0x6b53, 1);
@@ -4314,7 +4359,7 @@ void game_read_key_native(void) {
   // $6217 is on the replay coordinate, and is also where ram.probe and
   // screen.probe take their samples. It keeps its probe for both reasons.
   GAME_CYCLES_COORD(0x6217, 10);
-  const uint8_t at = ram_peek(0x624d);
+  const uint8_t at = ram_peek(kRingWrite);
   const uint8_t key = io_peek(0xc000);
   s_a = key;
   s_x = at;
@@ -4322,7 +4367,7 @@ void game_read_key_native(void) {
   if (key & 0x80) {
     GAME_CYCLES(0x621f, 21);
     io_poke(0xc010, key); // clear the strobe
-    ram_poke(0x623c + at, key);
+    ram_poke(kKeyRing + at, key);
 
     // The $0F is the ring's size and nothing checks it: widening it to $1F
     // passes every oracle, because no recording ever presses sixteen keys
@@ -4330,9 +4375,9 @@ void game_read_key_native(void) {
     const uint8_t next = (uint8_t)((at + 1) & 0x0f);
     s_x = (uint8_t)(at + 1);
     s_a = next;
-    if (next != ram_peek(0x624c)) {
+    if (next != ram_peek(kRingRead)) {
       GAME_CYCLES(0x622e, 10);
-      ram_poke(0x624d, next);
+      ram_poke(kRingWrite, next);
       return;
     }
     GAME_CYCLES(0x622c, 1);
@@ -4520,10 +4565,15 @@ static uint8_t scrn_cell(Cell c, uint16_t ret) {
   return s_a;
 }
 
-/// $649F / $64B0 -- read the keyboard and throw the answer away. The delay
-/// loops do this to keep the strobe from latching, and $6C49 is the port
-/// offset the key-redefinition screen chose.
-static void poll_and_discard(void) {
+/// $649F -- one click of the speaker. $6C49 holds the port offset, $30 for
+/// the speaker and $20 for the cassette output that nobody can hear, which is
+/// how muting works; game_sound_sweep does the same thing at $64B0.
+///
+/// Not a keyboard read, which is what this was called until the scoreboard
+/// pass went looking: the address is $C000 + $6C49, and the built-in symbol
+/// database resolves the $C000 to KBD, so the disassembly reads `LDA KBD,Y`
+/// and the index is what makes it the speaker.
+static void click_speaker(void) {
   peek(0xc000 + ram_peek(0x6c49));
 }
 
@@ -4599,7 +4649,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     game_read_direction(0x6290);
     uint8_t code = s_a;
 
-    uint8_t dir = ram_peek(0x624e);
+    uint8_t dir = ram_peek(kDirection);
     uint8_t shape;
 
   dispatch: /* $6291 */
@@ -4611,14 +4661,14 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
 
   steer: /* $6293 -- a key with the high bit on, so the player is steering */
     GAME_CYCLES(0x6293, 10);
-    ram_poke(0x6473, 0x10);
+    ram_poke(kClickCount, 0x10);
     if (code == KEY_TURN_CW) {
       GAME_CYCLES(0x629c, 14);
       shape = (uint8_t)(dir + 0x10);
       // $624E is left one below range here and normalised at $62B8, which is
       // the order the samples see; computing the wrap early would be tidier
       // and would not match.
-      ram_poke(0x624e, (uint8_t)(dir - 1));
+      ram_poke(kDirection, (uint8_t)(dir - 1));
       goto draw;
     }
 
@@ -4629,7 +4679,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     if (code == KEY_TURN_CCW) {
       GAME_CYCLES(0x6322, 17);
       shape = (uint8_t)(dir + 0x04);
-      ram_poke(0x624e, (uint8_t)(dir + 1));
+      ram_poke(kDirection, (uint8_t)(dir + 1));
       goto draw;
     }
 
@@ -4703,7 +4753,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
   draw: /* $62A5 -- draw the head, then step it one cell */
   {
     GAME_CYCLES(0x62a5, 28);
-    const Cell head = {.col = ram_peek(0x624f), .row = ram_peek(0x6250)};
+    const Cell head = {.col = ram_peek(kHeadCol), .row = ram_peek(kHeadRow)};
     ram_poke(0x0000, shape);
     ram_poke(0x0001, 0x0c);
     ram_poke(0x0002, head.col);
@@ -4712,8 +4762,8 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
 
     // $62B8 -- the direction back into 1..4, and the ink is the direction.
     GAME_CYCLES(0x62b8, 26);
-    dir = (uint8_t)((((uint8_t)(ram_peek(0x624e) - 1)) & 3) + 1);
-    ram_poke(0x624e, dir);
+    dir = (uint8_t)((((uint8_t)(ram_peek(kDirection) - 1)) & 3) + 1);
+    ram_poke(kDirection, dir);
     s_a = dir;
     rom_setcol(0x62c7);
 
@@ -4725,15 +4775,15 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     // $62D1 -- advance the head, and see what is there.
     GAME_CYCLES(0x62d1, 42);
     const Cell next = {
-        .col = (uint8_t)(head.col + ram_peek(0x6232 + dir)),
-        .row = (uint8_t)(head.row + ram_peek(0x6237 + dir)),
+        .col = (uint8_t)(head.col + ram_peek(kColDelta + dir)),
+        .row = (uint8_t)(head.row + ram_peek(kRowDelta + dir)),
     };
-    ram_poke(0x624f, next.col);
-    ram_poke(0x6250, next.row);
+    ram_poke(kHeadCol, next.col);
+    ram_poke(kHeadRow, next.row);
     const uint8_t cell = scrn_cell(next, 0x62ed);
 
     GAME_CYCLES(0x62ee, 25);
-    ram_poke(0x6253, cell);
+    ram_poke(kLifeOutcome, cell);
     GAME_CYCLES(0x6300, 6);
     plot_shape_at(dir, 0x0c, next);
     GAME_CYCLES(0x6303, 3);
@@ -4770,7 +4820,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     if (cell == 0x0f) {
       // $6480 -- an apple. Marked here; the caller does the scoring.
       GAME_CYCLES(0x6480, 14);
-      ram_poke(0x6473, 0x20);
+      ram_poke(kClickCount, 0x20);
       s_a = 0x07;
       rom_setcol(0x6489);
       GAME_CYCLES(0x648a, 14);
@@ -4802,7 +4852,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
           GAME_CYCLES(0x649d, 1);
       } while (y != 0);
       GAME_CYCLES(0x649f, 12);
-      poll_and_discard();
+      click_speaker();
       --x;
       if (x != 0)
         GAME_CYCLES(0x64a6, 1);
@@ -4814,14 +4864,14 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
 
   tail: /* $63A1 -- trim the tail, unless the snake is still growing */
     GAME_CYCLES(0x63a1, 6);
-    if (ram_peek(0x6254)) {
+    if (ram_peek(kGrowth)) {
       GAME_CYCLES(0x63a6, 15);
-      ram_poke(0x6254, (uint8_t)(ram_peek(0x6254) - 1));
-      ram_poke(0x6473, 0x07);
+      ram_poke(kGrowth, (uint8_t)(ram_peek(kGrowth) - 1));
+      ram_poke(kClickCount, 0x07);
     } else {
       GAME_CYCLES(0x63a4, 1);
       GAME_CYCLES(0x63b1, 14);
-      const Cell tail = {.col = ram_peek(0x6251), .row = ram_peek(0x6252)};
+      const Cell tail = {.col = ram_peek(kTailCol), .row = ram_peek(kTailRow)};
       const uint8_t under = scrn_cell(tail, 0x63b9);
 
       // The original keeps `under` on the stack across the erase. It stays on
@@ -4847,11 +4897,11 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       GAME_CYCLES(0x63da, 44);
       const uint8_t tail_dir = pop8();
       const Cell tail_next = {
-          .col = (uint8_t)(tail.col + ram_peek(0x6232 + tail_dir)),
-          .row = (uint8_t)(tail.row + ram_peek(0x6237 + tail_dir)),
+          .col = (uint8_t)(tail.col + ram_peek(kColDelta + tail_dir)),
+          .row = (uint8_t)(tail.row + ram_peek(kRowDelta + tail_dir)),
       };
-      ram_poke(0x6251, tail_next.col);
-      ram_poke(0x6252, tail_next.row);
+      ram_poke(kTailCol, tail_next.col);
+      ram_poke(kTailRow, tail_next.row);
       const uint8_t ahead = scrn_cell(tail_next, 0x63f5);
 
       GAME_CYCLES(0x63f6, 32);
@@ -4861,10 +4911,10 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
 
   pace: /* $640F -- the timer, the walls, and the delay that sets the speed */
     GAME_CYCLES(0x640f, 20);
-    poll_and_discard();
+    click_speaker();
     {
-      const uint8_t left = (uint8_t)(ram_peek(0x6255) - 1);
-      ram_poke(0x6255, left);
+      const uint8_t left = (uint8_t)(ram_peek(kLifeTimer) - 1);
+      ram_poke(kLifeTimer, left);
       if (left == 0) {
         GAME_CYCLES(0x641c, 12);
         return LIFE_TIMEOUT;
@@ -4914,10 +4964,10 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       push8(n);
       game_read_key_native();
       GAME_CYCLES(0x645b, 6);
-      if (ram_peek(0x6473)) {
+      if (ram_peek(kClickCount)) {
         GAME_CYCLES(0x6460, 18);
-        poll_and_discard();
-        ram_poke(0x6473, (uint8_t)(ram_peek(0x6473) - 1));
+        click_speaker();
+        ram_poke(kClickCount, (uint8_t)(ram_peek(kClickCount) - 1));
       } else {
         GAME_CYCLES(0x645e, 1);
       }
@@ -4990,8 +5040,8 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
   GAME_CYCLES(0x6a32, 10);
   const uint8_t apple_row = ram_peek(0x6b3c);
   const uint8_t apple_col = ram_peek(0x6b3b);
-  const uint8_t head_row = ram_peek(0x6250);
-  const uint8_t head_col = ram_peek(0x624f);
+  const uint8_t head_row = ram_peek(kHeadRow);
+  const uint8_t head_col = ram_peek(kHeadCol);
 
   bool settled = false;
 
@@ -5075,7 +5125,7 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
   // nothing to say; otherwise name the key that turns to it.
   GAME_CYCLES(0x6a48, 10);
   const uint8_t dir = ram_peek(0x6b38);
-  if (dir == ram_peek(0x624e)) {
+  if (dir == ram_peek(kDirection)) {
     GAME_CYCLES(0x6a4e, 1);
     GAME_CYCLES(0x6a54, 6);
     *key_out = dir;
@@ -5367,7 +5417,7 @@ void game_bonus_screen(void) {
           GAME_CYCLES(0x796e, 1);
       } while (y != 0);
       GAME_CYCLES(0x7970, 12);
-      poll_and_discard();
+      click_speaker();
       --x;
       if (x != 0)
         GAME_CYCLES(0x7977, 1);
@@ -5404,12 +5454,12 @@ void game_begin_life(void) {
   game_start_life_adapter(0x625a);
 
   GAME_CYCLES(0x625b, 36);
-  ram_poke(0x6251, s_a); // tail column, from $6630 by way of $660F
-  ram_poke(0x6250, 0x27); // head row: the bottom edge
-  ram_poke(0x6252, 0x27); // tail row, the same cell
-  ram_poke(0x624e, DIR_UP);
-  ram_poke(0x6254, 0x0a); // ten segments still to grow
-  ram_poke(0x6255, 0x64); // the level timer
+  ram_poke(kTailCol, s_a); // tail column, from $6630 by way of $660F
+  ram_poke(kHeadRow, 0x27); // head row: the bottom edge
+  ram_poke(kTailRow, 0x27); // tail row, the same cell
+  ram_poke(kDirection, DIR_UP);
+  ram_poke(kGrowth, 0x0a); // ten segments still to grow
+  ram_poke(kLifeTimer, 0x64); // the level timer
 
   // $6279 -- empty the sixteen-entry key ring at $623C. DEX/BPL, so it runs
   // down through 0 and stops when X wraps negative, one more pass than a
@@ -5417,15 +5467,15 @@ void game_begin_life(void) {
   uint8_t x = 0x0f;
   do {
     GAME_CYCLES(0x6279, 9);
-    ram_poke(0x623c + x, 0x00);
+    ram_poke(kKeyRing + x, 0x00);
     --x;
     if (!(x & 0x80))
       GAME_CYCLES(0x627d, 1);
   } while (!(x & 0x80));
 
   GAME_CYCLES(0x627f, 11);
-  ram_poke(0x624c, 0x00);
-  ram_poke(0x624d, 0x00);
+  ram_poke(kRingRead, 0x00);
+  ram_poke(kRingWrite, 0x00);
   game_play_loop(0x0000);
 }
 
@@ -6619,26 +6669,26 @@ void game_play_loop(uint16_t ret_addr) {
   // $62EE, because a reader should not have to know that to check it.
   switch (end) {
   case LIFE_GATE:
-    ram_poke(0x6253, 0x00);
+    ram_poke(kLifeOutcome, 0x00);
     break;
   case LIFE_APPLE:
-    ram_poke(0x6253, 0x0f);
+    ram_poke(kLifeOutcome, 0x0f);
     break;
   case LIFE_QUIT:
-    ram_poke(0x6253, 0xff);
+    ram_poke(kLifeOutcome, 0xff);
     break;
   case LIFE_TIMEOUT:
-    ram_poke(0x6253, 0xfe);
+    ram_poke(kLifeOutcome, 0xfe);
     break;
   case LIFE_CRASH:
-    ram_poke(0x6253, cell);
+    ram_poke(kLifeOutcome, cell);
     break;
   }
 
   // A is dead at both call sites -- $7716 and $7739 both load $6253 straight
   // away -- but the original leaves the reason there on most paths, so this
   // does too rather than leaving something arbitrary.
-  const uint8_t reason = ram_peek(0x6253);
+  const uint8_t reason = ram_peek(kLifeOutcome);
   s_a = reason;
   s_status_not_z = reason;
   s_status_n = (uint8_t)(reason & 0x80);
@@ -6849,7 +6899,7 @@ start_round: /* $76C7 */
   s_a = 0x00;
   GAME_CYCLES(0x7700, 23);
   ram_poke(0x0305, 0x00);
-  ram_poke(0x6255, life_time());
+  ram_poke(kLifeTimer, life_time());
   ram_poke(0x0022, 0x14); // window top, so HOME clears only the status panel
   rom_home(0x770f);
   GAME_CYCLES(0x7710, 6);
@@ -6861,7 +6911,7 @@ start_round: /* $76C7 */
 
 life: /* $7719 */
   GAME_CYCLES(0x7719, 19);
-  ram_poke(0x6255, life_time());
+  ram_poke(kLifeTimer, life_time());
   ram_poke(0x0022, 0x14);
   rom_home(0x7725);
   GAME_CYCLES(0x7726, 6);
@@ -6879,11 +6929,11 @@ life: /* $7719 */
 
 verdict: /* $7739 -- $6253 says how the life ended */
   GAME_CYCLES(0x7739, 8);
-  if (ram_peek(0x6253) == 0x0f)
+  if (ram_peek(kLifeOutcome) == 0x0f)
     goto ate_apple;
   GAME_CYCLES(0x7740, 3);
   GAME_CYCLES(0x77e6, 4);
-  if (ram_peek(0x6253) != 0x00)
+  if (ram_peek(kLifeOutcome) != 0x00)
     goto not_apple;
   goto round_cleared;
 
@@ -6911,7 +6961,7 @@ ate_apple: /* $773E */
   }
 
   GAME_CYCLES(0x7787, 18);
-  ram_poke(0x6254, (uint8_t)(ram_peek(0x6254) + 0x0a)); // ten more cells of snake
+  ram_poke(kGrowth, (uint8_t)(ram_peek(kGrowth) + 0x0a)); // ten more cells of snake
 
   // $7793 -- anything left in the round?
   if (ram_peek(kApplesLeft)) {
@@ -6990,7 +7040,7 @@ round_cleared: /* $77EA */
 not_apple: /* $77E8 */
   GAME_CYCLES(0x77e8, 1);
   GAME_CYCLES(0x7809, 4);
-  if (ram_peek(0x6253) != 0xfe) {
+  if (ram_peek(kLifeOutcome) != 0xfe) {
     GAME_CYCLES(0x780b, 1);
     goto ended;
   }
@@ -7021,7 +7071,7 @@ harder: /* $7817 -- three more apples in the round, and three more to come */
 
 ended: /* $7847 */
   GAME_CYCLES(0x7847, 8);
-  if (ram_peek(0x6253) == 0xff) {
+  if (ram_peek(kLifeOutcome) == 0xff) {
     GAME_CYCLES(0x784e, 3);
     goto new_game; // the player pressed the quit key
   }
@@ -7031,7 +7081,7 @@ ended: /* $7847 */
   // another life. Anything else falls through to the pause. Note the sense:
   // the original *branches away* when it is not $FE, so equality is the
   // fall-through, not the exception.
-  if (ram_peek(0x6253) == 0xfe) {
+  if (ram_peek(kLifeOutcome) == 0xfe) {
     GAME_CYCLES(0x7855, 3);
     goto life;
   }
