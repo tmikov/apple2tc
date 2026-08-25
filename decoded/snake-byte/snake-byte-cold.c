@@ -2275,16 +2275,17 @@ static uint8_t s_shape;
 /// They are still variables rather than parameters, which is the next step and
 /// not this one. What changed is that nothing can reach them by address, and
 /// each one has a type and a name instead of an index.
-/// Lo-res colour, 0..15; zero erases.
+/// The lo-res colour is gone from here. It was a global for the reason
+/// s_shape still is -- the original inherits it: draw_border drew six runs in
+/// whatever ink game_draw_playfield had set, and the redefinition screen's
+/// stem took the ink of the arrow plotted above it. But every one of those
+/// inheritances turned out to be readable at the call site, so the run helpers
+/// take the ink as an argument and the inheritance is written down instead of
+/// implied.
 ///
-/// A global for the same reason s_shape is one: it is inherited. draw_border
-/// draws six runs in the ink game_draw_playfield set before calling it, and
-/// the redefinition screen's stem takes the ink of the arrow plotted above it.
-/// plot_at and plot_shape_at therefore set it as well as passing it -- a run
-/// that follows them reads it back. Dropping that write drew the stem in a
-/// stale colour, which the cold gate's hires screen caught and its play screen
-/// did not.
-static uint8_t s_ink;
+/// s_shape did not thread and is still below. plot_at's two callers -- the
+/// bouncer erase and the tail erase -- genuinely erase with whatever shape was
+/// last used, so passing one would invent a value the original does not have.
 
 
 /// Plot the loaded shape, or a named one, into a cell. Defined further down,
@@ -2522,7 +2523,6 @@ void bouncer_step(Bouncer *b) {
   // last left in $00 -- see the header.
   TICK(11);
   s_a = 0x00;
-  s_ink = 0x00;
   rom_setcol();
 
   TICK(20);
@@ -2547,7 +2547,6 @@ void bouncer_step(Bouncer *b) {
   b->row = want_row;
   b->col = want_col;
   s_a = 0x03;
-  s_ink = 0x03;
   rom_setcol();
 
   TICK(6);
@@ -2967,19 +2966,6 @@ static void lores_hline(uint8_t row, uint8_t from_col) {
   rom_hline();
 }
 
-/// The three runs, with their endpoints as arguments instead of as four
-/// assignments before the call.
-///
-/// The globals are still where the steppers read them -- game_plot_hline_native
-/// walks s_col up to s_run_end and leaves it there -- so these set them and
-/// call, exactly as plot_shape_at does. What they buy is that a caller states
-/// the whole run in one place, including the endpoint it used to inherit from
-/// whatever ran before it.
-/// Plot at a cell in a given ink, keeping whatever shape s_shape holds.
-///
-/// Separate from plot_shape_at because for these callers the shape genuinely
-/// is inherited -- see s_shape -- and passing one would be inventing a value
-/// the original does not have.
 static void assert_binary_mode(const char *who, uint16_t at) {
   if (s_status_d) {
     fprintf(stderr, "%s: entered with decimal mode set\n", who);
@@ -2988,17 +2974,25 @@ static void assert_binary_mode(const char *who, uint16_t at) {
   }
 }
 
+/// Plot at a cell in a given ink, keeping whatever shape s_shape holds.
+///
+/// Separate from plot_shape_at because for these callers the shape genuinely
+/// is inherited -- see s_shape -- and passing one would be inventing a value
+/// the original does not have.
 static void plot_at(uint8_t ink, Cell c) {
-  s_ink = ink; // inherited by any run that follows -- see s_ink
   game_plot_shape_native(ink, c);
 }
 
-static void plot_hline_at(uint8_t col, uint8_t row, uint8_t to_col) {
-  game_plot_hline_native(s_ink, (Cell){.col = col, .row = row}, to_col);
+/// The three runs, with their ink and both endpoints as arguments instead of
+/// as assignments before the call. What they buy is that a caller states the
+/// whole run in one place, including the two things it used to inherit from
+/// whatever ran before it.
+static void plot_hline_at(uint8_t ink, uint8_t col, uint8_t row, uint8_t to_col) {
+  game_plot_hline_native(ink, (Cell){.col = col, .row = row}, to_col);
 }
 
-static void plot_vline_at(uint8_t col, uint8_t row, uint8_t to_row) {
-  game_plot_vline_native(s_ink, (Cell){.col = col, .row = row}, to_row);
+static void plot_vline_at(uint8_t ink, uint8_t col, uint8_t row, uint8_t to_row) {
+  game_plot_vline_native(ink, (Cell){.col = col, .row = row}, to_row);
 }
 
 static void lores_vline_at(uint8_t col, uint8_t row, uint8_t to_row) {
@@ -3110,7 +3104,10 @@ static void open_wall_gaps(void) {
 }
 
 /// The border, in both representations, plus the gap the snake leaves through.
-static void draw_border(void) {
+///
+/// \p ink is the six sides' colour, which the original inherits from
+/// game_draw_playfield rather than setting.
+static void draw_border(uint8_t ink) {
   TICK(10);
   lores_hline(0x00, 0x00); // $2C is still $27 from the wipe
 
@@ -3127,22 +3124,21 @@ static void draw_border(void) {
   lores_vline_at(0x27, 0x00, 0x27);
 
   TICK(19);
-  plot_hline_at(0x00, 0x00, 0x27);
+  plot_hline_at(ink, 0x00, 0x00, 0x27);
 
   TICK(16);
-  plot_hline_at(0x00, 0x27, 0x27);
+  plot_hline_at(ink, 0x00, 0x27, 0x27);
 
   TICK(14);
-  plot_vline_at(0x00, 0x00, 0x27);
+  plot_vline_at(ink, 0x00, 0x00, 0x27);
 
   TICK(16);
-  plot_vline_at(0x27, 0x00, 0x27);
+  plot_vline_at(ink, 0x27, 0x00, 0x27);
 
   // Ink 3 over columns $12-$16 of the bottom row, on top of the border just
   // laid down: the gap the snake leaves through.
   TICK(26);
-  s_ink = 0x03;
-  plot_hline_at(0x12, 0x27, 0x16);
+  plot_hline_at(0x03, 0x12, 0x27, 0x16);
 }
 
 /// Walk the pointer to the current level's script, skipping one whole script
@@ -3181,11 +3177,10 @@ void game_draw_playfield_native(void) {
   TICK(21);
   s_wndtop = 0x14;
   s_shape = 0x15;
-  s_ink = 0x0d;
   set_ink(0x0d);
 
   open_wall_gaps();
-  draw_border();
+  draw_border(0x0d);
 
 restart:
   seek_script();
@@ -3207,7 +3202,6 @@ restart:
       TICK(6);
       const uint8_t ink = script_byte(0x7140);
       TICK(9);
-      s_ink = ink;
       const uint8_t col = script_byte(0x7145);
       TICK(9);
       const uint8_t last = script_byte(0x714a);
@@ -3221,7 +3215,7 @@ restart:
       lores_hline(row, col);
 
       TICK(6);
-      plot_hline_at(col, row, last);
+      plot_hline_at(ink, col, row, last);
       TICK(3);
       continue;
     }
@@ -3232,7 +3226,6 @@ restart:
       TICK(6);
       const uint8_t ink = script_byte(0x716e);
       TICK(9);
-      s_ink = ink;
       const uint8_t row = script_byte(0x7173);
       TICK(9);
       const uint8_t last = script_byte(0x7178);
@@ -3241,12 +3234,13 @@ restart:
       TICK(12);
       set_ink(ink);
 
-      // The lo-res half puts s_row back where it found it, which is what lets
-      // the hi-res half run the same span without restating it.
+      // The lo-res half puts $03 back where it found it, which is what let
+      // the original's hi-res half run the same span without restating it.
+      // Both spans are stated here.
       TICK(6);
       lores_vline_at(col, row, last);
       TICK(6);
-      plot_vline_at(col, row, last);
+      plot_vline_at(ink, col, row, last);
       TICK(3);
       continue;
     }
@@ -3426,14 +3420,9 @@ void game_clear_hgr_native(void) {
 /* wraps through 255; nothing guards against it and nothing needs to.          */
 /* ========================================================================== */
 
-/// $6148 -- a horizontal run of hi-res cells, from s_col to s_run_end along
-/// row s_row.
-///
-/// The coordinate stays a global rather than becoming a parameter because it
-/// is read back on the way out: this loop leaves s_col on its endpoint, which
-/// the adapter returns in A, and game_draw_cell reads s_col/s_row as the cell
-/// to draw. Threading it means restructuring the steppers and both cell
-/// drawers together.
+/// $6148 -- a horizontal run of hi-res cells, from \p c along row c.row to
+/// \p to_col. The original walked $02/$03 and left $02 on the endpoint, which
+/// its adapter returned in A; that is the return value here.
 uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
   bool branchTarget = true;
   (void)branchTarget;
@@ -4552,7 +4541,6 @@ void game_draw_side_walls_native(void) {
 
   TICK(26);
   s_shape = 0x15;
-  s_ink = 0x02; // the upper segment
 
   uint8_t seed = s_life_timer;
   if (seed & 0x80) {
@@ -4569,18 +4557,18 @@ void game_draw_side_walls_native(void) {
   // as a life runs out.
   TICK(18);
   const uint8_t wall_top = (uint8_t)((seed >> 2) + 1);
-  plot_vline_at(0x00, 0x01, wall_top);
+  plot_vline_at(0x02, 0x00, 0x01, wall_top);
 
   TICK(16);
-  plot_vline_at(0x27, 0x01, wall_top);
+  plot_vline_at(0x02, 0x27, 0x01, wall_top);
 
   TICK(30);
   const uint8_t seam = (uint8_t)(wall_top + 1);
-  s_ink = 0x0d; // the lower segment
-  plot_vline_at(0x27, seam, 0x27);
+  // The lower segment.
+  plot_vline_at(0x0d, 0x27, seam, 0x27);
 
   TICK(18);
-  plot_vline_at(0x00, seam, 0x27);
+  plot_vline_at(0x0d, 0x00, seam, 0x27);
 
   // Tail call: SCRN of the bottom-centre cell, whose result the caller reads.
   TICK(7);
@@ -4788,7 +4776,6 @@ static uint8_t turn_for_key(uint8_t key, uint8_t dir) {
 /// argument block.
 static void plot_shape_at(uint8_t shape, uint8_t ink, Cell c) {
   s_shape = shape;
-  s_ink = ink; // inherited by any run that follows -- see s_ink
   game_plot_shape_native(ink, c);
 }
 
@@ -5185,8 +5172,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       // the cell is occupied.
       TICK(31);
       s_shape = 0x15;
-      s_ink = 0x0d;
-      plot_hline_at(0x12, 0x27, 0x16);
+      plot_hline_at(0x0d, 0x12, 0x27, 0x16);
       TICK(8);
       s_a = 0x0d;
       rom_setcol();
@@ -5600,30 +5586,28 @@ void game_bonus_screen(void) {
   // $78D1 -- the frame, in ink 9: top and bottom edges, then both sides.
   TICK(31);
   s_shape = 0x01;
-  s_ink = 0x09;
   // Columns $0D-$1A, rows $10-$15. The two sides used to inherit their column
-  // from the edge above: an hline leaves s_col at its own endpoint, so the
+  // from the edge above: an hline left $02 at its own endpoint, so the
   // first vline ran down $1A, the right edge, and not the $0D it looks like.
-  plot_hline_at(0x0d, 0x10, 0x1a);
+  plot_hline_at(0x09, 0x0d, 0x10, 0x1a);
   TICK(16);
-  plot_hline_at(0x0d, 0x15, 0x1a);
+  plot_hline_at(0x09, 0x0d, 0x15, 0x1a);
   TICK(16);
-  plot_vline_at(0x1a, 0x10, 0x15);
+  plot_vline_at(0x09, 0x1a, 0x10, 0x15);
   TICK(16);
-  plot_vline_at(0x0d, 0x10, 0x15);
+  plot_vline_at(0x09, 0x0d, 0x10, 0x15);
 
   // $7909 -- the interior, in ink 0, one row at a time from $11 to $14. The
   // original re-loads $02 each time and increments $03 in place, which is why
   // the rows are not written out as constants.
   TICK(26);
-  s_ink = 0x00;
-  plot_hline_at(0x0e, 0x11, 0x19);
+  plot_hline_at(0x00, 0x0e, 0x11, 0x19);
   TICK(16);
-  plot_hline_at(0x0e, 0x12, 0x19);
+  plot_hline_at(0x00, 0x0e, 0x12, 0x19);
   TICK(16);
-  plot_hline_at(0x0e, 0x13, 0x19);
+  plot_hline_at(0x00, 0x0e, 0x13, 0x19);
   TICK(16);
-  plot_hline_at(0x0e, 0x14, 0x19);
+  plot_hline_at(0x00, 0x0e, 0x14, 0x19);
 
   // $7937 -- "BONUS: " and the amount, through the hi-res font.
   TICK(16);
@@ -5926,8 +5910,8 @@ wait: /* $741C */
   // from the plot above rather than restating.
   TICK(21);
   s_shape = 0x0a;
-  plot_vline_at(0x1e, 0x13, 0x1d);
-  // At the stem's far end -- the vline above left s_row on $1D.
+  plot_vline_at(0x0c, 0x1e, 0x13, 0x1d);
+  // At the stem's far end -- the vline above left $03 on $1D.
   TICK(11);
   s_a = 0x0e;
   plot_shape_at(0x0e, 0x0c, (Cell){.col = 0x1e, .row = 0x1d});
@@ -6084,12 +6068,11 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* $3080, ... -- and successive scanlines within a cell are $400 apart, which */
 /* is why walking down a cell is just +4 on the high byte.                    */
 /*                                                                            */
-/* Arguments, which the original passed in zero page and this file passes in   */
-/* variables of the same name:                                                */
+/* Arguments. The original passed all three in zero page; the cell is a        */
+/* parameter here and only the shape is still a variable:                     */
 /*   s_shape  picks four AND masks from the table at $6174 ($00)              */
-/*   s_ink    0 erases, 1 draws ($01)                                         */
-/*   s_col    the byte offset within the cell row ($02)                       */
-/*   s_row    cell row, 0-47 ($03)                                            */
+/*   c.col    the byte offset within the cell row ($02)                       */
+/*   c.row    cell row, 0-47 ($03)                                            */
 /* Scratch, which was $04-$07 and is now four locals:                          */
 /*   the destination pointer, advanced one scanline per iteration             */
 /*   the index into the dot-pattern table at $6064                            */
@@ -6686,9 +6669,8 @@ ate_apple: /* $773E */
      marker on it, and stop the clock for the run to the gate -- see
      s_life_time for why $FF stops it rather than lengthening it. */
   TICK(31);
-  s_ink = 0x06;
   s_shape = 0x15;
-  plot_hline_at(0x12, 0x00, 0x16);
+  plot_hline_at(0x06, 0x12, 0x00, 0x16);
   TICK(16);
   plot_shape_at(0x15, 0x00, (Cell){.col = 0x14, .row = 0x00});
   TICK(14);
@@ -7024,7 +7006,6 @@ void init_emulated(void) {
      the first read before any write would see zero where the booting build
      sees what BASIC left there. */
   s_shape = kSnakeByteEntryRam[0x00];
-  s_ink = kSnakeByteEntryRam[0x01];
   s_ch = kSnakeByteEntryRam[0x24];
   s_cv = kSnakeByteEntryRam[0x25];
   s_wndlft = kSnakeByteEntryRam[0x20];
