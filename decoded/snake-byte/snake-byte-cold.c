@@ -207,6 +207,20 @@ typedef struct {
   uint8_t row;
 } Cell;
 
+/// One of the two objects that ricochet around the playfield. The original
+/// keeps them as four parallel pairs of bytes and copies one set into
+/// $6633-$6636 before stepping it -- a hand-rolled calling convention, which
+/// is why a struct fits so exactly, and which step_bouncer_slot now spells as
+/// passing one.
+typedef struct {
+  uint8_t col;
+  uint8_t row;
+  /// Always +1 or -1. The original stores them as bytes and reflects with
+  /// `EOR #$FE`, which swaps $01 and $FF.
+  int8_t dx;
+  int8_t dy;
+} Bouncer;
+
 void game_cold_start(void);
 void rom_plot(void);
 void rom_hline(void);
@@ -217,7 +231,7 @@ void rom_fc68(void);
 void rom_cout(void);
 void rom_setkbd(void);
 void rom_setvid(void);
-void game_move_bouncer(void);
+void game_move_bouncer(Bouncer *b);
 void game_print_inline_str(uint16_t ret_addr);
 void rom_bascalc(void);
 void rom_vtabz(void);
@@ -751,27 +765,6 @@ void rom_setvid(void);
 /// reason is different and the two lints check different things.
 #define GAME_CYCLES_ANCHOR(addr, n) GAME_CYCLES_COORD((addr), (n))
 
-/* --- The bouncers --------------------------------------------------------- */
-
-/// One of the two objects that ricochet around the playfield. The original
-/// keeps them as four parallel pairs of bytes and copies one set into
-/// $6633-$6636 before stepping it -- a hand-rolled calling convention, which
-/// is why a struct fits so exactly.
-typedef struct {
-  uint8_t col;
-  uint8_t row;
-  /// Always +1 or -1. The original stores them as bytes and reflects with
-  /// `EOR #$FE`, which swaps $01 and $FF.
-  int8_t dx;
-  int8_t dy;
-} Bouncer;
-
-/// Read bouncer \p i (0 or 1) out of emulated RAM.
-Bouncer bouncer_load(int i);
-
-/// Write bouncer \p i back to emulated RAM.
-void bouncer_store(int i, Bouncer b);
-
 /* --- Converted routines --------------------------------------------------- */
 
 /// $660F -- start a life: put the snake's head in \p head_col and set both
@@ -1084,7 +1077,7 @@ void game_print_inline_str(uint16_t ret_addr);
 
 /// $64C8 -- step the bouncer at $6633/$6634 by its deltas, reflecting off
 /// whatever it hits.
-void game_move_bouncer(void);
+void game_move_bouncer(Bouncer *b);
 
 /// $728D -- copy the score at $7252 over the high score at $7256 if it beats
 /// it, comparing BCD bytes most significant first.
@@ -2156,38 +2149,20 @@ void rom_setvid(void) {
 
 /* ========================================================================== */
 /* Storage                                                                    */
-/*                                                                            */
-/* The two bouncers occupy eight bytes at $6639-$6640, but not as two structs: */
-/* the fields are interleaved in pairs -- both columns, both rows, both dx,    */
-/* both dy. So a struct cannot simply be overlaid, and load/store it is.       */
-/*                                                                            */
-/* That is temporary. The addresses are here because generated code still      */
-/* reads them; when it stops, these two functions become the only thing that   */
-/* has to change.                                                             */
 /* ========================================================================== */
 
-static const struct {
-  uint16_t col, row, dx, dy;
-} kBouncerAddr[2] = {
-    {0x6639, 0x663a, 0x663d, 0x663e},
-    {0x663b, 0x663c, 0x663f, 0x6640},
+/// The two bouncers. They lived at $6639-$6640, and not as two structs: the
+/// fields were interleaved in pairs -- both columns, then both rows, then both
+/// dx, both dy -- so nothing could be overlaid on them and every access was a
+/// load or a store of four separate bytes.
+///
+/// Out of RAM the interleaving has nothing left to say, and this is an array
+/// of two. The initialisers are the shipped image's bytes de-interleaved;
+/// game_start_life overwrites both before the first life.
+static Bouncer s_bouncers[2] = {
+    {.col = 0x04, .row = 0x04, .dx = +1, .dy = +1},
+    {.col = 0x26, .row = 0x01, .dx = -1, .dy = +1},
 };
-
-Bouncer bouncer_load(int i) {
-  Bouncer b;
-  b.col = ram_peek(kBouncerAddr[i].col);
-  b.row = ram_peek(kBouncerAddr[i].row);
-  b.dx = (int8_t)ram_peek(kBouncerAddr[i].dx);
-  b.dy = (int8_t)ram_peek(kBouncerAddr[i].dy);
-  return b;
-}
-
-void bouncer_store(int i, Bouncer b) {
-  ram_poke(kBouncerAddr[i].col, b.col);
-  ram_poke(kBouncerAddr[i].row, b.row);
-  ram_poke(kBouncerAddr[i].dx, (uint8_t)b.dx);
-  ram_poke(kBouncerAddr[i].dy, (uint8_t)b.dy);
-}
 
 /* --- The game's own tables ------------------------------------------------ */
 /*
@@ -2212,44 +2187,47 @@ enum {
   kArrowGlyph = 0x75cb,     ///< which arrow glyph each slot blinks
 };
 
-/* --- The bouncers' working copy ------------------------------------------- */
+/* --- What the bouncer step left behind ------------------------------------ */
 /*
- * $6633-$6638 and $6C4A. The original does not step a bouncer where it lives:
- * it copies one of the two into $6633 first, steps that, and writes it back --
- * a calling convention in fixed memory, which is why a Bouncer struct fits it.
+ * $6637, $6638 and $6C4A held where the step would have landed before the
+ * walls got a say, and whether that cell was occupied. Nothing in this file
+ * ever read any of the three -- bouncer_step works in locals and commits into
+ * the Bouncer it was handed -- so the three stores existed only because the
+ * memory oracle hashed the bytes. Out of RAM they are dead code, and they are
+ * gone. The addresses are recorded here because that is the only place the
+ * knowledge now lives.
  */
-enum {
-  kBouncer = 0x6633,        ///< col, row, dx, dy at +0..+3
-  kWantCol = 0x6637,        ///< where the step would land, before the walls
-  kWantRow = 0x6638,        ///< get a say
-  kBounceBlocked = 0x6c4a,  ///< that cell was occupied, so reflect instead
-};
 
-/* --- The auto-steer's answers --------------------------------------------- */
-enum {
-  /// The direction $6A32 settled on. game_move_ok and key_for_direction both
-  /// read it back rather than being passed it.
-  kSteerDir = 0x6b38,
-  /// The apple sweep's cursor, left wherever the search stopped...
-  kSearchCol = 0x6b39,
-  kSearchRow = 0x6b3a,
-  /// ...and the answer, which $6A25 copies out of it. Two pairs holding the
-  /// same cell on exit, but only this one is what the steer reads.
-  kAppleCol = 0x6b3b,
-  kAppleRow = 0x6b3c,
-};
+/* --- The auto-steer's answer ---------------------------------------------- */
+/*
+ * $6B38-$6B3C. $6B39/$6B3A were the apple sweep's cursor, left wherever the
+ * search stopped, and went the same way as the three above: written at the end
+ * of the sweep, read by nothing. $6B3B/$6B3C are the answer and are real.
+ */
 
-/* --- Sound ---------------------------------------------------------------- */
-enum {
-  kTonePeriod = 0x6c46,    ///< and the on/off switch: 0 is silent
-  kToneCountdown = 0x6c47, ///< passes left before the next click
-  kTonePasses = 0x6c48,    ///< how many passes one tick of the tone runs
-  kClickPort = 0x6c49,     ///< $30 the speaker, $20 the cassette, i.e. muted
-  kSoundMuted = 0x69c2,    ///< toggled by Ctrl-S
-};
+/// The direction $6A32 settled on. game_move_ok and key_for_direction both
+/// read it back rather than being passed it.
+static uint8_t s_steer_dir = 0x02;
+
+/// The cell the sweep decided to steer towards.
+static Cell s_apple = {.col = 0x13, .row = 0x1d};
+
+/* --- Sound: $6C46-$6C49 and $69C2 ----------------------------------------- */
+
+/// The tone's period, and its on/off switch: 0 is silent.
+static uint8_t s_tone_period;
+/// Passes left before the next click.
+static uint8_t s_tone_countdown;
+/// How many passes one tick of the tone runs.
+static uint8_t s_tone_passes = 0x0f;
+/// Where the click goes, as the low byte of the soft switch: $30 the speaker,
+/// $20 the cassette, which is to say muted.
+static uint8_t s_click_port = 0x20;
+/// Toggled by Ctrl-S.
+static bool s_sound_muted;
 
 /// $6C71 -- the player chose the joystick at the setup prompt.
-enum { kJoystick = 0x6c71 };
+static bool s_joystick_selected;
 
 /// $3754 and $3757 -- the address operands of the LDA and STA in the
 /// relocation loop, which the loop increments to walk eight pages instead of
@@ -2402,8 +2380,8 @@ uint8_t game_start_life(uint8_t head_col) {
   // Opposite corners, converging. The original's nine stores are these two.
   const Bouncer a = {.col = 0x01, .row = 0x01, .dx = +1, .dy = +1};
   const Bouncer b = {.col = 0x26, .row = 0x01, .dx = -1, .dy = +1};
-  bouncer_store(0, a);
-  bouncer_store(1, b);
+  s_bouncers[0] = a;
+  s_bouncers[1] = b;
 
   // $6630 `LDA #$14`. Its one caller, $6256, stores this as the tail column;
   // it is not related to head_col, which happens to be $14 as well.
@@ -2440,12 +2418,9 @@ void game_install_cout_vector(void) {
 /* What the original spends bytes on and this does not: $6633-$6636 are a      */
 /* parameter block the caller copies in and out, $6637/$6638 are the candidate */
 /* cell, and $6C4A counts how many axes were blocked. All five are locals in   */
-/* any language with a stack.                                                 */
-/*                                                                            */
-/* Two of them still have to be written back. ram.probe hashes $6000-$BFFF,    */
-/* so the residue the original leaves in $6637/$6638 and $6C4A is compared;    */
-/* the values are computed as locals here and mirrored at the end. Those       */
-/* writes go away when the memory oracle does, and not before.                */
+/* any language with a stack, and all five are locals here -- the parameter    */
+/* block is the argument, and the other three were mirrored back only for as   */
+/* long as the memory oracle hashed the bytes.                                */
 /*                                                                            */
 /* The plots go through plot_at and plot_shape_at. Which one a call uses is    */
 /* the point: the erase at $654C deliberately does *not* name a shape. It      */
@@ -2490,7 +2465,6 @@ void bouncer_step(Bouncer *b) {
 
   if (b->row == 0) {
     TICK(6);
-    ram_poke(kBounceBlocked, 0x00);
     return;
   }
   TICK(1);
@@ -2564,9 +2538,6 @@ void bouncer_step(Bouncer *b) {
   if (want_row == 0) {
     // Off the board: not redrawn, and the position is not committed.
     TICK(6);
-    ram_poke(kWantCol, want_col);
-    ram_poke(kWantRow, want_row);
-    ram_poke(kBounceBlocked, (uint8_t)blocked);
     return;
   }
   TICK(1);
@@ -2587,9 +2558,6 @@ void bouncer_step(Bouncer *b) {
   rom_plot();
 
   TICK(6);
-  ram_poke(kWantCol, want_col);
-  ram_poke(kWantRow, want_row);
-  ram_poke(kBounceBlocked, (uint8_t)blocked);
 }
 
 /* --- The scoreboard: $7252-$7266 ------------------------------------------ */
@@ -2847,12 +2815,7 @@ void game_find_nearest_apple(void) {
   }
 
   TICK(22);
-  // The cursor is scratch, but ram.probe hashes $6000-$BFFF, so what the
-  // original left there is still compared.
-  ram_poke(kSearchCol, c.col);
-  ram_poke(kSearchRow, c.row);
-  ram_poke(kAppleCol, c.col);
-  ram_poke(kAppleRow, c.row);
+  s_apple = c;
 }
 
 /* ========================================================================== */
@@ -2890,8 +2853,6 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
       .row = (uint8_t)(kRowDelta[dir] + s_head.row),
   };
   s_status_v = ovf8(target.row, kRowDelta[dir], s_head.row);
-  ram_poke(kWantCol, target.col);
-  ram_poke(kWantRow, target.row);
 
   const uint8_t cell = cell_at(target);
   *cell_out = cell;
@@ -2910,7 +2871,6 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
   TICK(1);
 
   TICK(12);
-  ram_poke(kBounceBlocked, 0x00);
   if (target.row == 0) {
     // Row 0 is the top border; there is nothing above it to look at.
     TICK(1);
@@ -2935,7 +2895,6 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
     if (v == 0x00) {
       GAME_CYCLES(kNeighbour[i].inc_block, 6);
       ++free_neighbours;
-      ram_poke(kBounceBlocked, (uint8_t)free_neighbours);
     } else {
       GAME_CYCLES(kNeighbour[i].edge, 1);
     }
@@ -3050,7 +3009,7 @@ static uint8_t script_byte(uint16_t ret) {
 /// Graphics, hi-res, page 2, full screen. The reads are the writes.
 static void select_hires_page2(void) {
   TICK(32);
-  ram_poke(kTonePeriod, 0x00);
+  s_tone_period = 0x00;
   io_peek(0xc050);
   io_peek(0xc057);
   io_peek(0xc055);
@@ -3550,27 +3509,18 @@ uint8_t game_lores_vline_native(Cell c, uint8_t to_row) {
 /* $6594 -- step the bouncers, then take a key                                */
 /* ========================================================================== */
 
-/// Move one bouncer through the $6633-$6636 parameter block that $64C8's
-/// adapter still reads. The load and store either side are the original's own
-/// eight ram_pokes, which is what a struct copy looks like without structs.
+/// Move one bouncer. The original copies it into the parameter block at
+/// $6633-$6636, calls $64C8, and copies it back out; those eight ram_pokes
+/// were what a struct copy looks like without structs, and the block is the
+/// argument now.
 static void step_bouncer_slot(int slot, uint16_t block, uint16_t cycles, uint16_t ret,
                               uint16_t back_block, uint16_t back_cycles) {
   GAME_CYCLES(block, cycles);
-  const Bouncer in = bouncer_load(slot);
-  ram_poke(kBouncer, in.col);
-  ram_poke(kBouncer + 1, in.row);
-  ram_poke(kBouncer + 2, (uint8_t)in.dx);
-  ram_poke(kBouncer + 3, (uint8_t)in.dy);
-  game_move_bouncer();
+  Bouncer b = s_bouncers[slot];
+  game_move_bouncer(&b);
 
   GAME_CYCLES(back_block, back_cycles);
-  const Bouncer out = {
-      .col = ram_peek(kBouncer),
-      .row = ram_peek(kBouncer + 1),
-      .dx = (int8_t)ram_peek(kBouncer + 2),
-      .dy = (int8_t)ram_peek(kBouncer + 3),
-  };
-  bouncer_store(slot, out);
+  s_bouncers[slot] = b;
 }
 
 /// $6200 -- take the next key out of the ring buffer game_read_key fills.
@@ -3663,15 +3613,6 @@ enum { kCodeJoystickOn = 0x80, kCodeJoystickOff = 0x8b };
 /// at $6253, which ends the game in progress.
 enum { kCodeStop = 0x92 };
 
-/// $6C71 -- set once the player has chosen the joystick.
-static bool joystick_selected(void) {
-  return ram_peek(kJoystick) != 0;
-}
-
-static void select_joystick(bool on) {
-  ram_poke(kJoystick, on ? 0x01 : 0x00);
-}
-
 /// $0302 -- attract mode: nobody answered the difficulty prompt before it
 /// timed out, so the game is playing itself. Any input at all ends it, which
 /// is why the whole key table is skipped below.
@@ -3693,7 +3634,7 @@ uint8_t game_read_direction_native(uint8_t key) {
 
   if (attract_mode()) {
     TICK(6);
-    if (joystick_selected()) {
+    if (s_joystick_selected) {
       TICK(6);
       if (switch_pressed(0xc061)) {
         TICK(12);
@@ -3745,7 +3686,7 @@ uint8_t game_read_direction_native(uint8_t key) {
   TICK(4);
   if (code == kCodeJoystickOn) {
     TICK(12);
-    select_joystick(true);
+    s_joystick_selected = true;
     return 0x01;
   }
   TICK(1);
@@ -3753,7 +3694,7 @@ uint8_t game_read_direction_native(uint8_t key) {
   TICK(4);
   if (code == kCodeJoystickOff) {
     TICK(12);
-    select_joystick(false);
+    s_joystick_selected = false;
     return 0x00;
   }
   TICK(1);
@@ -3767,7 +3708,7 @@ uint8_t game_read_direction_native(uint8_t key) {
   TICK(1);
 
   TICK(6);
-  const uint8_t joystick = ram_peek(kJoystick);
+  const bool joystick = s_joystick_selected;
   if (!joystick) {
     TICK(8);
     return code;
@@ -3980,70 +3921,38 @@ uint8_t game_edit_key_native(uint8_t slot) {
 /* $6BFB -- the falling tone                                                  */
 /* ========================================================================== */
 
-/// The whole tone is four bytes. $6C46 is the period, and doubles as the
-/// on/off switch: game_mark_head raises it to 1 when the head moves and
-/// game_draw_playfield clears it, so the sound follows the snake and stops
-/// with it.
-static uint8_t tone_period(void) {
-  return ram_peek(kTonePeriod);
-}
-
-static void set_tone_period(uint8_t v) {
-  ram_poke(kTonePeriod, v);
-}
-
-/// Passes left before the next click.
-static uint8_t tone_countdown(void) {
-  return ram_peek(kToneCountdown);
-}
-
-static void set_tone_countdown(uint8_t v) {
-  ram_poke(kToneCountdown, v);
-}
-
-/// Where the click goes, as the low byte of the soft switch: $C030 is the
-/// speaker and $C020 the cassette output, which nobody can hear. Muting is
-/// therefore a store rather than a branch, and the click itself is one indexed
-/// read -- see the $7642 header for why that shape was chosen.
-static void set_click_port(uint8_t lo) {
-  ram_poke(kClickPort, lo);
-}
-
-/// $69C2 -- toggled by Ctrl-S at $69B9.
-static bool sound_muted(void) {
-  return ram_peek(kSoundMuted) != 0;
-}
-
-/// $69B9 -- flip it. The storage stays in emulated RAM rather than becoming a
-/// C variable because ram.probe hashes $6000-$BFFF, so moving it would read as
-/// a divergence rather than as a refactor.
-static void toggle_sound(void) {
-  ram_poke(kSoundMuted, (uint8_t)(ram_peek(kSoundMuted) ^ 0x01));
-}
+/* The whole tone is four bytes, declared up with the rest of the state.       */
+/* s_tone_period doubles as the on/off switch: game_mark_head raises it to 1   */
+/* when the head moves and game_draw_playfield clears it, so the sound follows */
+/* the snake and stops with it. s_click_port is where the click goes, as the   */
+/* low byte of the soft switch: $C030 is the speaker and $C020 the cassette    */
+/* output, which nobody can hear -- so muting is a store rather than a branch, */
+/* and the click itself is one indexed read. See the $7642 header for why that */
+/* shape was chosen.                                                          */
 
 void game_tick_sound_native(void) {
   TICK(6);
-  ram_poke(kTonePasses, 0x14); // twenty
+  s_tone_passes = 0x14; // twenty
 
   for (;;) {
     TICK(6);
-    const uint8_t period = tone_period();
+    const uint8_t period = s_tone_period;
     if (period) {
       TICK(4);
       if (period < 0x80) {
         TICK(8);
-        const uint8_t left = (uint8_t)(tone_countdown() - 1);
-        set_tone_countdown(left);
+        const uint8_t left = (uint8_t)(s_tone_countdown - 1);
+        s_tone_countdown = left;
         if (!left) {
           TICK(28);
-          const uint8_t port = ram_peek(kClickPort);
+          const uint8_t port = s_click_port;
           s_y = port; // live out of this routine; the click is `LDA $C000,Y`
           peek((uint16_t)(0xc000 + port));
 
           // Two INC $6C46: every click lengthens the period, so the pitch
           // falls for as long as the head keeps moving.
-          set_tone_period((uint8_t)(tone_period() + 2));
-          set_tone_countdown(tone_period());
+          s_tone_period = (uint8_t)(s_tone_period + 2);
+          s_tone_countdown = s_tone_period;
         } else {
           TICK(1);
         }
@@ -4055,24 +3964,24 @@ void game_tick_sound_native(void) {
     }
 
     TICK(8);
-    if (tone_period() >= 0x80) {
+    if (s_tone_period >= 0x80) {
       // Fallen off the bottom of the range: silence until something restarts
       // it. $80 is reached from below in steps of two, so this is the end of
       // one slide rather than a wrap.
       TICK(6);
-      set_tone_period(0x00);
+      s_tone_period = 0x00;
     } else {
       TICK(1);
     }
 
     // Chosen afresh every pass, and defaulting to inaudible.
     TICK(12);
-    set_click_port(0x20);
+    s_click_port = 0x20;
     if (!attract_mode()) {
       TICK(6);
-      if (!sound_muted()) {
+      if (!s_sound_muted) {
         TICK(6);
-        set_click_port(0x30);
+        s_click_port = 0x30;
       } else {
         TICK(1);
       }
@@ -4081,8 +3990,8 @@ void game_tick_sound_native(void) {
     }
 
     TICK(8);
-    const uint8_t left = (uint8_t)(ram_peek(kTonePasses) - 1);
-    ram_poke(kTonePasses, left);
+    const uint8_t left = (uint8_t)(s_tone_passes - 1);
+    s_tone_passes = left;
     if (!left)
       break;
     TICK(1);
@@ -4415,7 +4324,7 @@ void game_mark_head_native(void) {
 
   TICK(16);
   ram_poke(kHeadMoved, 0x01);
-  ram_poke(kTonePeriod, 0x01);
+  s_tone_period = 0x01;
 
   // A and its flags are live out of $6BEF, unlike almost everything else here.
   s_a = 0x01;
@@ -4541,7 +4450,7 @@ void game_sound_sweep_native(void) {
     // $30 here would pass too, and that would be a real bug: the mute would
     // stop working and no oracle in this repo looks at sound.
     TICK(12);
-    peek((uint16_t)(0xc000 + ram_peek(kClickPort)));
+    peek((uint16_t)(0xc000 + s_click_port));
     if (--x)
       TICK(1);
   } while (x);
@@ -4558,7 +4467,7 @@ void game_sound_sweep_native(void) {
     } while (y);
 
     TICK(12);
-    port = ram_peek(kClickPort);
+    port = s_click_port;
     last = peek((uint16_t)(0xc000 + port));
     if (++x)
       TICK(1);
@@ -4884,7 +4793,7 @@ static uint8_t scrn_cell(Cell c) {
 /// database resolves the $C000 to KBD, so the disassembly reads `LDA KBD,Y`
 /// and the index is what makes it the speaker.
 static void click_speaker(void) {
-  peek(0xc000 + ram_peek(kClickPort));
+  peek(0xc000 + s_click_port);
 }
 
 /* ========================================================================== */
@@ -4938,7 +4847,7 @@ uint8_t game_pause_or_toggle_sound_native(uint8_t key) {
   TICK(4);
   if (key == KEY_CTRL_S) {
     TICK(10);
-    toggle_sound();
+    s_sound_muted = !s_sound_muted;
   } else {
     TICK(1);
   }
@@ -5350,7 +5259,7 @@ static bool steer_try(
     uint16_t after_addr,
     unsigned after_cycles) {
   GAME_CYCLES(before_addr, before_cycles);
-  ram_poke(kSteerDir, dir);
+  s_steer_dir = dir;
   { // was game_move_ok()
     bool branchTarget = true;
   (void)branchTarget;
@@ -5363,7 +5272,7 @@ static bool steer_try(
     }
 
     uint8_t cell = 0;
-    const MoveVerdict v = snake_move_verdict(ram_peek(kSteerDir), &cell);
+    const MoveVerdict v = snake_move_verdict(s_steer_dir, &cell);
 
     // Turn the verdict back into what the callers at $6A40 branch on.
     switch (v) {
@@ -5395,8 +5304,8 @@ static bool steer_try(
 
 SteerChoice game_auto_steer(uint8_t *key_out) {
   TICK(10);
-  const uint8_t apple_row = ram_peek(kAppleRow);
-  const uint8_t apple_col = ram_peek(kAppleCol);
+  const uint8_t apple_row = s_apple.row;
+  const uint8_t apple_col = s_apple.col;
   const uint8_t head_row = s_head.row;
   const uint8_t head_col = s_head.col;
 
@@ -5481,7 +5390,7 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
   // $6A48 -- a direction was accepted. Already going that way means there is
   // nothing to say; otherwise name the key that turns to it.
   TICK(10);
-  const uint8_t dir = ram_peek(kSteerDir);
+  const uint8_t dir = s_steer_dir;
   if (dir == s_direction) {
     TICK(1);
     TICK(6);
@@ -5905,7 +5814,7 @@ wait: /* $741C */
     // $7428 -- once the inner counter wraps, try the joystick, if one is
     // selected. Each button stands in for a digit.
     TICK(6);
-    if (ram_peek(kJoystick)) {
+    if (s_joystick_selected) {
       TICK(10);
       io_peek(0xc05b);
       if (!(io_peek(0xc062) & 0x80)) {
@@ -6439,7 +6348,7 @@ void game_print_inline_str(uint16_t ret_addr) {
 /*   back the way it came.                                                    */
 /* ========================================================================== */
 
-void game_move_bouncer(void) {
+void game_move_bouncer(Bouncer *b) {
   // Adapter. The body is bouncer_step() in game_native.c.
   //
   // Cost: the trace gives up every block head in here except $64C8's, which
@@ -6447,9 +6356,6 @@ void game_move_bouncer(void) {
   // with GAME_CYCLES -- so the frame hashes and the memory samples are
   // unaffected.
   //
-  // $6633-$6636 is the original's parameter block, so the marshalling here is
-  // literally a load and a store of the struct its caller already copies in
-  // and out by hand.
   bool branchTarget = true;
   (void)branchTarget;
 
@@ -6460,25 +6366,13 @@ void game_move_bouncer(void) {
     abort();
   }
 
-  Bouncer b = {
-      .col = ram_peek(kBouncer),
-      .row = ram_peek(kBouncer + 1),
-      .dx = (int8_t)ram_peek(kBouncer + 2),
-      .dy = (int8_t)ram_peek(kBouncer + 3),
-  };
-
   // The state the original leaves behind: A holds the row it loaded first, and
   // the flags come from that load.
-  s_a = b.row;
-  s_status_not_z = b.row;
-  s_status_n = (b.row & 0x80);
+  s_a = b->row;
+  s_status_not_z = b->row;
+  s_status_n = (b->row & 0x80);
 
-  bouncer_step(&b);
-
-  ram_poke(kBouncer, b.col);
-  ram_poke(kBouncer + 1, b.row);
-  ram_poke(kBouncer + 2, (uint8_t)b.dx);
-  ram_poke(kBouncer + 3, (uint8_t)b.dy);
+  bouncer_step(b);
 }
 
 /* ========================================================================== */
@@ -6900,7 +6794,7 @@ ended: /* $7847 */
   game_print_inline_str(0x7867);
   for (;;) {
     TICK(6);
-    if (ram_peek(kJoystick)) {
+    if (s_joystick_selected) {
       TICK(6);
       // The button reads with bit 7 *clear* when pressed on this path.
       if (!(io_peek(0xc061) & 0x80)) {

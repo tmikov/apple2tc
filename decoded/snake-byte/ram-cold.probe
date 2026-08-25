@@ -92,11 +92,19 @@ probe mem(
     #              timer and how the life ended. The two delta tables below
     #              them ($6232-$623B) are read-only and stay hashed.
     # $6473        s_click_count
+    # $6633-$6640  the bouncer parameter block, the step's discarded residue
+    #              ($6637/$6638) and the two bouncers themselves
+    # $69C2        s_sound_muted
+    # $6B38-$6B3C  s_steer_dir, s_apple, and the sweep cursor it discarded
+    # $6C46-$6C4A  the tone, the click port, and $6C4A's discarded residue
+    # $6C71        s_joystick_selected
     # $71CB-$71CC  s_apple_value
     # $7252-$7266  the scoreboard: score, high score, apples, lives, level
     # $78B0-$78B2  s_bonus_amount, s_lives_at_level_start
-    game = hash($6000, $623B) ^ hash($6256, $6472) ^ hash($6474, $71CA) ^
-           hash($71CD, $7251) ^ hash($7267, $78AF) ^ hash($78B3, $BFFF)) {
+    game = hash($6000, $623B) ^ hash($6256, $6472) ^ hash($6474, $6632) ^
+           hash($6641, $69C1) ^ hash($69C3, $6B37) ^ hash($6B3D, $6C45) ^
+           hash($6C4B, $6C70) ^ hash($6C72, $71CA) ^ hash($71CD, $7251) ^
+           hash($7267, $78AF) ^ hash($78B3, $BFFF)) {
   printf("%08X %08X %08X %08X %08X %08X %08X %08X\n", zp_a, zp_b, zp_hi, low, txt, aux, hgr, game)
 }
 
