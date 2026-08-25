@@ -2002,23 +2002,123 @@ static uint8_t s_shape_mask[4] = {0xff, 0xff, 0xff, 0xff};
 
 /* --- The game's own tables ------------------------------------------------ */
 /*
- * All of these are data inside the loaded image, read and never written, so
- * they stay where they are: they are the image, not variables that happen to
- * live in it. labels.txt carries the same names for the disassembler.
+ * Read-only data inside the loaded image, and const arrays here. They were
+ * ram_peek(kTable + i) until 2026-08-25, which is what a 6502 has to write and
+ * not what the data is: every one of these is a lookup indexed by a small
+ * integer.
+ *
+ * Every extent below is *derived*, not assumed -- the playbook's own red flag,
+ * because the listing does not delimit a table and a 16-byte one that is
+ * really 128 is invisible until something indexes past 16. Each says where its
+ * end comes from. The bytes are the shipped image's, transcribed from
+ * snake-byte.b33; a wrong byte in any of them moves pixels, and the screen
+ * oracle compares 6,808 and 9,524 samples.
  */
-enum {
-  kHgrLineLo = 0x6000,      ///< 48 hi-res line addresses, low bytes
-  kHgrLineHi = 0x6030,      ///< and high bytes
-  kHgrPattern = 0x6064,     ///< dot patterns, indexed by the dot index
-  kShapeMaskTable = 0x6174, ///< four masks per shape; the source for kShapeMask
-  kSteerKey = 0x6a55,       ///< direction -> the key that turns to it
-  kAppleValueTable = 0x71c8, ///< per-apple value, indexed by s_difficulty
-  kKeyDefaults = 0x6c6a,    ///< the same six as shipped; never written
-  kKeyCH = 0x75b3,          ///< redefinition screen: where each slot's key
-  kKeyCV = 0x75b9,          ///< ... and its arrow are printed
-  kArrowCH = 0x75bf,
-  kArrowCV = 0x75c5,
-  kArrowGlyph = 0x75cb,     ///< which arrow glyph each slot blinks
+
+/// $6000/$6030 -- each hi-res cell row's base address, split into low and high
+/// halves. 48 rows; kHgrLineHi ends at $605F where the shape masks began.
+static const uint8_t kHgrLineLo[48] = {
+    0x00, 0x00, 0x80, 0x80, 0x00, 0x00, 0x80, 0x80, 0x00, 0x00, 0x80, 0x80,
+    0x00, 0x00, 0x80, 0x80, 0x28, 0x28, 0xa8, 0xa8, 0x28, 0x28, 0xa8, 0xa8,
+    0x28, 0x28, 0xa8, 0xa8, 0x28, 0x28, 0xa8, 0xa8, 0x50, 0x50, 0xd0, 0xd0,
+    0x50, 0x50, 0xd0, 0xd0, 0x50, 0x50, 0xd0, 0xd0, 0x50, 0x50, 0xd0, 0xd0,
+};
+static const uint8_t kHgrLineHi[48] = {
+    0x20, 0x30, 0x20, 0x30, 0x21, 0x31, 0x21, 0x31, 0x22, 0x32, 0x22, 0x32,
+    0x23, 0x33, 0x23, 0x33, 0x20, 0x30, 0x20, 0x30, 0x21, 0x31, 0x21, 0x31,
+    0x22, 0x32, 0x22, 0x32, 0x23, 0x33, 0x23, 0x33, 0x20, 0x30, 0x20, 0x30,
+    0x21, 0x31, 0x21, 0x31, 0x22, 0x32, 0x22, 0x32, 0x23, 0x33, 0x23, 0x33,
+};
+
+/// $6064 -- dot patterns, indexed by dot_index(): ink 0-15, scanline parity,
+/// column mod 4, so ((15*2+1)<<2)|3 == 127 is the largest index and the table
+/// is exactly 128. known-data.txt says the same: "ends exactly at hgr_draw".
+static const uint8_t kHgrPattern[128] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x88, 0x91, 0xa2, 0xc4,
+    0xa2, 0xc4, 0x88, 0x91, 0xc4, 0x88, 0x91, 0xa2, 0x91, 0xa2, 0xc4, 0x88,
+    0x55, 0x2a, 0x55, 0x2a, 0x55, 0x2a, 0x55, 0x2a, 0x08, 0x11, 0x22, 0x44,
+    0x22, 0x44, 0x08, 0x11, 0x2a, 0x55, 0x2a, 0x55, 0x55, 0x2a, 0x55, 0x2a,
+    0xd5, 0xaa, 0xd5, 0xaa, 0xd5, 0xaa, 0xd5, 0xaa, 0xf7, 0xee, 0xdd, 0xbb,
+    0xdd, 0xbb, 0xf7, 0xee, 0x11, 0x22, 0x44, 0x08, 0x44, 0x08, 0x11, 0x22,
+    0xaa, 0xd5, 0xaa, 0xd5, 0xaa, 0xd5, 0xaa, 0xd5, 0x33, 0x66, 0x4c, 0x19,
+    0x4c, 0x19, 0x33, 0x66, 0xaa, 0xd5, 0xaa, 0xd5, 0x55, 0x2a, 0x55, 0x2a,
+    0x2a, 0x55, 0x2a, 0x55, 0x2a, 0x55, 0x2a, 0x55, 0xaa, 0xd5, 0xaa, 0xd5,
+    0x2a, 0x55, 0x2a, 0x55, 0x3b, 0x77, 0x6e, 0x5d, 0x6e, 0x5d, 0x3b, 0x77,
+    0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f,
+};
+
+/// $6174 -- four AND masks per shape, indexed (shape << 2) + line.
+///
+/// The extent is the one that had to be worked out rather than looked up. The
+/// data ends at $61DF -- 27 shapes, the last of them $1A, which is the largest
+/// the code names. But game_play_loop draws the tail with shape `ahead + $0C`,
+/// where `ahead` is a lo-res cell and so 0-15, which reaches shape $1B and
+/// index 111. $61E0-$61FF is zero, and $6200 is code (dequeue_key). So the
+/// table runs to the code boundary, indices 108-139 are the padding the
+/// original reads in that case, and nothing can index past it: the byte
+/// arithmetic wraps at 256, but shape is bounded by $1B.
+static const uint8_t kShapeMaskTable[140] = {
+    0x00, 0x00, 0x00, 0x00, 0x8c, 0xbf, 0x8c, 0x00, 0x00, 0x8c, 0xbf, 0x8c,
+    0x98, 0xfe, 0x98, 0x00, 0x8c, 0xbf, 0x8c, 0x00, 0xb3, 0xb0, 0x8f, 0x00,
+    0x8f, 0xb0, 0xb3, 0xb3, 0xfc, 0x83, 0xf3, 0xb3, 0xf3, 0x83, 0xfc, 0x00,
+    0xff, 0x00, 0xff, 0x00, 0xb3, 0xb3, 0xb3, 0xb3, 0xff, 0x00, 0xff, 0x00,
+    0xb3, 0xb3, 0xb3, 0xb3, 0xe0, 0xff, 0xe0, 0x00, 0xbf, 0x0c, 0x0c, 0x0c,
+    0x83, 0xff, 0x83, 0x00, 0x0c, 0x0c, 0x0c, 0xbf, 0x8f, 0xb0, 0xb3, 0xb3,
+    0xfc, 0x83, 0xf3, 0xb3, 0xf3, 0x83, 0xfc, 0x00, 0xb3, 0xb0, 0x8f, 0x00,
+    0xff, 0xff, 0xff, 0xff, 0xe0, 0xf8, 0xfe, 0xff, 0xff, 0xbf, 0x0f, 0x03,
+    0x03, 0x0f, 0xbf, 0xff, 0xff, 0xfe, 0xf8, 0xe0, 0x9c, 0xe3, 0xe3, 0x9c,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+};
+
+/// $6387/$638C/$6391/$6396 -- one five-entry table per absolute-direction key,
+/// giving the relative turn that achieves it from the current direction, or
+/// $00 for "nothing to do". Five bytes each because they are indexed by
+/// direction 1-4 with entry 0 unused; $639B is code, which is where the fourth
+/// one ends.
+static const uint8_t kTurnForKey[4][5] = {
+    {0x00, 0x88, 0x00, 0x95, 0x00,},
+    {0x00, 0x00, 0x88, 0x00, 0x95,},
+    {0x00, 0x00, 0x95, 0x00, 0x88,},
+    {0x00, 0x95, 0x00, 0x88, 0x00,},
+};
+
+/// $6A55 -- direction to the key that turns to it. known-data.txt derives the
+/// five bytes from the LDA $6A55,X that reads them.
+static const uint8_t kSteerKey[5] = {
+    0x00, 0xcb, 0xc9, 0xca, 0xcd,
+};
+
+/// $6C6A -- the six keys as shipped. The live six at $6C63 are s_key_table,
+/// which the redefinition screen writes; these are never written.
+static const uint8_t kKeyDefaults[6] = {
+    0xc9, 0xca, 0xcb, 0xcd, 0x88, 0x95,
+};
+
+/// $71C8 -- what one apple is worth, indexed by difficulty 0-2. Three bytes:
+/// $71CB is s_apple_value, which is where the table stops.
+static const uint8_t kAppleValueTable[3] = {
+    0x10, 0x15, 0x20,
+};
+
+/// $75B3-$75D0 -- the redefinition screen's layout, five six-entry tables, one
+/// per slot: where the key is printed, where its arrow is, and which glyph the
+/// arrow uses. known-data.txt derives the span.
+static const uint8_t kKeyCH[6] = {
+    0x0a, 0x06, 0x0e, 0x0a, 0x1a, 0x22,
+};
+static const uint8_t kKeyCV[6] = {
+    0x05, 0x09, 0x09, 0x0d, 0x09, 0x09,
+};
+static const uint8_t kArrowCH[6] = {
+    0x0a, 0x08, 0x0c, 0x0a, 0x1c, 0x20,
+};
+static const uint8_t kArrowCV[6] = {
+    0x07, 0x09, 0x09, 0x0b, 0x09, 0x09,
+};
+static const uint8_t kArrowGlyph[6] = {
+    0xe2, 0xe4, 0xe5, 0xe3, 0xe4, 0xe5,
 };
 
 /* --- What the bouncer step left behind ------------------------------------ */
@@ -2224,7 +2324,7 @@ void game_load_shape_masks(uint8_t shape) {
   // Four masks per shape at $6174, into the four the plotter reads.
   uint8_t last = 0;
   for (unsigned line = 0; line < 4; ++line) {
-    last = ram_peek(kShapeMaskTable + (uint8_t)((uint8_t)(shape << 2) + line));
+    last = kShapeMaskTable[(uint8_t)((uint8_t)(shape << 2) + line)];
     s_shape_mask[line] = last;
   }
 }
@@ -3103,7 +3203,7 @@ restart:
 
 /// The address of a cell row's first scanline, from the split table.
 static uint16_t cell_row_base(uint8_t row) {
-  return (uint16_t)(ram_peek(kHgrLineLo + row) | (ram_peek(kHgrLineHi + row) << 8));
+  return (uint16_t)(kHgrLineLo[row] | (kHgrLineHi[row] << 8));
 }
 
 /// Index into the 128-byte dot table at $6064: 16 inks of 8, four column
@@ -3126,7 +3226,7 @@ void game_draw_cell_native(uint8_t ink, Cell c) {
     TICK(62);
     const uint8_t idx = dot_index(ink, (uint8_t)line, c.col);
 
-    poke(dest + c.col, (uint8_t)(ram_peek(kHgrPattern + idx) & s_shape_mask[line]));
+    poke(dest + c.col, (uint8_t)(kHgrPattern[idx] & s_shape_mask[line]));
     dest += 0x0400; // one scanline down, i.e. +4 on the high byte
 
     if (line != 3)
@@ -3158,7 +3258,7 @@ void game_merge_cell_native(uint8_t ink, Cell c) {
 
     const uint16_t at = dest + c.col;
     poke(at,
-         (uint8_t)(((ram_peek(kHgrPattern + idx) ^ 0x7f) & s_shape_mask[line]) | peek(at)));
+         (uint8_t)(((kHgrPattern[idx] ^ 0x7f) & s_shape_mask[line]) | peek(at)));
     dest += 0x0400;
 
     if (line != 3)
@@ -3367,7 +3467,7 @@ static uint8_t input_key(int i) {
 }
 
 static uint8_t input_code(int i) {
-  return ram_peek(kKeyDefaults + i);
+  return kKeyDefaults[i];
 }
 
 /// The two codes that are settings rather than directions.
@@ -3546,15 +3646,15 @@ uint8_t game_read_direction_native(uint8_t key) {
 /// game's own hi-res COUT, which is why the player knows which key is being
 /// asked for.
 static uint8_t slot_col(int slot) {
-  return ram_peek(kArrowCH + slot);
+  return kArrowCH[slot];
 }
 
 static uint8_t slot_row(int slot) {
-  return ram_peek(kArrowCV + slot);
+  return kArrowCV[slot];
 }
 
 static uint8_t slot_glyph(int slot) {
-  return ram_peek(kArrowGlyph + slot);
+  return kArrowGlyph[slot];
 }
 
 /// Both halves of the blink count X down to zero 256 times, and the X they
@@ -4024,7 +4124,7 @@ void game_set_apple_value_native(void) {
   TICK(20);
   s_apple_value[0] = 0x00;
   s_apple_value[1] = 0x00;
-  const uint8_t per_apple = ram_peek(kAppleValueTable + s_difficulty);
+  const uint8_t per_apple = kAppleValueTable[s_difficulty];
   uint8_t levels = s_script_index;
   s_status_d = 0x01;
 
@@ -4203,8 +4303,8 @@ void game_show_key_native(uint8_t slot, uint8_t key) {
 
   TICK(23);
   s_x = slot; // read back by the COUT hook, which is why it is set here
-  s_ch = ram_peek(kKeyCH + slot);
-  s_cv = ram_peek(kKeyCV + slot);
+  s_ch = kKeyCH[slot];
+  s_cv = kKeyCV[slot];
   rom_fc68();
 
   TICK(10);
@@ -4429,24 +4529,18 @@ enum {
 /// turn that achieves it from \p dir, or $00 for "nothing to do", which covers
 /// both "already going that way" and "that would be a reversal".
 static uint8_t turn_for_key(uint8_t key, uint8_t dir) {
-  uint16_t table;
   switch (key) {
   case KEY_UP:
-    table = 0x6387;
-    break;
+    return kTurnForKey[0][dir];
   case KEY_LEFT:
-    table = 0x638c;
-    break;
+    return kTurnForKey[1][dir];
   case KEY_RIGHT:
-    table = 0x6391;
-    break;
+    return kTurnForKey[2][dir];
   case KEY_DOWN:
-    table = 0x6396;
-    break;
+    return kTurnForKey[3][dir];
   default:
     return 0;
   }
-  return ram_peek(table + dir);
 }
 
 /// Draw \p shape into \p c with ink \p ink, through the plotter's zero-page
@@ -4889,7 +4983,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
 /// $6A55 -- the absolute-direction key that turns the snake to face \p dir.
 /// Index 0 is unused; the four that matter are the I/J/K/M diamond.
 static uint8_t key_for_direction(uint8_t dir) {
-  return ram_peek(kSteerKey + dir);
+  return kSteerKey[dir];
 }
 
 /// Propose \p dir and report whether the move is allowed.

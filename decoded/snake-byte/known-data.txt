@@ -49,3 +49,17 @@
 6C63 6C71 tbl_keys            # current and default key assignments, 6 + 6 bytes
 75B3 75D0 tbl_redefine_screen # CH/CV cursor tables and the arrow glyphs
 6A55 6A59 tbl_6A55            # indexed by $6A51 LDA $6A55,X
+6174 61FF tbl_shape_masks     # four AND masks per shape, indexed (shape<<2)+line.
+                              # Data ends at $61DF (27 shapes, last is $1A, the
+                              # largest the code names), but game_play_loop draws
+                              # the tail with shape `ahead + $0C` where `ahead` is
+                              # a lo-res cell, so 0-15 -- reaching shape $1B and
+                              # index 111. $61E0-$61FF is the zero padding that
+                              # case reads; $6200 is code, which is the end.
+                              # $616B-$6173 above is unreached *code* (LDA $C000 /
+                              # STA $C010 / STA $09 / RTS), not part of this.
+6387 639A tbl_turn_for_key    # four 5-entry tables, one per absolute-direction
+                              # key, indexed by direction 1-4 with entry 0 unused.
+                              # $639B is code, which is where the fourth ends.
+71C8 71CA tbl_apple_value     # per-apple value indexed by difficulty 0-2; $71CB
+                              # is the computed VALUE, which is where it stops.

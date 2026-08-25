@@ -18,6 +18,9 @@ declared data:
   $6C63-$6C71     15 bytes  tbl_keys
   $75B3-$75D0     30 bytes  tbl_redefine_screen
   $6A55-$6A59      5 bytes  tbl_6A55
+  $6174-$61FF    140 bytes  tbl_shape_masks
+  $6387-$639A     20 bytes  tbl_turn_for_key
+  $71C8-$71CA      3 bytes  tbl_apple_value
 
 range $00B1-$00C8  24 bytes
   code                24  100.0%
@@ -27,22 +30,21 @@ range $00B1-$00C8  24 bytes
     (no unidentified nonzero bytes)
 range $3750-$854E  19967 bytes
   code              4244   21.3%
-  declared data    12883   64.5%
-  unknown zero      2389   12.0%
-  unknown nonzero    451    2.3%   <- what is left to identify
+  declared data    13046   65.3%
+  unknown zero      2327   11.7%
+  unknown nonzero    350    1.8%   <- what is left to identify
     $799B-$7FFF   1637 bytes, 275 nonzero
-    $616B-$61FF    149 bytes, 98 nonzero
     $7680-$7690     17 bytes, 17 nonzero
     $6633-$6640     14 bytes, 14 nonzero
     $6232-$6255     36 bytes, 11 nonzero
-    $6387-$639A     20 bytes, 8 nonzero
+    $616B-$6173      9 bytes, 8 nonzero
     $7252-$7266     21 bytes, 6 nonzero
     $6B38-$6B3C      5 bytes, 5 nonzero
-    $71C8-$71CC      5 bytes, 4 nonzero
-    $6C46-$6C4A      5 bytes, 3 nonzero
-    $66A6-$66A8      3 bytes, 3 nonzero
     $3786-$37FF    122 bytes, 3 nonzero
+    $66A6-$66A8      3 bytes, 3 nonzero
+    $6C46-$6C4A      5 bytes, 3 nonzero
     $730C-$730D      2 bytes, 2 nonzero
+    $71CB-$71CC      2 bytes, 1 nonzero
     $73D7-$73D7      1 bytes, 1 nonzero
     $78B0-$78B2      3 bytes, 1 nonzero
 range $D000-$FFFF  12288 bytes
