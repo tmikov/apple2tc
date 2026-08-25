@@ -222,13 +222,13 @@ typedef struct {
 } Bouncer;
 
 void game_cold_start(void);
-void rom_plot(void);
-void rom_hline(void);
-void rom_setcol(void);
-void rom_scrn(void);
+void rom_plot(uint8_t row, uint8_t col);
+void rom_hline(uint8_t row, uint8_t from_col);
+void rom_setcol(uint8_t ink);
+uint8_t rom_scrn(uint8_t row, uint8_t col);
 void rom_home(void);
 void rom_fc68(void);
-void rom_cout(void);
+void rom_cout(uint8_t ch);
 void rom_setkbd(void);
 void rom_setvid(void);
 void game_move_bouncer(Bouncer *b);
@@ -550,18 +550,18 @@ void rom_wait(void) {
 
 
 /// $F800 PLOT. Plot a lo-res block at column Y, row A. Trashes A, preserves Y.
-void rom_plot(void);
+void rom_plot(uint8_t row, uint8_t col);
 
 /// $F819 HLINE. Draw a horizontal lo-res line at row A from column Y to the
 /// column in $2C.
-void rom_hline(void);
+void rom_hline(uint8_t row, uint8_t from_col);
 
 /// $F864 SETCOL. Set the lo-res color to A (low nibble), replicated into both
 /// nibbles of $30.
-void rom_setcol(void);
+void rom_setcol(uint8_t ink);
 
 /// $F871 SCRN. Read the lo-res block at column Y, row A; returns the color in A.
-void rom_scrn(void);
+uint8_t rom_scrn(uint8_t row, uint8_t col);
 
 /// $FC58 HOME. Clear the text window and move the cursor to its top left.
 void rom_home(void);
@@ -581,7 +581,7 @@ void rom_fc68(void);
 /// $FDED COUT. Output the character in A through the output vector CSWL/CSWH
 /// at $36/$37. See the extensive comment in `a2rom.c`: only the ROM COUT1
 /// ($FDF0) target is implemented; any other target aborts loudly.
-void rom_cout(void);
+void rom_cout(uint8_t ch);
 
 /// $FE89 SETKBD. Reset the input vector KSWL/KSWH ($38/$39) to the keyboard.
 void rom_setkbd(void);
@@ -753,7 +753,7 @@ uint8_t game_start_life(uint8_t head_col);
 
 /// $6127 -- copy shape \p shape's four scanline masks into $6060, and return
 /// the last one.
-uint8_t game_load_shape_masks(uint8_t shape);
+void game_load_shape_masks(uint8_t shape);
 
 /// $6641 -- point the ROM's character-output vector at the game's own hi-res
 /// handler, so every later COUT reaches game_cout_hook.
@@ -786,21 +786,21 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out);
 void game_promote_high_score(void);
 
 /// $6148 / $615A -- runs of hi-res cells along a row or down a column.
-uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col);
-uint8_t game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row);
+void game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col);
+void game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row);
 
 /// $7000 -- the lo-res half of a vertical run, restoring $03.
-uint8_t game_lores_vline_native(Cell c, uint8_t to_row);
+void game_lores_vline_native(Cell c, uint8_t to_row);
 
 /// $6594 -- step the bouncers the difficulty calls for, then return the next
 /// queued key.
 uint8_t game_step_bouncers_native(void);
 
 /// $60E7 -- draw the loaded shape into cell \p c in ink \p ink, replacing.
-uint8_t game_draw_cell_native(uint8_t ink, Cell c);
+void game_draw_cell_native(uint8_t ink, Cell c);
 
 /// $6B93 -- the same, merged into what is already there.
-uint8_t game_merge_cell_native(uint8_t ink, Cell c);
+void game_merge_cell_native(uint8_t ink, Cell c);
 
 /// $702B -- zero hi-res page 1.
 void game_clear_hgr_native(void);
@@ -833,7 +833,7 @@ void game_cold_start(void);
 ///
 /// Returns the key the Ctrl-S test actually saw, which is \p key unless ESC
 /// paused: the keypress that ends the pause replaces it and is tested in turn.
-uint8_t game_pause_or_toggle_sound_native(uint8_t key);
+void game_pause_or_toggle_sound_native(uint8_t key);
 
 /// $6BFB -- twenty passes of the falling tone that plays while the head moves.
 void game_tick_sound_native(void);
@@ -852,7 +852,7 @@ void game_add_score_native(void);
 void game_set_ink_native(uint8_t ink);
 
 /// $7019 -- read the byte at the $000A pointer into A and advance it.
-void game_next_byte_native(void);
+uint8_t game_next_byte_native(void);
 
 /// $6C4B -- the game's pseudo-random byte, always $00-$7F.
 uint8_t game_rand_byte_native(void);
@@ -864,7 +864,7 @@ Cell game_place_apple_native(void);
 void game_set_apple_value_native(void);
 
 /// $6BEF -- plot the head on the occupancy map and flag it as newly there.
-void game_mark_head_native(void);
+void game_mark_head_native(uint8_t row, uint8_t col);
 
 /// $6BDA -- draw a cell, merging the head shape over it if the head is on it.
 void game_draw_head_native(uint8_t ink, Cell c);
@@ -882,7 +882,7 @@ void game_sound_sweep_native(void);
 void game_show_key_native(uint8_t slot, uint8_t key);
 
 /// $6B3D -- draw both side walls, and leave SCRN of the bottom-centre cell.
-void game_draw_side_walls_native(void);
+uint8_t game_draw_side_walls_native(void);
 
 /// $6217 -- poll the keyboard and push what it finds into the ring at $623C.
 void game_read_key_native(void);
@@ -1232,10 +1232,11 @@ static void rom_plot1(void) {
 /// keeping the bit on the stack across GBASCALC and then adding $E0 to $0F,
 /// which is $F0 with the carry set and $EF without; only the low bit of the
 /// row can make the difference, so the sum is one of the two masks.
-void rom_plot(void) {
+void rom_plot(uint8_t row, uint8_t col) {
+  s_a = row;
+  s_y = col;
 
   /*$F800*/ TICK(11);
-  const uint8_t row = s_a;
   const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
   s_a = half;
@@ -1289,10 +1290,12 @@ void rom_plot(void) {
 /// same reason game_cold_start's do: the two loops are entered at different
 /// depths and leave through each other, which C's loop forms cannot say
 /// without a flag that the original does not have.
-void rom_hline(void) {
+void rom_hline(uint8_t row, uint8_t from_col) {
+  s_a = row;
+  s_y = from_col;
 
   /*$F819*/ TICK(6);
-  rom_plot();
+  rom_plot(s_a, s_y);
 
 across: /* $F81C -- one column at a time, up to H2 */
   TICK(5);
@@ -1325,7 +1328,7 @@ down: /* $F826 -- one row at a time, up to V2 */
 
   /*$F828*/ TICK(9);
   push8(s_a);
-  /*$F829*/ rom_plot();
+  /*$F829*/ rom_plot(s_a, s_y);
   /*$F82C*/ TICK(9);
   s_a = pop8();
   /*$F82D*/ s_status_c = (uint8_t)(s_a >= s_v2);
@@ -1343,7 +1346,9 @@ done:
 /* $F864 SETCOL                                                               */
 /* ========================================================================== */
 
-void rom_setcol(void) {
+void rom_setcol(uint8_t ink) {
+  s_a = ink;
+
 
   // The lo-res colour is stored in both nibbles, so a PLOT can take whichever
   // half MASK selects without shifting. Four ASLs and an ORA get there; the
@@ -1364,13 +1369,14 @@ void rom_setcol(void) {
 /* $F871 SCRN                                                                 */
 /* ========================================================================== */
 
-void rom_scrn(void) {
+uint8_t rom_scrn(uint8_t row, uint8_t col) {
+  s_a = row;
+  s_y = col;
 
   // The row's low bit says which half of the byte holds this cell, and the
   // ROM keeps it across GBASCALC on the stack -- as the whole status
   // register, because LSR put it in the carry and PHP is one byte.
   /*$F871*/ TICK(11);
-  const uint8_t row = s_a;
   const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
   s_a = half;
@@ -1402,6 +1408,7 @@ void rom_scrn(void) {
   s_a &= 0x0f;
 
   /*$F881*/
+  return s_a;
 }
 
 /* ========================================================================== */
@@ -1859,7 +1866,9 @@ out:
 /// fallback. The recorded session never leaves $FDF0, so `verify.sh` cannot
 /// catch a wrong guess here -- a silent fallback would render with the wrong
 /// font onto the wrong page, undetectably.
-void rom_cout(void) {
+void rom_cout(uint8_t ch) {
+  s_a = ch;
+
   uint16_t vector;
 
   /*$FDED*/ TICK(5);
@@ -2174,6 +2183,9 @@ static uint8_t s_shape;
 /// last used, so passing one would invent a value the original does not have.
 
 
+/// SCRN one cell. Defined further down, next to the plot helpers.
+static uint8_t scrn_cell(Cell c);
+
 /// Plot the loaded shape, or a named one, into a cell. Defined further down,
 /// next to the run helpers; declared here because the bouncers and the snake
 /// use them well before that.
@@ -2276,7 +2288,7 @@ uint8_t game_start_life(uint8_t head_col) {
   return 0x14;
 }
 
-uint8_t game_load_shape_masks(uint8_t shape) {
+void game_load_shape_masks(uint8_t shape) {
   /*$6127*/ TICK(53);
   // Four masks per shape at $6174, into the four the plotter reads.
   uint8_t last = 0;
@@ -2284,7 +2296,6 @@ uint8_t game_load_shape_masks(uint8_t shape) {
     last = ram_peek(kShapeMaskTable + (uint8_t)((uint8_t)(shape << 2) + line));
     s_shape_mask[line] = last;
   }
-  return last;
 }
 
 void game_install_cout_vector(void) {
@@ -2336,10 +2347,7 @@ static int8_t reflect(int8_t d) {
 /// own. Folding them in here is what broke the first attempt -- 4 cycles
 /// missing three times over, and every oracle diverged at once.
 static bool cell_taken(uint8_t col, uint8_t row) {
-  s_a = row;
-  s_y = col;
-  rom_scrn();
-  return s_a != 0x00;
+  return rom_scrn(row, col) != 0x00;
 }
 
 void bouncer_step(Bouncer *b) {
@@ -2402,16 +2410,13 @@ void bouncer_step(Bouncer *b) {
   // Erase where it was. Ink 0 is black, and the shape is whatever the caller
   // last left in $00 -- see the header.
   TICK(11);
-  s_a = 0x00;
-  rom_setcol();
+  rom_setcol(0x00);
 
   TICK(20);
   plot_at(0x00, (Cell){.col = b->col, .row = b->row});
 
   TICK(14);
-  s_a = b->row;
-  s_y = b->col;
-  rom_plot();
+  rom_plot(b->row, b->col);
 
   TICK(11);
   s_shape = 0x1a;
@@ -2426,16 +2431,13 @@ void bouncer_step(Bouncer *b) {
   TICK(29);
   b->row = want_row;
   b->col = want_col;
-  s_a = 0x03;
-  rom_setcol();
+  rom_setcol(0x03);
 
   TICK(6);
   plot_shape_at(0x1a, 0x03, (Cell){.col = b->col, .row = b->row});
 
   TICK(14);
-  s_a = b->row;
-  s_y = b->col;
-  rom_plot();
+  rom_plot(b->row, b->col);
 
   TICK(6);
 }
@@ -2649,10 +2651,7 @@ void game_promote_high_score(void) {
 
 /// The lo-res occupancy map's value at \p c. $0F is an apple.
 static uint8_t cell_at(Cell c) {
-  s_a = c.row;
-  s_y = c.col;
-  rom_scrn();
-  return s_a;
+  return rom_scrn(c.row, c.col);
 }
 
 void game_find_nearest_apple(void) {
@@ -2838,9 +2837,7 @@ static void set_ink(uint8_t ink) {
 
 /// The ROM's HLINE, which takes its right-hand end from $2C.
 static void lores_hline(uint8_t row, uint8_t from_col) {
-  s_a = row;
-  s_y = from_col;
-  rom_hline();
+  rom_hline(row, from_col);
 }
 
 static void assert_binary_mode(const char *who, uint16_t at) {
@@ -2873,25 +2870,20 @@ static void plot_vline_at(uint8_t ink, uint8_t col, uint8_t row, uint8_t to_row)
 }
 
 static void lores_vline_at(uint8_t col, uint8_t row, uint8_t to_row) {
-  { // was game_lores_vline()
-
-    /*$7000*/ TICK(6);
-    const uint8_t restored = game_lores_vline_native((Cell){.col = col, .row = row}, to_row);
-    s_a = restored;
-  }
+  /*$7000*/ TICK(6);
+  // The row it restores was this routine's result in A. Nothing reads it; the
+  // adapter that did has gone.
+  game_lores_vline_native((Cell){.col = col, .row = row}, to_row);
 }
 
 /// The ROM's PLOT.
 static void lores_plot(uint8_t row, uint8_t col) {
-  s_a = row;
-  s_y = col;
-  rom_plot();
+  rom_plot(row, col);
 }
 
 /// $7019 through its adapter: the next display-list byte.
 static uint8_t script_byte(uint16_t ret) {
-  game_next_byte_native();
-  return s_a;
+  return game_next_byte_native();
 }
 
 /// Graphics, hi-res, page 2, full screen. The reads are the writes.
@@ -2904,18 +2896,24 @@ static void select_hires_page2(void) {
   io_peek(0xc052);
 }
 
-/// A plain three-deep delay. Y is the innermost counter and is whatever the
-/// caller left in it -- the original does not initialise it.
+/// A plain three-deep delay, all three counters as arguments.
+///
+/// \p inner is the innermost, and the original does not initialise it -- it
+/// counts down from whatever Y happened to hold. That is not a value the code
+/// can state, so it was measured instead: game_clear_hgr_native's page loop is
+/// what runs immediately before, and it exits with Y wrapped to zero. Asserted
+/// over full runs of both scenarios, where it is zero every time. It is
+/// therefore passed as zero, which counts a full 256.
 ///
 /// The other two were the plotter's column and row, borrowed because zero page
 /// was the only place to put them; $7056 loaded them and $7061 counted them
-/// down. They are parameters. Nothing reads what the loop leaves behind:
-/// wipe_occupancy_map overwrites the row on its first line, open_wall_gaps
-/// touches neither, and the column is not read until draw_border writes it.
-static void spin(uint8_t outer, uint8_t middle) {
+/// down. Nothing reads what the loop leaves behind: wipe_occupancy_map
+/// overwrites the row on its first line, open_wall_gaps touches neither, and
+/// the column is not read until draw_border writes it.
+static void spin(uint8_t inner, uint8_t middle, uint8_t outer) {
   for (;;) {
     TICK(4);
-    if (--s_y) {
+    if (--inner) {
       TICK(1);
       continue;
     }
@@ -3018,12 +3016,12 @@ static void draw_border(uint8_t ink) {
 /// per level below it. DEX first, so level 1 skips nothing.
 static void seek_script(void) {
   TICK(14);
-  s_x = s_script_index;
+  uint8_t left = s_script_index;
   s_script_ptr = 0x8000;
 
   for (;;) {
     TICK(4);
-    if (!--s_x) {
+    if (!--left) {
       TICK(1);
       return;
     }
@@ -3044,7 +3042,7 @@ void game_draw_playfield_native(void) {
   TICK(6);
   game_clear_hgr_native();
   select_hires_page2();
-  spin(0x04, 0x00); // the counts $7056 used to store into $02/$03
+  spin(0x00, 0x00, 0x04); // the counts $7056 used to store into $02/$03
   wipe_occupancy_map();
 
   TICK(21);
@@ -3184,13 +3182,11 @@ static uint8_t dot_index(uint8_t ink, uint8_t scanline, uint8_t col) {
 }
 
 /// $60E7 -- draw the loaded shape into one cell, replacing what was there.
-uint8_t game_draw_cell_native(uint8_t ink, Cell c) {
+void game_draw_cell_native(uint8_t ink, Cell c) {
   /*$60E7*/ TICK(0);
   assert_binary_mode("game_draw_cell", 0x60e7);
-  uint8_t hgr_hi;
   TICK(22);
   uint16_t dest = cell_row_base(c.row);
-  hgr_hi = (uint8_t)(dest >> 8);
 
   for (unsigned line = 0; line < 4; ++line) {
     TICK(16);
@@ -3201,20 +3197,14 @@ uint8_t game_draw_cell_native(uint8_t ink, Cell c) {
 
     poke(dest + c.col, (uint8_t)(ram_peek(kHgrPattern + idx) & s_shape_mask[line]));
     dest += 0x0400; // one scanline down, i.e. +4 on the high byte
-    hgr_hi = (uint8_t)(dest >> 8);
 
     if (line != 3)
       TICK(1);
   }
 
   TICK(6);
-  // What the loop leaves: X counted to 4, Y is the column, A the last
-  // destination high byte, and the flags come from CPX #4.
-  s_x = 0x04;
-  s_y = c.col;
-  s_a = hgr_hi;
+  // The carry is what the loop's CPX #4 leaves.
   s_status_c = 0x01;
-  return hgr_hi;
 }
 
 /// $6B93 -- the same cell, merged instead of replaced: only bits are set, and
@@ -3226,11 +3216,9 @@ uint8_t game_draw_cell_native(uint8_t ink, Cell c) {
 /// The index degenerates to (ink >> 1) * 4 + (col & 3). Changing it to match
 /// $60F7 fails the screen check, so whatever the author meant, it is load
 /// bearing.
-uint8_t game_merge_cell_native(uint8_t ink, Cell c) {
-  uint8_t hgr_hi;
+void game_merge_cell_native(uint8_t ink, Cell c) {
   TICK(22);
   uint16_t dest = cell_row_base(c.row);
-  hgr_hi = (uint8_t)(dest >> 8);
 
   for (unsigned line = 0; line < 4; ++line) {
     TICK(85);
@@ -3242,21 +3230,18 @@ uint8_t game_merge_cell_native(uint8_t ink, Cell c) {
     poke(at,
          (uint8_t)(((ram_peek(kHgrPattern + idx) ^ 0x7f) & s_shape_mask[line]) | peek(at)));
     dest += 0x0400;
-    hgr_hi = (uint8_t)(dest >> 8);
 
     if (line != 3)
       TICK(1);
   }
 
   TICK(6);
-  return hgr_hi;
 }
 
 /// $702B -- zero hi-res page 1, $2000 through $3FFF. The inner loop runs a
 /// full 256 bytes because Y wraps, so the terminating test is on the page.
 void game_clear_hgr_native(void) {
   TICK(12);
-  s_y = 0x00;
 
   for (uint8_t page = 0x20;;) {
     uint8_t y = 0;
@@ -3264,7 +3249,6 @@ void game_clear_hgr_native(void) {
       TICK(12);
       poke((uint16_t)(page << 8) + y, 0x00);
       ++y;
-      s_y = y;
       if (y)
         TICK(1);
     } while (y);
@@ -3291,13 +3275,11 @@ void game_clear_hgr_native(void) {
 /// $6148 -- a horizontal run of hi-res cells, from \p c along row c.row to
 /// \p to_col. The original walked $02/$03 and left $02 on the endpoint, which
 /// its adapter returned in A; that is the return value here.
-uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
+void game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
   /*$6148*/ TICK(6);
-  {
-    const uint8_t mask = game_load_shape_masks(s_shape);
-    s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
-    s_a = mask;
-  }
+  // Loads the four scanline masks the cell drawers read. The mask it
+  // returns was the original\'s result in A and nothing reads it.
+  game_load_shape_masks(s_shape);
   for (;;) {
     TICK(6);
     game_draw_cell_native(ink, c);
@@ -3311,21 +3293,16 @@ uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
   }
   TICK(1);
   TICK(6);
-  s_a = c.col;
   s_status_c = 0x01;
-  s_a = c.col;
   s_status_c = 0x01;
-  return c.col;
 }
 
 /// $615A -- the same down a column: rows $03 through $08 in column $02.
-uint8_t game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
+void game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
   /*$615A*/ TICK(6);
-  {
-    const uint8_t mask = game_load_shape_masks(s_shape);
-    s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
-    s_a = mask;
-  }
+  // Loads the four scanline masks the cell drawers read. The mask it
+  // returns was the original\'s result in A and nothing reads it.
+  game_load_shape_masks(s_shape);
   for (;;) {
     TICK(6);
     game_draw_cell_native(ink, c);
@@ -3339,15 +3316,13 @@ uint8_t game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
   }
   TICK(1);
   TICK(6);
-  s_a = c.row;
   s_status_c = 0x01;
-  return c.row;
 }
 
 /// $7000 -- the lo-res half of a vertical run. Unlike the hi-res one it puts
 /// $03 back where it found it, because the caller draws the hi-res run over
 /// the same coordinates next.
-uint8_t game_lores_vline_native(Cell c, uint8_t to_row) {
+void game_lores_vline_native(Cell c, uint8_t to_row) {
   // The original saves the starting row and puts it back, which is what lets
   // the hi-res half of a display list's 'V' run the same span after it.
   push8(c.row);
@@ -3365,7 +3340,7 @@ uint8_t game_lores_vline_native(Cell c, uint8_t to_row) {
   }
   TICK(1);
   TICK(13);
-  return pop8();
+  (void)pop8();
 }
 
 /* ========================================================================== */
@@ -3410,7 +3385,6 @@ static uint8_t dequeue_key(void) {
   s_ring_read = (uint8_t)((at + 1) & 0x0f);
   // X *is* live out of $6594 -- `apple2tc --ir` says so -- unlike X out of
   // $6C72, where the same check let the write go. So it is maintained.
-  s_x = (uint8_t)(at + 1);
   return key;
 }
 
@@ -3621,7 +3595,6 @@ uint8_t game_read_direction_native(uint8_t key) {
     TICK(1);
   }
   // Y, unlike X, is live out of here -- see above.
-  s_y = (uint8_t)pressed;
 
   TICK(4);
   if (pressed != 1) {
@@ -3678,8 +3651,7 @@ static void edit_key_blank(uint8_t slot) {
 
   TICK(11);
   s_x = slot;
-  s_a = 0xa0; // space
-  rom_cout();
+  rom_cout(0xa0);
 
   TICK(2);
   uint8_t x = cout_left_x();
@@ -3714,8 +3686,7 @@ static uint8_t edit_key_prompt(uint8_t slot) {
   TICK(13);
   s_x = slot;
   const uint8_t glyph = slot_glyph(slot);
-  s_a = glyph;
-  rom_cout();
+  rom_cout(glyph);
 
   TICK(2);
   uint8_t x = cout_left_x();
@@ -3805,7 +3776,6 @@ void game_tick_sound_native(void) {
         if (!left) {
           TICK(28);
           const uint8_t port = s_click_port;
-          s_y = port; // live out of this routine; the click is `LDA $C000,Y`
           peek((uint16_t)(0xc000 + port));
 
           // Two INC $6C46: every click lengthens the period, so the pitch
@@ -3888,8 +3858,7 @@ static void cout_digit(uint8_t digit, uint16_t ret) {
     error_handler(0x71f3);
     abort();
   }
-  s_a = (uint8_t)(kCharZero + digit);
-  rom_cout();
+  rom_cout((uint8_t)(kCharZero + digit));
 }
 
 void game_print_bcd_native(uint8_t byte) {
@@ -3945,8 +3914,7 @@ void game_print_zero_if_blank_native(void) {
   }
 
   TICK(5);
-  s_a = kCharZero;
-  rom_cout(); // JMP $FDED -- a tail call, so no return address.
+  rom_cout(kCharZero); // JMP $FDED -- a tail call, so no return address.
 }
 
 /* ========================================================================== */
@@ -4012,16 +3980,14 @@ void game_set_ink_native(uint8_t ink) {
   }
 
   TICK(3);
-  s_a = ink ? 0x05 : 0x00;
-  rom_setcol(); // JMP $F864 -- a tail call.
+  rom_setcol(ink ? 0x05 : 0x00); // JMP $F864 -- a tail call.
 }
 
 /// $7019 -- read the byte the $000A pointer addresses and advance it. The
 /// display-list interpreter's only way of reading its script.
-void game_next_byte_native(void) {
+uint8_t game_next_byte_native(void) {
   TICK(14);
-  s_y = 0x00;
-  s_a = peek(s_script_ptr);
+  const uint8_t b = peek(s_script_ptr);
 
   ++s_script_ptr;
   if (s_script_ptr & 0xff) {
@@ -4031,7 +3997,7 @@ void game_next_byte_native(void) {
     TICK(5);
   }
   TICK(6);
-  // A and Y are live out; N and Z are not.
+  return b;
 }
 
 /* ========================================================================== */
@@ -4082,8 +4048,7 @@ static uint8_t bcd_inc16(uint8_t at[2]) {
   at[0] = (uint8_t)r;
 
   r = adc_dec16(at[1], 0x00, (uint8_t)(r >> 8) & 0x01);
-  s_a = (uint8_t)r;
-  at[1] = s_a;
+  at[1] = (uint8_t)r;
   s_status_d = 0x00;
   return (uint8_t)(r >> 8);
 }
@@ -4113,13 +4078,10 @@ Cell game_place_apple_native(void) {
 
   // White on the occupancy map, so the snake's collision test sees it.
   TICK(8);
-  s_a = 0x0f;
-  rom_setcol();
+  rom_setcol(0x0f);
 
   TICK(12);
-  s_a = at.row;
-  s_y = at.col;
-  rom_plot();
+  rom_plot(at.row, at.col);
 
   TICK(16);
   plot_shape_at(0x01, 0x09, at);
@@ -4168,16 +4130,15 @@ void game_set_apple_value_native(void) {
 /// $6BEF -- mark the head on the lo-res occupancy map, at the row and column
 /// the caller has already loaded, and raise the two flags that say it is
 /// there: $0305 for the next draw and $6C46 to start the tone.
-void game_mark_head_native(void) {
+void game_mark_head_native(uint8_t row, uint8_t col) {
   TICK(6);
-  rom_plot();
+  rom_plot(row, col);
 
   TICK(16);
   s_head_moved = true;
   s_tone_period = 0x01;
 
   // A and its flags are live out of $6BEF, unlike almost everything else here.
-  s_a = 0x01;
 }
 
 /// $6BDA -- draw the cell the caller set up, and if $0305 says the head is on
@@ -4194,13 +4155,7 @@ void game_draw_head_native(uint8_t ink, Cell c) {
     { // was game_plot_shape_merge()
 
       /*$6B93*/ TICK(6);
-      {
-      const uint8_t mask = game_load_shape_masks(s_shape);
-      // The original walked the table with INX, so X is left pointing at the
-      // last entry rather than one past it.
-      s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
-      s_a = mask;
-      }
+      game_load_shape_masks(s_shape);
 
       if (s_status_d) {
       fprintf(stderr, "game_plot_shape_merge: entered with decimal mode set\n");
@@ -4208,12 +4163,10 @@ void game_draw_head_native(uint8_t ink, Cell c) {
       abort();
       }
 
-      s_y = c.row; // LDY $03 at $6B98, before the loop overwrites it
-      const uint8_t last_hi = game_merge_cell_native(ink, c);
+      // The high byte it returns was the original's result in A; nothing
+      // reads it now.
+      game_merge_cell_native(ink, c);
 
-      s_x = 0x04;
-      s_y = c.col;
-      s_a = last_hi;
       s_status_c = 0x01;
     }
   } else {
@@ -4248,13 +4201,7 @@ void game_award_extra_life_native(void) {
 /// $60E4 -- load a shape and draw it, which is the pair every caller wants.
 void game_plot_shape_native(uint8_t ink, Cell c) {
   TICK(6);
-  {
-    const uint8_t mask = game_load_shape_masks(s_shape);
-    // The original walked the table with INX, so X is left pointing at the
-    // last entry rather than one past it.
-    s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
-    s_a = mask;
-  }
+  game_load_shape_masks(s_shape);
   game_draw_cell_native(ink, c); // JMP -- a tail call.
 }
 
@@ -4293,8 +4240,6 @@ void game_sound_sweep_native(void) {
       TICK(1);
   } while (x);
 
-  uint8_t port = 0;
-  uint8_t last = 0;
   do {
     TICK(4);
     uint8_t y = x;
@@ -4305,19 +4250,13 @@ void game_sound_sweep_native(void) {
     } while (y);
 
     TICK(12);
-    port = s_click_port;
-    last = peek((uint16_t)(0xc000 + port));
+    // The click itself. The read *is* the write -- see the note above.
+    peek((uint16_t)(0xc000 + s_click_port));
     if (++x)
       TICK(1);
   } while (x);
 
   TICK(6);
-
-  // A, X, Y, N and Z are all live out of $64A9 -- so the last click's port and
-  // the byte it read are, oddly, part of this routine's result.
-  s_a = last;
-  s_x = x;
-  s_y = port;
 }
 
 /// $7590 -- show \p key as the binding of slot \p slot on the redefinition
@@ -4350,16 +4289,14 @@ void game_show_key_native(uint8_t slot, uint8_t key) {
   rom_fc68();
 
   TICK(10);
-  s_a = glyph;
-  rom_cout();
+  rom_cout(glyph);
 
   TICK(9);
-  s_x = slot;
 }
 
 /// $6B3D -- both side walls, each in two segments of different ink, with the
 /// seam at a row derived from $6255. The seam is what the player aims for.
-void game_draw_side_walls_native(void) {
+uint8_t game_draw_side_walls_native(void) {
   // The random byte is thrown away. The call is not: $6C4B advances the
   // pointer at $000E, so this is what keeps apple placement from repeating
   // level to level.
@@ -4397,11 +4334,10 @@ void game_draw_side_walls_native(void) {
   TICK(18);
   plot_vline_at(0x0d, 0x00, seam, 0x27);
 
-  // Tail call: SCRN of the bottom-centre cell, whose result the caller reads.
+  // Tail call: SCRN of the bottom-centre cell, which is this routine's second
+  // result -- the caller uses it to decide whether to draw the gate.
   TICK(7);
-  s_a = 0x27;
-  s_y = 0x14;
-  rom_scrn();
+  return scrn_cell((Cell){.col = 0x14, .row = 0x27});
 }
 
 /* ========================================================================== */
@@ -4422,8 +4358,6 @@ void game_read_key_native(void) {
   GAME_CYCLES_COORD(0x6217, 10);
   const uint8_t at = s_ring_write;
   const uint8_t key = io_peek(0xc000);
-  s_a = key;
-  s_x = at;
 
   if (key & 0x80) {
     TICK(21);
@@ -4434,8 +4368,6 @@ void game_read_key_native(void) {
     // passes every oracle, because no recording ever presses sixteen keys
     // faster than the game reads them. Do not tidy it.
     const uint8_t next = (uint8_t)((at + 1) & 0x0f);
-    s_x = (uint8_t)(at + 1);
-    s_a = next;
     if (next != s_ring_read) {
       TICK(10);
       s_ring_write = next;
@@ -4608,10 +4540,7 @@ static void plot_shape_at(uint8_t shape, uint8_t ink, Cell c) {
 
 /// SCRN one cell.
 static uint8_t scrn_cell(Cell c) {
-  s_a = c.row;
-  s_y = c.col;
-  rom_scrn();
-  return s_a;
+  return rom_scrn(c.row, c.col);
 }
 
 /// $649F -- one click of the speaker. $6C49 holds the port offset, $30 for
@@ -4658,7 +4587,7 @@ static void click_speaker(void) {
 /* timings, not on a passing test.                                            */
 /* ========================================================================== */
 
-uint8_t game_pause_or_toggle_sound_native(uint8_t key) {
+void game_pause_or_toggle_sound_native(uint8_t key) {
   TICK(4);
   if (key == KEY_ESC) {
     for (;;) {
@@ -4683,7 +4612,6 @@ uint8_t game_pause_or_toggle_sound_native(uint8_t key) {
   }
 
   TICK(6);
-  return key;
 }
 
 LifeEnd game_play_loop_native(uint8_t *cell_out) {
@@ -4695,6 +4623,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     TICK(6);
     game_read_key_native();
     TICK(6);
+    uint8_t code;
     { // was game_read_direction()
 
       // The JSR stays here rather than moving into the native routine, because
@@ -4712,10 +4641,8 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       // The original saves the key on the stack across the $0302 test; here it is
       // an argument. The pushed byte is never observed: nothing between the PHA
       // and the PLA samples memory, and ram.probe compares only the live stack.
-      const uint8_t code = game_read_direction_native(key);
-      s_a = code;
+      code = game_read_direction_native(key);
     }
-    uint8_t code = s_a;
 
     uint8_t dir = s_direction;
     uint8_t shape;
@@ -4785,7 +4712,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     // $639B -- anything else is the pause/mute key.
     TICK(1);
     TICK(6);
-    (void)game_pause_or_toggle_sound_native(s_a);
+    game_pause_or_toggle_sound_native(code);
     TICK(3);
     goto pace;
 
@@ -4829,13 +4756,10 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     TICK(26);
     dir = (uint8_t)((((uint8_t)(s_direction - 1)) & 3) + 1);
     s_direction = dir;
-    s_a = dir;
-    rom_setcol();
+    rom_setcol(dir);
 
     TICK(14);
-    s_a = head.row;
-    s_y = head.col;
-    rom_plot();
+    rom_plot(head.row, head.col);
 
     // $62D1 -- advance the head, and see what is there.
     TICK(42);
@@ -4857,12 +4781,9 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     if (cell == 0) {
       TICK(3);
       TICK(8);
-      s_a = 0x07;
-      rom_setcol();
+      rom_setcol(0x07);
       TICK(14);
-      s_a = next.row;
-      s_y = next.col;
-      rom_plot();
+      rom_plot(next.row, next.col);
 
       // $633C -- the gate is column $14 of row 0.
       TICK(8);
@@ -4885,12 +4806,9 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       // $6480 -- an apple. Marked here; the caller does the scoring.
       TICK(14);
       s_click_count = 0x20;
-      s_a = 0x07;
-      rom_setcol();
+      rom_setcol(0x07);
       TICK(14);
-      s_a = next.row;
-      s_y = next.col;
-      game_mark_head_native();
+      game_mark_head_native(next.row, next.col);
       TICK(6);
       *cell_out = cell;
       return LIFE_APPLE;
@@ -4944,12 +4862,9 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       // engine and not the other.
       TICK(11);
       push8(under);
-      s_a = 0x00;
-      rom_setcol();
+      rom_setcol(0x00);
       TICK(14);
-      s_a = tail.row;
-      s_y = tail.col;
-      rom_plot();
+      rom_plot(tail.row, tail.col);
       TICK(25);
       plot_at(0x00, tail);
 
@@ -4983,13 +4898,9 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
 
     TICK(1);
     TICK(10);
-    s_a = 0x27;
-    s_y = 0x14;
-    game_draw_side_walls_native();
-    // The walls routine ends on a SCRN of the bottom-centre cell, and leaves
-    // it in A -- that is its second result, and the original reads it here.
+    const uint8_t gate_cell = game_draw_side_walls_native();
     TICK(4);
-    if (s_a == 0) {
+    if (gate_cell == 0) {
       // $642D -- the gate at the bottom is clear, so draw it. No edge charge
       // here: $6429's branch falls through to this and is only *taken* when
       // the cell is occupied.
@@ -4997,12 +4908,9 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       s_shape = 0x15;
       plot_hline_at(0x0d, 0x12, 0x27, 0x16);
       TICK(8);
-      s_a = 0x0d;
-      rom_setcol();
+      rom_setcol(0x0d);
       TICK(10);
-      s_a = 0x27;
-      s_y = 0x14;
-      rom_plot();
+      rom_plot(0x27, 0x14);
     } else {
       TICK(1);
     }
@@ -5108,17 +5016,14 @@ static bool steer_try(
     switch (v) {
     case MOVE_TARGET_TAKEN:
     // $6AD9 CMP #$0F left these.
-    s_a = cell;
     move_taken = (cell != 0x0f);
     s_status_c = (cell >= 0x0f);
     break;
     case MOVE_ROW_ZERO:
     case MOVE_OK:
-    s_a = 0x00;
     move_taken = 0x00;
     break;
     case MOVE_DEAD_END:
-    s_a = 0x01;
     move_taken = 0x01;
     break;
     }
@@ -5318,8 +5223,7 @@ void game_status_panel(void) {
   // there to wipe the character one place past this field, left over from a
   // longer count earlier in the game.
   TICK(8);
-  s_a = 0xa0;
-  rom_cout();
+  rom_cout(0xa0);
 
   // VALUE, same row, column $14. Two bytes at $71CB -- the current worth of an
   // apple, which game_set_apple_value computes per level.
@@ -5363,7 +5267,6 @@ void game_status_panel(void) {
   // Home the cursor. This CV write is the one that needs VTAB, because nothing
   // prints after it to recompute the line base.
   TICK(11);
-  s_a = 0x00;
   s_cv = 0x00;
   rom_fc68();
   TICK(6);
@@ -5395,7 +5298,6 @@ void game_bonus_screen(void) {
   s_bonus_amount[0] = (uint8_t)lo;
   const uint16_t hi = adc_dec16(s_apple_value[1], s_apple_value[1], (uint8_t)(lo >> 8) & 0x01);
   s_bonus_amount[1] = (uint8_t)hi;
-  s_a = (uint8_t)hi;
   s_status_c = (uint8_t)(hi >> 8) & 0x01;
   s_status_d = 0x00; // $78C7 CLD
 
@@ -5439,7 +5341,6 @@ void game_bonus_screen(void) {
   s_cv = 0x09;
   game_install_cout_vector();
   // The LDA #$4A flags are overwritten by the second load; only these outlive.
-  s_a = 0x66;
   TICK(6);
   game_print_inline_str(0x7944);
   TICK(15);
@@ -5509,10 +5410,10 @@ void game_bonus_screen(void) {
 
 void game_begin_life(void) {
   TICK(8);
-  s_a = game_start_life(0x14);
+  const uint8_t tail_col = game_start_life(0x14);
 
   TICK(36);
-  s_tail.col = s_a; // from $6630, by way of $660F
+  s_tail.col = tail_col; // from $6630, by way of $660F
   s_head.row = 0x27; // the bottom edge
   s_tail.row = 0x27; // the same cell
   s_direction = DIR_UP;
@@ -5609,12 +5510,16 @@ wait: /* $741C */
   for (;;) {
     // $741C -- spin Y round once, then look at the keyboard. This site keeps
     // its probe: it is one of the addresses the replay coordinate counts.
+    // Y again, and again not initialised by the original. Measured the same
+    // way as spin's: zero on every pass of both scenarios, and the loop itself
+    // leaves it zero, so only the first arrival could ever differ.
+    uint8_t ticks = 0;
     do {
       TICK(4);
-      s_y = (uint8_t)(s_y + 1);
-      if (s_y != 0)
+      ++ticks;
+      if (ticks != 0)
         TICK(1);
-    } while (s_y != 0);
+    } while (ticks != 0);
 
     GAME_CYCLES_COORD(0x741f, 6);
     key = io_peek(0xc000);
@@ -5708,7 +5613,6 @@ wait: /* $741C */
   io_peek(0xc052);
   game_install_cout_vector();
   // The LDA #$4A flags are overwritten by the second load; only these outlive.
-  s_a = 0x66;
   TICK(11);
   s_cv = 0x01;
   game_print_inline_str(0x748e);
@@ -5731,7 +5635,6 @@ wait: /* $741C */
   plot_vline_at(0x0c, 0x1e, 0x13, 0x1d);
   // At the stem's far end -- the vline above left $03 on $1D.
   TICK(11);
-  s_a = 0x0e;
   plot_shape_at(0x0e, 0x0c, (Cell){.col = 0x1e, .row = 0x1d});
 
   TICK(2);
@@ -5857,15 +5760,13 @@ void game_print_inline_str(uint16_t ret_addr) {
 
     /*$723F*/ TICK(9);
     const uint8_t ch = peek(s_str_ptr);
-    s_y = 0x00;
-    s_a = ch;
     if (!ch) {
       /*$7243*/ TICK(1);
       break;
     }
 
     /*$7245*/ TICK(6);
-    rom_cout();
+    rom_cout(ch);
     /*$7248*/ TICK(3);
   }
 
@@ -6173,7 +6074,6 @@ void game_move_bouncer(Bouncer *b) {
 
   // The state the original leaves behind: A holds the row it loaded first, and
   // the flags come from that load.
-  s_a = b->row;
 
   bouncer_step(b);
 }
@@ -6396,7 +6296,6 @@ start_round: /* $76C7 */
   game_plot_shape_native(0x09, apple);
   TICK(8);
   s_step_delay = 0x52;
-  s_a = 0x00;
   TICK(23);
   s_head_moved = false;
   s_life_timer = s_life_time;
@@ -6485,12 +6384,9 @@ ate_apple: /* $773E */
   plot_shape_at(0x15, 0x00, (Cell){.col = 0x14, .row = 0x00});
   TICK(14);
   s_life_time = 0xff;
-  s_a = 0x00;
-  rom_setcol();
+  rom_setcol(0x00);
   TICK(10);
-  s_a = 0x00;
-  s_y = 0x14;
-  rom_plot();
+  rom_plot(0x00, 0x14);
   TICK(3);
   goto life;
 
