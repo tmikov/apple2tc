@@ -556,7 +556,7 @@ written; the artifact is not finished.
 ```
                                   now    was    note
 ram_peek/ram_poke, any form         16    314   all 16 are read-only image tables
-s_status_* references              100    222   c 62, d 36; the other five are gone
+s_status_* references               62    222   c 27, d 35; the other five are gone
 s_a / s_x / s_y references          15    307   11 are COUT's X/Y promise, 3 the
                                                 entry load; see "The registers"
 branchTarget                         0    122   never read; 5 left inside one macro
@@ -650,6 +650,29 @@ arguments: it reads its slot out of X and restores the caller's X and Y on the
 way out. Three more are the entry-state load. Removing any of them would mean
 changing what the machine's own dispatch is, not what this file says.
 
+### The carry
+
+`C` survived the flag audit as "genuinely crosses a call" and did not survive
+being checked with a tool. No `rom_*` routine reads it on entry: every read is
+preceded either by a local write or by a call whose callee writes it. All ten
+game-side carry writes were dead -- inverting every one passes all six cold
+checks -- and eight more inside `rom_*` were dead because the branch after them
+tests the value rather than the flag. 36 writes are 12.
+
+What the carry actually is, is one 6502 idiom on three edges: a routine ends on
+a `CMP` and its caller reaches an `ADC` with no `CLC` in front of it, so the
+compare's carry *is* the +1. `rom_clreolz` and `rom_vtabz` return it and
+`rom_bascalc` hands back its second `ASL`'s. A global flag was hiding a real
+data dependency behind something that looked like residue, which is exactly why
+the wrong conclusion was easy to reach.
+
+**Both wrong liveness claims this file has produced were produced by reading.**
+The other was `rom_cout`'s parameter list. Use the read-before-write fixpoint
+over the call graph; it is a dozen lines and it does not miss callees.
+
+`D` stays entirely: 17 reads, every one choosing between a binary and a BCD
+arm, plus the `assert_binary_mode` gates.
+
 **Half of a2rom is converted by reading, not by running**, and this has not
 changed: nothing scrolls and nothing emits Ctrl-G, so `rom_wait`, `rom_fc68`'s
 scroll and `rom_coutz`'s bell and backspace arms are on probe-acceptance.sh's
@@ -699,7 +722,7 @@ write can reach:
 | `v` | 26 | 2 | the same, for bit 6 |
 | `n` | 40 | 2 | both reads in `rom_fc68`, dominated by a local write |
 | `not_z` | 43 | 3 | `rom_wait`'s two loops and `steer_try`'s return, all dominated |
-| `c` | 36 | 26 | **stays** -- read on entry to `rom_home` and `rom_fc68` |
+| `c` | 36 | 26 | *this line was wrong -- see below* |
 | `d` | 18 | 18 | **stays** -- every BCD region and every `assert_binary_mode` |
 
 A value pushed only so that it can be popped back into itself is not a value.
@@ -707,8 +730,11 @@ That is what killed `i` and `v`: bits 2 and 6 leave the pushed byte and the two
 restores go with them, while bit 3 (`d`) and bit 0 (the LSR's carry) stay
 because those are genuinely read.
 
-"In `rom_*`, registers are the algorithm" is true of `c` and `d` and was not
-true of the other five. Check before quoting it at `s_a`/`s_x`/`s_y`.
+"In `rom_*`, registers are the algorithm" is true of `d` and was not true of
+the other six. **The `c` row above was wrong**, and the way it was wrong is the
+most useful thing on this page: the reads it cited are preceded by a *call*
+whose callee writes the carry. Reading the routine's own body missed that.
+Corrected 2026-08-25 -- see "The carry" below.
 
 **Two of the localisations are not checked by running them**, and say so above
 themselves: nothing scrolls and nothing emits Ctrl-G, so inverting `rom_fc68`'s
