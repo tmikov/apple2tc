@@ -335,8 +335,6 @@ static void emulated_entry_point(void) {
 /// CLREOLZ both read BASL straight afterwards and the monitor's callers are
 /// not all in this file's control.
 void rom_bascalc(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   /*$FBC1*/ TICK(20);
   const uint8_t line = s_a;
@@ -359,7 +357,6 @@ void rom_bascalc(void) {
       s_a = (uint8_t)r;
     }
   }
-  branchTarget = true;
 
   /*$FBD0*/ TICK(19);
   s_basl = s_a;
@@ -371,15 +368,12 @@ void rom_bascalc(void) {
   s_a = addr_lo;
   s_basl = addr_lo;
 
-  (void)branchTarget;
 }
 
 /// $FC24 VTABZ. BASCALC for the line in A, then shift the base right by the
 /// window's left edge, so BASL points at the first column of the window rather
 /// than of the screen.
 void rom_vtabz(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   /*$FC24*/ TICK(6);
   rom_bascalc();
@@ -409,8 +403,6 @@ void rom_vtabz(void) {
 /// scrolls. The body is three instructions and its tail call is the routine
 /// below, which *is* exercised, so what is unchecked is the LDY and the jump.
 void rom_clreol(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   /*$FC9C*/ TICK(3);
   s_y = s_ch;
@@ -424,8 +416,6 @@ void rom_clreol(void) {
 /// Y is left at the width and the carry set, which is how the original exits
 /// the loop; both are still written because the monitor's callers read them.
 void rom_clreolz(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   /*$FC9E*/ TICK(2);
   s_a = 0xa0; // a space, high bit set
@@ -440,16 +430,13 @@ void rom_clreolz(void) {
 
     const uint8_t width = s_wndwdth;
     s_status_c = (next >= width);
-    branchTarget = true;
     if (next >= width)
       break;
 
     /*$FCA5*/ TICK(1);
-    branchTarget = true;
   }
 
   /*$FCA7*/ TICK(6);
-  (void)branchTarget;
 }
 
 /// $FCA8 WAIT. The monitor's delay: two nested `SBC #$01 / BNE` loops around
@@ -465,8 +452,6 @@ void rom_clreolz(void) {
 /// from a copy on the stack, and the outer one counts the original down, so
 /// the total is quadratic in A rather than linear.
 void rom_wait(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   /* The SBC's Z, which both loops branch on. A local for the same reason the
      scroll's N is one: nothing outside this routine ever read the flag, and
@@ -499,11 +484,9 @@ void rom_wait(void) {
         s_status_c = (flags & 0x01);
         not_zero = (uint8_t)(~flags & 2);
       }
-      branchTarget = true;
       if (!not_zero)
         break;
       /*$FCAC*/ TICK(1);
-      branchTarget = true;
     }
 
     // The outer one: the copy off the stack, down by one.
@@ -522,15 +505,12 @@ void rom_wait(void) {
       s_status_c = (flags & 0x01);
       not_zero = (uint8_t)(~flags & 2);
     }
-    branchTarget = true;
     if (!not_zero)
       break;
     /*$FCB1*/ TICK(1);
-    branchTarget = true;
   }
 
   /*$FCB3*/ TICK(6);
-  (void)branchTarget;
 }
 
 /* ========================================================================== *
@@ -713,11 +693,15 @@ void rom_setvid(void);
 /// the coordinate's, which turns a 640,983-line diff into one line naming the
 /// address.
 ///
-/// The local is the emulator's assembly-trace plumbing: `CYCLES` consults a
-/// `branchTarget` flag the generated dispatch keeps, to print one line per
-/// block rather than one per instruction. Converted code has no block
-/// structure for that question to be about, and a site spelled this way is a
-/// block head by construction, so it answers yes and moves on.
+/// The local inside the macro is the emulator's assembly-trace plumbing:
+/// `CYCLES` consults a `branchTarget` flag the generated dispatch keeps, to
+/// print one line per block rather than one per instruction. Converted code
+/// has no block structure for that question to be about, and a site spelled
+/// this way is a block head by construction, so it answers yes and moves on.
+///
+/// That local is the only `branchTarget` left in this file. The generated code
+/// declared one per function and assigned it at every block head; nothing here
+/// ever read one, so all 121 went.
 #define GAME_CYCLES_COORD(addr, n) \
   do {                             \
     bool branchTarget = true;      \
@@ -1128,7 +1112,9 @@ static void game_play_one_life(void);
 ///   - `peek`, `poke`, `peek16`, `ram_peek16al`, `push8`, `pop8`, `push16`,
 ///     `pop16`, `adc_decimal`, `sbc_decimal` are all `static`.
 ///   - The `CYCLES()` macro expands to references to `s_pc`, `s_cycles`,
-///     `s_remaining_cycles` and the *local* variable `branchTarget`.
+///     `s_remaining_cycles` and a *local* variable `branchTarget`, which is
+///     why the only use of `CYCLES` here goes through GAME_CYCLES_COORD --
+///     that macro declares one inside its own block.
 ///
 /// Only `ram_peek`, `ram_poke`, `ram_peek16`, `io_peek`, `io_poke` and
 /// `error_handler` have external linkage (declared in `apple2tc/system.h`).
@@ -1190,8 +1176,6 @@ static void rom_cout1(void);
 /// build a text address, and this one shifts by two and ORs, which lands on
 /// the lo-res page instead.
 static void rom_gbascalc(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   /*$F847*/ TICK(20);
   const uint8_t row = s_a;
@@ -1212,8 +1196,6 @@ static void rom_gbascalc(void) {
     // edge costs).
     /*$F852*/ TICK(1);
   }
-  branchTarget = true;
-  (void)branchTarget;
 
   /*$F856*/ TICK(19);
   s_gbasl = s_a;
@@ -1225,8 +1207,6 @@ static void rom_gbascalc(void) {
 /// $F80E PLOT1. Store the color mask ($30) into the lo-res half-byte selected
 /// by MASK ($2E) at GBASL/GBASH ($26) + Y.
 static void rom_plot1(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   // One lo-res cell: replace the half of the byte MASK selects with the
   // matching half of COLOR, leaving the other half alone. `(old ^ colour) &
@@ -1253,8 +1233,6 @@ static void rom_plot1(void) {
 /// which is $F0 with the carry set and $EF without; only the low bit of the
 /// row can make the difference, so the sum is one of the two masks.
 void rom_plot(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   /*$F800*/ TICK(11);
   const uint8_t row = s_a;
@@ -1289,8 +1267,6 @@ void rom_plot(void) {
     // $F808 BCC -- the branch itself, taken here.
     /*$F808*/ TICK(1);
   }
-  branchTarget = true;
-  (void)branchTarget;
 
   /*$F80C*/ TICK(3);
   s_mask = s_a;
@@ -1314,17 +1290,13 @@ void rom_plot(void) {
 /// depths and leave through each other, which C's loop forms cannot say
 /// without a flag that the original does not have.
 void rom_hline(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   /*$F819*/ TICK(6);
   rom_plot();
-  branchTarget = true;
 
 across: /* $F81C -- one column at a time, up to H2 */
   TICK(5);
   s_status_c = (uint8_t)(s_y >= s_h2);
-  branchTarget = true;
   if (s_status_c) {
     // $F81E BCS -- the branch itself, taken here.
     /*$F81E*/ TICK(1);
@@ -1335,7 +1307,6 @@ across: /* $F81C -- one column at a time, up to H2 */
   s_y = (uint8_t)(s_y + 0x01);
   /*$F821*/ rom_plot1();
   /*$F824*/ TICK(2);
-  branchTarget = true;
   if (!s_status_c) {
     // $F824 BCC -- the branch itself, taken here.
     /*$F824*/ TICK(1);
@@ -1358,7 +1329,6 @@ down: /* $F826 -- one row at a time, up to V2 */
   /*$F82C*/ TICK(9);
   s_a = pop8();
   /*$F82D*/ s_status_c = (uint8_t)(s_a >= s_v2);
-  branchTarget = true;
   if (!s_status_c) {
     // $F82F BCC -- the branch itself, taken here.
     /*$F82F*/ TICK(1);
@@ -1367,7 +1337,6 @@ down: /* $F826 -- one row at a time, up to V2 */
 
 done:
   /*$F831*/ TICK(6);
-  (void)branchTarget;
 }
 
 /* ========================================================================== */
@@ -1375,8 +1344,6 @@ done:
 /* ========================================================================== */
 
 void rom_setcol(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   // The lo-res colour is stored in both nibbles, so a PLOT can take whichever
   // half MASK selects without shifting. Four ASLs and an ORA get there; the
@@ -1398,8 +1365,6 @@ void rom_setcol(void) {
 /* ========================================================================== */
 
 void rom_scrn(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   // The row's low bit says which half of the byte holds this cell, and the
   // ROM keeps it across GBASCALC on the stack -- as the whole status
@@ -1449,8 +1414,6 @@ void rom_scrn(void) {
 /// carries the line number on the stack across both calls because VTABZ and
 /// CLREOLZ each destroy A.
 void rom_home(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
 home: /* $FC58 */
   TICK(13);
@@ -1458,7 +1421,6 @@ home: /* $FC58 */
   /*$FC5A*/ s_cv = s_wndtop;
   /*$FC5C*/ s_y = 0x00;
   /*$FC5E*/ s_ch = 0x00;
-  branchTarget = true;
   // $FC60 BEQ -- provably always taken (Y was just loaded 0), but the branch
   // instruction still executes and still pays its own cost every time. The
   // decompiler doesn't do cross-instruction flag proofs either, so it keeps
@@ -1481,7 +1443,6 @@ home: /* $FC58 */
       s_a = (uint8_t)adc_dec16(s_a, 0x00, s_status_c);
 
     /*$FC52*/ s_status_c = (uint8_t)(s_a >= s_wndbtm);
-    branchTarget = true;
     if (!s_status_c) {
       // $FC54 BCC -- the branch itself, taken here.
       /*$FC54*/ TICK(1);
@@ -1489,7 +1450,6 @@ home: /* $FC58 */
     }
 
     /*$FC56*/ TICK(2);
-    branchTarget = true;
     if (!s_status_c)
       goto home; // the BCS's not-taken arm, which cannot be reached
     // $FC56 BCS -- the branch itself, same address as the block above because
@@ -1500,7 +1460,6 @@ home: /* $FC58 */
 
   /*$FC22*/ TICK(3); // TABV
   s_a = s_cv;
-  (void)branchTarget;
   rom_vtabz(); // JMP -- a tail call.
 }
 
@@ -1528,8 +1487,6 @@ home: /* $FC58 */
 /// The scroll copies each line over the one above it, back to front, keeping
 /// the source line's base in BASL and the destination's in BAS2L.
 void rom_fc68(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   /* The scroll's N. It was s_status_n while every routine in this file
      maintained the whole status register; this is the only routine that ever
@@ -1546,7 +1503,6 @@ void rom_fc68(void) {
 
   /*$FC68*/ TICK(8);
   s_a = s_cv;
-  branchTarget = true;
   if (!(s_cv >= s_wndbtm)) {
     // $FC6C BCC -- the branch itself, taken here. Nothing to scroll.
     /*$FC6C*/ TICK(1);
@@ -1559,7 +1515,6 @@ void rom_fc68(void) {
   /*$FC70*/ s_a = s_wndtop;
   /*$FC72*/ push8(s_a);
   /*$FC73*/ rom_vtabz();
-  branchTarget = true;
 
 scroll: /* $FC76 -- one line up per pass */
   TICK(28);
@@ -1575,7 +1530,6 @@ scroll: /* $FC76 -- one line up per pass */
     s_a = (uint8_t)r;
   }
 
-  /*$FC86*/ branchTarget = true;
   if (s_a >= s_wndbtm) {
     // $FC86 BCS -- the branch itself, taken here. That was the last line.
     /*$FC86*/ TICK(1);
@@ -1585,7 +1539,6 @@ scroll: /* $FC76 -- one line up per pass */
   /*$FC88*/ TICK(9);
   push8(s_a);
   /*$FC89*/ rom_vtabz();
-  branchTarget = true;
 
 copy: /* $FC8C -- one character, right to left */
   TICK(15);
@@ -1595,7 +1548,6 @@ copy: /* $FC8C -- one character, right to left */
     /*$FC90*/ const uint8_t next = (uint8_t)(at - 0x01);
     negative = (uint8_t)(next & 0x80);
     s_y = next;
-    branchTarget = true;
     if (!negative) {
       // $FC91 BPL -- the branch itself, taken here (loop back).
       /*$FC91*/ TICK(1);
@@ -1604,7 +1556,6 @@ copy: /* $FC8C -- one character, right to left */
   }
 
   /*$FC93*/ TICK(2);
-  branchTarget = true;
   if (negative) {
     // $FC93 BMI -- the branch itself, taken here (outer loop back).
     /*$FC93*/ TICK(1);
@@ -1617,8 +1568,6 @@ last_line: /* $FC95 -- blank what the scroll left at the bottom */
   /*$FC97*/ rom_clreolz();
 
   /*$FC9A*/ TICK(2);
-  branchTarget = true;
-  (void)branchTarget;
   if (!s_status_c) {
     rom_clreol(); // JMP -- a tail call.
       return;
@@ -1684,11 +1633,8 @@ last_line: /* $FC95 -- blank what the scroll left at the bottom */
 /// feed -- and writing it as nested ifs would need each of those spelled out
 /// twice.
 static void rom_coutz(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   /*$FB78*/ TICK(4);
-  branchTarget = true;
   if (s_a != 0x8d) {
     /*$FB7A*/ TICK(1);
     goto emit;
@@ -1698,16 +1644,14 @@ static void rom_coutz(void) {
      already waiting and it is Ctrl-S, stop here until another key arrives.
      Ctrl-C is left in the keyboard latch on the way out so that whatever is
      running next still sees it; anything else is consumed. */
-  /*$FB7C*/ CYCLES(0xfb7c, 6);
+  /*$FB7C*/ GAME_CYCLES_COORD(0xfb7c, 6);
   s_y = io_peek(0xc000);
-  branchTarget = true;
   if (!(s_y & 0x80)) {
     /*$FB7F*/ TICK(1);
     goto emit;
   }
 
   /*$FB81*/ TICK(4);
-  branchTarget = true;
   if (s_y != 0x93) {
     /*$FB83*/ TICK(1);
     goto emit;
@@ -1718,14 +1662,12 @@ static void rom_coutz(void) {
   for (;;) { /* $FB88 -- spin until a key is pressed */
     TICK(6);
     s_y = io_peek(0xc000);
-    branchTarget = true;
     if (!(s_y & 0x80)) {
       /*$FB8B*/ TICK(1);
       continue;
     }
 
     /*$FB8D*/ TICK(4);
-    branchTarget = true;
     if (s_y == 0x83) {
       // Ctrl-C: leave it latched.
       /*$FB8F*/ TICK(1);
@@ -1738,7 +1680,6 @@ static void rom_coutz(void) {
 emit: /* $FB94 JMP $FBFD */
   TICK(3);
   /*$FBFD*/ TICK(4);
-  branchTarget = true;
   if (!(s_a >= 0xa0)) {
     // The not-taken arm jumps straight to the dispatch without the edge charge.
     goto dispatch;
@@ -1758,7 +1699,6 @@ store: /* $FBF0 -- put the character at the cursor */
   {
     const uint8_t width = s_wndwdth;
     s_status_c = (uint8_t)(s_a >= width);
-    branchTarget = true;
     if (s_status_c) {
       // Off the right edge, so wrap: the same thing a carriage return does.
       /*$FBFA*/ TICK(1);
@@ -1766,13 +1706,11 @@ store: /* $FBF0 -- put the character at the cursor */
     }
   }
   /*$FBFC*/ TICK(6);
-  branchTarget = true;
   goto out;
 
 dispatch: /* $FC01 -- not printable; which control code is it? */
   TICK(4);
   s_y = s_a;
-  branchTarget = true;
   if (!(s_a & 0x80)) {
     // Below $80 the monitor stores it anyway, high bit and all.
     /*$FC02*/ TICK(1);
@@ -1780,14 +1718,12 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
   }
 
   /*$FC04*/ TICK(4);
-  branchTarget = true;
   if (s_a == 0x8d) {
     /*$FC06*/ TICK(1);
     goto carriage_return;
   }
 
   /*$FC08*/ TICK(4);
-  branchTarget = true;
   if (s_a == 0x8a) {
     /*$FC0A*/ TICK(1);
     goto line_feed;
@@ -1795,7 +1731,6 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
 
   /*$FC0C*/ TICK(4);
   s_status_c = (uint8_t)(s_a >= 0x88);
-  branchTarget = true;
   if (s_a != 0x88) {
     /*$FC0E*/ TICK(1);
     goto bell;
@@ -1807,11 +1742,9 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
   {
     const uint8_t back = (uint8_t)(s_ch - 0x01);
     s_ch = back;
-    branchTarget = true;
     if (!(back & 0x80)) {
       /*$FC12*/ TICK(1);
       /*$FBFC*/ TICK(6);
-      branchTarget = true;
       goto out;
     }
   }
@@ -1826,12 +1759,10 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
     s_a = top;
     const uint8_t cv = s_cv;
     s_status_c = (uint8_t)(top >= cv);
-    branchTarget = true;
     if (s_status_c) {
       // Already on the window's top line; there is nowhere to go up to.
       /*$FC1E*/ TICK(1);
       /*$FC2B*/ TICK(6);
-      branchTarget = true;
       goto out;
     }
   }
@@ -1849,12 +1780,10 @@ bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
     const uint8_t ch = s_a;
     const uint8_t differs = (uint8_t)(ch != 0x87);
     s_status_c = (uint8_t)(ch >= 0x87);
-    branchTarget = true;
     if (differs) {
       // Not the bell either. Drop it.
       /*$FBDB*/ TICK(1);
       /*$FBEF*/ TICK(6);
-      branchTarget = true;
       goto out;
     }
   }
@@ -1863,7 +1792,6 @@ bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
   /*$FBDD*/ TICK(8);
   s_a = 0x40;
   /*$FBDF*/ rom_wait();
-  branchTarget = true;
   /*$FBE2*/ TICK(2);
   s_y = 0xc0;
 
@@ -1871,18 +1799,15 @@ bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
     TICK(8);
     s_a = 0x0c;
     /*$FBE6*/ rom_wait();
-    branchTarget = true;
     /*$FBE9*/ TICK(8);
     s_a = io_peek(0xc030);
     /*$FBEC*/ s_y = (uint8_t)(s_y - 0x01);
-    branchTarget = true;
     if (!s_y)
       break;
     /*$FBED*/ TICK(1);
   }
 
   /*$FBEF*/ TICK(6);
-  branchTarget = true;
   goto out;
 
 carriage_return: /* $FC62 -- to the left edge, then down */
@@ -1895,7 +1820,6 @@ line_feed: /* $FC66 */
   /*$FC68*/ rom_fc68(); // JMP -- a tail call, and where a scroll happens.
 
 out:
-  (void)branchTarget;
 }
 
 /* ========================================================================== */
@@ -1936,13 +1860,10 @@ out:
 /// catch a wrong guess here -- a silent fallback would render with the wrong
 /// font onto the wrong page, undetectably.
 void rom_cout(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
   uint16_t vector;
 
   /*$FDED*/ TICK(5);
             vector = csw16(); // JMP ($36)
-            branchTarget = true;
             switch (vector) {
             case 0xfdf0:
               rom_cout1();
@@ -1973,8 +1894,6 @@ void rom_cout(void) {
 /// monitor does inverse and flashing -- $FF leaves them alone. Control codes
 /// are let through unmasked, since mangling them would change what they mean.
 static void rom_cout1(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   /*$FDF0*/ TICK(4);
   const bool printable = s_a >= 0xa0;
@@ -1991,15 +1910,12 @@ static void rom_cout1(void) {
   /*$FDF6*/ TICK(12);
   s_ysav1 = s_y;
   /*$FDF8*/ push8(s_a);
-  branchTarget = true;
   rom_coutz(); // JSR $FB78
 
   /*$FDFC*/ TICK(13);
   s_a = pop8();
   /*$FDFD*/ s_y = s_ysav1;
 
-  branchTarget = true;
-  (void)branchTarget;
   /*$FDFF*/
 }
 
@@ -2016,8 +1932,6 @@ static void rom_cout1(void) {
 /// nothing dispatches input through it -- but the routine runs at startup and
 /// its cycles count, so it is here in full.
 void rom_setkbd(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   /*$FE89*/ TICK(11);
   s_a2l = 0x00;
@@ -2066,8 +1980,6 @@ void rom_setkbd(void) {
 /// startup, before it has repointed anything. Had it ever called it after
 /// installing the hook, COUT would have stayed hooked.
 void rom_setvid(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   /*$FE93*/ TICK(9);
   s_a2l = 0x00;
@@ -2350,8 +2262,6 @@ static uint8_t s_click_count;
 /* ========================================================================== */
 
 uint8_t game_start_life(uint8_t head_col) {
-  bool branchTarget = true;
-  (void)branchTarget;
   /*$660F*/ TICK(50);
   s_head.col = head_col;
 
@@ -2367,8 +2277,6 @@ uint8_t game_start_life(uint8_t head_col) {
 }
 
 uint8_t game_load_shape_masks(uint8_t shape) {
-  bool branchTarget = true;
-  (void)branchTarget;
   /*$6127*/ TICK(53);
   // Four masks per shape at $6174, into the four the plotter reads.
   uint8_t last = 0;
@@ -2380,8 +2288,6 @@ uint8_t game_load_shape_masks(uint8_t shape) {
 }
 
 void game_install_cout_vector(void) {
-  bool branchTarget = true;
-  (void)branchTarget;
   /*$6641*/ TICK(16);
   // CSWL/CSWH at $36/$37, pointed at $664A.
   s_cswl = 0x4a;
@@ -2968,8 +2874,6 @@ static void plot_vline_at(uint8_t ink, uint8_t col, uint8_t row, uint8_t to_row)
 
 static void lores_vline_at(uint8_t col, uint8_t row, uint8_t to_row) {
   { // was game_lores_vline()
-    bool branchTarget = true;
-  (void)branchTarget;
 
     /*$7000*/ TICK(6);
     const uint8_t restored = game_lores_vline_native((Cell){.col = col, .row = row}, to_row);
@@ -3281,8 +3185,6 @@ static uint8_t dot_index(uint8_t ink, uint8_t scanline, uint8_t col) {
 
 /// $60E7 -- draw the loaded shape into one cell, replacing what was there.
 uint8_t game_draw_cell_native(uint8_t ink, Cell c) {
-  bool branchTarget = true;
-  (void)branchTarget;
   /*$60E7*/ TICK(0);
   assert_binary_mode("game_draw_cell", 0x60e7);
   uint8_t hgr_hi;
@@ -3390,8 +3292,6 @@ void game_clear_hgr_native(void) {
 /// \p to_col. The original walked $02/$03 and left $02 on the endpoint, which
 /// its adapter returned in A; that is the return value here.
 uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
-  bool branchTarget = true;
-  (void)branchTarget;
   /*$6148*/ TICK(6);
   {
     const uint8_t mask = game_load_shape_masks(s_shape);
@@ -3420,8 +3320,6 @@ uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
 
 /// $615A -- the same down a column: rows $03 through $08 in column $02.
 uint8_t game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
-  bool branchTarget = true;
-  (void)branchTarget;
   /*$615A*/ TICK(6);
   {
     const uint8_t mask = game_load_shape_masks(s_shape);
@@ -4294,8 +4192,6 @@ void game_draw_head_native(uint8_t ink, Cell c) {
     TICK(11);
     s_shape = 0x01;
     { // was game_plot_shape_merge()
-      bool branchTarget = true;
-  (void)branchTarget;
 
       /*$6B93*/ TICK(6);
       {
@@ -4800,8 +4696,6 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     game_read_key_native();
     TICK(6);
     { // was game_read_direction()
-      bool branchTarget = true;
-  (void)branchTarget;
 
       // The JSR stays here rather than moving into the native routine, because
       // game_step_bouncers's own adapter is what keeps $6216 -- the RTS it shares
@@ -5197,8 +5091,6 @@ static bool steer_try(
   GAME_CYCLES(before_addr, before_cycles);
   s_steer_dir = dir;
   { // was game_move_ok()
-    bool branchTarget = true;
-  (void)branchTarget;
 
     /*$6AB8*/ TICK(0);
     if (s_status_d) {
@@ -5947,8 +5839,6 @@ wait: /* $741C */
 /// ram.probe compares only the live stack.
 ///
 void game_print_inline_str(uint16_t ret_addr) {
-  bool branchTarget = true;
-  (void)branchTarget;
 
   /*$7230*/ TICK(20);
   s_str_ptr = ret_addr;
@@ -6273,8 +6163,6 @@ void game_move_bouncer(Bouncer *b) {
   // with GAME_CYCLES -- so the frame hashes and the memory samples are
   // unaffected.
   //
-  bool branchTarget = true;
-  (void)branchTarget;
 
   /*$64C8*/ TICK(12);
   if (s_status_d) {
