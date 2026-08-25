@@ -237,7 +237,7 @@ uint8_t rom_bascalc(uint8_t line);
 void rom_vtabz(uint8_t line);
 void rom_clreol(void);
 void rom_clreolz(uint8_t col);
-void rom_wait(void);
+void rom_wait(uint8_t n);
 
 /// The program starts here. There used to be a func_t001 in between -- the
 /// generated dispatch -- and by the end it was a stub that called this.
@@ -438,7 +438,7 @@ void rom_clreolz(uint8_t col) {
 /// A comes back as 0 and the carry set. The inner loop counts A down to zero
 /// from a copy on the stack, and the outer one counts the original down, so
 /// the total is quadratic in A rather than linear.
-void rom_wait(void) {
+void rom_wait(uint8_t n) {
 
   /* The SBC's Z, which both loops branch on. A local for the same reason the
      scroll's N is one: nothing outside this routine ever read the flag, and
@@ -454,19 +454,20 @@ void rom_wait(void) {
 
   for (;;) {
     /*$FCA9*/ TICK(3);
-    push8(s_a);
+    push8(n);
 
     // The inner loop: A down to zero, one SBC per pass.
+    uint8_t inner = n;
     for (;;) {
       /*$FCAA*/ TICK(4);
       if (!s_status_d) {
-        const uint16_t r = (uint16_t)(s_a - 0x0001) - (uint8_t)(0x01 - s_status_c);
+        const uint16_t r = (uint16_t)(inner - 0x0001) - (uint8_t)(0x01 - s_status_c);
         s_status_c = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
-        s_a = (uint8_t)r;
-        not_zero = s_a;
+        inner = (uint8_t)r;
+        not_zero = inner;
       } else {
-        const uint16_t r = sbc_dec16(s_a, 0x01, s_status_c);
-        s_a = (uint8_t)r;
+        const uint16_t r = sbc_dec16(inner, 0x01, s_status_c);
+        inner = (uint8_t)r;
         const uint8_t flags = (uint8_t)(r >> 8);
         s_status_c = (flags & 0x01);
         not_zero = (uint8_t)(~flags & 2);
@@ -478,16 +479,16 @@ void rom_wait(void) {
 
     // The outer one: the copy off the stack, down by one.
     /*$FCAE*/ TICK(8);
-    s_a = pop8();
+    n = pop8();
     if (!s_status_d) {
-      const uint8_t before = s_a;
+      const uint8_t before = n;
       const uint16_t r = (uint16_t)(before - 0x0001) - (uint8_t)(0x01 - s_status_c);
       s_status_c = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
-      s_a = (uint8_t)r;
-      not_zero = s_a;
+      n = (uint8_t)r;
+      not_zero = n;
     } else {
-      const uint16_t r = sbc_dec16(s_a, 0x01, s_status_c);
-      s_a = (uint8_t)r;
+      const uint16_t r = sbc_dec16(n, 0x01, s_status_c);
+      n = (uint8_t)r;
       const uint8_t flags = (uint8_t)(r >> 8);
       s_status_c = (flags & 0x01);
       not_zero = (uint8_t)(~flags & 2);
@@ -1136,11 +1137,11 @@ static void game_play_one_life(void);
 void rom_vtabz(uint8_t line);
 void rom_clreolz(uint8_t col);
 void rom_clreol(void);
-void rom_wait(void);
+void rom_wait(uint8_t n);
 
 /* $FDF0 COUT1, defined below. `rom_cout` dispatches to it, and so does the
    game's own $664A handler in game.c once it has drawn its glyph. */
-static void rom_cout1(void);
+static void rom_cout1(uint8_t ch);
 
 /* ========================================================================== */
 /* Private helpers.                                                           */
@@ -1383,11 +1384,12 @@ uint8_t rom_scrn(uint8_t row, uint8_t col) {
 /// CLREOLZ each destroy A.
 void rom_home(void) {
 
+  uint8_t line;
+
 home: /* $FC58 */
   TICK(13);
-  s_a = s_wndtop;
+  line = s_wndtop;
   /*$FC5A*/ s_cv = s_wndtop;
-  /*$FC5C*/ s_y = 0x00;
   /*$FC5E*/ s_ch = 0x00;
   // $FC60 BEQ -- provably always taken (Y was just loaded 0), but the branch
   // instruction still executes and still pays its own cost every time. The
@@ -1397,20 +1399,21 @@ home: /* $FC58 */
 
   for (;;) { /* $FC46 -- CLRSC2, one line per pass */
     TICK(9);
-    push8(s_a);
-    /*$FC47*/ rom_vtabz(s_a);
+    push8(line);
+    /*$FC47*/ rom_vtabz(line);
     /*$FC4A*/ TICK(6);
-    rom_clreolz(s_y);
+    // $FC5C loaded Y with 0 and CLREOLZ is the only thing that moves it, so
+    // every pass starts the blank at column 0.
+    rom_clreolz(0x00);
 
     /*$FC4D*/ TICK(13);
-    s_y = 0x00;
-    s_a = pop8();
+    line = pop8();
     if (!s_status_d)
-      s_a = (uint8_t)(s_a + s_status_c);
+      line = (uint8_t)(line + s_status_c);
     else
-      s_a = (uint8_t)adc_dec16(s_a, 0x00, s_status_c);
+      line = (uint8_t)adc_dec16(line, 0x00, s_status_c);
 
-    /*$FC52*/ s_status_c = (uint8_t)(s_a >= s_wndbtm);
+    /*$FC52*/ s_status_c = (uint8_t)(line >= s_wndbtm);
     if (!s_status_c) {
       // $FC54 BCC -- the branch itself, taken here.
       /*$FC54*/ TICK(1);
@@ -1468,53 +1471,52 @@ void rom_fc68(void) {
      dominance argument above, not on a green gate. */
   uint8_t negative = 0;
 
+  uint8_t line;
+  uint8_t col = 0;
+
   /*$FC68*/ TICK(8);
-  s_a = s_cv;
   if (!(s_cv >= s_wndbtm)) {
     // $FC6C BCC -- the branch itself, taken here. Nothing to scroll.
     /*$FC6C*/ TICK(1);
-    rom_vtabz(s_a); // JMP -- a tail call.
+    rom_vtabz(s_cv); // JMP -- a tail call.
       return;
   }
 
   /*$FC6E*/ TICK(17);
   s_cv = (uint8_t)(s_cv - 0x01);
-  /*$FC70*/ s_a = s_wndtop;
-  /*$FC72*/ push8(s_a);
-  /*$FC73*/ rom_vtabz(s_a);
+  /*$FC70*/ line = s_wndtop;
+  /*$FC72*/ push8(line);
+  /*$FC73*/ rom_vtabz(line);
 
 scroll: /* $FC76 -- one line up per pass */
   TICK(28);
   /*$FC78*/ s_bas2l = s_basl;
   /*$FC7C*/ s_bas2h = s_bash;
-  /*$FC80*/ s_y = (uint8_t)(s_wndwdth - 0x01);
-  /*$FC81*/ s_a = pop8();
-  if (!s_status_d) {
-    const uint16_t r = ((uint16_t)s_a + 0x0001) + s_status_c;
-    s_a = (uint8_t)r;
-  } else {
-    const uint16_t r = adc_dec16(s_a, 0x01, s_status_c);
-    s_a = (uint8_t)r;
-  }
+  /*$FC80*/ col = (uint8_t)(s_wndwdth - 0x01);
+  /*$FC81*/ line = pop8();
+  if (!s_status_d)
+    line = (uint8_t)(((uint16_t)line + 0x0001) + s_status_c);
+  else
+    line = (uint8_t)adc_dec16(line, 0x01, s_status_c);
 
-  if (s_a >= s_wndbtm) {
+  if (line >= s_wndbtm) {
     // $FC86 BCS -- the branch itself, taken here. That was the last line.
     /*$FC86*/ TICK(1);
     goto last_line;
   }
 
   /*$FC88*/ TICK(9);
-  push8(s_a);
-  /*$FC89*/ rom_vtabz(s_a);
+  push8(line);
+  /*$FC89*/ rom_vtabz(line);
 
 copy: /* $FC8C -- one character, right to left */
   TICK(15);
   {
-    const uint8_t at = s_y;
+    const uint8_t at = col;
     /*$FC8E*/ poke((uint16_t)(bas2_16() + at), peek((uint16_t)(bas16() + at)));
     /*$FC90*/ const uint8_t next = (uint8_t)(at - 0x01);
     negative = (uint8_t)(next & 0x80);
-    s_y = next;
+    col = next;
     if (!negative) {
       // $FC91 BPL -- the branch itself, taken here (loop back).
       /*$FC91*/ TICK(1);
@@ -1531,8 +1533,7 @@ copy: /* $FC8C -- one character, right to left */
 
 last_line: /* $FC95 -- blank what the scroll left at the bottom */
   TICK(8);
-  s_y = 0x00;
-  /*$FC97*/ rom_clreolz(s_y);
+  /*$FC97*/ rom_clreolz(0x00);
 
   /*$FC9A*/ TICK(2);
   if (!s_status_c) {
@@ -1598,10 +1599,9 @@ last_line: /* $FC95 -- blank what the scroll left at the bottom */
 /// falls into the carriage return, and a carriage return falls into the line
 /// feed -- and writing it as nested ifs would need each of those spelled out
 /// twice.
-static void rom_coutz(void) {
-
+static void rom_coutz(uint8_t ch) {
   /*$FB78*/ TICK(4);
-  if (s_a != 0x8d) {
+  if (ch != 0x8d) {
     /*$FB7A*/ TICK(1);
     goto emit;
   }
@@ -1611,14 +1611,14 @@ static void rom_coutz(void) {
      Ctrl-C is left in the keyboard latch on the way out so that whatever is
      running next still sees it; anything else is consumed. */
   /*$FB7C*/ GAME_CYCLES_COORD(0xfb7c, 6);
-  s_y = io_peek(0xc000);
-  if (!(s_y & 0x80)) {
+  uint8_t key = io_peek(0xc000);
+  if (!(key & 0x80)) {
     /*$FB7F*/ TICK(1);
     goto emit;
   }
 
   /*$FB81*/ TICK(4);
-  if (s_y != 0x93) {
+  if (key != 0x93) {
     /*$FB83*/ TICK(1);
     goto emit;
   }
@@ -1627,14 +1627,14 @@ static void rom_coutz(void) {
 
   for (;;) { /* $FB88 -- spin until a key is pressed */
     TICK(6);
-    s_y = io_peek(0xc000);
-    if (!(s_y & 0x80)) {
+    key = io_peek(0xc000);
+    if (!(key & 0x80)) {
       /*$FB8B*/ TICK(1);
       continue;
     }
 
     /*$FB8D*/ TICK(4);
-    if (s_y == 0x83) {
+    if (key == 0x83) {
       // Ctrl-C: leave it latched.
       /*$FB8F*/ TICK(1);
       break;
@@ -1646,7 +1646,7 @@ static void rom_coutz(void) {
 emit: /* $FB94 JMP $FBFD */
   TICK(3);
   /*$FBFD*/ TICK(4);
-  if (!(s_a >= 0xa0)) {
+  if (!(ch >= 0xa0)) {
     // The not-taken arm jumps straight to the dispatch without the edge charge.
     goto dispatch;
   }
@@ -1656,15 +1656,13 @@ emit: /* $FB94 JMP $FBFD */
 
 store: /* $FBF0 -- put the character at the cursor */
   TICK(9);
-  s_y = s_ch;
-  /*$FBF2*/ poke((uint16_t)(bas16() + s_y), s_a);
+  /*$FBF2*/ poke((uint16_t)(bas16() + s_ch), ch);
 
   /*$FBF4*/ TICK(13);
   s_ch = (uint8_t)(s_ch + 0x01);
-  s_a = s_ch;
   {
     const uint8_t width = s_wndwdth;
-    s_status_c = (uint8_t)(s_a >= width);
+    s_status_c = (uint8_t)(s_ch >= width);
     if (s_status_c) {
       // Off the right edge, so wrap: the same thing a carriage return does.
       /*$FBFA*/ TICK(1);
@@ -1676,28 +1674,27 @@ store: /* $FBF0 -- put the character at the cursor */
 
 dispatch: /* $FC01 -- not printable; which control code is it? */
   TICK(4);
-  s_y = s_a;
-  if (!(s_a & 0x80)) {
+  if (!(ch & 0x80)) {
     // Below $80 the monitor stores it anyway, high bit and all.
     /*$FC02*/ TICK(1);
     goto store;
   }
 
   /*$FC04*/ TICK(4);
-  if (s_a == 0x8d) {
+  if (ch == 0x8d) {
     /*$FC06*/ TICK(1);
     goto carriage_return;
   }
 
   /*$FC08*/ TICK(4);
-  if (s_a == 0x8a) {
+  if (ch == 0x8a) {
     /*$FC0A*/ TICK(1);
     goto line_feed;
   }
 
   /*$FC0C*/ TICK(4);
-  s_status_c = (uint8_t)(s_a >= 0x88);
-  if (s_a != 0x88) {
+  s_status_c = (uint8_t)(ch >= 0x88);
+  if (ch != 0x88) {
     /*$FC0E*/ TICK(1);
     goto bell;
   }
@@ -1722,7 +1719,6 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
   /*$FC1A*/ TICK(8);
   {
     const uint8_t top = s_wndtop;
-    s_a = top;
     const uint8_t cv = s_cv;
     s_status_c = (uint8_t)(top >= cv);
     if (s_status_c) {
@@ -1742,7 +1738,6 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
 bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
   TICK(4);
   {
-    const uint8_t ch = s_a;
     const uint8_t differs = (uint8_t)(ch != 0x87);
     s_status_c = (uint8_t)(ch >= 0x87);
     if (differs) {
@@ -1755,19 +1750,17 @@ bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
 
   // A tenth of a second of silence, then 192 clicks of the speaker.
   /*$FBDD*/ TICK(8);
-  s_a = 0x40;
-  /*$FBDF*/ rom_wait();
+  /*$FBDF*/ rom_wait(0x40);
   /*$FBE2*/ TICK(2);
-  s_y = 0xc0;
+  uint8_t clicks = 0xc0;
 
   for (;;) { /* $FBE4 */
     TICK(8);
-    s_a = 0x0c;
-    /*$FBE6*/ rom_wait();
+    /*$FBE6*/ rom_wait(0x0c);
     /*$FBE9*/ TICK(8);
-    s_a = io_peek(0xc030);
-    /*$FBEC*/ s_y = (uint8_t)(s_y - 0x01);
-    if (!s_y)
+    io_peek(0xc030); // the click; the read is the write
+    /*$FBEC*/ clicks = (uint8_t)(clicks - 0x01);
+    if (!clicks)
       break;
     /*$FBED*/ TICK(1);
   }
@@ -1825,18 +1818,16 @@ out:
 /// catch a wrong guess here -- a silent fallback would render with the wrong
 /// font onto the wrong page, undetectably.
 void rom_cout(uint8_t ch) {
-  s_a = ch;
-
   uint16_t vector;
 
   /*$FDED*/ TICK(5);
             vector = csw16(); // JMP ($36)
             switch (vector) {
             case 0xfdf0:
-              rom_cout1();
+              rom_cout1(ch);
               break;
             case 0x664a:
-              game_cout_hook_native(s_a);
+              game_cout_hook_native(ch);
               break;
             default:
               fprintf(
@@ -1860,27 +1851,29 @@ void rom_cout(uint8_t ch) {
 /// Printable characters ($A0 and up) are masked with INVFLG, which is how the
 /// monitor does inverse and flashing -- $FF leaves them alone. Control codes
 /// are let through unmasked, since mangling them would change what they mean.
-static void rom_cout1(void) {
-
+static void rom_cout1(uint8_t ch) {
   /*$FDF0*/ TICK(4);
-  const bool printable = s_a >= 0xa0;
+  const bool printable = ch >= 0xa0;
   s_status_c = (uint8_t)printable;
 
   if (printable) {
     /*$FDF4*/ TICK(3);
-    s_a = (uint8_t)(s_a & s_invflg);
+    ch = (uint8_t)(ch & s_invflg);
   } else {
     // $FDF2 BCC -- the branch itself, taken here.
     /*$FDF2*/ TICK(1);
   }
 
+  // Y is saved and restored around the call because COUT promises its callers
+  // that it preserves it. That promise is why s_y is still a variable at all
+  // in this file -- see game_cout_hook_native, which reads it.
   /*$FDF6*/ TICK(12);
   s_ysav1 = s_y;
-  /*$FDF8*/ push8(s_a);
-  rom_coutz(); // JSR $FB78
+  /*$FDF8*/ push8(ch);
+  rom_coutz(ch); // JSR $FB78
 
   /*$FDFC*/ TICK(13);
-  s_a = pop8();
+  (void)pop8();
   /*$FDFD*/ s_y = s_ysav1;
 
   /*$FDFF*/
@@ -1902,8 +1895,9 @@ void rom_setkbd(void) {
 
   /*$FE89*/ TICK(11);
   s_a2l = 0x00;
-  s_x = 0x38;
-  s_y = 0x1b;
+  // X and Y are the built-in device's vector, $FD1B (KEYIN). SETIO below keeps
+  // the low half and replaces the page.
+  const uint8_t entry_low = 0x1b;
   // $FE91 BNE -- provably always taken (Y was just loaded #$1B, nonzero),
   // same reasoning as $FC60 in rom_home: the decompiler doesn't do
   // cross-instruction flag proofs, so the branch still executes and still
@@ -1916,23 +1910,24 @@ void rom_setkbd(void) {
   // one.
   /*$FE9B*/ TICK(7);
   /*$FE9D*/ const uint8_t slot = (uint8_t)(s_a2l & 0x0f);
-  s_a = slot;
+  uint8_t page, low;
   if (slot) {
     /*$FEA1*/ TICK(6);
-    s_a = (uint8_t)(s_a | 0xc0);
-    s_y = 0x00;
+    page = (uint8_t)(slot | 0xc0);
+    low = 0x00;
     // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
     /*$FEA5*/ TICK(1);
   } else {
     // $FE9F BEQ -- the branch itself, taken here.
     /*$FE9F*/ TICK(1);
     /*$FEA7*/ TICK(2);
-    s_a = 0xfd;
+    page = 0xfd;
+    low = entry_low;
   }
 
   /*$FEA9*/ TICK(14);
-  s_kswl = s_y;
-  s_kswh = s_a;
+  s_kswl = low;
+  s_kswh = page;
 
   /*$FEAD*/
 }
@@ -1950,8 +1945,8 @@ void rom_setvid(void) {
 
   /*$FE93*/ TICK(9);
   s_a2l = 0x00;
-  s_x = 0x36;
-  s_y = 0xf0;
+  // The same, for $FDF0 (COUT1).
+  const uint8_t entry_low = 0xf0;
 
   // $FE9B SETIO. A2L is the slot; slot 0 means the built-in device and the ROM
   // answers page $FD, where its own KEYIN and COUT1 live. A real slot would
@@ -1959,23 +1954,24 @@ void rom_setvid(void) {
   // one.
   /*$FE9B*/ TICK(7);
   /*$FE9D*/ const uint8_t slot = (uint8_t)(s_a2l & 0x0f);
-  s_a = slot;
+  uint8_t page, low;
   if (slot) {
     /*$FEA1*/ TICK(6);
-    s_a = (uint8_t)(s_a | 0xc0);
-    s_y = 0x00;
+    page = (uint8_t)(slot | 0xc0);
+    low = 0x00;
     // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
     /*$FEA5*/ TICK(1);
   } else {
     // $FE9F BEQ -- the branch itself, taken here.
     /*$FE9F*/ TICK(1);
     /*$FEA7*/ TICK(2);
-    s_a = 0xfd;
+    page = 0xfd;
+    low = entry_low;
   }
 
   /*$FEA9*/ TICK(14);
-  s_cswl = s_y;
-  s_cswh = s_a;
+  s_cswl = low;
+  s_cswh = page;
 
   /*$FEAD*/
 }
@@ -2840,7 +2836,7 @@ static void lores_plot(uint8_t row, uint8_t col) {
 }
 
 /// $7019 through its adapter: the next display-list byte.
-static uint8_t script_byte(uint16_t ret) {
+static uint8_t script_byte(void) {
   return game_next_byte_native();
 }
 
@@ -2985,7 +2981,7 @@ static void seek_script(void) {
     }
     for (;;) {
       TICK(6);
-      const uint8_t b = script_byte(0x7123);
+      const uint8_t b = script_byte();
       TICK(4);
       if (b == OP_END) {
         TICK(1);
@@ -3016,7 +3012,7 @@ restart:
 
   for (;;) {
     TICK(6);
-    const uint8_t op = script_byte(0x712d);
+    const uint8_t op = script_byte();
 
     TICK(4);
     if (op == OP_RESTART) {
@@ -3029,13 +3025,13 @@ restart:
     TICK(4);
     if (op == OP_HLINE) {
       TICK(6);
-      const uint8_t ink = script_byte(0x7140);
+      const uint8_t ink = script_byte();
       TICK(9);
-      const uint8_t col = script_byte(0x7145);
+      const uint8_t col = script_byte();
       TICK(9);
-      const uint8_t last = script_byte(0x714a);
+      const uint8_t last = script_byte();
       TICK(9);
-      const uint8_t row = script_byte(0x714f);
+      const uint8_t row = script_byte();
       TICK(12);
       set_ink(ink);
 
@@ -3053,13 +3049,13 @@ restart:
     TICK(4);
     if (op == OP_VLINE) {
       TICK(6);
-      const uint8_t ink = script_byte(0x716e);
+      const uint8_t ink = script_byte();
       TICK(9);
-      const uint8_t row = script_byte(0x7173);
+      const uint8_t row = script_byte();
       TICK(9);
-      const uint8_t last = script_byte(0x7178);
+      const uint8_t last = script_byte();
       TICK(9);
-      const uint8_t col = script_byte(0x717d);
+      const uint8_t col = script_byte();
       TICK(12);
       set_ink(ink);
 
@@ -3078,11 +3074,11 @@ restart:
     TICK(4);
     if (op == OP_PLOT) {
       TICK(6);
-      const uint8_t ink = script_byte(0x7194);
+      const uint8_t ink = script_byte();
       TICK(9);
-      const uint8_t col = script_byte(0x7199);
+      const uint8_t col = script_byte();
       TICK(9);
-      const uint8_t row = script_byte(0x719e);
+      const uint8_t row = script_byte();
       TICK(12);
       set_ink(ink);
 
@@ -3098,7 +3094,7 @@ restart:
     TICK(4);
     if (op == OP_STORE) {
       TICK(6);
-      const uint8_t v = script_byte(0x71b9);
+      const uint8_t v = script_byte();
       TICK(7);
       s_level_time = v;
       continue;
@@ -3309,7 +3305,7 @@ void game_lores_vline_native(Cell c, uint8_t to_row) {
 /// $6633-$6636, calls $64C8, and copies it back out; those eight ram_pokes
 /// were what a struct copy looks like without structs, and the block is the
 /// argument now.
-static void step_bouncer_slot(int slot, uint16_t block, uint16_t cycles, uint16_t ret,
+static void step_bouncer_slot(int slot, uint16_t block, uint16_t cycles,
                               uint16_t back_block, uint16_t back_cycles) {
   GAME_CYCLES(block, cycles);
   Bouncer b = s_bouncers[slot];
@@ -3358,7 +3354,7 @@ uint8_t game_step_bouncers_native(void) {
   }
   TICK(1);
 
-  step_bouncer_slot(0, 0x659c, 38, 0x65b6, 0x65b7, 40);
+  step_bouncer_slot(0, 0x659c, 38, 0x65b7, 40);
 
   if (s_difficulty == 0x01) {
     TICK(3);
@@ -3366,7 +3362,7 @@ uint8_t game_step_bouncers_native(void) {
   }
   TICK(1);
 
-  step_bouncer_slot(1, 0x65d9, 38, 0x65f3, 0x65f4, 35);
+  step_bouncer_slot(1, 0x65d9, 38, 0x65f4, 35);
   return dequeue_key();
 }
 
@@ -3810,7 +3806,7 @@ enum { kCharZero = 0xb0 };
 /// printed with D clear -- $7267 is the only thing in the game that sets it,
 /// and it clears it again before returning -- so say so loudly rather than
 /// carry a decimal path that cannot be reached.
-static void cout_digit(uint8_t digit, uint16_t ret) {
+static void cout_digit(uint8_t digit) {
   if (s_status_d) {
     fprintf(stderr, "cout_digit: entered with decimal mode set\n");
     error_handler(0x71f3);
@@ -3834,7 +3830,7 @@ void game_print_bcd_native(uint8_t byte) {
   if (digit_seen()) {
     TICK(1);
     TICK(14);
-    cout_digit(high, 0x720d);
+    cout_digit(high);
   } else {
     // A leading zero: dropped, and nothing is printed.
     TICK(7);
@@ -3854,7 +3850,7 @@ void game_print_bcd_native(uint8_t byte) {
   if (digit_seen()) {
     TICK(1);
     TICK(14);
-    cout_digit(low, 0x7224);
+    cout_digit(low);
     TICK(6);
   } else {
     TICK(10);
@@ -4419,8 +4415,7 @@ void game_cout_hook_native(uint8_t ch) {
   }
 
   TICK(7);
-  s_a = ch; // PLA -- the high bit is still on it
-  rom_cout1(); // JMP $FDF0
+  rom_cout1(ch); // JMP $FDF0 -- the PLA, high bit still on it
 }
 
 /* ========================================================================== */
@@ -4946,7 +4941,6 @@ static bool steer_try(
     uint8_t dir,
     uint16_t before_addr,
     unsigned before_cycles,
-    uint16_t move_ok_ret,
     uint16_t after_addr,
     unsigned after_cycles) {
   /* What the original's BEQ tests. It was s_status_not_z; nothing outside this
@@ -5014,7 +5008,7 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
       TICK(2);
       dir = DIR_UP;
     }
-    settled = steer_try(dir, 0x6a40, 10, 0x6a45, 0x6a46, 2);
+    settled = steer_try(dir, 0x6a40, 10, 0x6a46, 2);
     if (!settled)
       TICK(1);
   } else {
@@ -5025,11 +5019,11 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
   if (!settled) {
     TICK(10);
     if (apple_col >= head_col) {
-      settled = steer_try(DIR_RIGHT, 0x6a62, 12, 0x6a69, 0x6a6a, 2);
+      settled = steer_try(DIR_RIGHT, 0x6a62, 12, 0x6a6a, 2);
       if (settled) {
         TICK(1);
       } else {
-        settled = steer_try(DIR_LEFT, 0x6a6c, 12, 0x6a73, 0x6a74, 2);
+        settled = steer_try(DIR_LEFT, 0x6a6c, 12, 0x6a74, 2);
         if (settled)
           TICK(1);
         else
@@ -5037,11 +5031,11 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
       }
     } else {
       TICK(1);
-      settled = steer_try(DIR_LEFT, 0x6a79, 12, 0x6a80, 0x6a81, 2);
+      settled = steer_try(DIR_LEFT, 0x6a79, 12, 0x6a81, 2);
       if (settled) {
         TICK(1);
       } else {
-        settled = steer_try(DIR_RIGHT, 0x6a83, 12, 0x6a8a, 0x6a8b, 2);
+        settled = steer_try(DIR_RIGHT, 0x6a83, 12, 0x6a8b, 2);
         if (settled)
           TICK(1);
         // Refused: falls straight into $6A8D, where the other branch had to
@@ -5054,18 +5048,18 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
   if (!settled) {
     TICK(10);
     if (apple_row >= head_row) {
-      settled = steer_try(DIR_DOWN, 0x6a95, 12, 0x6a9c, 0x6a9d, 2);
+      settled = steer_try(DIR_DOWN, 0x6a95, 12, 0x6a9d, 2);
       if (settled)
         TICK(1);
     } else {
       TICK(1);
     }
     if (!settled) {
-      settled = steer_try(DIR_UP, 0x6a9f, 12, 0x6aa6, 0x6aa7, 2);
+      settled = steer_try(DIR_UP, 0x6a9f, 12, 0x6aa7, 2);
       if (settled) {
         TICK(1);
       } else {
-        settled = steer_try(DIR_DOWN, 0x6aa9, 12, 0x6ab0, 0x6ab1, 2);
+        settled = steer_try(DIR_DOWN, 0x6aa9, 12, 0x6ab1, 2);
         if (settled) {
           TICK(1);
         } else {
@@ -6247,7 +6241,7 @@ start_round: /* $76C7 */
   game_set_apple_value_native();
   TICK(14);
   io_peek(0xc054);       // page 1
-  s_a = io_peek(0xc053); // mixed text/graphics
+  io_peek(0xc053);       // mixed text/graphics
   const Cell apple = game_place_apple_native();
   TICK(6);
   // $76F6 redraws it, at the cell game_place_apple just chose.
