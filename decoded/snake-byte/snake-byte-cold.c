@@ -353,12 +353,10 @@ void rom_bascalc(void) {
     // ADC #$7F with carry set, i.e. +$80: the second half of the band.
     if (!s_status_d) {
       const uint16_t r = (uint16_t)(s_a + 0x007f) + s_status_c;
-      s_status_v = ovf8((uint8_t)r, s_a, 0x7f);
       s_a = (uint8_t)r;
     } else {
       const uint16_t r = adc_dec16(s_a, 0x7f, s_status_c);
       s_a = (uint8_t)r;
-      s_status_v = (((uint8_t)(r >> 8) & 0x40) != 0);
     }
   }
   branchTarget = true;
@@ -370,8 +368,6 @@ void rom_bascalc(void) {
   const uint16_t shifted = (uint16_t)(s_a << 0x02);
   s_status_c = (uint8_t)((shifted & 0x01ff) >> 8);
   const uint8_t addr_lo = (uint8_t)shifted | s_basl;
-  s_status_not_z = addr_lo;
-  s_status_n = (addr_lo & 0x80);
   s_a = addr_lo;
   s_basl = addr_lo;
 
@@ -393,18 +389,12 @@ void rom_vtabz(void) {
     const uint8_t left = s_wndlft;
     const uint16_t r = ((uint16_t)s_a + left) + s_status_c;
     s_status_c = (uint8_t)(r >> 8);
-    s_status_v = ovf8((uint8_t)r, s_a, left);
     s_a = (uint8_t)r;
-    s_status_not_z = s_a;
-    s_status_n = (s_a & 0x80);
   } else {
     const uint16_t r = adc_dec16(s_a, s_wndlft, s_status_c);
     s_a = (uint8_t)r;
     const uint8_t flags = (uint8_t)(r >> 8);
     s_status_c = (flags & 0x01);
-    s_status_not_z = (uint8_t)(~flags & 2);
-    s_status_v = ((flags & 0x40) != 0);
-    s_status_n = (flags & 0x80);
   }
   s_basl = s_a;
 
@@ -449,9 +439,7 @@ void rom_clreolz(void) {
     s_y = next;
 
     const uint8_t width = s_wndwdth;
-    s_status_not_z = (next != width);
     s_status_c = (next >= width);
-    s_status_n = (uint8_t)((uint8_t)(next - width) & 0x80);
     branchTarget = true;
     if (next >= width)
       break;
@@ -480,6 +468,15 @@ void rom_wait(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
+  /* The SBC's Z, which both loops branch on. A local for the same reason the
+     scroll's N is one: nothing outside this routine ever read the flag, and
+     each read here follows the SBC that sets it.
+
+     Also not checked by running it -- rom_wait's only caller is BELL1 and
+     nothing emits Ctrl-G, so it fires zero times in both scenarios. Inverting
+     either test below passes all six cold checks. */
+  uint8_t not_zero = 0;
+
   /*$FCA8*/ TICK(2);
   s_status_c = 0x01;
 
@@ -494,16 +491,16 @@ void rom_wait(void) {
         const uint16_t r = (uint16_t)(s_a - 0x0001) - (uint8_t)(0x01 - s_status_c);
         s_status_c = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
         s_a = (uint8_t)r;
-        s_status_not_z = s_a;
+        not_zero = s_a;
       } else {
         const uint16_t r = sbc_dec16(s_a, 0x01, s_status_c);
         s_a = (uint8_t)r;
         const uint8_t flags = (uint8_t)(r >> 8);
         s_status_c = (flags & 0x01);
-        s_status_not_z = (uint8_t)(~flags & 2);
+        not_zero = (uint8_t)(~flags & 2);
       }
       branchTarget = true;
-      if (!s_status_not_z)
+      if (!not_zero)
         break;
       /*$FCAC*/ TICK(1);
       branchTarget = true;
@@ -516,19 +513,17 @@ void rom_wait(void) {
       const uint8_t before = s_a;
       const uint16_t r = (uint16_t)(before - 0x0001) - (uint8_t)(0x01 - s_status_c);
       s_status_c = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
-      s_status_v = ovf8((uint8_t)r, before, 0xfe);
       s_a = (uint8_t)r;
-      s_status_not_z = s_a;
+      not_zero = s_a;
     } else {
       const uint16_t r = sbc_dec16(s_a, 0x01, s_status_c);
       s_a = (uint8_t)r;
       const uint8_t flags = (uint8_t)(r >> 8);
       s_status_c = (flags & 0x01);
-      s_status_not_z = (uint8_t)(~flags & 2);
-      s_status_v = ((flags & 0x40) != 0);
+      not_zero = (uint8_t)(~flags & 2);
     }
     branchTarget = true;
-    if (!s_status_not_z)
+    if (!not_zero)
       break;
     /*$FCB1*/ TICK(1);
     branchTarget = true;
@@ -1240,8 +1235,6 @@ static void rom_plot1(void) {
   const uint16_t at = (uint16_t)(gbas16() + s_y);
   const uint8_t old = peek(at);
   const uint8_t mixed = (uint8_t)(((old ^ s_color) & s_mask) ^ old);
-  s_status_not_z = mixed;
-  s_status_n = (mixed & 0x80);
   s_a = mixed;
   /*$F816*/ poke(at, mixed);
 
@@ -1268,19 +1261,15 @@ void rom_plot(void) {
   const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
   s_a = half;
-  /*$F801*/ push8((uint8_t)((row & 0x01) | ((half == 0) << 1) | (s_status_i << 2) |
-                            (s_status_d << 3) | STATUS_B | (s_status_v << 6) |
-                            (half & 0x80)));
+  /*$F801*/ push8((uint8_t)((row & 0x01) | ((half == 0) << 1) | (s_status_d << 3) |
+                            STATUS_B | (half & 0x80)));
   /*$F802*/ rom_gbascalc();
 
   /*$F805*/ TICK(8);
   {
     const uint8_t saved = pop8();
     s_status_c = (uint8_t)(saved & 0x01);
-    s_status_i = ((saved & 0x04) != 0);
     s_status_d = ((saved & 0x08) != 0);
-    s_status_b = 0x00;
-    s_status_v = ((saved & 0x40) != 0);
   }
   /*$F806*/ s_a = 0x0f;
 
@@ -1289,14 +1278,12 @@ void rom_plot(void) {
     if (!s_status_d) {
       const uint16_t r = ((uint16_t)s_a + 0x00e0) + s_status_c;
       s_status_c = (uint8_t)(r >> 8);
-      s_status_v = ovf8((uint8_t)r, s_a, 0xe0);
       s_a = (uint8_t)r;
     } else {
       const uint16_t r = adc_dec16(s_a, 0xe0, s_status_c);
       s_a = (uint8_t)r;
       const uint8_t flags = (uint8_t)(r >> 8);
       s_status_c = (flags & 0x01);
-      s_status_v = ((flags & 0x40) != 0);
     }
   } else {
     // $F808 BCC -- the branch itself, taken here.
@@ -1359,12 +1346,10 @@ down: /* $F826 -- one row at a time, up to V2 */
   TICK(2);
   if (!s_status_d) {
     const uint16_t r = ((uint16_t)s_a + 0x0001) + s_status_c;
-    s_status_v = ovf8((uint8_t)r, s_a, 0x01);
     s_a = (uint8_t)r;
   } else {
     const uint16_t r = adc_dec16(s_a, 0x01, s_status_c);
     s_a = (uint8_t)r;
-    s_status_v = (((uint8_t)(r >> 8) & 0x40) != 0);
   }
 
   /*$F828*/ TICK(9);
@@ -1402,8 +1387,6 @@ void rom_setcol(void) {
   const uint16_t shifted = (uint16_t)(low << 0x04);
   s_status_c = (uint8_t)((shifted & 0x01ff) >> 8);
   const uint8_t both = (uint8_t)((uint8_t)shifted | s_color);
-  s_status_not_z = both;
-  s_status_n = (both & 0x80);
   s_a = both;
   s_color = both;
 
@@ -1426,9 +1409,8 @@ void rom_scrn(void) {
   const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
   s_a = half;
-  /*$F872*/ push8((uint8_t)((row & 0x01) | ((half == 0) << 1) | (s_status_i << 2) |
-                            (s_status_d << 3) | STATUS_B | (s_status_v << 6) |
-                            (half & 0x80)));
+  /*$F872*/ push8((uint8_t)((row & 0x01) | ((half == 0) << 1) | (s_status_d << 3) |
+                            STATUS_B | (half & 0x80)));
   /*$F873*/ rom_gbascalc();
 
   /*$F876*/ TICK(11);
@@ -1439,10 +1421,7 @@ void rom_scrn(void) {
   /*$F878*/ {
     const uint8_t saved = pop8();
     s_status_c = (uint8_t)(saved & 0x01);
-    s_status_i = ((saved & 0x04) != 0);
     s_status_d = ((saved & 0x08) != 0);
-    s_status_b = 0x00;
-    s_status_v = ((saved & 0x40) != 0);
   }
 
   if (upper) {
@@ -1456,8 +1435,6 @@ void rom_scrn(void) {
 
   /*$F87F*/ TICK(8);
   s_a &= 0x0f;
-  s_status_not_z = s_a;
-  s_status_n = 0x00;
 
   /*$F881*/
 }
@@ -1554,6 +1531,19 @@ void rom_fc68(void) {
   bool branchTarget = true;
   (void)branchTarget;
 
+  /* The scroll's N. It was s_status_n while every routine in this file
+     maintained the whole status register; this is the only routine that ever
+     read the flag, and both reads are below, inside and just after the copy
+     loop, on paths the DEY that sets it dominates. So it is a local, and the
+     other thirty-nine writes of s_status_n in this file were dead stores and
+     are gone.
+
+     Not checked by running it: nothing in either scenario scrolls, and $FC8C
+     and $FC93 are on probe-acceptance.sh's unverified list to say so.
+     Inverting the test below passes all six cold checks. This rests on the
+     dominance argument above, not on a green gate. */
+  uint8_t negative = 0;
+
   /*$FC68*/ TICK(8);
   s_a = s_cv;
   branchTarget = true;
@@ -1579,12 +1569,10 @@ scroll: /* $FC76 -- one line up per pass */
   /*$FC81*/ s_a = pop8();
   if (!s_status_d) {
     const uint16_t r = ((uint16_t)s_a + 0x0001) + s_status_c;
-    s_status_v = ovf8((uint8_t)r, s_a, 0x01);
     s_a = (uint8_t)r;
   } else {
     const uint16_t r = adc_dec16(s_a, 0x01, s_status_c);
     s_a = (uint8_t)r;
-    s_status_v = (((uint8_t)(r >> 8) & 0x40) != 0);
   }
 
   /*$FC86*/ branchTarget = true;
@@ -1605,10 +1593,10 @@ copy: /* $FC8C -- one character, right to left */
     const uint8_t at = s_y;
     /*$FC8E*/ poke((uint16_t)(bas2_16() + at), peek((uint16_t)(bas16() + at)));
     /*$FC90*/ const uint8_t next = (uint8_t)(at - 0x01);
-    s_status_n = (uint8_t)(next & 0x80);
+    negative = (uint8_t)(next & 0x80);
     s_y = next;
     branchTarget = true;
-    if (!s_status_n) {
+    if (!negative) {
       // $FC91 BPL -- the branch itself, taken here (loop back).
       /*$FC91*/ TICK(1);
       goto copy;
@@ -1617,7 +1605,7 @@ copy: /* $FC8C -- one character, right to left */
 
   /*$FC93*/ TICK(2);
   branchTarget = true;
-  if (s_status_n) {
+  if (negative) {
     // $FC93 BMI -- the branch itself, taken here (outer loop back).
     /*$FC93*/ TICK(1);
     goto scroll;
@@ -1726,7 +1714,6 @@ static void rom_coutz(void) {
   }
 
   /*$FB85*/ TICK(4);
-  s_status_v = (uint8_t)((io_peek(0xc010) >> 0x06) & 0x01);
 
   for (;;) { /* $FB88 -- spin until a key is pressed */
     TICK(6);
@@ -1745,7 +1732,6 @@ static void rom_coutz(void) {
       break;
     }
     /*$FB91*/ TICK(4);
-    s_status_v = (uint8_t)((io_peek(0xc010) >> 0x06) & 0x01);
     break;
   }
 
@@ -1771,9 +1757,7 @@ store: /* $FBF0 -- put the character at the cursor */
   s_a = s_ch;
   {
     const uint8_t width = s_wndwdth;
-    s_status_not_z = (uint8_t)(s_a != width);
     s_status_c = (uint8_t)(s_a >= width);
-    s_status_n = (uint8_t)((uint8_t)(s_a - width) & 0x80);
     branchTarget = true;
     if (s_status_c) {
       // Off the right edge, so wrap: the same thing a carriage return does.
@@ -1822,8 +1806,6 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
   /*$FC10*/ TICK(7);
   {
     const uint8_t back = (uint8_t)(s_ch - 0x01);
-    s_status_not_z = back;
-    s_status_n = (uint8_t)(back & 0x80);
     s_ch = back;
     branchTarget = true;
     if (!(back & 0x80)) {
@@ -1843,9 +1825,7 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
     const uint8_t top = s_wndtop;
     s_a = top;
     const uint8_t cv = s_cv;
-    s_status_not_z = (uint8_t)(top != cv);
     s_status_c = (uint8_t)(top >= cv);
-    s_status_n = (uint8_t)((uint8_t)(top - cv) & 0x80);
     branchTarget = true;
     if (s_status_c) {
       // Already on the window's top line; there is nowhere to go up to.
@@ -1868,9 +1848,7 @@ bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
   {
     const uint8_t ch = s_a;
     const uint8_t differs = (uint8_t)(ch != 0x87);
-    s_status_not_z = differs;
     s_status_c = (uint8_t)(ch >= 0x87);
-    s_status_n = (uint8_t)((uint8_t)(ch - 0x87) & 0x80);
     branchTarget = true;
     if (differs) {
       // Not the bell either. Drop it.
@@ -1897,8 +1875,6 @@ bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
     /*$FBE9*/ TICK(8);
     s_a = io_peek(0xc030);
     /*$FBEC*/ s_y = (uint8_t)(s_y - 0x01);
-    s_status_not_z = s_y;
-    s_status_n = (uint8_t)(s_y & 0x80);
     branchTarget = true;
     if (!s_y)
       break;
@@ -2021,8 +1997,6 @@ static void rom_cout1(void) {
   /*$FDFC*/ TICK(13);
   s_a = pop8();
   /*$FDFD*/ s_y = s_ysav1;
-  s_status_not_z = s_y;
-  s_status_n = (s_y & 0x80);
 
   branchTarget = true;
   (void)branchTarget;
@@ -2872,7 +2846,6 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
       .col = (uint8_t)(kColDelta[dir] + s_head.col),
       .row = (uint8_t)(kRowDelta[dir] + s_head.row),
   };
-  s_status_v = ovf8(target.row, kRowDelta[dir], s_head.row);
 
   const uint8_t cell = cell_at(target);
   *cell_out = cell;
@@ -2907,8 +2880,6 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
         .col = (uint8_t)(target.col + kNeighbour[i].dcol),
         .row = (uint8_t)(target.row + kNeighbour[i].drow),
     };
-    if (kNeighbour[i].drow)
-      s_status_v = ovf8(n.row, target.row, kNeighbour[i].drow > 0 ? 0x01 : 0xfe);
 
     const uint8_t v = cell_at(n);
     GAME_CYCLES(kNeighbour[i].cmp_block, 4);
@@ -3003,8 +2974,6 @@ static void lores_vline_at(uint8_t col, uint8_t row, uint8_t to_row) {
     /*$7000*/ TICK(6);
     const uint8_t restored = game_lores_vline_native((Cell){.col = col, .row = row}, to_row);
     s_a = restored;
-    s_status_not_z = restored;
-    s_status_n = (restored & 0x80);
   }
 }
 
@@ -3343,9 +3312,6 @@ uint8_t game_draw_cell_native(uint8_t ink, Cell c) {
   s_y = c.col;
   s_a = hgr_hi;
   s_status_c = 0x01;
-  s_status_not_z = 0x00;
-  s_status_n = 0x00;
-  s_status_v = ovf8(s_a, (uint8_t)(s_a - 0x04), 0x04);
   return hgr_hi;
 }
 
@@ -3431,8 +3397,6 @@ uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
     const uint8_t mask = game_load_shape_masks(s_shape);
     s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
     s_a = mask;
-    s_status_not_z = mask;
-    s_status_n = (mask & 0x80);
   }
   for (;;) {
     TICK(6);
@@ -3449,12 +3413,8 @@ uint8_t game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
   TICK(6);
   s_a = c.col;
   s_status_c = 0x01;
-  s_status_not_z = 0x00;
-  s_status_n = 0x00;
   s_a = c.col;
   s_status_c = 0x01;
-  s_status_not_z = 0x00;
-  s_status_n = 0x00;
   return c.col;
 }
 
@@ -3467,8 +3427,6 @@ uint8_t game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
     const uint8_t mask = game_load_shape_masks(s_shape);
     s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
     s_a = mask;
-    s_status_not_z = mask;
-    s_status_n = (mask & 0x80);
   }
   for (;;) {
     TICK(6);
@@ -3485,8 +3443,6 @@ uint8_t game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
   TICK(6);
   s_a = c.row;
   s_status_c = 0x01;
-  s_status_not_z = 0x00;
-  s_status_n = 0x00;
   return c.row;
 }
 
@@ -3825,8 +3781,6 @@ static void edit_key_blank(uint8_t slot) {
   TICK(11);
   s_x = slot;
   s_a = 0xa0; // space
-  s_status_not_z = 0xa0;
-  s_status_n = 0x80;
   rom_cout();
 
   TICK(2);
@@ -3863,8 +3817,6 @@ static uint8_t edit_key_prompt(uint8_t slot) {
   s_x = slot;
   const uint8_t glyph = slot_glyph(slot);
   s_a = glyph;
-  s_status_not_z = glyph;
-  s_status_n = (glyph & 0x80);
   rom_cout();
 
   TICK(2);
@@ -4138,7 +4090,6 @@ void game_add_score_native(void) {
   // back -- `apple2tc --ir`, which also explains the D: it is live out too,
   // and the original's CLD is what makes it false.
   s_status_c = carry;
-  s_status_v = ((flags & 0x40) != 0);
   s_status_d = 0x00;
 }
 
@@ -4280,7 +4231,6 @@ Cell game_place_apple_native(void) {
   TICK(32);
   const uint8_t flags = bcd_inc16(s_apples_afield);
   s_status_c = (flags & 0x01);
-  s_status_v = ((flags & 0x40) != 0);
   return at;
 }
 
@@ -4295,7 +4245,6 @@ void game_set_apple_value_native(void) {
   uint8_t levels = s_script_index;
   s_status_d = 0x01;
 
-  uint8_t flags = 0;
   for (;;) {
     TICK(28);
     uint16_t r = adc_dec16(per_apple, s_apple_value[0], 0x00);
@@ -4303,7 +4252,6 @@ void game_set_apple_value_native(void) {
 
     r = adc_dec16(s_apple_value[1], 0x00, (uint8_t)(r >> 8) & 0x01);
     s_apple_value[1] = (uint8_t)r;
-    flags = (uint8_t)(r >> 8);
 
     if (!--levels)
       break;
@@ -4311,8 +4259,7 @@ void game_set_apple_value_native(void) {
   }
 
   TICK(8);
-  // V and D are the whole of this routine's live-out set.
-  s_status_v = ((flags & 0x40) != 0);
+  // D is the whole of this routine's live-out set now that V has gone.
   s_status_d = 0x00;
 }
 
@@ -4333,8 +4280,6 @@ void game_mark_head_native(void) {
 
   // A and its flags are live out of $6BEF, unlike almost everything else here.
   s_a = 0x01;
-  s_status_not_z = 0x01;
-  s_status_n = 0x00;
 }
 
 /// $6BDA -- draw the cell the caller set up, and if $0305 says the head is on
@@ -4359,8 +4304,6 @@ void game_draw_head_native(uint8_t ink, Cell c) {
       // last entry rather than one past it.
       s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
       s_a = mask;
-      s_status_not_z = mask;
-      s_status_n = (mask & 0x80);
       }
 
       if (s_status_d) {
@@ -4376,9 +4319,6 @@ void game_draw_head_native(uint8_t ink, Cell c) {
       s_y = c.col;
       s_a = last_hi;
       s_status_c = 0x01;
-      s_status_not_z = 0x00;
-      s_status_n = 0x00;
-      s_status_v = ovf8(s_a, (uint8_t)(s_a - 0x04), 0x04);
     }
   } else {
     TICK(1);
@@ -4403,7 +4343,6 @@ void game_award_extra_life_native(void) {
   s_lives = (uint8_t)r;
   const uint8_t flags = (uint8_t)(r >> 8);
   s_status_c = (flags & 0x01);
-  s_status_v = ((flags & 0x40) != 0);
   s_status_d = 0x00;
   game_sound_sweep_native();
 
@@ -4419,8 +4358,6 @@ void game_plot_shape_native(uint8_t ink, Cell c) {
     // last entry rather than one past it.
     s_x = (uint8_t)((uint8_t)(s_shape << 2) + 3);
     s_a = mask;
-    s_status_not_z = mask;
-    s_status_n = (mask & 0x80);
   }
   game_draw_cell_native(ink, c); // JMP -- a tail call.
 }
@@ -4485,8 +4422,6 @@ void game_sound_sweep_native(void) {
   s_a = last;
   s_x = x;
   s_y = port;
-  s_status_not_z = x;
-  s_status_n = (x & 0x80);
 }
 
 /// $7590 -- show \p key as the binding of slot \p slot on the redefinition
@@ -4520,14 +4455,10 @@ void game_show_key_native(uint8_t slot, uint8_t key) {
 
   TICK(10);
   s_a = glyph;
-  s_status_not_z = glyph;
-  s_status_n = (glyph & 0x80);
   rom_cout();
 
   TICK(9);
   s_x = slot;
-  s_status_not_z = slot;
-  s_status_n = (slot & 0x80);
 }
 
 /// $6B3D -- both side walls, each in two segments of different ink, with the
@@ -4889,8 +4820,6 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       // and the PLA samples memory, and ram.probe compares only the live stack.
       const uint8_t code = game_read_direction_native(key);
       s_a = code;
-      s_status_not_z = code;
-      s_status_n = (code & 0x80);
     }
     uint8_t code = s_a;
 
@@ -5260,6 +5189,11 @@ static bool steer_try(
     uint16_t move_ok_ret,
     uint16_t after_addr,
     unsigned after_cycles) {
+  /* What the original's BEQ tests. It was s_status_not_z; nothing outside this
+     routine ever read that flag, so it is a local. This one the gate does
+     run: inverting the sense of the return below fails the play screen. */
+  uint8_t move_taken = 0;
+
   GAME_CYCLES(before_addr, before_cycles);
   s_steer_dir = dir;
   { // was game_move_ok()
@@ -5276,32 +5210,31 @@ static bool steer_try(
     uint8_t cell = 0;
     const MoveVerdict v = snake_move_verdict(s_steer_dir, &cell);
 
-    // Turn the verdict back into what the callers at $6A40 branch on.
+    // Turn the verdict back into what the callers at $6A40 branch on. The
+    // switch covers every MoveVerdict, so move_taken is always assigned; the
+    // initialiser above is there because the compiler cannot see that.
     switch (v) {
     case MOVE_TARGET_TAKEN:
     // $6AD9 CMP #$0F left these.
     s_a = cell;
-    s_status_not_z = (cell != 0x0f);
+    move_taken = (cell != 0x0f);
     s_status_c = (cell >= 0x0f);
-    s_status_n = ((uint8_t)(cell - 0x0f) & 0x80);
     break;
     case MOVE_ROW_ZERO:
     case MOVE_OK:
     s_a = 0x00;
-    s_status_not_z = 0x00;
-    s_status_n = 0x00;
+    move_taken = 0x00;
     break;
     case MOVE_DEAD_END:
     s_a = 0x01;
-    s_status_not_z = 0x01;
-    s_status_n = 0x00;
+    move_taken = 0x01;
     break;
     }
   }
   GAME_CYCLES(after_addr, after_cycles);
   // The original branches on Z, which game_move_ok leaves set for exactly the
   // verdicts that permit the move -- including a target holding the apple.
-  return s_status_not_z == 0;
+  return move_taken == 0;
 }
 
 SteerChoice game_auto_steer(uint8_t *key_out) {
@@ -5572,7 +5505,6 @@ void game_bonus_screen(void) {
   s_bonus_amount[1] = (uint8_t)hi;
   s_a = (uint8_t)hi;
   s_status_c = (uint8_t)(hi >> 8) & 0x01;
-  s_status_v = ((uint8_t)(hi >> 8) & 0x40) != 0;
   s_status_d = 0x00; // $78C7 CLD
 
   // Twice, because the bonus is twice the apple value and game_add_score adds
@@ -5616,8 +5548,6 @@ void game_bonus_screen(void) {
   game_install_cout_vector();
   // The LDA #$4A flags are overwritten by the second load; only these outlive.
   s_a = 0x66;
-  s_status_not_z = 0x66;
-  s_status_n = 0x00;
   TICK(6);
   game_print_inline_str(0x7944);
   TICK(15);
@@ -5688,8 +5618,6 @@ void game_bonus_screen(void) {
 void game_begin_life(void) {
   TICK(8);
   s_a = game_start_life(0x14);
-  s_status_not_z = s_a;
-  s_status_n = 0x00;
 
   TICK(36);
   s_tail.col = s_a; // from $6630, by way of $660F
@@ -5889,8 +5817,6 @@ wait: /* $741C */
   game_install_cout_vector();
   // The LDA #$4A flags are overwritten by the second load; only these outlive.
   s_a = 0x66;
-  s_status_not_z = 0x66;
-  s_status_n = 0x00;
   TICK(11);
   s_cv = 0x01;
   game_print_inline_str(0x748e);
@@ -6043,8 +5969,6 @@ void game_print_inline_str(uint16_t ret_addr) {
     const uint8_t ch = peek(s_str_ptr);
     s_y = 0x00;
     s_a = ch;
-    s_status_not_z = ch;
-    s_status_n = (ch & 0x80);
     if (!ch) {
       /*$7243*/ TICK(1);
       break;
@@ -6362,8 +6286,6 @@ void game_move_bouncer(Bouncer *b) {
   // The state the original leaves behind: A holds the row it loaded first, and
   // the flags come from that load.
   s_a = b->row;
-  s_status_not_z = b->row;
-  s_status_n = (b->row & 0x80);
 
   bouncer_step(b);
 }
@@ -7036,12 +6958,7 @@ void init_emulated(void) {
   s_x = SB_ENTRY_X;
   s_y = SB_ENTRY_Y;
   s_sp = SB_ENTRY_SP;
-  s_status_n = SB_ENTRY_STATUS & 0x80;
-  s_status_v = (SB_ENTRY_STATUS & 0x40) != 0;
-  s_status_b = (SB_ENTRY_STATUS & 0x10) != 0;
   s_status_d = (SB_ENTRY_STATUS & 0x08) != 0;
-  s_status_i = (SB_ENTRY_STATUS & 0x04) != 0;
-  s_status_not_z = !(SB_ENTRY_STATUS & 0x02);
   s_status_c = (SB_ENTRY_STATUS & 0x01) != 0;
 
   /* The soft switches, which no RAM image carries. $01 is text, page 1, not
