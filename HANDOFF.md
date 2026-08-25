@@ -406,9 +406,9 @@ The two builds run different code and must agree frame for frame.
 ```
 range $3750-$854E  19967 bytes
   code              4244   21.3%
-  declared data    12883   64.5%
-  unknown zero      2389   12.0%
-  unknown nonzero    451    2.3%   <- what is left to identify
+  declared data    13046   65.3%
+  unknown zero      2327   11.7%
+  unknown nonzero    350    1.8%   <- what is left to identify
 ```
 
 `known-data.txt` declares the identified non-code regions, each with its
@@ -420,10 +420,11 @@ The largest remaining gaps:
 
 ```
 $799B-$7FFF  1637 bytes,  275 nonzero   84% zero -- a buffer with scattered state
-$616B-$61FF   149 bytes,   98 nonzero   tbl_hgr_masks, extent not yet derived
 $7680-$7690    17 bytes,   17 nonzero
 $6633-$6640    14 bytes,   14 nonzero
 $6232-$6255    36 bytes,   11 nonzero   near buf_keys
+$616B-$6173     9 bytes,    8 nonzero   unreached *code*, not data: LDA $C000 /
+                                        STA $C010 / STA $09 / RTS
 ```
 
 then a long tail of runs under 10 bytes. Nothing left is a cluster; this is
@@ -555,7 +556,7 @@ written; the artifact is not finished.
 
 ```
                                   now    was    note
-ram_peek/ram_poke, any form         16    314   all 16 are read-only image tables
+ram_peek/ram_poke, any form          3    314   the entry-state loader, nothing else
 s_status_* references               62    222   c 27, d 35; the other five are gone
 s_a / s_x / s_y references          15    307   11 are COUT's X/Y promise, 3 the
                                                 entry load; see "The registers"
@@ -642,6 +643,26 @@ count, `rom_coutz(ch)` carries the character through eleven branches as a
 parameter instead of in A, and SETIO's `X`/`Y` turn out to be the built-in
 device's vector -- `$FD1B` for KEYIN, `$FDF0` for COUT1 -- which is the first
 time reading it says so.
+
+**The lookup tables are arrays** (2026-08-25). Thirteen of them, and the last
+`ram_peek` of game data went with them -- the three that remain are the
+entry-state loader filling `s_ram`. They had been left as image reads on the
+grounds that they are "the image, not variables that happen to live in it",
+which was an assertion rather than a reason: the real obstacle was that the
+extents had not been derived, which is the playbook's own red flag.
+
+**Deriving one of them was the whole point.** `$6174`'s shape masks hold data
+to `$61DF` -- 27 shapes, the last `$1A`, the largest the code names. But the
+tail is drawn with shape `ahead + $0C` where `ahead` is a lo-res cell, so 0-15,
+which reaches shape `$1B` and index 111: past the data, into the zero padding
+that runs to the code at `$6200`. An array sized to the data -- or to the 107
+the two scenarios actually reach, which was measured -- would have been an
+out-of-bounds read the first time a tail walked into a cell holding 15, on a
+path no recording takes.
+
+**The gate cannot check a table entry nothing reads**, so all 13 arrays were
+compared against `snake-byte.b33` byte for byte instead. That check is worth
+repeating after any edit to them.
 
 **The 15 that remain are the floor, and they are one thing.** Eleven are COUT's
 promise to preserve X and Y. The game repoints CSWL/CSWH at its own hi-res
