@@ -233,10 +233,10 @@ void rom_setkbd(void);
 void rom_setvid(void);
 void game_move_bouncer(Bouncer *b);
 void game_print_inline_str(uint16_t ret_addr);
-void rom_bascalc(void);
-void rom_vtabz(void);
+uint8_t rom_bascalc(uint8_t line);
+void rom_vtabz(uint8_t line);
 void rom_clreol(void);
-void rom_clreolz(void);
+void rom_clreolz(uint8_t col);
 void rom_wait(void);
 
 /// The program starts here. There used to be a func_t001 in between -- the
@@ -334,63 +334,55 @@ static void emulated_entry_point(void) {
 /// A and the flags are left as the original leaves them, because COUT1 and
 /// CLREOLZ both read BASL straight afterwards and the monitor's callers are
 /// not all in this file's control.
-void rom_bascalc(void) {
-
+uint8_t rom_bascalc(uint8_t line) {
   /*$FBC1*/ TICK(20);
-  const uint8_t line = s_a;
   // LSR: the carry is the line's low bit, and it is what decides the ADC below.
   const uint8_t odd = line & 0x01;
   s_status_c = odd;
   s_bash = (uint8_t)(((line >> 1) & 0x03) | 0x04);
-  s_a = line & 0x18;
+  uint8_t band = line & 0x18;
 
   if (!odd) {
     /*$FBCC*/ TICK(1);
   } else {
     /*$FBCE*/ TICK(2);
     // ADC #$7F with carry set, i.e. +$80: the second half of the band.
-    if (!s_status_d) {
-      const uint16_t r = (uint16_t)(s_a + 0x007f) + s_status_c;
-      s_a = (uint8_t)r;
-    } else {
-      const uint16_t r = adc_dec16(s_a, 0x7f, s_status_c);
-      s_a = (uint8_t)r;
-    }
+    if (!s_status_d)
+      band = (uint8_t)((uint16_t)(band + 0x007f) + s_status_c);
+    else
+      band = (uint8_t)adc_dec16(band, 0x7f, s_status_c);
   }
 
   /*$FBD0*/ TICK(19);
-  s_basl = s_a;
+  s_basl = band;
   // ASL twice, then OR the original back in. The second shift's carry out is
   // the one the original leaves behind.
-  const uint16_t shifted = (uint16_t)(s_a << 0x02);
+  const uint16_t shifted = (uint16_t)(band << 0x02);
   s_status_c = (uint8_t)((shifted & 0x01ff) >> 8);
   const uint8_t addr_lo = (uint8_t)shifted | s_basl;
-  s_a = addr_lo;
   s_basl = addr_lo;
-
+  return addr_lo;
 }
 
 /// $FC24 VTABZ. BASCALC for the line in A, then shift the base right by the
 /// window's left edge, so BASL points at the first column of the window rather
 /// than of the screen.
-void rom_vtabz(void) {
-
+void rom_vtabz(uint8_t line) {
   /*$FC24*/ TICK(6);
-  rom_bascalc();
+  const uint8_t base = rom_bascalc(line);
 
   /*$FC27*/ TICK(6);
+  uint8_t basl;
   if (!s_status_d) {
-    const uint8_t left = s_wndlft;
-    const uint16_t r = ((uint16_t)s_a + left) + s_status_c;
+    const uint16_t r = ((uint16_t)base + s_wndlft) + s_status_c;
     s_status_c = (uint8_t)(r >> 8);
-    s_a = (uint8_t)r;
+    basl = (uint8_t)r;
   } else {
-    const uint16_t r = adc_dec16(s_a, s_wndlft, s_status_c);
-    s_a = (uint8_t)r;
-    const uint8_t flags = (uint8_t)(r >> 8);
-    s_status_c = (flags & 0x01);
+    const uint16_t r = adc_dec16(base, s_wndlft, s_status_c);
+    basl = (uint8_t)r;
+    s_status_c = (uint8_t)((r >> 8) & 0x01);
   }
-  s_basl = s_a;
+  s_basl = basl;
 
   /*$FC2B*/ TICK(6);
 }
@@ -403,11 +395,8 @@ void rom_vtabz(void) {
 /// scrolls. The body is three instructions and its tail call is the routine
 /// below, which *is* exercised, so what is unchecked is the LDY and the jump.
 void rom_clreol(void) {
-
   /*$FC9C*/ TICK(3);
-  s_y = s_ch;
-  rom_clreolz(); // JMP -- a tail call.
-
+  rom_clreolz(s_ch); // JMP -- a tail call.
 }
 
 /// $FC9E CLREOLZ. The same, from column Y rather than from the cursor. Writes
@@ -415,18 +404,16 @@ void rom_clreol(void) {
 ///
 /// Y is left at the width and the carry set, which is how the original exits
 /// the loop; both are still written because the monitor's callers read them.
-void rom_clreolz(void) {
-
+void rom_clreolz(uint8_t col) {
   /*$FC9E*/ TICK(2);
-  s_a = 0xa0; // a space, high bit set
+  const uint8_t space = 0xa0; // a space, high bit set
 
   for (;;) {
     /*$FCA0*/ TICK(13);
-    const uint8_t col = s_y;
-    poke((uint16_t)(bas16() + col), s_a);
+    poke((uint16_t)(bas16() + col), space);
 
     const uint8_t next = (uint8_t)(col + 1);
-    s_y = next;
+    col = next;
 
     const uint8_t width = s_wndwdth;
     s_status_c = (next >= width);
@@ -1146,8 +1133,8 @@ static void game_play_one_life(void);
 
 /* Helpers that remain in the generated code. Redeclared here so that this file
    reads standalone; C permits identical redeclarations. */
-void rom_vtabz(void);
-void rom_clreolz(void);
+void rom_vtabz(uint8_t line);
+void rom_clreolz(uint8_t col);
 void rom_clreol(void);
 void rom_wait(void);
 
@@ -1175,21 +1162,19 @@ static void rom_cout1(void);
 /// the half. It differs in the tail: BASCALC ORs the shifted value back in to
 /// build a text address, and this one shifts by two and ORs, which lands on
 /// the lo-res page instead.
-static void rom_gbascalc(void) {
-
+static void rom_gbascalc(uint8_t row) {
   /*$F847*/ TICK(20);
-  const uint8_t row = s_a;
   const uint8_t odd = (uint8_t)(row & 0x01);
   s_status_c = odd;
   /*$F84D*/ s_gbash = (uint8_t)(((row >> 0x01) & 0x03) | 0x04);
-  /*$F850*/ s_a = (uint8_t)(row & 0x18);
+  /*$F850*/ uint8_t band = (uint8_t)(row & 0x18);
 
   if (odd) {
     /*$F854*/ TICK(2);
     if (!s_status_d)
-      s_a = (uint8_t)((s_a + 0x7f) + s_status_c);
+      band = (uint8_t)((band + 0x7f) + s_status_c);
     else
-      s_a = (uint8_t)adc_dec16(s_a, 0x7f, s_status_c);
+      band = (uint8_t)adc_dec16(band, 0x7f, s_status_c);
   } else {
     // $F852 BCC -- the branch itself, taken here (not modelled by the block
     // above's own cost, which is the not-taken total; see the design doc on
@@ -1198,25 +1183,22 @@ static void rom_gbascalc(void) {
   }
 
   /*$F856*/ TICK(19);
-  s_gbasl = s_a;
-  /*$F85C*/ s_gbasl = (uint8_t)((uint8_t)(s_a << 0x02) | s_gbasl);
+  s_gbasl = band;
+  /*$F85C*/ s_gbasl = (uint8_t)((uint8_t)(band << 0x02) | s_gbasl);
 
   /*$F85E*/
 }
 
 /// $F80E PLOT1. Store the color mask ($30) into the lo-res half-byte selected
 /// by MASK ($2E) at GBASL/GBASH ($26) + Y.
-static void rom_plot1(void) {
-
+static void rom_plot1(uint8_t col) {
   // One lo-res cell: replace the half of the byte MASK selects with the
   // matching half of COLOR, leaving the other half alone. `(old ^ colour) &
   // mask ^ old` is the ROM's way of saying that in three instructions.
   /*$F80E*/ TICK(28);
-  const uint16_t at = (uint16_t)(gbas16() + s_y);
+  const uint16_t at = (uint16_t)(gbas16() + col);
   const uint8_t old = peek(at);
-  const uint8_t mixed = (uint8_t)(((old ^ s_color) & s_mask) ^ old);
-  s_a = mixed;
-  /*$F816*/ poke(at, mixed);
+  /*$F816*/ poke(at, (uint8_t)(((old ^ s_color) & s_mask) ^ old));
 
   /*$F818*/
 }
@@ -1233,16 +1215,12 @@ static void rom_plot1(void) {
 /// which is $F0 with the carry set and $EF without; only the low bit of the
 /// row can make the difference, so the sum is one of the two masks.
 void rom_plot(uint8_t row, uint8_t col) {
-  s_a = row;
-  s_y = col;
-
   /*$F800*/ TICK(11);
   const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
-  s_a = half;
   /*$F801*/ push8((uint8_t)((row & 0x01) | ((half == 0) << 1) | (s_status_d << 3) |
                             STATUS_B | (half & 0x80)));
-  /*$F802*/ rom_gbascalc();
+  /*$F802*/ rom_gbascalc(half);
 
   /*$F805*/ TICK(8);
   {
@@ -1250,19 +1228,18 @@ void rom_plot(uint8_t row, uint8_t col) {
     s_status_c = (uint8_t)(saved & 0x01);
     s_status_d = ((saved & 0x08) != 0);
   }
-  /*$F806*/ s_a = 0x0f;
+  /*$F806*/ uint8_t mask = 0x0f;
 
   if (upper) {
     /*$F80A*/ TICK(2);
     if (!s_status_d) {
-      const uint16_t r = ((uint16_t)s_a + 0x00e0) + s_status_c;
+      const uint16_t r = ((uint16_t)mask + 0x00e0) + s_status_c;
       s_status_c = (uint8_t)(r >> 8);
-      s_a = (uint8_t)r;
+      mask = (uint8_t)r;
     } else {
-      const uint16_t r = adc_dec16(s_a, 0xe0, s_status_c);
-      s_a = (uint8_t)r;
-      const uint8_t flags = (uint8_t)(r >> 8);
-      s_status_c = (flags & 0x01);
+      const uint16_t r = adc_dec16(mask, 0xe0, s_status_c);
+      mask = (uint8_t)r;
+      s_status_c = (uint8_t)((r >> 8) & 0x01);
     }
   } else {
     // $F808 BCC -- the branch itself, taken here.
@@ -1270,9 +1247,8 @@ void rom_plot(uint8_t row, uint8_t col) {
   }
 
   /*$F80C*/ TICK(3);
-  s_mask = s_a;
-  rom_plot1(); // JMP -- a tail call.
-
+  s_mask = mask;
+  rom_plot1(col); // JMP -- a tail call.
 }
 
 /* ========================================================================== */
@@ -1291,15 +1267,14 @@ void rom_plot(uint8_t row, uint8_t col) {
 /// depths and leave through each other, which C's loop forms cannot say
 /// without a flag that the original does not have.
 void rom_hline(uint8_t row, uint8_t from_col) {
-  s_a = row;
-  s_y = from_col;
+  uint8_t col = from_col;
 
   /*$F819*/ TICK(6);
-  rom_plot(s_a, s_y);
+  rom_plot(row, col);
 
 across: /* $F81C -- one column at a time, up to H2 */
   TICK(5);
-  s_status_c = (uint8_t)(s_y >= s_h2);
+  s_status_c = (uint8_t)(col >= s_h2);
   if (s_status_c) {
     // $F81E BCS -- the branch itself, taken here.
     /*$F81E*/ TICK(1);
@@ -1307,8 +1282,8 @@ across: /* $F81C -- one column at a time, up to H2 */
   }
 
   /*$F820*/ TICK(8);
-  s_y = (uint8_t)(s_y + 0x01);
-  /*$F821*/ rom_plot1();
+  col = (uint8_t)(col + 0x01);
+  /*$F821*/ rom_plot1(col);
   /*$F824*/ TICK(2);
   if (!s_status_c) {
     // $F824 BCC -- the branch itself, taken here.
@@ -1318,20 +1293,17 @@ across: /* $F81C -- one column at a time, up to H2 */
 
 down: /* $F826 -- one row at a time, up to V2 */
   TICK(2);
-  if (!s_status_d) {
-    const uint16_t r = ((uint16_t)s_a + 0x0001) + s_status_c;
-    s_a = (uint8_t)r;
-  } else {
-    const uint16_t r = adc_dec16(s_a, 0x01, s_status_c);
-    s_a = (uint8_t)r;
-  }
+  if (!s_status_d)
+    row = (uint8_t)(((uint16_t)row + 0x0001) + s_status_c);
+  else
+    row = (uint8_t)adc_dec16(row, 0x01, s_status_c);
 
   /*$F828*/ TICK(9);
-  push8(s_a);
-  /*$F829*/ rom_plot(s_a, s_y);
+  push8(row);
+  /*$F829*/ rom_plot(row, col);
   /*$F82C*/ TICK(9);
-  s_a = pop8();
-  /*$F82D*/ s_status_c = (uint8_t)(s_a >= s_v2);
+  row = pop8();
+  /*$F82D*/ s_status_c = (uint8_t)(row >= s_v2);
   if (!s_status_c) {
     // $F82F BCC -- the branch itself, taken here.
     /*$F82F*/ TICK(1);
@@ -1347,20 +1319,15 @@ done:
 /* ========================================================================== */
 
 void rom_setcol(uint8_t ink) {
-  s_a = ink;
-
-
   // The lo-res colour is stored in both nibbles, so a PLOT can take whichever
   // half MASK selects without shifting. Four ASLs and an ORA get there; the
   // carry the original leaves is the top bit shifted out of the low nibble.
   /*$F864*/ TICK(25);
-  const uint8_t low = (uint8_t)(s_a & 0x0f);
+  const uint8_t low = (uint8_t)(ink & 0x0f);
   s_color = low;
   const uint16_t shifted = (uint16_t)(low << 0x04);
   s_status_c = (uint8_t)((shifted & 0x01ff) >> 8);
-  const uint8_t both = (uint8_t)((uint8_t)shifted | s_color);
-  s_a = both;
-  s_color = both;
+  s_color = (uint8_t)((uint8_t)shifted | low);
 
   /*$F870*/
 }
@@ -1370,22 +1337,18 @@ void rom_setcol(uint8_t ink) {
 /* ========================================================================== */
 
 uint8_t rom_scrn(uint8_t row, uint8_t col) {
-  s_a = row;
-  s_y = col;
-
   // The row's low bit says which half of the byte holds this cell, and the
   // ROM keeps it across GBASCALC on the stack -- as the whole status
   // register, because LSR put it in the carry and PHP is one byte.
   /*$F871*/ TICK(11);
   const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
-  s_a = half;
   /*$F872*/ push8((uint8_t)((row & 0x01) | ((half == 0) << 1) | (s_status_d << 3) |
                             STATUS_B | (half & 0x80)));
-  /*$F873*/ rom_gbascalc();
+  /*$F873*/ rom_gbascalc(half);
 
   /*$F876*/ TICK(11);
-  s_a = peek((uint16_t)(gbas16() + s_y));
+  uint8_t cell = peek((uint16_t)(gbas16() + col));
 
   // PLP: only the carry matters to what follows, but the rest is restored
   // because the original restores it.
@@ -1397,18 +1360,16 @@ uint8_t rom_scrn(uint8_t row, uint8_t col) {
 
   if (upper) {
     /*$F87B*/ TICK(8);
-    s_status_c = (uint8_t)((s_a >> 0x03) & 0x01);
-    s_a = (uint8_t)(s_a >> 0x04);
+    s_status_c = (uint8_t)((cell >> 0x03) & 0x01);
+    cell = (uint8_t)(cell >> 0x04);
   } else {
     // $F879 BCC -- the branch itself, taken here.
     /*$F879*/ TICK(1);
   }
 
   /*$F87F*/ TICK(8);
-  s_a &= 0x0f;
-
   /*$F881*/
-  return s_a;
+  return cell & 0x0f;
 }
 
 /* ========================================================================== */
@@ -1437,9 +1398,9 @@ home: /* $FC58 */
   for (;;) { /* $FC46 -- CLRSC2, one line per pass */
     TICK(9);
     push8(s_a);
-    /*$FC47*/ rom_vtabz();
+    /*$FC47*/ rom_vtabz(s_a);
     /*$FC4A*/ TICK(6);
-    rom_clreolz();
+    rom_clreolz(s_y);
 
     /*$FC4D*/ TICK(13);
     s_y = 0x00;
@@ -1466,8 +1427,7 @@ home: /* $FC58 */
   }
 
   /*$FC22*/ TICK(3); // TABV
-  s_a = s_cv;
-  rom_vtabz(); // JMP -- a tail call.
+  rom_vtabz(s_cv); // JMP -- a tail call.
 }
 
 /* ========================================================================== */
@@ -1513,7 +1473,7 @@ void rom_fc68(void) {
   if (!(s_cv >= s_wndbtm)) {
     // $FC6C BCC -- the branch itself, taken here. Nothing to scroll.
     /*$FC6C*/ TICK(1);
-    rom_vtabz(); // JMP -- a tail call.
+    rom_vtabz(s_a); // JMP -- a tail call.
       return;
   }
 
@@ -1521,7 +1481,7 @@ void rom_fc68(void) {
   s_cv = (uint8_t)(s_cv - 0x01);
   /*$FC70*/ s_a = s_wndtop;
   /*$FC72*/ push8(s_a);
-  /*$FC73*/ rom_vtabz();
+  /*$FC73*/ rom_vtabz(s_a);
 
 scroll: /* $FC76 -- one line up per pass */
   TICK(28);
@@ -1545,7 +1505,7 @@ scroll: /* $FC76 -- one line up per pass */
 
   /*$FC88*/ TICK(9);
   push8(s_a);
-  /*$FC89*/ rom_vtabz();
+  /*$FC89*/ rom_vtabz(s_a);
 
 copy: /* $FC8C -- one character, right to left */
   TICK(15);
@@ -1572,7 +1532,7 @@ copy: /* $FC8C -- one character, right to left */
 last_line: /* $FC95 -- blank what the scroll left at the bottom */
   TICK(8);
   s_y = 0x00;
-  /*$FC97*/ rom_clreolz();
+  /*$FC97*/ rom_clreolz(s_y);
 
   /*$FC9A*/ TICK(2);
   if (!s_status_c) {
@@ -1584,8 +1544,7 @@ last_line: /* $FC95 -- blank what the scroll left at the bottom */
   /*$FC9A*/ TICK(1);
 
   /*$FC22*/ TICK(3); // TABV
-  s_a = s_cv;
-  rom_vtabz();
+  rom_vtabz(s_cv);
 }
 
 /* ========================================================================== */
@@ -1777,8 +1736,7 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
   /*$FC20*/ TICK(5);
   s_cv = (uint8_t)(s_cv - 0x01);
   /*$FC22*/ TICK(3); // TABV
-  s_a = s_cv;
-  rom_vtabz();
+  rom_vtabz(s_cv);
   goto out;
 
 bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
