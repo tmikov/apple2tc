@@ -17,8 +17,9 @@ move has to be done in for the gate to be evidence, what turns out to be a dead
 store the moment its byte leaves RAM, and which flag claims survived being
 checked. Two of them did not.
 
-**What the artifact still is not.** 288 `s_a`/`s_x`/`s_y` references, mostly
-the monitor's own argument passing; step 6; and the loose ends. See items 2-4.
+**What the artifact still is not.** 169 `s_a`/`s_x`/`s_y` references inside the
+`rom_*` bodies -- the monitor's own working state, now that its entry points
+take arguments; step 6; and the loose ends. See items 2-4.
 
 The gate is weaker than it once was, and this is the thing most likely to
 mislead a green run: the block-head trace compares **six** addresses, not 113,
@@ -556,7 +557,9 @@ written; the artifact is not finished.
                                   now    was    note
 ram_peek/ram_poke, any form         16    314   all 16 are read-only image tables
 s_status_* references              100    222   c 62, d 36; the other five are gone
-s_a / s_x / s_y references         288    307   step 4's remainder, mostly rom_*
+s_a / s_x / s_y references         185    307   169 of them inside rom_*
+  ... of those, outside rom_*        16    130   the COUT hook and the entry load
+branchTarget                         0    122   never read; 5 left inside one macro
 ram_peek(0x...) with a hex literal    0    115
 bb_N: labels                          0    141
 tmpN_U8 temporaries                   0
@@ -583,12 +586,13 @@ What remains, in order of how well-defined it is:
    trace its site and moves the pin; an adapter *merged* — charge, `CYCLES`
    site and write-back all moving inside the routine it describes — costs
    nothing.
-2. **Step 4's remainder: `s_a`/`s_x`/`s_y`**, 288 references. The game side is
-   already clean; what is left is overwhelmingly inside `rom_*`, where the
-   registers are the monitor's own argument-passing convention. Audit it the
-   way the flags were audited -- classify every site as a read or a write and
-   ask which reads a write can reach -- rather than by inspection. That method
-   is written up under "The game's state, and the flags".
+2. ~~**Step 4's remainder: `s_a`/`s_x`/`s_y`.**~~ **Mostly done 2026-08-24.**
+   130 references outside `rom_*` are down to 16, and those 16 are real. See
+   "The registers" below. What is left is **169 inside the `rom_*` bodies**,
+   where the registers are the monitor's own working state rather than its
+   interface -- the five entry points that callers actually use now take
+   arguments. Rewriting the bodies is a separate job and a bigger one; it needs
+   the same read-before-write analysis applied *within* each routine.
 3. **Step 6**, on the terms in its entry -- but **re-measure first**: its table
    of 130 probing / 721 charge-only sites predates the conversions and is
    stale. As of 2026-08-24 the file has 839 `TICK` (an addressless charge), 16
@@ -597,6 +601,43 @@ What remains, in order of how well-defined it is:
 4. **Loose ends:** 451 unknown nonzero bytes in `coverage.txt`, probe phase 3,
    and `robotron`/`bolo`, which have never been regenerated against any of this.
 
+
+### The registers
+
+Done 2026-08-24, same method as the flags: classify, do not inspect.
+
+**Compute which registers a routine reads on entry; do not read it off.** A
+fixpoint over read-before-write, following calls, is twelve lines of Python and
+it is the only reason `rom_cout`'s parameter list came out right: it reads X
+and Y as well as A, because it dispatches through `JMP ($36)` into the COUT
+hook and the hook reads them. Reading `rom_cout`'s own body would have said
+"A". The five entry points callers use are `rom_plot(row, col)`,
+`rom_scrn(row, col)` returning the cell, `rom_setcol(ink)`,
+`rom_hline(row, from_col)` and `rom_cout(ch)`; the bodies are untouched and
+assign to `s_a`/`s_y` at the top.
+
+**Poison, do not delete, to test whether a store is dead.** 42 residue writes
+were suspected dead. Assigning each `0x5A` instead of its intended value and
+running the gate is strictly stronger than deleting it: a deleted store leaves
+the *previous* value in the register, which can coincidentally be the right
+one, whereas a poisoned one cannot. Both batches passed all six cold checks.
+
+**An `apple2tc --ir` live-out claim expires.** Three of those writes carried a
+comment sourcing them to the IR's liveness analysis, and they were true --  of
+the *generated* program, where the reader was generated code. That reader
+became C and the claim quietly stopped holding. Re-derive; do not inherit.
+
+**A value the code cannot state can still be measured.** Two delay loops count
+down from whatever Y happens to hold, because the original never initialises
+it. Asserting `s_y == 0` at both sites over full runs of both scenarios never
+fired, so `spin()` takes it as an argument now and says where the number came
+from. That is weaker than a proof and stronger than a guess, and the comment
+says which.
+
+**`branchTarget` was never read.** 121 of its 122 occurrences were the
+generated dispatch's assembly-trace plumbing. The five that remain are inside
+`GAME_CYCLES_COORD`, which declares one in its own block -- and that is why the
+file's one bare `CYCLES` is spelled that way now.
 
 ### The game's state, and the flags
 
