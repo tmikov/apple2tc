@@ -233,10 +233,10 @@ void rom_setkbd(void);
 void rom_setvid(void);
 void game_move_bouncer(Bouncer *b);
 void game_print_inline_str(uint16_t ret_addr);
-uint8_t rom_bascalc(uint8_t line);
-void rom_vtabz(uint8_t line);
+uint8_t rom_bascalc(uint8_t line, bool *carry_out);
+bool rom_vtabz(uint8_t line);
 void rom_clreol(void);
-void rom_clreolz(uint8_t col);
+bool rom_clreolz(uint8_t col);
 void rom_wait(uint8_t n);
 
 /// The program starts here. There used to be a func_t001 in between -- the
@@ -334,11 +334,13 @@ static void emulated_entry_point(void) {
 /// A and the flags are left as the original leaves them, because COUT1 and
 /// CLREOLZ both read BASL straight afterwards and the monitor's callers are
 /// not all in this file's control.
-uint8_t rom_bascalc(uint8_t line) {
+/// Compute BASH and BASL for line \p line, returning BASL's low byte and, in
+/// \p carry_out, the bit shifted out of the second ASL -- which VTABZ adds
+/// straight back in.
+uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
   /*$FBC1*/ TICK(20);
   // LSR: the carry is the line's low bit, and it is what decides the ADC below.
   const uint8_t odd = line & 0x01;
-  s_status_c = odd;
   s_bash = (uint8_t)(((line >> 1) & 0x03) | 0x04);
   uint8_t band = line & 0x18;
 
@@ -346,19 +348,21 @@ uint8_t rom_bascalc(uint8_t line) {
     /*$FBCC*/ TICK(1);
   } else {
     /*$FBCE*/ TICK(2);
-    // ADC #$7F with carry set, i.e. +$80: the second half of the band.
+    // ADC #$7F with the carry the LSR just set, i.e. +$80: the second half of
+    // the band.
     if (!s_status_d)
-      band = (uint8_t)((uint16_t)(band + 0x007f) + s_status_c);
+      band = (uint8_t)((uint16_t)(band + 0x007f) + odd);
     else
-      band = (uint8_t)adc_dec16(band, 0x7f, s_status_c);
+      band = (uint8_t)adc_dec16(band, 0x7f, odd);
   }
 
   /*$FBD0*/ TICK(19);
   s_basl = band;
   // ASL twice, then OR the original back in. The second shift's carry out is
-  // the one the original leaves behind.
+  // what VTABZ adds straight back in, which is why it is returned rather than
+  // left in a flag.
   const uint16_t shifted = (uint16_t)(band << 0x02);
-  s_status_c = (uint8_t)((shifted & 0x01ff) >> 8);
+  *carry_out = ((shifted & 0x01ff) >> 8) != 0;
   const uint8_t addr_lo = (uint8_t)shifted | s_basl;
   s_basl = addr_lo;
   return addr_lo;
@@ -367,24 +371,26 @@ uint8_t rom_bascalc(uint8_t line) {
 /// $FC24 VTABZ. BASCALC for the line in A, then shift the base right by the
 /// window's left edge, so BASL points at the first column of the window rather
 /// than of the screen.
-void rom_vtabz(uint8_t line) {
+/// Point BASL/BASH at line \p line of the text screen.
+///
+/// Returns the carry out of `ADC WNDLFT`, which the scroll at $FC81 reads as
+/// the +1 that steps to the next line -- the same trick HOME plays with
+/// CLREOLZ's. The carry going *in* is BASCALC's, from its second ASL.
+bool rom_vtabz(uint8_t line) {
   /*$FC24*/ TICK(6);
-  const uint8_t base = rom_bascalc(line);
+  bool carry;
+  const uint8_t base = rom_bascalc(line, &carry);
 
   /*$FC27*/ TICK(6);
-  uint8_t basl;
-  if (!s_status_d) {
-    const uint16_t r = ((uint16_t)base + s_wndlft) + s_status_c;
-    s_status_c = (uint8_t)(r >> 8);
-    basl = (uint8_t)r;
-  } else {
-    const uint16_t r = adc_dec16(base, s_wndlft, s_status_c);
-    basl = (uint8_t)r;
-    s_status_c = (uint8_t)((r >> 8) & 0x01);
-  }
-  s_basl = basl;
+  uint16_t r;
+  if (!s_status_d)
+    r = ((uint16_t)base + s_wndlft) + carry;
+  else
+    r = adc_dec16(base, s_wndlft, carry);
+  s_basl = (uint8_t)r;
 
   /*$FC2B*/ TICK(6);
+  return ((r >> 8) & 0x01) != 0;
 }
 
 /// $FC9C CLREOL. Blank from the cursor to the right edge of the window.
@@ -396,7 +402,7 @@ void rom_vtabz(uint8_t line) {
 /// below, which *is* exercised, so what is unchecked is the LDY and the jump.
 void rom_clreol(void) {
   /*$FC9C*/ TICK(3);
-  rom_clreolz(s_ch); // JMP -- a tail call.
+  rom_clreolz(s_ch); // JMP -- a tail call; nobody reads its carry.
 }
 
 /// $FC9E CLREOLZ. The same, from column Y rather than from the cursor. Writes
@@ -404,7 +410,12 @@ void rom_clreol(void) {
 ///
 /// Y is left at the width and the carry set, which is how the original exits
 /// the loop; both are still written because the monitor's callers read them.
-void rom_clreolz(uint8_t col) {
+/// Blank from \p col to the window's right edge.
+///
+/// Returns the carry its final `CPY WNDWDTH` leaves, which is not decoration:
+/// HOME's CLRSC2 loop reaches its `ADC #$00` with no CLC of its own and uses
+/// this as the +1 that steps to the next line, and $FC9A branches on it.
+bool rom_clreolz(uint8_t col) {
   /*$FC9E*/ TICK(2);
   const uint8_t space = 0xa0; // a space, high bit set
 
@@ -416,14 +427,13 @@ void rom_clreolz(uint8_t col) {
     col = next;
 
     const uint8_t width = s_wndwdth;
-    s_status_c = (next >= width);
-    if (next >= width)
-      break;
+    if (next >= width) {
+      /*$FCA7*/ TICK(6);
+      return true;
+    }
 
     /*$FCA5*/ TICK(1);
   }
-
-  /*$FCA7*/ TICK(6);
 }
 
 /// $FCA8 WAIT. The monitor's delay: two nested `SBC #$01 / BNE` loops around
@@ -591,51 +601,25 @@ void rom_setvid(void);
 
 
 
-/// \file
-/// Snake Byte as ordinary C: parameters, return values, structs, locals.
-///
-/// Where this fits
-/// ---------------
-/// `game.c` holds the game's routines in the shape the 6502 left them --
-/// arguments in fixed zero-page addresses, results in A and the status flags,
-/// an emulated stack, `CYCLES` at every block head. That shape is not a
-/// stylistic choice: those routines are called by *generated* code, which
-/// reads that machine state, so each one has to present the same ABI the
-/// original did.
-///
-/// This file is the other end. Functions here take arguments and return
-/// values, and know nothing about `s_a`, the flags, or the return address.
-/// Each one is reached through a small adapter left behind in `game.c`, which
-/// marshals the machine state in and out. As callers convert, adapters
-/// disappear; `game.c` shrinks and this file grows, and the split between the
-/// two is exactly the frontier.
-///
-/// What it costs, and when
-/// -----------------------
-/// Three oracles check this code, and they do not survive the conversion
-/// equally:
-///
-///   the frame hashes (verify.sh) survive to the end -- they only look at
-///     video memory, which is the machine's no matter who writes it.
-///   the memory hashes (ram.probe) survive until a variable's *storage*
-///     leaves emulated RAM. Until then an adapter can write everything back
-///     before returning and the samples are unchanged.
-///   the block-head trace dies first, per routine, the moment a branch moves
-///     in here -- `CYCLES` cannot follow into real C without dragging the
-///     block structure with it.
-///
-/// So the conversion order is not arbitrary. A routine with a single block
-/// converts for free: its adapter keeps the one `CYCLES` and calls straight
-/// in. A routine with internal branches costs its share of the trace, and
-/// that is a deliberate trade to be made with the count in front of you, not
-/// discovered afterwards.
-///
-/// Storage
-/// -------
-/// Variables still live at their original addresses, because generated code
-/// and the unconverted half of `game.c` read them there. They are named here
-/// and reached through accessors, so that when the storage does move, one
-/// file changes and not every use.
+/* ========================================================================== *
+ * The game, as ordinary C                                                    *
+ * ========================================================================== *
+ *
+ * This section arrived as game_native.c, which was one half of a split: game.c
+ * held each routine in the shape the 6502 left it -- arguments in fixed
+ * zero-page addresses, results in A and the flags, an emulated stack, CYCLES
+ * at every block head -- because generated code called it and read that state,
+ * while game_native.c held the same routines as C behind an adapter that
+ * marshalled between the two.
+ *
+ * None of that is true here. There is no generated code left to keep an ABI
+ * for, the 42 adapters are gone, the arguments are arguments, and the storage
+ * is C variables rather than addresses reached through accessors. The two
+ * files are one, and the frontier the split described has been crossed.
+ *
+ * What survives from that arrangement is the cycle accounting below, and the
+ * reason it is spelled three different ways.
+ */
 
 
 /* --- Cycle accounting ----------------------------------------------------- */
@@ -1134,8 +1118,8 @@ static void game_play_one_life(void);
 
 /* Helpers that remain in the generated code. Redeclared here so that this file
    reads standalone; C permits identical redeclarations. */
-void rom_vtabz(uint8_t line);
-void rom_clreolz(uint8_t col);
+bool rom_vtabz(uint8_t line);
+bool rom_clreolz(uint8_t col);
 void rom_clreol(void);
 void rom_wait(uint8_t n);
 
@@ -1235,12 +1219,10 @@ void rom_plot(uint8_t row, uint8_t col) {
     /*$F80A*/ TICK(2);
     if (!s_status_d) {
       const uint16_t r = ((uint16_t)mask + 0x00e0) + s_status_c;
-      s_status_c = (uint8_t)(r >> 8);
       mask = (uint8_t)r;
     } else {
       const uint16_t r = adc_dec16(mask, 0xe0, s_status_c);
       mask = (uint8_t)r;
-      s_status_c = (uint8_t)((r >> 8) & 0x01);
     }
   } else {
     // $F808 BCC -- the branch itself, taken here.
@@ -1321,14 +1303,11 @@ done:
 
 void rom_setcol(uint8_t ink) {
   // The lo-res colour is stored in both nibbles, so a PLOT can take whichever
-  // half MASK selects without shifting. Four ASLs and an ORA get there; the
-  // carry the original leaves is the top bit shifted out of the low nibble.
+  // half MASK selects without shifting. Four ASLs and an ORA get there in the
+  // original; the carry they leave is read by nothing.
   /*$F864*/ TICK(25);
   const uint8_t low = (uint8_t)(ink & 0x0f);
-  s_color = low;
-  const uint16_t shifted = (uint16_t)(low << 0x04);
-  s_status_c = (uint8_t)((shifted & 0x01ff) >> 8);
-  s_color = (uint8_t)((uint8_t)shifted | low);
+  s_color = (uint8_t)((low << 0x04) | low);
 
   /*$F870*/
 }
@@ -1351,17 +1330,15 @@ uint8_t rom_scrn(uint8_t row, uint8_t col) {
   /*$F876*/ TICK(11);
   uint8_t cell = peek((uint16_t)(gbas16() + col));
 
-  // PLP: only the carry matters to what follows, but the rest is restored
-  // because the original restores it.
+  // PLP. Only D is restored: the carry the original brings back here is read
+  // by nothing, and the other bits were never pushed -- see rom_plot.
   /*$F878*/ {
     const uint8_t saved = pop8();
-    s_status_c = (uint8_t)(saved & 0x01);
     s_status_d = ((saved & 0x08) != 0);
   }
 
   if (upper) {
     /*$F87B*/ TICK(8);
-    s_status_c = (uint8_t)((cell >> 0x03) & 0x01);
     cell = (uint8_t)(cell >> 0x04);
   } else {
     // $F879 BCC -- the branch itself, taken here.
@@ -1403,25 +1380,26 @@ home: /* $FC58 */
     /*$FC47*/ rom_vtabz(line);
     /*$FC4A*/ TICK(6);
     // $FC5C loaded Y with 0 and CLREOLZ is the only thing that moves it, so
-    // every pass starts the blank at column 0.
-    rom_clreolz(0x00);
+    // every pass starts the blank at column 0. Its carry comes back out as the
+    // +1 below: $FC4D's `ADC #$00` has no CLC in front of it, and this is why.
+    const bool step = rom_clreolz(0x00);
 
     /*$FC4D*/ TICK(13);
     line = pop8();
     if (!s_status_d)
-      line = (uint8_t)(line + s_status_c);
+      line = (uint8_t)(line + step);
     else
-      line = (uint8_t)adc_dec16(line, 0x00, s_status_c);
+      line = (uint8_t)adc_dec16(line, 0x00, step);
 
-    /*$FC52*/ s_status_c = (uint8_t)(line >= s_wndbtm);
-    if (!s_status_c) {
+    /*$FC52*/ const bool past_bottom = line >= s_wndbtm;
+    if (!past_bottom) {
       // $FC54 BCC -- the branch itself, taken here.
       /*$FC54*/ TICK(1);
       continue;
     }
 
     /*$FC56*/ TICK(2);
-    if (!s_status_c)
+    if (!past_bottom)
       goto home; // the BCS's not-taken arm, which cannot be reached
     // $FC56 BCS -- the branch itself, same address as the block above because
     // this is a singleton one-instruction block.
@@ -1473,6 +1451,7 @@ void rom_fc68(void) {
 
   uint8_t line;
   uint8_t col = 0;
+  bool step = false;
 
   /*$FC68*/ TICK(8);
   if (!(s_cv >= s_wndbtm)) {
@@ -1486,7 +1465,7 @@ void rom_fc68(void) {
   s_cv = (uint8_t)(s_cv - 0x01);
   /*$FC70*/ line = s_wndtop;
   /*$FC72*/ push8(line);
-  /*$FC73*/ rom_vtabz(line);
+  /*$FC73*/ step = rom_vtabz(line);
 
 scroll: /* $FC76 -- one line up per pass */
   TICK(28);
@@ -1494,10 +1473,11 @@ scroll: /* $FC76 -- one line up per pass */
   /*$FC7C*/ s_bas2h = s_bash;
   /*$FC80*/ col = (uint8_t)(s_wndwdth - 0x01);
   /*$FC81*/ line = pop8();
+  // $FC82's ADC has no CLC either; the carry is whatever VTABZ last returned.
   if (!s_status_d)
-    line = (uint8_t)(((uint16_t)line + 0x0001) + s_status_c);
+    line = (uint8_t)(((uint16_t)line + 0x0001) + step);
   else
-    line = (uint8_t)adc_dec16(line, 0x01, s_status_c);
+    line = (uint8_t)adc_dec16(line, 0x01, step);
 
   if (line >= s_wndbtm) {
     // $FC86 BCS -- the branch itself, taken here. That was the last line.
@@ -1507,7 +1487,7 @@ scroll: /* $FC76 -- one line up per pass */
 
   /*$FC88*/ TICK(9);
   push8(line);
-  /*$FC89*/ rom_vtabz(line);
+  /*$FC89*/ step = rom_vtabz(line);
 
 copy: /* $FC8C -- one character, right to left */
   TICK(15);
@@ -1533,10 +1513,10 @@ copy: /* $FC8C -- one character, right to left */
 
 last_line: /* $FC95 -- blank what the scroll left at the bottom */
   TICK(8);
-  /*$FC97*/ rom_clreolz(0x00);
+  /*$FC97*/ const bool filled = rom_clreolz(0x00);
 
   /*$FC9A*/ TICK(2);
-  if (!s_status_c) {
+  if (!filled) {
     rom_clreol(); // JMP -- a tail call.
       return;
   }
@@ -1693,7 +1673,6 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
   }
 
   /*$FC0C*/ TICK(4);
-  s_status_c = (uint8_t)(ch >= 0x88);
   if (ch != 0x88) {
     /*$FC0E*/ TICK(1);
     goto bell;
@@ -1739,7 +1718,6 @@ bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
   TICK(4);
   {
     const uint8_t differs = (uint8_t)(ch != 0x87);
-    s_status_c = (uint8_t)(ch >= 0x87);
     if (differs) {
       // Not the bell either. Drop it.
       /*$FBDB*/ TICK(1);
@@ -1854,7 +1832,6 @@ void rom_cout(uint8_t ch) {
 static void rom_cout1(uint8_t ch) {
   /*$FDF0*/ TICK(4);
   const bool printable = ch >= 0xa0;
-  s_status_c = (uint8_t)printable;
 
   if (printable) {
     /*$FDF4*/ TICK(3);
@@ -3158,7 +3135,6 @@ void game_draw_cell_native(uint8_t ink, Cell c) {
 
   TICK(6);
   // The carry is what the loop's CPX #4 leaves.
-  s_status_c = 0x01;
 }
 
 /// $6B93 -- the same cell, merged instead of replaced: only bits are set, and
@@ -3247,8 +3223,6 @@ void game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
   }
   TICK(1);
   TICK(6);
-  s_status_c = 0x01;
-  s_status_c = 0x01;
 }
 
 /// $615A -- the same down a column: rows $03 through $08 in column $02.
@@ -3270,7 +3244,6 @@ void game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
   }
   TICK(1);
   TICK(6);
-  s_status_c = 0x01;
 }
 
 /// $7000 -- the lo-res half of a vertical run. Unlike the hi-res one it puts
@@ -3906,10 +3879,10 @@ void game_add_score_native(void) {
   // against snake-byte-easy.b33. Neither committed recording ever scores
   // enough to cross a byte boundary.
   //
-  // C and V are live out of $7267 and N and Z are not, so only these are put
-  // back -- `apple2tc --ir`, which also explains the D: it is live out too,
-  // and the original's CLD is what makes it false.
-  s_status_c = carry;
+  // D is the only flag live out of $7267 that survives here, and the
+  // original's CLD is what makes it false. `apple2tc --ir` also called C and V
+  // live out; that was true of the generated program, whose caller read them.
+  // Nothing does now.
   s_status_d = 0x00;
 }
 
@@ -3993,10 +3966,8 @@ uint8_t game_rand_byte_native(void) {
   }
 }
 
-/// Add one, in BCD, to the two-byte counter at \p at. Returns the flags
-/// adc_dec16 left on the second byte, because two of them are live out of
-/// $7642.
-static uint8_t bcd_inc16(uint8_t at[2]) {
+/// Add one, in BCD, to the two-byte counter at \p at.
+static void bcd_inc16(uint8_t at[2]) {
   s_status_d = 0x01;
   uint16_t r = adc_dec16(at[0], 0x01, 0x00);
   at[0] = (uint8_t)r;
@@ -4004,7 +3975,6 @@ static uint8_t bcd_inc16(uint8_t at[2]) {
   r = adc_dec16(at[1], 0x00, (uint8_t)(r >> 8) & 0x01);
   at[1] = (uint8_t)r;
   s_status_d = 0x00;
-  return (uint8_t)(r >> 8);
 }
 
 Cell game_place_apple_native(void) {
@@ -4043,8 +4013,7 @@ Cell game_place_apple_native(void) {
   // One more apple on screen. $77D0 watches this pair and calls back here when
   // it reaches zero.
   TICK(32);
-  const uint8_t flags = bcd_inc16(s_apples_afield);
-  s_status_c = (flags & 0x01);
+  bcd_inc16(s_apples_afield);
   return at;
 }
 
@@ -4121,7 +4090,6 @@ void game_draw_head_native(uint8_t ink, Cell c) {
       // reads it now.
       game_merge_cell_native(ink, c);
 
-      s_status_c = 0x01;
     }
   } else {
     TICK(1);
@@ -4142,10 +4110,7 @@ void game_draw_head_native(uint8_t ink, Cell c) {
 void game_award_extra_life_native(void) {
   TICK(22);
   s_status_d = 0x01;
-  const uint16_t r = adc_dec16(s_lives, 0x01, 0x00);
-  s_lives = (uint8_t)r;
-  const uint8_t flags = (uint8_t)(r >> 8);
-  s_status_c = (flags & 0x01);
+  s_lives = (uint8_t)adc_dec16(s_lives, 0x01, 0x00);
   s_status_d = 0x00;
   game_sound_sweep_native();
 
@@ -4969,7 +4934,6 @@ static bool steer_try(
     case MOVE_TARGET_TAKEN:
     // $6AD9 CMP #$0F left these.
     move_taken = (cell != 0x0f);
-    s_status_c = (cell >= 0x0f);
     break;
     case MOVE_ROW_ZERO:
     case MOVE_OK:
@@ -5250,7 +5214,6 @@ void game_bonus_screen(void) {
   s_bonus_amount[0] = (uint8_t)lo;
   const uint16_t hi = adc_dec16(s_apple_value[1], s_apple_value[1], (uint8_t)(lo >> 8) & 0x01);
   s_bonus_amount[1] = (uint8_t)hi;
-  s_status_c = (uint8_t)(hi >> 8) & 0x01;
   s_status_d = 0x00; // $78C7 CLD
 
   // Twice, because the bonus is twice the apple value and game_add_score adds
@@ -6689,7 +6652,13 @@ void init_emulated(void) {
   s_a2l = kSnakeByteEntryRam[0x3e];
 
   /* Registers. SP matters most -- the live stack bytes above are meaningless
-     without it. The flags are $A0: N set, everything else clear. */
+     without it. The flags are $A0: N set, everything else clear.
+
+     The carry is loaded with the rest even though nothing reads it before a
+     ROM routine overwrites it: this block is the machine's state at $3750, and
+     leaving one member out to save a line would make it something else. The
+     ten *residue* carry writes -- game routines setting it because the
+     original left it set -- are a different thing and are gone. */
   s_a = SB_ENTRY_A;
   s_x = SB_ENTRY_X;
   s_y = SB_ENTRY_Y;
