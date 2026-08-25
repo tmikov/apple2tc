@@ -2164,21 +2164,29 @@ static Bouncer s_bouncers[2] = {
     {.col = 0x26, .row = 0x01, .dx = -1, .dy = +1},
 };
 
+/// $6C63 -- the six bound keys, in slot order. The key-redefinition screen
+/// writes them; kKeyDefaults is the same six as shipped and is never written.
+static uint8_t s_key_table[6] = {0xc9, 0xca, 0xcb, 0xcd, 0x88, 0x95};
+
+/// $6060 -- the loaded shape's four scanline masks, which game_load_shape
+/// copies out of kShapeMaskTable and the two hi-res cell drawers read.
+/// $FF FF FF FF in the shipped image, which is what a shape of all dots
+/// would leave there.
+static uint8_t s_shape_mask[4] = {0xff, 0xff, 0xff, 0xff};
+
 /* --- The game's own tables ------------------------------------------------ */
 /*
- * All of these are data inside the loaded image, so they are read and never
- * written -- except kShapeMask, which is the working copy kShapeMaskTable is
- * copied into. labels.txt carries the same names for the disassembler.
+ * All of these are data inside the loaded image, read and never written, so
+ * they stay where they are: they are the image, not variables that happen to
+ * live in it. labels.txt carries the same names for the disassembler.
  */
 enum {
   kHgrLineLo = 0x6000,      ///< 48 hi-res line addresses, low bytes
   kHgrLineHi = 0x6030,      ///< and high bytes
-  kShapeMask = 0x6060,      ///< the loaded shape's four scanline masks
   kHgrPattern = 0x6064,     ///< dot patterns, indexed by the dot index
   kShapeMaskTable = 0x6174, ///< four masks per shape; the source for kShapeMask
   kSteerKey = 0x6a55,       ///< direction -> the key that turns to it
-  kAppleValueTable = 0x71c8, ///< per-apple value, indexed by kDifficulty
-  kKeyTable = 0x6c63,       ///< the six bound keys, in slot order
+  kAppleValueTable = 0x71c8, ///< per-apple value, indexed by s_difficulty
   kKeyDefaults = 0x6c6a,    ///< the same six as shipped; never written
   kKeyCH = 0x75b3,          ///< redefinition screen: where each slot's key
   kKeyCV = 0x75b9,          ///< ... and its arrow are printed
@@ -2228,11 +2236,6 @@ static bool s_sound_muted;
 
 /// $6C71 -- the player chose the joystick at the setup prompt.
 static bool s_joystick_selected;
-
-/// $3754 and $3757 -- the address operands of the LDA and STA in the
-/// relocation loop, which the loop increments to walk eight pages instead of
-/// keeping a page counter. Written back because ram.probe hashes the range.
-enum { kRelocLoadOp = 0x3754, kRelocStoreOp = 0x3757 };
 
 /* --- The plotter's arguments ---------------------------------------------- */
 /*
@@ -2392,13 +2395,11 @@ uint8_t game_load_shape_masks(uint8_t shape) {
   bool branchTarget = true;
   (void)branchTarget;
   /*$6127*/ TICK(53);
-  // Four masks per shape at $6174, and $6060 is where the plotter reads them.
-  // Both stay in emulated RAM: $6060 is read by game_draw_cell, which is not
-  // converted, and $6174 is part of the loaded binary image.
+  // Four masks per shape at $6174, into the four the plotter reads.
   uint8_t last = 0;
   for (unsigned line = 0; line < 4; ++line) {
     last = ram_peek(kShapeMaskTable + (uint8_t)((uint8_t)(shape << 2) + line));
-    ram_poke(kShapeMask + line, last);
+    s_shape_mask[line] = last;
   }
   return last;
 }
@@ -2614,7 +2615,7 @@ static uint8_t s_apples_quota[2] = {0x10, 0x00};
 /// LEVEL, one BCD byte.
 static uint8_t s_level = 0x01;
 
-/// What s_life_timer is loaded with when a life begins. Comes from kLevelTime,
+/// What s_life_timer is loaded with when a life begins. Comes from s_level_time,
 /// the level's own allowance.
 ///
 /// $77BC sets it to $FF once the round's last apple is gone, which stops the
@@ -2630,53 +2631,72 @@ static uint8_t s_life_time = 0x64;
 /*
  * Six bytes that outlive a life, set once at $376E and then kept up to date as
  * the game goes on. Everything else about a life is torn down and rebuilt.
+ * game_cold_start writes all six before anything reads them, so unlike the
+ * scoreboard these need no initialisers.
  */
-enum {
-  /// How long the pace loop dawdles between steps, i.e. the snake's speed.
-  /// $52 at startup and at the top of every round; $772E takes two off at the
-  /// start of each life and stops at 3, so the snake speeds up as lives are
-  /// lost and never goes faster than that.
-  kStepDelay = 0x0300,
-  /// 0..2, chosen at the setup prompt. Indexes the per-apple value table at
-  /// $71C8, and decides how many bouncers step per pass.
-  kDifficulty = 0x0301,
-  /// The game is playing itself, because nobody answered the difficulty
-  /// prompt before it timed out. Any input at all clears it, and while it is
-  /// set the death pause does not wait to be told to carry on.
-  kDemoMode = 0x0302,
-  /// Which of the 29 display lists at $8000 this level draws, 1-based.
-  /// select_script skips that many '*'-terminated scripts to find it.
-  kScriptIndex = 0x0303,
-  /// $0304 -- the level's time allowance, which seeds s_life_time at the start
-  /// of every life. Set by the display list's 'T' command (see run_script),
-  /// and $64 until one says otherwise. It is *not* the apple value, which is
-  /// s_apple_value and is computed by game_set_apple_value from the difficulty
-  /// and the level number; that routine never reads this byte.
-  kLevelTime = 0x0304,
-  /// The head moved this step, so the next draw merges the head shape over
-  /// the cell. game_mark_head raises it, game_draw_head reads it and clears it.
-  kHeadMoved = 0x0305,
-};
 
-/* --- The three zero-page pointers ----------------------------------------- */
-enum {
-  /// Into the current display list. game_next_byte reads through it and bumps
-  /// it; select_script points it at the right script first.
-  kScriptPtr = 0x000a,
-  /// Into the string that follows a JSR to game_print_inline_str -- which is
-  /// where the printer finds it, by reading the return address off the stack.
-  kStrPtr = 0x000c,
-  /// game_rand_byte's cursor. It is not a generator: it walks $1800-$1FFF and
-  /// returns the first byte it finds with bit 7 clear, so the "random" numbers
-  /// are the game's own level data, relocated there by the cold start.
-  /// $7980 clamps the high byte into [$18,$1F) on the way into the setup
-  /// screen, which is what keeps it inside that window.
-  kRandPtr = 0x000e,
-};
+/// How long the pace loop dawdles between steps, i.e. the snake's speed.
+/// $52 at startup and at the top of every round; $772E takes two off at the
+/// start of each life and stops at 3, so the snake speeds up as lives are
+/// lost and never goes faster than that.
+static uint8_t s_step_delay;
+
+/// 0..2, chosen at the setup prompt. Indexes the per-apple value table at
+/// $71C8, and decides how many bouncers step per pass.
+static uint8_t s_difficulty;
+
+/// The game is playing itself, because nobody answered the difficulty
+/// prompt before it timed out. Any input at all clears it, and while it is
+/// set the death pause does not wait to be told to carry on.
+static bool s_demo_mode;
+
+/// Which of the 29 display lists at $8000 this level draws, 1-based.
+/// select_script skips that many '*'-terminated scripts to find it.
+static uint8_t s_script_index;
+
+/// The level's time allowance, which seeds s_life_time at the start of every
+/// life. Set by the display list's 'T' command (see run_script), and $64 until
+/// one says otherwise. It is *not* the apple value, which is s_apple_value and
+/// is computed by game_set_apple_value from the difficulty and the level
+/// number; that routine never reads this byte.
+static uint8_t s_level_time;
+
+/// The head moved this step, so the next draw merges the head shape over
+/// the cell. game_mark_head raises it, game_draw_head reads it and clears it.
+static bool s_head_moved;
+
+/* --- The three zero-page pointers: $000A-$000F ---------------------------- */
+/*
+ * Pointer pairs in the original, low byte first, and 16-bit variables here.
+ * Their byte-at-a-time increments -- bump the low byte, and if it wrapped bump
+ * the high one -- are what a 6502 writes for ++p, so that is what they are;
+ * the branch survives only because the two arms cost different cycles.
+ *
+ * The initialisers are what the machine holds at $3750, out of
+ * entry-state-inc.h rather than out of the game image: this is zero page, and
+ * the game never loaded over it.
+ */
+
+/// Into the current display list. game_next_byte reads through it and bumps
+/// it; select_script points it at the right script first.
+static uint16_t s_script_ptr = 0x994c;
+
+/// Into the string that follows a JSR to game_print_inline_str -- which is
+/// where the printer finds it, by reading the return address off the stack.
+static uint16_t s_str_ptr = 0xffe1;
+
+/// game_rand_byte's cursor. It is not a generator: it walks $1800-$1FFF and
+/// returns the first byte it finds with bit 7 clear, so the "random" numbers
+/// are the game's own level data, relocated there by the cold start.
+/// game_setup_screen clamps the high byte into [$18,$1F) on the way in, which
+/// is what keeps it inside that window.
+static uint16_t s_rand_ptr = 0x6b00;
 
 /// $73D7 -- the setup screen has run once. The first time through it asks
-/// nothing, takes difficulty 1 and demo mode, and only sets this.
-enum { kSetupSeen = 0x73d7 };
+/// nothing, takes difficulty 1 and demo mode, and only sets this. The shipped
+/// image already has it set, so that first pass is skipped on a cold start and
+/// the prompt appears immediately.
+static bool s_setup_seen = true;
 
 /// VALUE -- what one apple is worth on this level, two BCD bytes.
 /// game_set_apple_value recomputes it per level.
@@ -2743,8 +2763,9 @@ void game_promote_high_score(void) {
 /* own column leftwards, then from it again rightwards. First hit wins, so the */
 /* result leans left. Nothing found parks the answer at row 0, column $14.     */
 /*                                                                            */
-/* $6B39/$6B3A are the cursor and $6B3B/$6B3C the answer. The cursor is a pair */
-/* of locals here, mirrored back at the end because ram.probe still hashes it. */
+/* $6B39/$6B3A were the cursor and $6B3B/$6B3C the answer. The cursor is a    */
+/* pair of locals here: nothing ever read the two bytes back, so once the      */
+/* storage left RAM the stores that mirrored them were dead code.              */
 /* ========================================================================== */
 
 /// The lo-res occupancy map's value at \p c. $0F is an apple.
@@ -3070,7 +3091,7 @@ static void wipe_occupancy_map(void) {
 /// One gap per bouncer, which is what the difficulty counts.
 static void open_wall_gaps(void) {
   TICK(6);
-  const uint8_t difficulty = ram_peek(kDifficulty);
+  const uint8_t difficulty = s_difficulty;
   if (!difficulty) {
     TICK(1);
     return;
@@ -3080,7 +3101,7 @@ static void open_wall_gaps(void) {
   lores_plot(0x01, 0x01);
 
   TICK(8);
-  if (ram_peek(kDifficulty) == 0x01) {
+  if (s_difficulty == 0x01) {
     TICK(1);
     return;
   }
@@ -3128,9 +3149,8 @@ static void draw_border(void) {
 /// per level below it. DEX first, so level 1 skips nothing.
 static void seek_script(void) {
   TICK(14);
-  s_x = ram_peek(kScriptIndex);
-  ram_poke(kScriptPtr, 0x00);
-  ram_poke(kScriptPtr + 1, 0x80);
+  s_x = s_script_index;
+  s_script_ptr = 0x8000;
 
   for (;;) {
     TICK(4);
@@ -3177,7 +3197,7 @@ restart:
     TICK(4);
     if (op == OP_RESTART) {
       TICK(9);
-      ram_poke(kScriptIndex, 0x01);
+      s_script_index = 0x01;
       goto restart;
     }
     TICK(1);
@@ -3257,7 +3277,7 @@ restart:
       TICK(6);
       const uint8_t v = script_byte(0x71b9);
       TICK(7);
-      ram_poke(kLevelTime, v);
+      s_level_time = v;
       continue;
     }
     TICK(1);
@@ -3282,7 +3302,7 @@ restart:
 /* is +4 on the high byte and nothing else.                                    */
 /*                                                                            */
 /* $04/$05 (the destination pointer), $06 (the pattern index) and $07 (the     */
-/* scanline counter) are locals, mirrored back at the end for ram.probe.       */
+/* scanline counter) are locals.                                              */
 /* ========================================================================== */
 
 /// The address of a cell row's first scanline, from the split table.
@@ -3314,7 +3334,7 @@ uint8_t game_draw_cell_native(uint8_t ink, Cell c) {
     TICK(62);
     const uint8_t idx = dot_index(ink, (uint8_t)line, c.col);
 
-    poke(dest + c.col, (uint8_t)(ram_peek(kHgrPattern + idx) & ram_peek(kShapeMask + line)));
+    poke(dest + c.col, (uint8_t)(ram_peek(kHgrPattern + idx) & s_shape_mask[line]));
     dest += 0x0400; // one scanline down, i.e. +4 on the high byte
     hgr_hi = (uint8_t)(dest >> 8);
 
@@ -3358,7 +3378,7 @@ uint8_t game_merge_cell_native(uint8_t ink, Cell c) {
 
     const uint16_t at = dest + c.col;
     poke(at,
-         (uint8_t)(((ram_peek(kHgrPattern + idx) ^ 0x7f) & ram_peek(kShapeMask + line)) | peek(at)));
+         (uint8_t)(((ram_peek(kHgrPattern + idx) ^ 0x7f) & s_shape_mask[line]) | peek(at)));
     dest += 0x0400;
     hgr_hi = (uint8_t)(dest >> 8);
 
@@ -3555,7 +3575,7 @@ static uint8_t dequeue_key(void) {
 /// the key dequeue whose byte is the return value.
 uint8_t game_step_bouncers_native(void) {
   TICK(6);
-  const uint8_t difficulty = ram_peek(kDifficulty);
+  const uint8_t difficulty = s_difficulty;
 
   if (!difficulty) {
     TICK(3);
@@ -3565,7 +3585,7 @@ uint8_t game_step_bouncers_native(void) {
 
   step_bouncer_slot(0, 0x659c, 38, 0x65b6, 0x65b7, 40);
 
-  if (ram_peek(kDifficulty) == 0x01) {
+  if (s_difficulty == 0x01) {
     TICK(3);
     return dequeue_key();
   }
@@ -3599,7 +3619,7 @@ uint8_t game_step_bouncers_native(void) {
 enum { kInputCount = 6 };
 
 static uint8_t input_key(int i) {
-  return ram_peek(kKeyTable + i);
+  return s_key_table[i];
 }
 
 static uint8_t input_code(int i) {
@@ -3617,7 +3637,7 @@ enum { kCodeStop = 0x92 };
 /// timed out, so the game is playing itself. Any input at all ends it, which
 /// is why the whole key table is skipped below.
 static bool attract_mode(void) {
-  return ram_peek(kDemoMode) != 0;
+  return s_demo_mode;
 }
 
 /// A switch input. Every one of the game's three read sites -- here, the
@@ -4163,15 +4183,14 @@ void game_set_ink_native(uint8_t ink) {
 void game_next_byte_native(void) {
   TICK(14);
   s_y = 0x00;
-  s_a = peek(ram_peek16al(kScriptPtr));
+  s_a = peek(s_script_ptr);
 
-  const uint8_t lo = (uint8_t)(ram_peek(kScriptPtr) + 1);
-  ram_poke(kScriptPtr, lo);
-  if (lo) {
+  ++s_script_ptr;
+  if (s_script_ptr & 0xff) {
     TICK(1);
   } else {
+    // The low byte wrapped, so the original had to bump the high one too.
     TICK(5);
-    ram_poke(kScriptPtr + 1, (uint8_t)(ram_peek(kScriptPtr + 1) + 1));
   }
   TICK(6);
   // A and Y are live out; N and Z are not.
@@ -4195,18 +4214,16 @@ void game_next_byte_native(void) {
 /// the game. Nothing enforces that; the original simply relies on it.
 uint8_t game_rand_byte_native(void) {
   TICK(7);
-  const uint8_t lo = (uint8_t)(ram_peek(kRandPtr) + 1);
-  ram_poke(kRandPtr, lo);
-  if (lo) {
+  ++s_rand_ptr;
+  if (s_rand_ptr & 0xff) {
     TICK(1);
   } else {
     TICK(5);
-    ram_poke(kRandPtr + 1, (uint8_t)(ram_peek(kRandPtr + 1) + 1));
   }
 
   for (;;) {
     TICK(9);
-    const uint8_t b = peek(ram_peek16al(kRandPtr));
+    const uint8_t b = peek(s_rand_ptr);
     if (!(b & 0x80)) {
       TICK(1);
       TICK(6);
@@ -4214,8 +4231,7 @@ uint8_t game_rand_byte_native(void) {
     }
 
     TICK(13);
-    ram_poke(kRandPtr, 0x00);
-    ram_poke(kRandPtr + 1, 0x18);
+    s_rand_ptr = 0x1800;
   }
 }
 
@@ -4286,8 +4302,8 @@ void game_set_apple_value_native(void) {
   TICK(20);
   s_apple_value[0] = 0x00;
   s_apple_value[1] = 0x00;
-  const uint8_t per_apple = ram_peek(kAppleValueTable + ram_peek(kDifficulty));
-  uint8_t levels = ram_peek(kScriptIndex);
+  const uint8_t per_apple = ram_peek(kAppleValueTable + s_difficulty);
+  uint8_t levels = s_script_index;
   s_status_d = 0x01;
 
   uint8_t flags = 0;
@@ -4323,7 +4339,7 @@ void game_mark_head_native(void) {
   rom_plot();
 
   TICK(16);
-  ram_poke(kHeadMoved, 0x01);
+  s_head_moved = true;
   s_tone_period = 0x01;
 
   // A and its flags are live out of $6BEF, unlike almost everything else here.
@@ -4340,7 +4356,7 @@ void game_draw_head_native(uint8_t ink, Cell c) {
   game_plot_shape_native(ink, c);
 
   TICK(6);
-  if (ram_peek(kHeadMoved)) {
+  if (s_head_moved) {
     TICK(11);
     s_shape = 0x01;
     { // was game_plot_shape_merge()
@@ -4380,7 +4396,7 @@ void game_draw_head_native(uint8_t ink, Cell c) {
   }
 
   TICK(12);
-  ram_poke(kHeadMoved, 0x00);
+  s_head_moved = false;
   // Only V and D are live out, and neither is touched here.
 }
 
@@ -4725,8 +4741,8 @@ void game_cout_hook_native(uint8_t ch) {
 /* the four tables at $6387. Asking for the direction it is already going, or  */
 /* for a reversal, yields $00 from those tables and is ignored.                */
 /*                                                                            */
-/* What is still in emulated RAM, and why: the zero-page block $00-$03 is the  */
-/* plotter's argument list. The snake's own state is C variables now.          */
+/* Nothing here is in emulated RAM any more; the four tables at $6387 are the  */
+/* loaded image, which is a different thing.                                  */
 /* ========================================================================== */
 
 /// What the player can press, after game_read_direction_native() has had its
@@ -4965,7 +4981,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
 
   autopilot: /* $6308 -- no steering this step */
     TICK(6);
-    if (ram_peek(kDemoMode)) {
+    if (s_demo_mode) {
       uint8_t proposal = 0;
       TICK(6);
       const SteerChoice choice = game_auto_steer(&proposal);
@@ -5187,7 +5203,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     // as long as the last move gave it something to say.
     // DEX/BNE again: $0300 of zero would mean 256 passes, not none.
     TICK(4);
-    uint8_t n = ram_peek(kStepDelay);
+    uint8_t n = s_step_delay;
     do {
       TICK(6);
       game_tick_sound_native();
@@ -5744,7 +5760,7 @@ void game_begin_life(void) {
 void game_setup_screen(void) {
   // $7980 -- keep $0E/$0F inside the window game_rand_byte expects.
   TICK(7);
-  const uint8_t hi = ram_peek(kRandPtr + 1);
+  const uint8_t hi = (uint8_t)(s_rand_ptr >> 8);
   bool clamp_lo = hi >= 0x1f;
   if (!clamp_lo) {
     TICK(4);
@@ -5756,18 +5772,18 @@ void game_setup_screen(void) {
   }
   if (clamp_lo) {
     TICK(8);
-    ram_poke(kRandPtr, (uint8_t)(ram_peek(kRandPtr) & 0xde));
+    s_rand_ptr &= 0xffde;
   }
   TICK(13);
-  ram_poke(kRandPtr + 1, (uint8_t)((ram_peek(kRandPtr + 1) & 0x1f) | 0x18));
+  s_rand_ptr = (uint16_t)((s_rand_ptr & 0x1fff) | 0x1800);
 
   // $73D8 -- the first call through here never asks anything.
   TICK(6);
-  if (!ram_peek(kSetupSeen)) {
+  if (!s_setup_seen) {
     TICK(20);
-    ram_poke(kDemoMode, 0x01);
-    ram_poke(kDifficulty, 0x01);
-    ram_poke(kSetupSeen, 0x01);
+    s_demo_mode = true;
+    s_difficulty = 0x01;
+    s_setup_seen = true;
     return;
   }
 
@@ -5848,8 +5864,8 @@ wait: /* $741C */
     outer_count = outer;
     if (outer == 0) {
       TICK(20);
-      ram_poke(kDemoMode, 0x01);
-      ram_poke(kDifficulty, 0x01);
+      s_demo_mode = true;
+      s_difficulty = 0x01;
       io_poke(0xc010, 0x01);
       return;
     }
@@ -5873,8 +5889,8 @@ wait: /* $741C */
     }
     // $7470 -- a digit. The subtract is a plain SBC with carry set.
     TICK(24);
-    ram_poke(kDifficulty, (uint8_t)(key - 0xb0));
-    ram_poke(kDemoMode, 0x00);
+    s_difficulty = (uint8_t)(key - 0xb0);
+    s_demo_mode = false;
     io_poke(0xc010, 0x00);
     return;
   }
@@ -5898,7 +5914,7 @@ wait: /* $741C */
   TICK(2);
   for (uint8_t i = 0; i != 6; ++i) {
     TICK(10);
-    game_show_key_native(i, ram_peek(kKeyTable + i));
+    game_show_key_native(i, s_key_table[i]);
     TICK(6);
     if (i != 5)
       TICK(1);
@@ -5921,7 +5937,7 @@ wait: /* $741C */
     TICK(6);
     const uint8_t chosen = game_edit_key_native(i);
     TICK(11);
-    ram_poke(kKeyTable + i, chosen);
+    s_key_table[i] = chosen;
     game_show_key_native(i, chosen);
     TICK(6);
     if (i != 5)
@@ -6020,33 +6036,27 @@ wait: /* $741C */
 /// the emulated stack pointer ends where the caller left it either way, and
 /// ram.probe compares only the live stack.
 ///
-/// $0C/$0D are still written at every step. They are scratch, but they are in
-/// the range ram.probe hashes, so the residue has to be the residue the
-/// original left.
 void game_print_inline_str(uint16_t ret_addr) {
   bool branchTarget = true;
   (void)branchTarget;
 
   /*$7230*/ TICK(20);
-  ram_poke(kStrPtr, (uint8_t)ret_addr);
-  ram_poke(kStrPtr + 1, (uint8_t)(ret_addr >> 8));
+  s_str_ptr = ret_addr;
   rom_fc68(); // VTAB to the current CV
 
   for (;;) {
     // The pointer is stepped before the read, which is why the caller passes
     // the address of the JSR's last byte rather than of the string.
     /*$7239*/ TICK(7);
-    const uint8_t lo = (uint8_t)(ram_peek(kStrPtr) + 1);
-    ram_poke(kStrPtr, lo);
-    if (!lo) {
+    ++s_str_ptr;
+    if (!(s_str_ptr & 0xff)) {
       /*$723D*/ TICK(5);
-      ram_poke(kStrPtr + 1, (uint8_t)(ram_peek(kStrPtr + 1) + 1));
     } else {
       /*$723B*/ TICK(1);
     }
 
     /*$723F*/ TICK(9);
-    const uint8_t ch = peek(ram_peek16al(kStrPtr));
+    const uint8_t ch = peek(s_str_ptr);
     s_y = 0x00;
     s_a = ch;
     s_status_not_z = ch;
@@ -6517,8 +6527,9 @@ void game_cold_start(void) {
   /* $3750 -- copy eight pages of level data from $3800 down to $1800. The
      original walks them by incrementing the operands of its own LDA and STA
      ($3754 and $3757), which is why it re-enters $3750 eight times rather
-     than looping inside. The patched operand bytes are written back because
-     ram.probe hashes that range. */
+     than looping inside. The page counter is this loop's own, so the two
+     patched bytes are written by nothing and read by nothing; they were
+     mirrored back only for as long as the memory oracle hashed them. */
   for (unsigned page = 0; page != 8; ++page) {
     // Probed, not because anything needs to observe it, but because it is what
     // probe-acceptance.sh aligns the two builds on -- see GAME_CYCLES_ANCHOR.
@@ -6530,8 +6541,6 @@ void game_cold_start(void) {
         TICK(1);
     }
     TICK(20);
-    ram_poke(kRelocLoadOp, (uint8_t)(ram_peek(kRelocLoadOp) + 1));
-    ram_poke(kRelocStoreOp, (uint8_t)(ram_peek(kRelocStoreOp) + 1));
     if (page != 7)
       TICK(1);
   }
@@ -6541,11 +6550,11 @@ void game_cold_start(void) {
   TICK(6);
   rom_setkbd();
   TICK(29);
-  ram_poke(kStepDelay, 0x52);
-  ram_poke(kDifficulty, 0x01);
-  ram_poke(kDemoMode, 0x01); // so the first pass plays itself
-  ram_poke(kScriptIndex, 0x01);
-  ram_poke(kLevelTime, 0x64);
+  s_step_delay = 0x52;
+  s_difficulty = 0x01;
+  s_demo_mode = true; // so the first pass plays itself
+  s_script_index = 0x01;
+  s_level_time = 0x64;
   goto round;             // $3783: JMP $76C2
 
 new_game: /* $7691 */
@@ -6555,7 +6564,7 @@ new_game: /* $7691 */
   TICK(6);
   game_promote_high_score();
   TICK(40);
-  ram_poke(kScriptIndex, 0x01);
+  s_script_index = 0x01;
   s_level = 0x01;
   s_score[0] = 0x00;
   s_score[1] = 0x00;
@@ -6583,7 +6592,7 @@ start_round: /* $76C7 */
   s_apples_left[1] = s_apples_quota[1];
   game_draw_playfield_native();
   TICK(14);
-  s_life_time = ram_peek(kLevelTime);
+  s_life_time = s_level_time;
   game_set_apple_value_native();
   TICK(14);
   io_peek(0xc054);       // page 1
@@ -6593,10 +6602,10 @@ start_round: /* $76C7 */
   // $76F6 redraws it, at the cell game_place_apple just chose.
   game_plot_shape_native(0x09, apple);
   TICK(8);
-  ram_poke(kStepDelay, 0x52);
+  s_step_delay = 0x52;
   s_a = 0x00;
   TICK(23);
-  ram_poke(kHeadMoved, 0x00);
+  s_head_moved = false;
   s_life_timer = s_life_time;
   s_wndtop = 0x14; // window top, so HOME clears only the status panel
   rom_home();
@@ -6616,10 +6625,10 @@ life: /* $7719 */
   TICK(6);
   game_status_panel();
   TICK(8);
-  if (ram_peek(kStepDelay) >= 0x03) {
+  if (s_step_delay >= 0x03) {
     // $7730 -- two steps faster each life, but never past 3.
     TICK(8);
-    ram_poke(kStepDelay, (uint8_t)(ram_peek(kStepDelay) - 2));
+    s_step_delay = (uint8_t)(s_step_delay - 2);
   } else {
     TICK(1);
   }
@@ -6718,7 +6727,7 @@ round_cleared: /* $77EA */
     s_level = (uint8_t)r;
   }
   s_status_d = 0x00;
-  ram_poke(kScriptIndex, (uint8_t)(ram_peek(kScriptIndex) + 1));
+  s_script_index = (uint8_t)(s_script_index + 1);
   // $77F8 -- no life was lost this round, so it earns a bonus.
   if (s_lives == s_lives_at_level_start) {
     TICK(6);
@@ -6781,7 +6790,7 @@ ended: /* $7847 */
   }
   TICK(1);
   TICK(6);
-  if (ram_peek(kDemoMode)) {
+  if (s_demo_mode) {
     TICK(1);
     goto lose_life; // the demo does not wait to be told to carry on
   }
