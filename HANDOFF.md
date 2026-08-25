@@ -4,27 +4,35 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
-**Start here (2026-08-24).** All six cleanup steps in "Cleaning up the C" are
-done. **That is not the same as the artifact being finished**, and the gap is
-the first thing to understand: the six steps moved the *plotter's* argument
-block and the *monitor's* zero page out of emulated RAM, killed all 42
-adapters, dropped `ret_addr` and the emulated call stack, and took every
-address out of the cycle charges. They never touched **the game's own state**,
-which is still 314 `ram_peek`/`ram_poke` calls into `s_ram` behind named
-constants, plus 222 status-flag references. See item 0 under "What is left".
+**Start here (2026-08-24, later the same day).** The six cleanup steps were
+done, and so is the gap that entry used to describe: **the game's own state is
+out of emulated RAM.** 314 `ram_peek`/`ram_poke` calls are down to 16, and all
+16 read read-only tables in the loaded image. The plotting state is threaded
+and the status flags are audited: five of the seven are gone entirely, and 222
+references are down to 100, all of them `c` and `d`.
 
-The gate changed underneath all of that and is weaker than it was. Read "Where
-things stand" before trusting a green run: the block-head trace now compares
-six addresses rather than 113, so control flow inside the game is not compared
-at all. The screen and memory at 6,808 and 9,524 samples are the gate.
+Read **"The game's state, and the flags"** under "What is left" before doing
+anything similar. It is the method rather than the result: what order a storage
+move has to be done in for the gate to be evidence, what turns out to be a dead
+store the moment its byte leaves RAM, and which flag claims survived being
+checked. Two of them did not.
 
-**Last commit:** run `git log -1`; this line has been stale before. As of
-2026-08-22 the tree is clean and nothing is pushed. The most recent work is
-`$69A9` — the last emulator-shaped game routine — becoming real C, on a
-**standing decision that no further recordings will be made**: unexercised code
-is decoded from the binary rather than held until something runs it. See the
-2026-08-22 log entry, and note that it supersedes a playbook rule that said the
-opposite.
+**What the artifact still is not.** 288 `s_a`/`s_x`/`s_y` references, mostly
+the monitor's own argument passing; step 6; and the loose ends. See items 2-4.
+
+The gate is weaker than it once was, and this is the thing most likely to
+mislead a green run: the block-head trace compares **six** addresses, not 113,
+so control flow inside the game is not compared at all. The screen and memory
+at 6,808 and 9,524 samples are the gate, and both were narrowed further by the
+state migration — see the hole list at the top of `ram-cold.probe`.
+
+**Last commit:** run `git log -1`; this line has been stale before. The tree is
+clean and nothing is pushed.
+
+The **standing decision that no further recordings will be made** is still in
+force: unexercised code is decoded from the binary rather than held until
+something runs it. See the 2026-08-22 log entry, and note that it supersedes a
+playbook rule that said the opposite.
 
 Before that, two decompiler capabilities — `--inline-str` and
 `--alt-exit` — and the conversion they unblocked: **the main loop and the
@@ -545,35 +553,25 @@ name on it, and there are still 314 of them. The steps below are done as
 written; the artifact is not finished.
 
 ```
-ram_peek/ram_poke, any form         314      the game's variables still live in s_ram
-s_status_* references               222      c 62, not_z 46, n 42, d 36, v 28, i 5, b 3
-s_a / s_x / s_y references          307      about half inside rom_*, where they are the ABI
-ram_peek(0x...) with a hex literal    0        was 115 distinct addresses
-bb_N: labels                        0        was 141
-tmpN_U8 temporaries                 0
-ret_addr parameters                 0        was 117; push16/pop16 unused
-compiler warnings of its own        0        at -Wall
-adapters left                       0        was 42
+                                  now    was    note
+ram_peek/ram_poke, any form         16    314   all 16 are read-only image tables
+s_status_* references              100    222   c 62, d 36; the other five are gone
+s_a / s_x / s_y references         288    307   step 4's remainder, mostly rom_*
+ram_peek(0x...) with a hex literal    0    115
+bb_N: labels                          0    141
+tmpN_U8 temporaries                   0
+ret_addr parameters                   0    117   push16/pop16 unused
+compiler warnings of its own          0          at -Wall
+adapters left                         0     42
 ```
 
 What remains, in order of how well-defined it is:
 
-0. **What the plan's six steps did not cover, and what a reader notices first.**
-   The game's variables are still in `s_ram`, reached through named constants
-   rather than being C variables: `kBouncer` (16 uses), `kAppleValue` (13),
-   `kScore` (11), `kLifeOutcome` (11), `kRandPtr` (11), `kDifficulty` (9) and a
-   long tail. Moving them is the same move the plotter block and the monitor's
-   zero page already made -- and the same oracle cost, one narrowing of
-   `ram-cold.probe` per range.
-
-   The 6502 status flags are the other half: 222 references, and `s_status_c`
-   alone is 62. Most are written by a routine because the original left them
-   set, and read by nobody. Each needs its live-out checked the way
-   `game_pause_or_toggle_sound`'s was; `apple2tc --ir` prints `LiveOut:` per
-   routine and is the tool for it.
-
-   Neither is a step in the plan above. Both are what "C worth maintaining"
-   means, and they are bigger than steps 2 through 6 put together.
+0. ~~**What the plan's six steps did not cover.**~~ **Done 2026-08-24**, in six
+   commits. The game's variables are C variables, the plotting state is
+   threaded, and the status flags are audited. See "The game's state, and the
+   flags" below for what was actually established, which is more useful than
+   the fact that it is finished.
 
 1. ~~**Step 4's adapters.**~~ **Done 2026-08-24 — there are none left.** The
    last six merged into their natives or inlined at their single call site;
@@ -585,16 +583,95 @@ What remains, in order of how well-defined it is:
    trace its site and moves the pin; an adapter *merged* — charge, `CYCLES`
    site and write-back all moving inside the routine it describes — costs
    nothing.
-2. **Step 6**, on the terms in its entry.
-3. **Loose ends:** 451 unknown nonzero bytes in `coverage.txt`, probe phase 3,
+2. **Step 4's remainder: `s_a`/`s_x`/`s_y`**, 288 references. The game side is
+   already clean; what is left is overwhelmingly inside `rom_*`, where the
+   registers are the monitor's own argument-passing convention. Audit it the
+   way the flags were audited -- classify every site as a read or a write and
+   ask which reads a write can reach -- rather than by inspection. That method
+   is written up under "The game's state, and the flags".
+3. **Step 6**, on the terms in its entry -- but **re-measure first**: its table
+   of 130 probing / 721 charge-only sites predates the conversions and is
+   stale. As of 2026-08-24 the file has 839 `TICK` (an addressless charge), 16
+   `GAME_CYCLES` (a charge on an edge, deliberately not probing) and 11
+   probing sites, of which the cold trace installs 6.
+4. **Loose ends:** 451 unknown nonzero bytes in `coverage.txt`, probe phase 3,
    and `robotron`/`bolo`, which have never been regenerated against any of this.
 
 
-`snake-byte-cold.c` is the decompilation, and it is not yet good C: values are
-passed in `s_a` (203 uses), 115 distinct addresses stand in for variables, 40
-functions still take a `uint16_t ret_addr` they mostly ignore, and there are
-842 `CYCLES` sites to maintain. The plan below is ordered by *which oracle each
-step spends*, cheapest-and-fully-checked first.
+### The game's state, and the flags
+
+Done 2026-08-24. The interesting part is the method and what it turned up, not
+the counts.
+
+**Storage moves are done in the order that produces evidence.** Move the
+storage with `ram-cold.probe` untouched and read the gate: it must say *trace
+PASS, screen PASS, memory FAIL*. That failure is the proof the oracle was
+watching those bytes. Only then narrow the probe, and then mutate each new
+edge address and watch memory alone catch it. Every one of the 34 edges added
+across the four slices was mutation-tested; all 34 were caught.
+
+The `game` field is XOR-folded over its surviving pieces rather than given a
+parameter each, because `PROBE_MAX_PARAMS` is 16 and there are more holes than
+that. One wrong byte changes exactly one sub-hash, which is all this checks.
+
+**Seven stores turned out to be dead the moment their bytes left RAM.**
+`$6637`/`$6638` (where a bouncer step would have landed before the walls got a
+say), `$6C4A` (how many axes blocked it), `$6B39`/`$6B3A` (the apple sweep's
+cursor) and `$3754`/`$3757` (the relocation loop's patched LDA/STA operands).
+Every one was written and read by nothing: the routines work in locals and
+commit through the struct or the counter they were handed, so the stores
+existed only because the memory oracle hashed the addresses. **Expect this at
+every slice** -- and note that `-Wall` will *not* tell you, because these were
+writes to `s_ram`, not to a variable.
+
+**Initialisers are load-bearing.** Every moved variable is initialised to the
+byte the shipped image holds at its address -- or, for zero page, from
+`entry-state-inc.h`. A new game seeds itself from `s_apples_quota`, the status
+panel is drawn before anything writes `s_lives` or `s_level`, and
+`s_setup_seen` is already set in the image, which is why the setup screen's
+first pass is skipped on a cold start.
+
+**The flag audit is a classification, not an inspection.** Split every
+`s_status_*` site into reads and writes, then ask, per flag, which reads a
+write can reach:
+
+| flag | writes | reads | verdict |
+| --- | --- | --- | --- |
+| `b` | 3 | 0 | never read at all -- the PHP bytes use the `STATUS_B` constant |
+| `i` | 3 | 2 | both reads feed a PHP byte whose only reader is the PLP restoring `i` |
+| `v` | 26 | 2 | the same, for bit 6 |
+| `n` | 40 | 2 | both reads in `rom_fc68`, dominated by a local write |
+| `not_z` | 43 | 3 | `rom_wait`'s two loops and `steer_try`'s return, all dominated |
+| `c` | 36 | 26 | **stays** -- read on entry to `rom_home` and `rom_fc68` |
+| `d` | 18 | 18 | **stays** -- every BCD region and every `assert_binary_mode` |
+
+A value pushed only so that it can be popped back into itself is not a value.
+That is what killed `i` and `v`: bits 2 and 6 leave the pushed byte and the two
+restores go with them, while bit 3 (`d`) and bit 0 (the LSR's carry) stay
+because those are genuinely read.
+
+"In `rom_*`, registers are the algorithm" is true of `c` and `d` and was not
+true of the other five. Check before quoting it at `s_a`/`s_x`/`s_y`.
+
+**Two of the localisations are not checked by running them**, and say so above
+themselves: nothing scrolls and nothing emits Ctrl-G, so inverting `rom_fc68`'s
+or `rom_wait`'s test passes all six cold checks. `$FC8C` and `$FC93` are
+already on probe-acceptance.sh's unverified list. `steer_try`'s is checked --
+inverting it fails the play screen.
+
+**The ink threaded; the shape did not.** `s_ink` was read in exactly two
+places, and every writer's value was readable at its call site, so the run
+helpers take it as an argument and `draw_border(0x0d)` says where the border's
+colour comes from. `s_shape` stays a global because `plot_at`'s two callers --
+the bouncer erase and the tail erase -- genuinely erase with whatever shape was
+last used. Both inferred inherited inks were mutation-tested; the redefinition
+screen's is caught by the hires screen and by nothing else.
+
+**`-Wall` does not flag a file-scope static that is written and never read.**
+This is a different blind spot from the `-Wunused-but-set-variable` one already
+recorded, and it is why threading and deleting must be separate steps: the gate
+was run green with `s_ink` written but unread before any of its writes were
+removed.
 
 **~~Step 0 — strengthen the cold gate first.~~** Done 2026-08-23. It compared
 trace and screen but not memory, and most of what follows moves values without
@@ -712,20 +789,23 @@ were load-bearing and none of them looked it:
 - the redefinition screen's stem and third glyph both inherit column `$1E` from
   the arrow plotted above them.
 
-### What is left of step 3
+### ~~What is left of step 3~~ — done 2026-08-24
 
-`s_shape`, `s_ink`, `s_col`, `s_row` and `s_run_end`. These are the plotting
-subsystem's shared state and the steppers mutate them mid-loop — `s_col` and
-`s_row` are read back by the adapters as the routine's result, and by
-`game_draw_cell` as the cell to draw. Threading them means restructuring
-`game_plot_shape_native`, the three steppers and both cell drawers together,
-rather than one address at a time. `s_shape` is a genuine global and will not
-thread at all; do not assume the other four are the same, and do not assume
-they are not.
+`s_col`, `s_row` and `s_run_end` had already gone with the adapters; the
+helpers take a `Cell` and an endpoint. What was actually left was `s_ink` and
+`s_shape`, and the warning that stood here — *do not assume the other four are
+like `s_shape`, and do not assume they are not* — was worth heeding, because
+they were not alike.
 
-The order that worked everywhere else: readers first (there are far fewer than
-writers), then ask which reader gets its value from a caller and which from
-whatever ran last.
+`s_ink` threaded completely. It was read in exactly two lines, and the value
+every writer set was readable at its call site, so the three run helpers take
+it and `draw_border(0x0d)` names where the border's colour comes from.
+`s_shape` did not thread and stays: `plot_at`'s two callers, the bouncer erase
+and the tail erase, genuinely erase with whatever shape was last used, so
+passing one would invent a value the original does not have.
+
+The order that worked: readers first — there are far fewer than writers — then
+ask which reader gets its value from a caller and which from whatever ran last.
 
 **3d: the cursor.** `$0024/$0025` — CH and CV — are `s_ch` and `s_cv`, 43
 accesses moved. That they belong to the ROM rather than to the game was raised
@@ -748,12 +828,18 @@ their callers pass values (`game_print_bcd_native(byte)` rather than `s_a =
 byte` then a call). `game_play_loop` became `game_play_one_life()`. Three
 decimal-mode gates became one `assert_binary_mode()`.
 
-What is left is 531 register/flag references, and **294 of them are inside
-`rom_*`, where registers are the algorithm** — the monitor's own routines pass
-in A/Y/X because that is what they are. The game side is already clean: it goes
-through `lores_plot(row, col)`, `scrn_cell(c)`, `plot_shape_at(...)`. So the
-remaining work is the 19 adapters with `CYCLES` sites, and the route to those
-is under step 6 below — not through step 6.
+The flag half is finished (see "The game's state, and the flags"), which
+leaves 288 `s_a`/`s_x`/`s_y` references. Most are inside `rom_*`, where the
+registers are the monitor's own argument-passing convention. The game side is
+already clean: it goes through `lores_plot(row, col)`, `scrn_cell(c)`,
+`plot_shape_at(...)`.
+
+**Do not take "in `rom_*`, registers are the algorithm" on trust for these.**
+It was the same claim made about the flags, and when it was checked it held for
+`c` and `d` and was false for the other five: `b` was never read at all, and
+`i` and `v` were only ever pushed so that they could be popped back into
+themselves. Classify every `s_a`/`s_x`/`s_y` site as a read or a write and ask
+which reads each write can reach, the same way.
 
 **~~Step 5 — drop `ret_addr` and the emulated stack.~~** Done 2026-08-24. 36
 signatures, and `push16`/`pop16` are unused in this build. Free, because
@@ -1026,6 +1112,9 @@ Mistakes already made here. The log has the full accounts.
 | Every `CYCLES`-shaped call site is a program location | It is not. The taken-branch penalty is charged on the *edge*, in a block carrying the branch's address that the program is never actually *at* — so it must not trace or dispatch probes, or one execution of that branch gets reported twice. Hence `AddEdgeCycles`/`CYCLES_EDGE`. 698 ROM addresses are edges and 121 of them are also real block heads, so the two are not distinguishable by address. |
 | A plan's list of keyboard-read sites is complete because it was grepped once | Snake Byte's coordinate plan named three sites (`$FD1B`, `$741F`, `$7890`); a fourth, `$6217` — the in-game ingest that clears the strobe and fills the ring buffer at `$623C` — was missing. Recording with only the three captured 11 of 23 keys, not 11 cycle-quantised ones: once a script delivers via `key` at all, the host's per-frame drain stands down entirely (`probe_uses_key()`), so an uncovered site's keys are never delivered, not merely mis-timed. Found by recording and counting, not by reading the disassembly harder. |
 | A green gate proves the code you just wrote | Only if the binary was rebuilt. Twice on 2026-08-24 `probe-acceptance.sh` reported six green cold checks against a stale executable — once because ninja saw no work for a file it had just been handed (same-second mtime), once because the build had failed and the old binary was still there. The script now refuses to run if any program is older than its sources; before that check existed, the only defence was reading the `Linking` line above the result. |
+| `-Wall` will tell you when a store goes dead | Not for a file-scope static. `s_ink` was written at fourteen sites and read at none for a whole build, and `-Wall`, `-Wextra` and the gate were all green. It only warns about *locals* (`-Wunused-but-set-variable`, itself a separate warning from `-Wunused-variable`). And it says nothing at all about a dead `ram_poke`, which is what seven of the moved stores turned out to be. Classify the sites; do not wait to be told. |
+| "In `rom_*`, registers are the algorithm", so leave them | True of `c` and `d`. False of `b`, `i`, `v`, `n` and `not_z`, which is 115 of the 222 flag references. The phrase was being quoted rather than checked. |
+| A green gate proves a routine you just rewrote | Only if a scenario runs it. Inverting `rom_fc68`'s scroll test or `rom_wait`'s countdown test passes all six cold checks, because nothing scrolls and nothing emits Ctrl-G. `probe-acceptance.sh`'s unverified list already names those addresses; read it before believing a pass. |
 | A test that fails proves the check it names | Task 3's own drain-guard regression test specified `--frames=10`. At that frame count the buggy (unguarded) and the fixed (guarded) build produce byte-identical output — the installed keyboard site isn't even reached until roughly frame 8.3, and the one key that would distinguish the two builds is stamped for a point roughly 59 frames further out — so the test failed identically before and after the fix and proved nothing either way. Needed `--frames=100`. A red result is only evidence once you have also seen it turn green for the right reason. |
 
 ---

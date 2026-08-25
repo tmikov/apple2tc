@@ -2856,3 +2856,97 @@ So they can go one at a time, each lowering the pinned count with a reason, and
 the trace stays intact for everything else. Four of them are already charged
 `CYCLES(addr, 0)`, so deleting those costs no cycles at all — only the site.
 That is the route, and it does not need step 6 first.
+
+---
+
+## 2026-08-24 (after step 6's entry) — The game's state leaves RAM, and the flags get classified
+
+**Status:** validated · **Scope:** apple2tc
+
+The three things HANDOFF listed as untouched by the six cleanup steps — the
+game's own variables, the plotting state, and the status flags — are done. The
+counts (314 `ram_peek`/`ram_poke` down to 16, 222 flag references down to 100)
+are the least interesting part. Four things are worth carrying to the next
+binary.
+
+### The order of a storage move is what makes the gate evidence
+
+Established at step 3a and used unchanged for all four slices here. Move the
+storage **with the probe untouched first**, and require the gate to read *trace
+PASS, screen PASS, memory FAIL*. That failure is the only proof that the oracle
+was watching those bytes; a narrowing applied first would have been
+indistinguishable from a narrowing over bytes nothing ever wrote. Then narrow,
+then mutate each new edge address and watch memory alone catch it.
+
+Thirty-four edges were added across the four slices. All thirty-four were
+mutation-tested and all thirty-four were caught. That number is the point: it
+is cheap, it is mechanical, and it is what stops a probe from quietly becoming
+a hash over a range nobody touches.
+
+The `game` field is XOR-folded over its fourteen surviving pieces rather than
+given a parameter each, because `PROBE_MAX_PARAMS` is 16. One wrong byte
+changes exactly one sub-hash and nothing cancels it.
+
+### A store becomes dead the moment its byte leaves RAM, and nothing tells you
+
+Seven of them here: `$6637`/`$6638`, `$6C4A`, `$6B39`/`$6B3A` and
+`$3754`/`$3757`. In every case the routine already computed the value in a
+local and committed it through the struct or counter it was handed; the store
+existed *only* because the memory oracle hashed the address. They read as
+faithfulness and they were scaffolding.
+
+`-Wall` cannot help. It says nothing about a dead `ram_poke`, and — the part
+that is new — it says nothing about a **file-scope static** that is written and
+never read either. `s_ink` was written at fourteen sites and read at none for
+an entire build, with `-Wall`, `-Wextra` and all six cold checks green. The
+existing note about `-Wunused-but-set-variable` covers locals only.
+
+That is why threading and deleting were done as two commits: thread, gate,
+*then* delete. If the deletion had gone in with the threading, a mistake in
+either would have been attributed to the other.
+
+### "In `rom_*`, registers are the algorithm" is a hypothesis, not a fact
+
+It had been repeated across several documents as a reason not to touch the
+flags. Checked, by classifying all 222 sites as reads or writes:
+
+- `b` — 3 writes, **0 reads**. Never read anywhere. The PHP bytes use the
+  `STATUS_B` constant, not the variable.
+- `i` and `v` — 2 reads each, and both feed the PHP byte in `rom_plot` and
+  `rom_scrn`, whose only reader is the PLP restoring `i` and `v` from bits 2
+  and 6. A value pushed so that it can be popped back into itself is not a
+  value. Bit 3 (`d`) and bit 0 (the LSR's carry) stay, because those are read.
+- `n` and `not_z` — read in one routine each (plus `steer_try`), on paths a
+  local write dominates. Locals now; 87 dead stores gone.
+- `c` — **stays**, and this is measured: it is read on entry to `rom_home`
+  (CLRSC2's first pass, before `$FC52` sets it) and to `rom_fc68`, so it
+  genuinely crosses a call.
+- `d` — **stays**. Every BCD region and every `assert_binary_mode`.
+
+So the claim held for two of seven and was false for five, covering 115 of the
+222 references. **Do not extend it to `s_a`/`s_x`/`s_y` without running the same
+classification** — that is the remainder of step 4, and it is the same shape of
+work.
+
+### Inheritance can be written down, or it can be a global — check which
+
+`s_ink` and `s_shape` were the same kind of thing on paper: both inherited
+across calls, both documented as globals for that reason. They are not the same
+thing. Every reader of `s_ink` was one of two lines and every writer's value
+was readable at its call site, so the run helpers take it as an argument and
+`draw_border(0x0d)` states what it used to inherit. `s_shape` does not thread:
+`plot_at`'s two callers erase with whatever shape was last used, and passing
+one would invent a value the original does not have.
+
+Both inferred inherited inks were mutation-tested rather than argued.
+`draw_border`'s is caught by the play screen; the redefinition screen's stem is
+caught by the hires screen **and by nothing else** — which is the scenario that
+was added on 2026-08-23 for exactly this class of thing.
+
+### What is not checked by running it, and says so
+
+`rom_fc68`'s scroll and `rom_wait`'s countdown loops. Inverting either test
+passes all six cold checks, because nothing scrolls and nothing emits Ctrl-G.
+`$FC8C` and `$FC93` are already on `probe-acceptance.sh`'s unverified list.
+Both localisations rest on the dominance argument and each records that above
+itself. `steer_try`'s is checked: inverting it fails the play screen.
