@@ -2920,7 +2920,9 @@ flags. Checked, by classifying all 222 sites as reads or writes:
   local write dominates. Locals now; 87 dead stores gone.
 - `c` — **stays**, and this is measured: it is read on entry to `rom_home`
   (CLRSC2's first pass, before `$FC52` sets it) and to `rom_fc68`, so it
-  genuinely crosses a call.
+  genuinely crosses a call. **[Superseded 2026-08-25: this is wrong. Both
+  reads are preceded by a call whose callee writes the carry. See the
+  2026-08-25 entry.]**
 - `d` — **stays**. Every BCD region and every `assert_binary_mode`.
 
 So the claim held for two of seven and was false for five, covering 115 of the
@@ -2950,3 +2952,75 @@ passes all six cold checks, because nothing scrolls and nothing emits Ctrl-G.
 `$FC8C` and `$FC93` are already on `probe-acceptance.sh`'s unverified list.
 Both localisations rest on the dominance argument and each records that above
 itself. `steer_try`'s is checked: inverting it fails the play screen.
+
+---
+
+## 2026-08-25 — The carry was not live across calls, and the ROM bodies convert
+
+**Status:** validated · **Scope:** apple2tc
+
+Supersedes the carry finding in the 2026-08-24 entry, which is marked there.
+
+### The correction
+
+That entry recorded, as measured, that `C` is read on entry to `rom_home` and
+`rom_fc68` and therefore genuinely crosses a call. It is not. Both reads sit
+after a call -- `rom_clreolz` in HOME's CLRSC2 loop, `rom_vtabz` in the scroll
+-- and both callees write the carry before returning. I read each routine's own
+body and stopped there.
+
+That is the *same* mistake the `rom_cout` parameter list had already caught,
+three days of work earlier: reading a body instead of following the calls.
+Knowing the failure mode did not prevent it. The lesson is not "be careful", it
+is that **a liveness claim about a register must be produced by a tool, not by
+reading** -- the read-before-write fixpoint over the call graph takes a dozen
+lines and would have said so both times.
+
+Consequence: all ten game-side carry writes were dead, and inverting every one
+of them passes all six cold checks. Eight more inside `rom_*` were dead for the
+ordinary reason -- the branch after them tests the value, not the flag. 36
+writes are 12.
+
+### What the carry actually is
+
+Three edges, and they are a real 6502 idiom worth naming: a routine ends on a
+`CMP`, and its caller reaches an `ADC` with no `CLC` in front of it, so the
+compare's carry *is* the +1.
+
+- `rom_clreolz` returns it; HOME steps a line with it and `$FC9A` branches on it.
+- `rom_vtabz` returns it; the scroll at `$FC81` does the same.
+- `rom_bascalc` hands back its second `ASL`'s carry, which VTABZ adds in.
+
+They are return values now. A global flag was hiding a genuine data dependency
+behind something that looked like residue -- which is precisely why the wrong
+conclusion above was easy to reach and hard to notice.
+
+### The ROM bodies convert once the entry points have signatures
+
+144 register references inside `rom_*` down to 11, in two passes. Nothing
+clever: give each routine parameters for what it reads, a return value for what
+a caller reads, and turn the rest into locals.
+
+Two things fell out that reading had not produced. SETIO's `X` and `Y` are the
+built-in device's vector -- `$FD1B` for KEYIN, `$FDF0` for COUT1 -- and SETIO
+keeps the low half while replacing the page; `rom_setkbd` and `rom_setvid` say
+so now. And `rom_home`'s two `s_y = 0` were stating something the code can say
+directly: CLREOLZ is the only thing that moves Y, so every pass blanks from
+column 0.
+
+### The floor, and what it is made of
+
+15 register references remain. Eleven are COUT's promise to preserve X and Y:
+the game repoints CSWL/CSWH at its own hi-res renderer, so the hook is entered
+through `JMP ($36)` and **cannot** take arguments -- it reads its slot out of X
+and restores the caller's X and Y on the way out. Three are the entry-state
+load. That is not a tail to be chipped at; it is the machine's own dispatch
+being the interface.
+
+### Comments outlive the code they describe
+
+The `\file` block heading the converted half still described the
+`game.c`/`game_native.c` split -- adapters marshalling machine state, variables
+"still living at their original addresses", accessors. Every clause of it had
+been false since the merge, and it sat directly above the code that disproved
+it. Worth a sweep whenever a file absorbs another one.
