@@ -71,7 +71,6 @@
 #include "apple2tc/a2host_api.h"
 #include "apple2tc/a2io.h"
 
-
 /* ========================================================================== *
  * The machine, the images, and what is left of the ROM                     *
  * ========================================================================== */
@@ -89,61 +88,68 @@
 /// above it also toggle the speaker.
 static void speaker_access(uint8_t port);
 
-/// Charge the cycles the original spent, without naming the address.
+/// Advance the clock and, if the host's budget is spent, hand control back.
 ///
-/// Step 6b. The clock has to keep running -- `cycles_expired()` is what
-/// advances the host's frames, so with no charges at all `--frames` never
-/// terminates -- but nothing needs the *address* once the block-head trace is
-/// retired. This is the same arithmetic CYCLES does, minus the `s_pc` store
-/// and the probe dispatch that a charge-only site never used.
-///
-/// Timing is bit-identical, which is what makes the change checkable: the
-/// screen and memory comparisons run against the booting build unchanged.
-#define TICK(n)                            \
-  do {                                     \
-    if (s_remaining_cycles <= 0)           \
-      cycles_expired();                    \
-    s_cycles += (n);                       \
-    s_remaining_cycles -= (n);             \
+/// Nothing calls this directly any more -- see `advance` below, which is this
+/// with a name that says why the site exists. It stays a separate macro
+/// because the two things it does are separate: the arithmetic, and the
+/// suspend point that lets the host draw a frame.
+#define TICK(n)                  \
+  do {                           \
+    if (s_remaining_cycles <= 0) \
+      cycles_expired();          \
+    s_cycles += (n);             \
+    s_remaining_cycles -= (n);   \
   } while (0)
 
-/// The same charge, at a site where the duration is *perceptible* -- audible,
-/// or visible as a pause -- and which therefore must never be deleted.
+/// Advance the virtual clock, at one of the twenty-one places in this program
+/// where a duration is *perceptible*.
 ///
-/// The distinction is the whole of the virtual-clock design. Most of this
-/// file's charges pay for arithmetic nobody can hear or see, and they exist
-/// only because the 6502 spent the cycles; those can be folded away or
-/// dropped. The sites spelled `advance` cannot, for one of two reasons:
+/// This is the only way time passes here, and that is the point. The 6502
+/// spent cycles on every instruction it executed, and the decompiled file
+/// used to charge for all of them: 838 sites, most of them paying for
+/// arithmetic nobody can hear or see. Those are gone. What is left advances
+/// the clock for one of two reasons, and each site says which.
 ///
 ///   - **It sets a pitch.** The Apple II speaker is a one-bit cone and
 ///     reading $C030 flips it, so the note *is* the interval between reads.
-///     Shorten the interval and the tone goes sharp. These are the tone
-///     loop, the apple sweep, the death buzz and the pace loop's click.
-///   - **It is the only yield in a loop that waits for input.** Every charge
-///     is a suspend point: `cycles_expired()` parks the game here and hands
-///     the host its window to draw and poll the keyboard. Delete the last
-///     charge in a polling loop and the window never opens -- the game spins
-///     forever with a frozen display and no way to answer.
+///     Shorten the interval and the tone goes sharp. The tone loop, the apple
+///     sweep, the death buzz, the pace loop's click.
+///   - **It is a duration you can see or feel.** The 1.29 s hold on a cleared
+///     screen, the 7.8 s prompt timeout, the redefinition cursor's blink --
+///     and the snake's own tempo, which is why redrawing the walls still
+///     costs 28,848 cycles.
 ///
-/// The second failure is invisible to the whole gate. Under probe-stamped
-/// replay the key counter advances at the keyboard *read*, so a spinning loop
-/// keeps incrementing it and receives its keys without a frame ever
-/// happening: every check passes and the real game hangs. That is why playing
-/// it is a required step and not a courtesy.
+/// **Every one of them is also a suspend point, and some are the only one in
+/// their loop.** `cycles_expired()` parks the game at a charge and hands the
+/// host its window to draw and poll the keyboard. Delete the last charge in a
+/// loop that waits for input and the window never opens: the game spins
+/// forever with a frozen display and no way to answer.
 ///
-/// A macro rather than a comment convention so the count is greppable -- 17
-/// sites, against 775 plain `TICK`s -- and so deleting one is a compile-time
-/// visible act rather than the removal of an indistinguishable line.
+/// That failure is invisible to the entire gate. Under probe-stamped replay
+/// the key counter advances at the keyboard *read*, so a spinning loop keeps
+/// incrementing it and receives its keys without a frame ever happening --
+/// every check passes and the real game hangs. Playing it is a required step,
+/// not a courtesy.
+///
+/// **Calibration.** Each value is the measured cost of the region it stands
+/// for: from this site to the next charge, on real 6502 cycles. Two of them
+/// are *less* than that measurement, because a region can contain a surviving
+/// `GAME_CYCLES_COORD` -- the probe-carrying addresses charge for themselves,
+/// and counting them here too made the game 50% slower at the death pause
+/// before the block-head trace caught it.
+///
+/// A macro rather than a comment convention, so that the count is greppable
+/// and deleting one is a visible act rather than the removal of an
+/// indistinguishable line.
 #define advance(n) TICK(n)
-
 
 /// The zero-page fragment $00B1-$00C8 the run data carried: the six-byte
 /// CHRGET routine Applesoft assembles there at boot. Small enough to read,
 /// so unlike the other two images it stays in the file.
-static const uint8_t s_mem_00b1[0x0018] = {
-  0xE6, 0xB8, 0xD0, 0x02, 0xE6, 0xB9, 0xAD, 0x06, 0x02, 0xC9, 0x3A, 0xB0, 0x0A, 0xC9, 0x20, 0xF0,
-  0xEF, 0x38, 0xE9, 0x30, 0x38, 0xE9, 0xD0, 0x60
-};
+static const uint8_t s_mem_00b1[0x0018] = {0xE6, 0xB8, 0xD0, 0x02, 0xE6, 0xB9, 0xAD, 0x06,
+                                           0x02, 0xC9, 0x3A, 0xB0, 0x0A, 0xC9, 0x20, 0xF0,
+                                           0xEF, 0x38, 0xE9, 0x30, 0x38, 0xE9, 0xD0, 0x60};
 
 #include "game-image.inc"
 #include "rom-image.inc"
@@ -181,7 +187,7 @@ static uint16_t sbc_dec16(uint8_t a, uint8_t b, uint8_t cf) {
 /* The monitor's own state, out of emulated RAM on the same terms as the game's.
    Names are the Apple II's, because every reference uses them and a2rom.h's
    prose already did. */
-static uint8_t s_wndlft;  ///< text window: left, width, top, bottom
+static uint8_t s_wndlft; ///< text window: left, width, top, bottom
 static uint8_t s_wndwdth;
 static uint8_t s_wndtop;
 static uint8_t s_wndbtm;
@@ -191,16 +197,16 @@ static uint8_t s_wndbtm;
    rewrites only the low byte, and the glyph blitter does 8-bit arithmetic on
    each -- the code says so with a mask or a shift, which is what the split
    used to be hiding. */
-static uint16_t s_gbas;  ///< lo-res line base, from GBASCALC and V2
-static uint16_t s_bas;   ///< text line base, from BASCALC and CV
-static uint16_t s_bas2;  ///< the scroll's destination line
-static uint8_t s_v2;      ///< VLINE's bottom row
-static uint8_t s_mask;    ///< which nibble of a lo-res byte a PLOT touches
-static uint8_t s_color;   ///< the lo-res colour, both nibbles
-static uint8_t s_invflg;  ///< COUT1 ANDs the character with this: $FF normal
+static uint16_t s_gbas; ///< lo-res line base, from GBASCALC and V2
+static uint16_t s_bas; ///< text line base, from BASCALC and CV
+static uint16_t s_bas2; ///< the scroll's destination line
+static uint8_t s_v2; ///< VLINE's bottom row
+static uint8_t s_mask; ///< which nibble of a lo-res byte a PLOT touches
+static uint8_t s_color; ///< the lo-res colour, both nibbles
+static uint8_t s_invflg; ///< COUT1 ANDs the character with this: $FF normal
 static uint16_t s_csw; ///< the character output vector the game repoints
 static uint16_t s_ksw; ///< the character input vector; nothing reads it
-static uint8_t s_a2l;     ///< SETKBD/SETVID scratch
+static uint8_t s_a2l; ///< SETKBD/SETVID scratch
 
 /// $002C, and still one byte doing two jobs.
 ///
@@ -233,7 +239,6 @@ static uint8_t s_ch, s_cv;
 
 /// The converted game routines are entered with decimal mode clear. Rather
 /// than carry the decompiler's dead decimal arms through them, say so and fail
-
 
 /// A cell on the 40x48 playfield grid.
 typedef struct {
@@ -279,84 +284,6 @@ static void emulated_entry_point(void) {
   game_cold_start();
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /// $FBC1 BASCALC. Turn a text line number in A into that line's base address
 /// in BASL/BASH.
 ///
@@ -372,16 +299,14 @@ static void emulated_entry_point(void) {
 /// \p carry_out, the bit shifted out of the second ASL -- which VTABZ adds
 /// straight back in.
 uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
-  // 40 cycles, 41 for an odd line -- the text-page twin of GBASCALC, with the
-  // same one-cycle branch. Measured at all 145 calls.
-  /*$FBC1*/ TICK(40);
+  /*$FBC1*/
   // LSR: the carry is the line's low bit, and it is what decides the ADC below.
   const uint8_t odd = line & 0x01;
   const uint8_t page = (uint8_t)(((line >> 1) & 0x03) | 0x04);
   uint8_t band = line & 0x18;
 
   if (odd) {
-    /*$FBCE*/ TICK(1);
+    /*$FBCE*/
     // ADC #$7F with the carry the LSR just set, i.e. +$80: the second half of
     // the band.
     band = (uint8_t)((uint16_t)(band + 0x007f) + odd);
@@ -407,9 +332,7 @@ uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
 /// the +1 that steps to the next line -- the same trick HOME plays with
 /// CLREOLZ's. The carry going *in* is BASCALC's, from its second ASL.
 bool rom_vtabz(uint8_t line) {
-  // 18 cycles of its own, flat: no branch, and BASCALC charges separately.
-  /*$FC24*/ TICK(18);
-  bool carry;
+  /*$FC24*/ bool carry;
   const uint8_t base = rom_bascalc(line, &carry);
 
   const uint16_t r = ((uint16_t)base + s_wndlft) + carry;
@@ -417,8 +340,7 @@ bool rom_vtabz(uint8_t line) {
   // this really is a write of one half.
   s_bas = (uint16_t)((s_bas & 0xff00) | (uint8_t)r);
 
-  /*$FC2B*/
-  return ((r >> 8) & 0x01) != 0;
+  /*$FC2B*/ return ((r >> 8) & 0x01) != 0;
 }
 
 /// $FC9C CLREOL. Blank from the cursor to the right edge of the window.
@@ -429,8 +351,7 @@ bool rom_vtabz(uint8_t line) {
 /// scrolls. The body is three instructions and its tail call is the routine
 /// below, which *is* exercised, so what is unchecked is the LDY and the jump.
 void rom_clreol(void) {
-  /*$FC9C*/ TICK(3);
-  rom_clreolz(s_ch); // JMP -- a tail call; nobody reads its carry.
+  /*$FC9C*/ rom_clreolz(s_ch); // JMP -- a tail call; nobody reads its carry.
 }
 
 /// $FC9E CLREOLZ. The same, from column Y rather than from the cursor. Writes
@@ -444,23 +365,20 @@ void rom_clreol(void) {
 /// HOME's CLRSC2 loop reaches its `ADC #$00` with no CLC of its own and uses
 /// this as the +1 that steps to the next line, and $FC9A branches on it.
 bool rom_clreolz(uint8_t col) {
-  /*$FC9E*/ TICK(2);
-  const uint8_t space = 0xa0; // a space, high bit set
+  /*$FC9E*/ const uint8_t space = 0xa0; // a space, high bit set
 
   for (;;) {
-    /*$FCA0*/ TICK(13);
-    poke((uint16_t)(s_bas + col), space);
+    /*$FCA0*/ poke((uint16_t)(s_bas + col), space);
 
     const uint8_t next = (uint8_t)(col + 1);
     col = next;
 
     const uint8_t width = s_wndwdth;
     if (next >= width) {
-      /*$FCA7*/ TICK(6);
-      return true;
+      /*$FCA7*/ return true;
     }
 
-    /*$FCA5*/ TICK(1);
+    /*$FCA5*/
   }
 }
 
@@ -477,7 +395,6 @@ bool rom_clreolz(uint8_t col) {
 /// from a copy on the stack, and the outer one counts the original down, so
 /// the total is quadratic in A rather than linear.
 void rom_wait(uint8_t n) {
-
   /* The SBC's Z, which both loops branch on. A local for the same reason the
      scroll's N is one: nothing outside this routine ever read the flag, and
      each read here follows the SBC that sets it.
@@ -487,12 +404,12 @@ void rom_wait(uint8_t n) {
      either test below passes all six cold checks. */
   uint8_t not_zero = 0;
 
-  /*$FCA8*/ TICK(2);
+  /*$FCA8*/
   // SEC: the borrow chain both loops run on.
   uint8_t carry = 0x01;
 
   for (;;) {
-    /*$FCA9*/ TICK(3);
+    /*$FCA9*/
 
     // The inner loop: A down to zero, one SBC per pass.
     uint8_t inner = n;
@@ -501,28 +418,27 @@ void rom_wait(uint8_t n) {
       // bell's clicks -- so this charge is the tone. Neither scenario emits
       // Ctrl-G, so nothing in the gate covers it; it survives on the argument
       // rather than on a measurement, which is worth saying plainly.
-      /*$FCAA*/ advance(4);
+      /*$FCAA*/ advance(5);
       const uint16_t r = (uint16_t)(inner - 0x0001) - (uint8_t)(0x01 - carry);
       carry = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
       inner = (uint8_t)r;
       not_zero = inner;
       if (!not_zero)
         break;
-      /*$FCAC*/ TICK(1);
+      /*$FCAC*/
     }
 
     // The outer one: the copy off the stack, down by one.
-    /*$FCAE*/ TICK(8);
-    const uint16_t r = (uint16_t)(n - 0x0001) - (uint8_t)(0x01 - carry);
+    /*$FCAE*/ const uint16_t r = (uint16_t)(n - 0x0001) - (uint8_t)(0x01 - carry);
     carry = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
     n = (uint8_t)r;
     not_zero = n;
     if (!not_zero)
       break;
-    /*$FCB1*/ TICK(1);
+    /*$FCB1*/
   }
 
-  /*$FCB3*/ TICK(6);
+  /*$FCB3*/
 }
 
 /* ========================================================================== *
@@ -557,8 +473,6 @@ void rom_wait(uint8_t n) {
 ///
 /// IMPORTANT: `a2rom.c` is *not* a standalone translation unit. See the comment
 /// at the top of that file.
-
-
 
 /// $F800 PLOT. Plot a lo-res block at column Y, row A. Trashes A, preserves Y.
 void rom_plot(uint8_t row, uint8_t col);
@@ -612,8 +526,6 @@ void rom_setvid(void);
  * LICENSE file in the root directory of this source tree.
  */
 
-
-
 /* ========================================================================== *
  * The game, as ordinary C                                                    *
  * ========================================================================== *
@@ -633,7 +545,6 @@ void rom_setvid(void);
  * What survives from that arrangement is the cycle accounting below, and the
  * reason it is spelled three different ways.
  */
-
 
 /* --- Cycle accounting ----------------------------------------------------- */
 
@@ -947,8 +858,6 @@ void game_setup_screen(void);
  * LICENSE file in the root directory of this source tree.
  */
 
-
-
 /// \file
 /// Snake Byte routines decompiled by hand, because apple2tc could not reach
 /// them. See game.c for why each one is here.
@@ -959,7 +868,6 @@ void game_setup_screen(void);
 /// $664A -- the game's own COUT handler, a hi-res text renderer.
 /// $7230 -- print the NUL-terminated string that follows the call.
 void game_print_inline_str(uint16_t ret_addr);
-
 
 /* --- $60E4/$60E7/$6127: the hi-res cell plotter -------------------------- */
 
@@ -1066,10 +974,6 @@ void game_move_bouncer(Bouncer *b);
 /// what the caller at $7739 reads.
 static void game_play_one_life(void);
 
-
-
-
-
 /* ========================================================================== *
  * Apple II ROM entry points, hand-written                                  *
  * ========================================================================== */
@@ -1129,7 +1033,6 @@ static void game_play_one_life(void);
 /// `snake-bytec1` target is the self-contained reference build, which
 /// decompiles the ROM instead of calling into here.
 
-
 /* Helpers that remain in the generated code. Redeclared here so that this file
    reads standalone; C permits identical redeclarations. */
 bool rom_vtabz(uint8_t line);
@@ -1162,20 +1065,12 @@ static void rom_cout1(uint8_t ch);
 /// build a text address, and this one shifts by two and ORs, which lands on
 /// the lo-res page instead.
 static void rom_gbascalc(uint8_t row) {
-  // 40 cycles, or 41 when the row is odd. Measured at all 9,913 calls, which
-  // split 4,911 even to 5,002 odd, and the two values are the only ones.
-  // The odd path costs the one extra because $F852's BCC is not taken and the
-  // ADC runs instead; charging the base here and the difference on the branch
-  // keeps that exact and lets the else-arm, which existed only to hold a
-  // charge, go away.
-  /*$F847*/ TICK(40);
-  const uint8_t odd = (uint8_t)(row & 0x01);
+  /*$F847*/ const uint8_t odd = (uint8_t)(row & 0x01);
   /*$F84D*/ const uint8_t page = (uint8_t)(((row >> 0x01) & 0x03) | 0x04);
   /*$F850*/ uint8_t band = (uint8_t)(row & 0x18);
 
   if (odd) {
-    /*$F854*/ TICK(1);
-    band = (uint8_t)((band + 0x7f) + odd);
+    /*$F854*/ band = (uint8_t)((band + 0x7f) + odd);
   }
 
   /*$F85C*/ s_gbas = (uint16_t)((uint8_t)((uint8_t)(band << 0x02) | band) | (page << 8));
@@ -1189,8 +1084,7 @@ static void rom_plot1(uint8_t col) {
   // One lo-res cell: replace the half of the byte MASK selects with the
   // matching half of COLOR, leaving the other half alone. `(old ^ colour) &
   // mask ^ old` is the ROM's way of saying that in three instructions.
-  /*$F80E*/ TICK(28);
-  const uint16_t at = (uint16_t)(s_gbas + col);
+  /*$F80E*/ const uint16_t at = (uint16_t)(s_gbas + col);
   const uint8_t old = peek(at);
   /*$F816*/ poke(at, (uint8_t)(((old ^ s_color) & s_mask) ^ old));
 
@@ -1209,11 +1103,7 @@ static void rom_plot1(uint8_t col) {
 /// which is $F0 with the carry set and $EF without; only the low bit of the
 /// row can make the difference, so the sum is one of the two masks.
 void rom_plot(uint8_t row, uint8_t col) {
-  // 23 cycles of its own, 24 for an odd row -- $F808's BCC again, and the
-  // same treatment as GBASCALC's. Measured at all 1,394 calls. This excludes
-  // the two routines it calls, which charge for themselves.
-  /*$F800*/ TICK(23);
-  const uint8_t half = (uint8_t)(row >> 0x01);
+  /*$F800*/ const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
   // PHP/PLP across GBASCALC, to carry the LSR's bit past a call that clobbers
   // the flags. The bit is `row & 0x01`, and nothing else survived the round
@@ -1224,8 +1114,7 @@ void rom_plot(uint8_t row, uint8_t col) {
   /*$F806*/ uint8_t mask = 0x0f;
 
   if (upper) {
-    /*$F80A*/ TICK(1);
-    mask = (uint8_t)(((uint16_t)mask + 0x00e0) + carry);
+    /*$F80A*/ mask = (uint8_t)(((uint16_t)mask + 0x00e0) + carry);
   }
 
   s_mask = mask;
@@ -1252,44 +1141,36 @@ void rom_hline(uint8_t row, uint8_t from_col) {
   // The CMPs below leave it and the ADC at $F826 reads it back.
   uint8_t carry;
 
-  /*$F819*/ TICK(6);
-  rom_plot(row, col);
+  /*$F819*/ rom_plot(row, col);
 
 across: /* $F81C -- one column at a time, up to H2 */
-  TICK(5);
   carry = (uint8_t)(col >= s_h2);
   if (carry) {
     // $F81E BCS -- the branch itself, taken here.
-    /*$F81E*/ TICK(1);
-    goto done;
+    /*$F81E*/ goto done;
   }
 
-  /*$F820*/ TICK(8);
-  col = (uint8_t)(col + 0x01);
+  /*$F820*/ col = (uint8_t)(col + 0x01);
   /*$F821*/ rom_plot1(col);
-  /*$F824*/ TICK(2);
-  if (!carry) {
+  /*$F824*/ if (!carry) {
     // $F824 BCC -- the branch itself, taken here.
-    /*$F824*/ TICK(1);
-    goto across;
+    /*$F824*/ goto across;
   }
 
 down: /* $F826 -- one row at a time, up to V2 */
-  TICK(2);
   row = (uint8_t)(((uint16_t)row + 0x0001) + carry);
 
-  /*$F828*/ TICK(9);
+  /*$F828*/
   /*$F829*/ rom_plot(row, col);
-  /*$F82C*/ TICK(9);
+  /*$F82C*/
   /*$F82D*/ carry = (uint8_t)(row >= s_v2);
   if (!carry) {
     // $F82F BCC -- the branch itself, taken here.
-    /*$F82F*/ TICK(1);
-    goto down;
+    /*$F82F*/ goto down;
   }
 
 done:
-  /*$F831*/ TICK(6);
+  /*$F831*/
 }
 
 /* ========================================================================== */
@@ -1300,8 +1181,7 @@ void rom_setcol(uint8_t ink) {
   // The lo-res colour is stored in both nibbles, so a PLOT can take whichever
   // half MASK selects without shifting. Four ASLs and an ORA get there in the
   // original; the carry they leave is read by nothing.
-  /*$F864*/ TICK(25);
-  const uint8_t low = (uint8_t)(ink & 0x0f);
+  /*$F864*/ const uint8_t low = (uint8_t)(ink & 0x0f);
   s_color = (uint8_t)((low << 0x04) | low);
 
   /*$F870*/
@@ -1315,11 +1195,7 @@ uint8_t rom_scrn(uint8_t row, uint8_t col) {
   // The row's low bit says which half of the byte holds this cell, and the
   // ROM keeps it across GBASCALC on the stack -- as the whole status
   // register, because LSR put it in the carry and PHP is one byte.
-  // 31 cycles of its own, 38 for an odd row: the four LSRs that shift the
-  // upper nibble down cost seven more than the BCC that skips them. Measured
-  // at all 8,519 calls, and those are the only two values.
-  /*$F871*/ TICK(31);
-  const uint8_t half = (uint8_t)(row >> 0x01);
+  /*$F871*/ const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
 
   /*$F873*/ rom_gbascalc(half);
@@ -1330,12 +1206,10 @@ uint8_t rom_scrn(uint8_t row, uint8_t col) {
   // read by nothing here.
 
   if (upper) {
-    /*$F87B*/ TICK(7);
-    cell = (uint8_t)(cell >> 0x04);
+    /*$F87B*/ cell = (uint8_t)(cell >> 0x04);
   }
 
-  /*$F881*/
-  return cell & 0x0f;
+  /*$F881*/ return cell & 0x0f;
 }
 
 /* ========================================================================== */
@@ -1348,11 +1222,9 @@ uint8_t rom_scrn(uint8_t row, uint8_t col) {
 /// carries the line number on the stack across both calls because VTABZ and
 /// CLREOLZ each destroy A.
 void rom_home(void) {
-
   uint8_t line;
 
 home: /* $FC58 */
-  TICK(13);
   line = s_wndtop;
   /*$FC5A*/ s_cv = s_wndtop;
   /*$FC5E*/ s_ch = 0x00;
@@ -1360,37 +1232,32 @@ home: /* $FC58 */
   // instruction still executes and still pays its own cost every time. The
   // decompiler doesn't do cross-instruction flag proofs either, so it keeps
   // charging this the same way.
-  /*$FC60*/ TICK(1);
+  /*$FC60*/
 
   for (;;) { /* $FC46 -- CLRSC2, one line per pass */
-    TICK(9);
     /*$FC47*/ rom_vtabz(line);
-    /*$FC4A*/ TICK(6);
+    /*$FC4A*/
     // $FC5C loaded Y with 0 and CLREOLZ is the only thing that moves it, so
     // every pass starts the blank at column 0. Its carry comes back out as the
     // +1 below: $FC4D's `ADC #$00` has no CLC in front of it, and this is why.
     const bool step = rom_clreolz(0x00);
 
-    /*$FC4D*/ TICK(13);
-    line = (uint8_t)(line + step);
+    /*$FC4D*/ line = (uint8_t)(line + step);
 
     /*$FC52*/ const bool past_bottom = line >= s_wndbtm;
     if (!past_bottom) {
       // $FC54 BCC -- the branch itself, taken here.
-      /*$FC54*/ TICK(1);
-      continue;
+      /*$FC54*/ continue;
     }
 
-    /*$FC56*/ TICK(2);
-    if (!past_bottom)
+    /*$FC56*/ if (!past_bottom)
       goto home; // the BCS's not-taken arm, which cannot be reached
     // $FC56 BCS -- the branch itself, same address as the block above because
     // this is a singleton one-instruction block.
-    /*$FC56*/ TICK(1);
-    break;
+    /*$FC56*/ break;
   }
 
-  /*$FC22*/ TICK(3); // TABV
+  /*$FC22*/ // TABV
   rom_vtabz(s_cv); // JMP -- a tail call.
 }
 
@@ -1418,7 +1285,6 @@ home: /* $FC58 */
 /// The scroll copies each line over the one above it, back to front, keeping
 /// the source line's base in BASL and the destination's in BAS2L.
 void rom_fc68(void) {
-
   /* The scroll's N. It was s_status_n while every routine in this file
      maintained the whole status register; this is the only routine that ever
      read the flag, and both reads are below, inside and just after the copy
@@ -1436,21 +1302,17 @@ void rom_fc68(void) {
   uint8_t col = 0;
   bool step = false;
 
-  /*$FC68*/ TICK(8);
-  if (!(s_cv >= s_wndbtm)) {
+  /*$FC68*/ if (!(s_cv >= s_wndbtm)) {
     // $FC6C BCC -- the branch itself, taken here. Nothing to scroll.
-    /*$FC6C*/ TICK(1);
-    rom_vtabz(s_cv); // JMP -- a tail call.
-      return;
+    /*$FC6C*/ rom_vtabz(s_cv); // JMP -- a tail call.
+    return;
   }
 
-  /*$FC6E*/ TICK(17);
-  s_cv = (uint8_t)(s_cv - 0x01);
+  /*$FC6E*/ s_cv = (uint8_t)(s_cv - 0x01);
   /*$FC70*/ line = s_wndtop;
   /*$FC73*/ step = rom_vtabz(line);
 
 scroll: /* $FC76 -- one line up per pass */
-  TICK(28);
   /*$FC78*/ s_bas2 = s_bas;
   /*$FC80*/ col = (uint8_t)(s_wndwdth - 0x01);
   // $FC82's ADC has no CLC either; the carry is whatever VTABZ last returned.
@@ -1458,49 +1320,42 @@ scroll: /* $FC76 -- one line up per pass */
 
   if (line >= s_wndbtm) {
     // $FC86 BCS -- the branch itself, taken here. That was the last line.
-    /*$FC86*/ TICK(1);
-    goto last_line;
+    /*$FC86*/ goto last_line;
   }
 
-  /*$FC88*/ TICK(9);
+  /*$FC88*/
   /*$FC89*/ step = rom_vtabz(line);
 
 copy: /* $FC8C -- one character, right to left */
-  TICK(15);
-  {
-    const uint8_t at = col;
-    /*$FC8E*/ poke((uint16_t)(s_bas2 + at), peek((uint16_t)(s_bas + at)));
-    /*$FC90*/ const uint8_t next = (uint8_t)(at - 0x01);
-    negative = (uint8_t)(next & 0x80);
-    col = next;
-    if (!negative) {
-      // $FC91 BPL -- the branch itself, taken here (loop back).
-      /*$FC91*/ TICK(1);
-      goto copy;
-    }
+{
+  const uint8_t at = col;
+  /*$FC8E*/ poke((uint16_t)(s_bas2 + at), peek((uint16_t)(s_bas + at)));
+  /*$FC90*/ const uint8_t next = (uint8_t)(at - 0x01);
+  negative = (uint8_t)(next & 0x80);
+  col = next;
+  if (!negative) {
+    // $FC91 BPL -- the branch itself, taken here (loop back).
+    /*$FC91*/ goto copy;
   }
+}
 
-  /*$FC93*/ TICK(2);
-  if (negative) {
+  /*$FC93*/ if (negative) {
     // $FC93 BMI -- the branch itself, taken here (outer loop back).
-    /*$FC93*/ TICK(1);
-    goto scroll;
+    /*$FC93*/ goto scroll;
   }
 
 last_line: /* $FC95 -- blank what the scroll left at the bottom */
-  TICK(8);
   /*$FC97*/ const bool filled = rom_clreolz(0x00);
 
-  /*$FC9A*/ TICK(2);
-  if (!filled) {
+  /*$FC9A*/ if (!filled) {
     rom_clreol(); // JMP -- a tail call.
-      return;
+    return;
   }
   // $FC9A BCS -- taken here, and it falls into the trampoline charge below
   // before continuing; the not-taken arm above jumps straight out without it.
-  /*$FC9A*/ TICK(1);
+  /*$FC9A*/
 
-  /*$FC22*/ TICK(3); // TABV
+  /*$FC22*/ // TABV
   rom_vtabz(s_cv);
 }
 
@@ -1556,10 +1411,8 @@ last_line: /* $FC95 -- blank what the scroll left at the bottom */
 /// feed -- and writing it as nested ifs would need each of those spelled out
 /// twice.
 static void rom_coutz(uint8_t ch) {
-  /*$FB78*/ TICK(4);
-  if (ch != 0x8d) {
-    /*$FB7A*/ TICK(1);
-    goto emit;
+  /*$FB78*/ if (ch != 0x8d) {
+    /*$FB7A*/ goto emit;
   }
 
   /* $FB7C -- the Ctrl-S handshake, on a carriage return only. If a key is
@@ -1569,165 +1422,130 @@ static void rom_coutz(uint8_t ch) {
   /*$FB7C*/ GAME_CYCLES_COORD(0xfb7c, 6);
   uint8_t key = io_peek(0xc000);
   if (!(key & 0x80)) {
-    /*$FB7F*/ TICK(1);
-    goto emit;
+    /*$FB7F*/ goto emit;
   }
 
-  /*$FB81*/ TICK(4);
-  if (key != 0x93) {
-    /*$FB83*/ TICK(1);
-    goto emit;
+  /*$FB81*/ if (key != 0x93) {
+    /*$FB83*/ goto emit;
   }
 
-  /*$FB85*/ TICK(4);
+  /*$FB85*/
 
   for (;;) { /* $FB88 -- spin until a key is pressed */
-    TICK(6);
     key = io_peek(0xc000);
     if (!(key & 0x80)) {
-      /*$FB8B*/ TICK(1);
-      continue;
+      /*$FB8B*/ continue;
     }
 
-    /*$FB8D*/ TICK(4);
-    if (key == 0x83) {
+    /*$FB8D*/ if (key == 0x83) {
       // Ctrl-C: leave it latched.
-      /*$FB8F*/ TICK(1);
-      break;
+      /*$FB8F*/ break;
     }
-    /*$FB91*/ TICK(4);
-    break;
+    /*$FB91*/ break;
   }
 
 emit: /* $FB94 JMP $FBFD */
-  TICK(3);
-  /*$FBFD*/ TICK(4);
-  if (!(ch >= 0xa0)) {
+  /*$FBFD*/ if (!(ch >= 0xa0)) {
     // The not-taken arm jumps straight to the dispatch without the edge charge.
     goto dispatch;
   }
   // $FBFF BCS -- taken here, and it falls into the trampoline charge before
   // continuing.
-  /*$FBFF*/ TICK(1);
+  /*$FBFF*/
 
 store: /* $FBF0 -- put the character at the cursor */
-  TICK(9);
   /*$FBF2*/ poke((uint16_t)(s_bas + s_ch), ch);
 
-  /*$FBF4*/ TICK(13);
-  s_ch = (uint8_t)(s_ch + 0x01);
+  /*$FBF4*/ s_ch = (uint8_t)(s_ch + 0x01);
   {
     const uint8_t width = s_wndwdth;
     const bool past_right_edge = s_ch >= width;
     if (past_right_edge) {
       // Off the right edge, so wrap: the same thing a carriage return does.
-      /*$FBFA*/ TICK(1);
-      goto carriage_return;
+      /*$FBFA*/ goto carriage_return;
     }
   }
-  /*$FBFC*/ TICK(6);
-  goto out;
+  /*$FBFC*/ goto out;
 
 dispatch: /* $FC01 -- not printable; which control code is it? */
-  TICK(4);
   if (!(ch & 0x80)) {
     // Below $80 the monitor stores it anyway, high bit and all.
-    /*$FC02*/ TICK(1);
-    goto store;
+    /*$FC02*/ goto store;
   }
 
-  /*$FC04*/ TICK(4);
-  if (ch == 0x8d) {
-    /*$FC06*/ TICK(1);
-    goto carriage_return;
+  /*$FC04*/ if (ch == 0x8d) {
+    /*$FC06*/ goto carriage_return;
   }
 
-  /*$FC08*/ TICK(4);
-  if (ch == 0x8a) {
-    /*$FC0A*/ TICK(1);
-    goto line_feed;
+  /*$FC08*/ if (ch == 0x8a) {
+    /*$FC0A*/ goto line_feed;
   }
 
-  /*$FC0C*/ TICK(4);
-  if (ch != 0x88) {
-    /*$FC0E*/ TICK(1);
-    goto bell;
+  /*$FC0C*/ if (ch != 0x88) {
+    /*$FC0E*/ goto bell;
   }
 
   /* $FC10 -- backspace. Off the left edge wraps to the end of the line above,
      which is why it falls into the cursor-up path rather than returning. */
-  /*$FC10*/ TICK(7);
-  {
+  /*$FC10*/ {
     const uint8_t back = (uint8_t)(s_ch - 0x01);
     s_ch = back;
     if (!(back & 0x80)) {
-      /*$FC12*/ TICK(1);
-      /*$FBFC*/ TICK(6);
-      goto out;
+      /*$FC12*/
+      /*$FBFC*/ goto out;
     }
   }
 
-  /*$FC14*/ TICK(11);
+  /*$FC14*/
   /*$FC16*/ s_ch = s_wndwdth;
   /*$FC18*/ s_ch = (uint8_t)(s_ch - 0x01);
 
-  /*$FC1A*/ TICK(8);
-  {
+  /*$FC1A*/ {
     const uint8_t top = s_wndtop;
     const uint8_t cv = s_cv;
     const bool at_window_top = top >= cv;
     if (at_window_top) {
       // Already on the window's top line; there is nowhere to go up to.
-      /*$FC1E*/ TICK(1);
-      /*$FC2B*/ TICK(6);
-      goto out;
+      /*$FC1E*/
+      /*$FC2B*/ goto out;
     }
   }
 
-  /*$FC20*/ TICK(5);
-  s_cv = (uint8_t)(s_cv - 0x01);
-  /*$FC22*/ TICK(3); // TABV
+  /*$FC20*/ s_cv = (uint8_t)(s_cv - 0x01);
+  /*$FC22*/ // TABV
   rom_vtabz(s_cv);
   goto out;
 
 bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
-  TICK(4);
-  {
-    const uint8_t differs = (uint8_t)(ch != 0x87);
-    if (differs) {
-      // Not the bell either. Drop it.
-      /*$FBDB*/ TICK(1);
-      /*$FBEF*/ TICK(6);
-      goto out;
-    }
+{
+  const uint8_t differs = (uint8_t)(ch != 0x87);
+  if (differs) {
+    // Not the bell either. Drop it.
+    /*$FBDB*/
+    /*$FBEF*/ goto out;
   }
+}
 
   // A tenth of a second of silence, then 192 clicks of the speaker.
-  /*$FBDD*/ TICK(8);
+  /*$FBDD*/
   /*$FBDF*/ rom_wait(0x40);
-  /*$FBE2*/ TICK(2);
-  uint8_t clicks = 0xc0;
+  /*$FBE2*/ uint8_t clicks = 0xc0;
 
   for (;;) { /* $FBE4 */
-    TICK(8);
     /*$FBE6*/ rom_wait(0x0c);
-    /*$FBE9*/ TICK(8);
-    io_peek(0xc030); // the click; the read is the write
+    /*$FBE9*/ io_peek(0xc030); // the click; the read is the write
     /*$FBEC*/ clicks = (uint8_t)(clicks - 0x01);
     if (!clicks)
       break;
-    /*$FBED*/ TICK(1);
+    /*$FBED*/
   }
 
-  /*$FBEF*/ TICK(6);
-  goto out;
+  /*$FBEF*/ goto out;
 
 carriage_return: /* $FC62 -- to the left edge, then down */
-  TICK(5);
   /*$FC64*/ s_ch = 0x00;
 
 line_feed: /* $FC66 */
-  TICK(5);
   s_cv = (uint8_t)(s_cv + 0x01);
   /*$FC68*/ rom_fc68(); // JMP -- a tail call, and where a scroll happens.
 
@@ -1774,28 +1592,27 @@ out:
 void rom_cout(uint8_t ch) {
   uint16_t vector;
 
-  /*$FDED*/ TICK(5);
-            vector = s_csw; // JMP ($36)
-            switch (vector) {
-            case 0xfdf0:
-              rom_cout1(ch);
-              break;
-            case 0x664a:
-              game_cout_hook_native(ch);
-              break;
-            default:
-              fprintf(
-                  stderr,
-                  "rom_cout: output vector CSWL/CSWH ($36/$37) points at $%04X, "
-                  "which is not implemented.\n"
-                  "  Known targets are $FDF0 (ROM COUT1) and $664A (the game's "
-                  "hi-res text renderer).\n",
-                  vector);
-              error_handler(0xfded);
-              abort();
-            }
+  /*$FDED*/ vector = s_csw; // JMP ($36)
+  switch (vector) {
+  case 0xfdf0:
+    rom_cout1(ch);
+    break;
+  case 0x664a:
+    game_cout_hook_native(ch);
+    break;
+  default:
+    fprintf(
+        stderr,
+        "rom_cout: output vector CSWL/CSWH ($36/$37) points at $%04X, "
+        "which is not implemented.\n"
+        "  Known targets are $FDF0 (ROM COUT1) and $664A (the game's "
+        "hi-res text renderer).\n",
+        vector);
+    error_handler(0xfded);
+    abort();
+  }
 
-                      return;
+  return;
 }
 
 /// $FDF0 COUT1 -- the ROM's own character output: mask to the current text
@@ -1806,25 +1623,22 @@ void rom_cout(uint8_t ch) {
 /// monitor does inverse and flashing -- $FF leaves them alone. Control codes
 /// are let through unmasked, since mangling them would change what they mean.
 static void rom_cout1(uint8_t ch) {
-  /*$FDF0*/ TICK(4);
-  const bool printable = ch >= 0xa0;
+  /*$FDF0*/ const bool printable = ch >= 0xa0;
 
   if (printable) {
-    /*$FDF4*/ TICK(3);
-    ch = (uint8_t)(ch & s_invflg);
+    /*$FDF4*/ ch = (uint8_t)(ch & s_invflg);
   } else {
     // $FDF2 BCC -- the branch itself, taken here.
-    /*$FDF2*/ TICK(1);
+    /*$FDF2*/
   }
 
   // The original saves Y in YSAV1 across the call and puts it back, because
   // COUT promises its callers it preserves Y. Nothing in this file ever reads
   // Y for a value, so the promise has nobody to keep it to: saving and
   // restoring were the only two things that touched it.
-  /*$FDF6*/ TICK(12);
-  rom_coutz(ch); // JSR $FB78
+  /*$FDF6*/ rom_coutz(ch); // JSR $FB78
 
-  /*$FDFC*/ TICK(13);
+  /*$FDFC*/
 
   /*$FDFF*/
 }
@@ -1842,9 +1656,7 @@ static void rom_cout1(uint8_t ch) {
 /// nothing dispatches input through it -- but the routine runs at startup and
 /// its cycles count, so it is here in full.
 void rom_setkbd(void) {
-
-  /*$FE89*/ TICK(11);
-  s_a2l = 0x00;
+  /*$FE89*/ s_a2l = 0x00;
   // X and Y are the built-in device's vector, $FD1B (KEYIN). SETIO below keeps
   // the low half and replaces the page.
   const uint8_t entry_low = 0x1b;
@@ -1852,31 +1664,28 @@ void rom_setkbd(void) {
   // same reasoning as $FC60 in rom_home: the decompiler doesn't do
   // cross-instruction flag proofs, so the branch still executes and still
   // pays its own cost every time.
-  /*$FE91*/ TICK(1);
+  /*$FE91*/
 
   // $FE9B SETIO. A2L is the slot; slot 0 means the built-in device and the ROM
   // answers page $FD, where its own KEYIN and COUT1 live. A real slot would
   // give $Cn00 instead -- decoded, never taken, because the game never sets
   // one.
-  /*$FE9B*/ TICK(7);
+  /*$FE9B*/
   /*$FE9D*/ const uint8_t slot = (uint8_t)(s_a2l & 0x0f);
   uint8_t page, low;
   if (slot) {
-    /*$FEA1*/ TICK(6);
-    page = (uint8_t)(slot | 0xc0);
+    /*$FEA1*/ page = (uint8_t)(slot | 0xc0);
     low = 0x00;
     // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
-    /*$FEA5*/ TICK(1);
+    /*$FEA5*/
   } else {
     // $FE9F BEQ -- the branch itself, taken here.
-    /*$FE9F*/ TICK(1);
-    /*$FEA7*/ TICK(2);
-    page = 0xfd;
+    /*$FE9F*/
+    /*$FEA7*/ page = 0xfd;
     low = entry_low;
   }
 
-  /*$FEA9*/ TICK(14);
-  s_ksw = (uint16_t)(low | (page << 8));
+  /*$FEA9*/ s_ksw = (uint16_t)(low | (page << 8));
 
   /*$FEAD*/
 }
@@ -1891,9 +1700,7 @@ void rom_setkbd(void) {
 /// startup, before it has repointed anything. Had it ever called it after
 /// installing the hook, COUT would have stayed hooked.
 void rom_setvid(void) {
-
-  /*$FE93*/ TICK(9);
-  s_a2l = 0x00;
+  /*$FE93*/ s_a2l = 0x00;
   // The same, for $FDF0 (COUT1).
   const uint8_t entry_low = 0xf0;
 
@@ -1901,25 +1708,22 @@ void rom_setvid(void) {
   // answers page $FD, where its own KEYIN and COUT1 live. A real slot would
   // give $Cn00 instead -- decoded, never taken, because the game never sets
   // one.
-  /*$FE9B*/ TICK(7);
+  /*$FE9B*/
   /*$FE9D*/ const uint8_t slot = (uint8_t)(s_a2l & 0x0f);
   uint8_t page, low;
   if (slot) {
-    /*$FEA1*/ TICK(6);
-    page = (uint8_t)(slot | 0xc0);
+    /*$FEA1*/ page = (uint8_t)(slot | 0xc0);
     low = 0x00;
     // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
-    /*$FEA5*/ TICK(1);
+    /*$FEA5*/
   } else {
     // $FE9F BEQ -- the branch itself, taken here.
-    /*$FE9F*/ TICK(1);
-    /*$FEA7*/ TICK(2);
-    page = 0xfd;
+    /*$FE9F*/
+    /*$FEA7*/ page = 0xfd;
     low = entry_low;
   }
 
-  /*$FEA9*/ TICK(14);
-  s_csw = (uint16_t)(low | (page << 8));
+  /*$FEA9*/ s_csw = (uint16_t)(low | (page << 8));
 
   /*$FEAD*/
 }
@@ -1942,7 +1746,6 @@ void rom_setvid(void) {
 /// Like a2rom.c and game.c this is textually included into the generated
 /// translation unit, and it must come *before* game.c, whose adapters call
 /// into it.
-
 
 /* ========================================================================== */
 /* Storage                                                                    */
@@ -1991,31 +1794,24 @@ static uint8_t s_shape_mask[4] = {0xff, 0xff, 0xff, 0xff};
 /// one table of addresses is the same data said once. kHgrLineHi ended at
 /// $605F, where the shape masks began.
 static const uint16_t kHgrLineBase[48] = {
-    0x2000, 0x3000, 0x2080, 0x3080, 0x2100, 0x3100,
-    0x2180, 0x3180, 0x2200, 0x3200, 0x2280, 0x3280,
-    0x2300, 0x3300, 0x2380, 0x3380, 0x2028, 0x3028,
-    0x20a8, 0x30a8, 0x2128, 0x3128, 0x21a8, 0x31a8,
-    0x2228, 0x3228, 0x22a8, 0x32a8, 0x2328, 0x3328,
-    0x23a8, 0x33a8, 0x2050, 0x3050, 0x20d0, 0x30d0,
-    0x2150, 0x3150, 0x21d0, 0x31d0, 0x2250, 0x3250,
-    0x22d0, 0x32d0, 0x2350, 0x3350, 0x23d0, 0x33d0,
+    0x2000, 0x3000, 0x2080, 0x3080, 0x2100, 0x3100, 0x2180, 0x3180, 0x2200, 0x3200, 0x2280, 0x3280,
+    0x2300, 0x3300, 0x2380, 0x3380, 0x2028, 0x3028, 0x20a8, 0x30a8, 0x2128, 0x3128, 0x21a8, 0x31a8,
+    0x2228, 0x3228, 0x22a8, 0x32a8, 0x2328, 0x3328, 0x23a8, 0x33a8, 0x2050, 0x3050, 0x20d0, 0x30d0,
+    0x2150, 0x3150, 0x21d0, 0x31d0, 0x2250, 0x3250, 0x22d0, 0x32d0, 0x2350, 0x3350, 0x23d0, 0x33d0,
 };
 
 /// $6064 -- dot patterns, indexed by dot_index(): ink 0-15, scanline parity,
 /// column mod 4, so ((15*2+1)<<2)|3 == 127 is the largest index and the table
 /// is exactly 128. known-data.txt says the same: "ends exactly at hgr_draw".
 static const uint8_t kHgrPattern[128] = {
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x88, 0x91, 0xa2, 0xc4,
-    0xa2, 0xc4, 0x88, 0x91, 0xc4, 0x88, 0x91, 0xa2, 0x91, 0xa2, 0xc4, 0x88,
-    0x55, 0x2a, 0x55, 0x2a, 0x55, 0x2a, 0x55, 0x2a, 0x08, 0x11, 0x22, 0x44,
-    0x22, 0x44, 0x08, 0x11, 0x2a, 0x55, 0x2a, 0x55, 0x55, 0x2a, 0x55, 0x2a,
-    0xd5, 0xaa, 0xd5, 0xaa, 0xd5, 0xaa, 0xd5, 0xaa, 0xf7, 0xee, 0xdd, 0xbb,
-    0xdd, 0xbb, 0xf7, 0xee, 0x11, 0x22, 0x44, 0x08, 0x44, 0x08, 0x11, 0x22,
-    0xaa, 0xd5, 0xaa, 0xd5, 0xaa, 0xd5, 0xaa, 0xd5, 0x33, 0x66, 0x4c, 0x19,
-    0x4c, 0x19, 0x33, 0x66, 0xaa, 0xd5, 0xaa, 0xd5, 0x55, 0x2a, 0x55, 0x2a,
-    0x2a, 0x55, 0x2a, 0x55, 0x2a, 0x55, 0x2a, 0x55, 0xaa, 0xd5, 0xaa, 0xd5,
-    0x2a, 0x55, 0x2a, 0x55, 0x3b, 0x77, 0x6e, 0x5d, 0x6e, 0x5d, 0x3b, 0x77,
-    0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x88, 0x91, 0xa2, 0xc4, 0xa2, 0xc4, 0x88, 0x91,
+    0xc4, 0x88, 0x91, 0xa2, 0x91, 0xa2, 0xc4, 0x88, 0x55, 0x2a, 0x55, 0x2a, 0x55, 0x2a, 0x55, 0x2a,
+    0x08, 0x11, 0x22, 0x44, 0x22, 0x44, 0x08, 0x11, 0x2a, 0x55, 0x2a, 0x55, 0x55, 0x2a, 0x55, 0x2a,
+    0xd5, 0xaa, 0xd5, 0xaa, 0xd5, 0xaa, 0xd5, 0xaa, 0xf7, 0xee, 0xdd, 0xbb, 0xdd, 0xbb, 0xf7, 0xee,
+    0x11, 0x22, 0x44, 0x08, 0x44, 0x08, 0x11, 0x22, 0xaa, 0xd5, 0xaa, 0xd5, 0xaa, 0xd5, 0xaa, 0xd5,
+    0x33, 0x66, 0x4c, 0x19, 0x4c, 0x19, 0x33, 0x66, 0xaa, 0xd5, 0xaa, 0xd5, 0x55, 0x2a, 0x55, 0x2a,
+    0x2a, 0x55, 0x2a, 0x55, 0x2a, 0x55, 0x2a, 0x55, 0xaa, 0xd5, 0xaa, 0xd5, 0x2a, 0x55, 0x2a, 0x55,
+    0x3b, 0x77, 0x6e, 0x5d, 0x6e, 0x5d, 0x3b, 0x77, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f,
 };
 
 /// $6174 -- four AND masks per shape, indexed (shape << 2) + line.
@@ -2029,18 +1825,15 @@ static const uint8_t kHgrPattern[128] = {
 /// original reads in that case, and nothing can index past it: the byte
 /// arithmetic wraps at 256, but shape is bounded by $1B.
 static const uint8_t kShapeMaskTable[140] = {
-    0x00, 0x00, 0x00, 0x00, 0x8c, 0xbf, 0x8c, 0x00, 0x00, 0x8c, 0xbf, 0x8c,
-    0x98, 0xfe, 0x98, 0x00, 0x8c, 0xbf, 0x8c, 0x00, 0xb3, 0xb0, 0x8f, 0x00,
-    0x8f, 0xb0, 0xb3, 0xb3, 0xfc, 0x83, 0xf3, 0xb3, 0xf3, 0x83, 0xfc, 0x00,
-    0xff, 0x00, 0xff, 0x00, 0xb3, 0xb3, 0xb3, 0xb3, 0xff, 0x00, 0xff, 0x00,
-    0xb3, 0xb3, 0xb3, 0xb3, 0xe0, 0xff, 0xe0, 0x00, 0xbf, 0x0c, 0x0c, 0x0c,
-    0x83, 0xff, 0x83, 0x00, 0x0c, 0x0c, 0x0c, 0xbf, 0x8f, 0xb0, 0xb3, 0xb3,
-    0xfc, 0x83, 0xf3, 0xb3, 0xf3, 0x83, 0xfc, 0x00, 0xb3, 0xb0, 0x8f, 0x00,
-    0xff, 0xff, 0xff, 0xff, 0xe0, 0xf8, 0xfe, 0xff, 0xff, 0xbf, 0x0f, 0x03,
-    0x03, 0x0f, 0xbf, 0xff, 0xff, 0xfe, 0xf8, 0xe0, 0x9c, 0xe3, 0xe3, 0x9c,
+    0x00, 0x00, 0x00, 0x00, 0x8c, 0xbf, 0x8c, 0x00, 0x00, 0x8c, 0xbf, 0x8c, 0x98, 0xfe, 0x98, 0x00,
+    0x8c, 0xbf, 0x8c, 0x00, 0xb3, 0xb0, 0x8f, 0x00, 0x8f, 0xb0, 0xb3, 0xb3, 0xfc, 0x83, 0xf3, 0xb3,
+    0xf3, 0x83, 0xfc, 0x00, 0xff, 0x00, 0xff, 0x00, 0xb3, 0xb3, 0xb3, 0xb3, 0xff, 0x00, 0xff, 0x00,
+    0xb3, 0xb3, 0xb3, 0xb3, 0xe0, 0xff, 0xe0, 0x00, 0xbf, 0x0c, 0x0c, 0x0c, 0x83, 0xff, 0x83, 0x00,
+    0x0c, 0x0c, 0x0c, 0xbf, 0x8f, 0xb0, 0xb3, 0xb3, 0xfc, 0x83, 0xf3, 0xb3, 0xf3, 0x83, 0xfc, 0x00,
+    0xb3, 0xb0, 0x8f, 0x00, 0xff, 0xff, 0xff, 0xff, 0xe0, 0xf8, 0xfe, 0xff, 0xff, 0xbf, 0x0f, 0x03,
+    0x03, 0x0f, 0xbf, 0xff, 0xff, 0xfe, 0xf8, 0xe0, 0x9c, 0xe3, 0xe3, 0x9c, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
 /// $6387/$638C/$6391/$6396 -- one five-entry table per absolute-direction key,
@@ -2049,47 +1842,107 @@ static const uint8_t kShapeMaskTable[140] = {
 /// direction 1-4 with entry 0 unused; $639B is code, which is where the fourth
 /// one ends.
 static const uint8_t kTurnForKey[4][5] = {
-    {0x00, 0x88, 0x00, 0x95, 0x00,},
-    {0x00, 0x00, 0x88, 0x00, 0x95,},
-    {0x00, 0x00, 0x95, 0x00, 0x88,},
-    {0x00, 0x95, 0x00, 0x88, 0x00,},
+    {
+        0x00,
+        0x88,
+        0x00,
+        0x95,
+        0x00,
+    },
+    {
+        0x00,
+        0x00,
+        0x88,
+        0x00,
+        0x95,
+    },
+    {
+        0x00,
+        0x00,
+        0x95,
+        0x00,
+        0x88,
+    },
+    {
+        0x00,
+        0x95,
+        0x00,
+        0x88,
+        0x00,
+    },
 };
 
 /// $6A55 -- direction to the key that turns to it. known-data.txt derives the
 /// five bytes from the LDA $6A55,X that reads them.
 static const uint8_t kSteerKey[5] = {
-    0x00, 0xcb, 0xc9, 0xca, 0xcd,
+    0x00,
+    0xcb,
+    0xc9,
+    0xca,
+    0xcd,
 };
 
 /// $6C6A -- the six keys as shipped. The live six at $6C63 are s_key_table,
 /// which the redefinition screen writes; these are never written.
 static const uint8_t kKeyDefaults[6] = {
-    0xc9, 0xca, 0xcb, 0xcd, 0x88, 0x95,
+    0xc9,
+    0xca,
+    0xcb,
+    0xcd,
+    0x88,
+    0x95,
 };
 
 /// $71C8 -- what one apple is worth, indexed by difficulty 0-2. Three bytes:
 /// $71CB is s_apple_value, which is where the table stops.
 static const uint8_t kAppleValueTable[3] = {
-    0x10, 0x15, 0x20,
+    0x10,
+    0x15,
+    0x20,
 };
 
 /// $75B3-$75D0 -- the redefinition screen's layout, five six-entry tables, one
 /// per slot: where the key is printed, where its arrow is, and which glyph the
 /// arrow uses. known-data.txt derives the span.
 static const uint8_t kKeyCH[6] = {
-    0x0a, 0x06, 0x0e, 0x0a, 0x1a, 0x22,
+    0x0a,
+    0x06,
+    0x0e,
+    0x0a,
+    0x1a,
+    0x22,
 };
 static const uint8_t kKeyCV[6] = {
-    0x05, 0x09, 0x09, 0x0d, 0x09, 0x09,
+    0x05,
+    0x09,
+    0x09,
+    0x0d,
+    0x09,
+    0x09,
 };
 static const uint8_t kArrowCH[6] = {
-    0x0a, 0x08, 0x0c, 0x0a, 0x1c, 0x20,
+    0x0a,
+    0x08,
+    0x0c,
+    0x0a,
+    0x1c,
+    0x20,
 };
 static const uint8_t kArrowCV[6] = {
-    0x07, 0x09, 0x09, 0x0b, 0x09, 0x09,
+    0x07,
+    0x09,
+    0x09,
+    0x0b,
+    0x09,
+    0x09,
 };
 static const uint8_t kArrowGlyph[6] = {
-    0xe2, 0xe4, 0xe5, 0xe3, 0xe4, 0xe5,
+    0xe2,
+    0xe4,
+    0xe5,
+    0xe3,
+    0xe4,
+    0xe5,
 };
 
 /* --- What the bouncer step left behind ------------------------------------ */
@@ -2165,7 +2018,6 @@ static bool s_joystick_selected;
 /// that a hazard was checked -- see the note below.
 static uint8_t s_shape;
 
-
 /// The block itself, moved out of emulated RAM and split into variables now
 /// that the glyph blitter no longer shares it.
 ///
@@ -2183,7 +2035,6 @@ static uint8_t s_shape;
 /// s_shape did not thread and is still below. plot_at's two callers -- the
 /// bouncer erase and the tail erase -- genuinely erase with whatever shape was
 /// last used, so passing one would invent a value the original does not have.
-
 
 /// SCRN one cell. Defined further down, next to the plot helpers.
 static uint8_t scrn_cell(Cell c);
@@ -2276,8 +2127,7 @@ static uint8_t s_click_count;
 /* ========================================================================== */
 
 uint8_t game_start_life(uint8_t head_col) {
-  /*$660F*/ TICK(50);
-  s_head.col = head_col;
+  /*$660F*/ s_head.col = head_col;
 
   // Opposite corners, converging. The original's nine stores are these two.
   const Bouncer a = {.col = 0x01, .row = 0x01, .dx = +1, .dy = +1};
@@ -2291,7 +2141,7 @@ uint8_t game_start_life(uint8_t head_col) {
 }
 
 void game_load_shape_masks(uint8_t shape) {
-  /*$6127*/ TICK(53);
+  /*$6127*/
   // Four masks per shape at $6174, into the four the plotter reads.
   uint8_t last = 0;
   for (unsigned line = 0; line < 4; ++line) {
@@ -2301,7 +2151,7 @@ void game_load_shape_masks(uint8_t shape) {
 }
 
 void game_install_cout_vector(void) {
-  /*$6641*/ TICK(16);
+  /*$6641*/
   // CSWL/CSWH at $36/$37, pointed at $664A.
   s_csw = 0x664a;
 }
@@ -2355,92 +2205,61 @@ void bouncer_step(Bouncer *b) {
   unsigned blocked = 0;
 
   if (b->row == 0) {
-    TICK(6);
     return;
   }
-  TICK(1);
 
-  TICK(36);
   uint8_t want_col = (uint8_t)(b->col + b->dx);
   uint8_t want_row = (uint8_t)(b->row + b->dy);
 
   const bool diagonal_taken = cell_taken(want_col, want_row);
-  TICK(4);
   if (diagonal_taken) {
     // Which axis actually stopped it? Ask the two cells either side.
-    TICK(14);
     const bool across_taken = cell_taken(want_col, b->row);
-    TICK(4);
     if (across_taken) {
-      TICK(24);
       want_col = b->col;
       b->dx = reflect(b->dx);
       ++blocked;
-    } else {
-      TICK(1);
     }
 
-    TICK(14);
     const bool down_taken = cell_taken(b->col, want_row);
-    TICK(4);
     if (down_taken) {
-      TICK(24);
       want_row = b->row;
       b->dy = reflect(b->dy);
       ++blocked;
-    } else {
-      TICK(1);
     }
 
-    TICK(6);
     if (blocked == 0) {
       // An inside corner: only the diagonal is blocked, so go back the way
       // it came.
-      TICK(36);
       want_col = b->col;
       want_row = b->row;
       b->dx = reflect(b->dx);
       b->dy = reflect(b->dy);
-    } else {
-      TICK(1);
     }
-  } else {
-    TICK(1);
   }
 
   // Erase where it was. Ink 0 is black, and the shape is whatever the caller
   // last left in $00 -- see the header.
-  TICK(11);
   rom_setcol(0x00);
 
-  TICK(20);
   plot_at(0x00, (Cell){.col = b->col, .row = b->row});
 
-  TICK(14);
   rom_plot(b->row, b->col);
 
-  TICK(11);
   s_shape = 0x1a;
 
   if (want_row == 0) {
     // Off the board: not redrawn, and the position is not committed.
-    TICK(6);
     return;
   }
-  TICK(1);
 
-  TICK(29);
   b->row = want_row;
   b->col = want_col;
   rom_setcol(0x03);
 
-  TICK(6);
   plot_shape_at(0x1a, 0x03, (Cell){.col = b->col, .row = b->row});
 
-  TICK(14);
   rom_plot(b->row, b->col);
-
-  TICK(6);
 }
 
 /* --- The scoreboard: $7252-$7266 ------------------------------------------ */
@@ -2630,12 +2449,9 @@ void game_promote_high_score(void) {
   }
 
   if (beats_it) {
-    TICK(32);
     for (unsigned i = 0; i < 4; ++i)
       s_hi_score[i] = s_score[i];
   }
-
-  TICK(6);
 }
 
 /* ========================================================================== */
@@ -2662,59 +2478,40 @@ void game_find_nearest_apple(void) {
   Cell c = {.col = s_head.col, .row = 1};
   bool found = false;
 
-  TICK(14);
   for (;;) { // leftwards
-    TICK(14);
     const uint8_t v = cell_at(c);
-    TICK(4);
     if (v == kApple) {
-      TICK(1);
       found = true;
       break;
     }
-    TICK(14);
     if (++c.row != kLastRow) {
-      TICK(1);
       continue;
     }
-    TICK(14);
     c.row = 1;
     if (--c.col == 0)
       break;
-    TICK(1);
   }
 
   if (!found) {
-    TICK(8);
     c.col = s_head.col;
 
     for (;;) { // rightwards
-      TICK(14);
       const uint8_t v = cell_at(c);
-      TICK(2);
-      TICK(2);
       if (v == kApple) {
-        TICK(1);
         break;
       }
-      TICK(14);
       if (++c.row != kLastRow) {
-        TICK(1);
         continue;
       }
-      TICK(20);
       c.row = 1;
       if (++c.col == kLastRow) {
-        TICK(12);
         c.row = 0;
         c.col = 0x14;
         break;
       }
-      TICK(1);
     }
   }
 
-  TICK(22);
   s_apple = c;
 }
 
@@ -2745,8 +2542,6 @@ static const struct {
 };
 
 MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
-  TICK(42);
-
   // The head plus this direction's deltas.
   const Cell target = {
       .col = (uint8_t)(kColDelta[dir] + s_head.col),
@@ -2757,23 +2552,12 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
   *cell_out = cell;
 
   // Empty or an apple, and nothing else, may be stepped into.
-  TICK(4);
-  if (cell != 0x00)
-    TICK(2);
-  else
-    TICK(1);
-  TICK(2);
   if (cell != 0x00 && cell != 0x0f) {
-    TICK(6);
     return MOVE_TARGET_TAKEN;
   }
-  TICK(1);
 
-  TICK(12);
   if (target.row == 0) {
     // Row 0 is the top border; there is nothing above it to look at.
-    TICK(1);
-    TICK(6);
     return MOVE_ROW_ZERO;
   }
 
@@ -2797,13 +2581,9 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
     }
   }
 
-  TICK(6);
   if (free_neighbours) {
-    TICK(8);
     return MOVE_OK;
   }
-  TICK(1);
-  TICK(8);
   return MOVE_DEAD_END;
 }
 
@@ -2824,11 +2604,11 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
 /// The display list's opcodes. Single letters, in Apple II ASCII.
 typedef enum {
   OP_RESTART = 0x45, ///< 'E' -- back to level 1 and start over. Level 30 only.
-  OP_HLINE = 0x48,   ///< 'H' -- ink, column, last column, row
-  OP_PLOT = 0x50,    ///< 'P' -- ink, column, row. No script uses it.
-  OP_STORE = 0x54,   ///< 'T' -- one byte, into $0304
-  OP_VLINE = 0x56,   ///< 'V' -- ink, row, last row, column
-  OP_END = 0x2a,     ///< '*' -- end of this level's script
+  OP_HLINE = 0x48, ///< 'H' -- ink, column, last column, row
+  OP_PLOT = 0x50, ///< 'P' -- ink, column, row. No script uses it.
+  OP_STORE = 0x54, ///< 'T' -- one byte, into $0304
+  OP_VLINE = 0x56, ///< 'V' -- ink, row, last row, column
+  OP_END = 0x2a, ///< '*' -- end of this level's script
 } ScriptOp;
 
 /// $7024 -- the lo-res plot colour. Zero erases, anything else draws.
@@ -2863,7 +2643,7 @@ static void plot_vline_at(uint8_t ink, uint8_t col, uint8_t row, uint8_t to_row)
 }
 
 static void lores_vline_at(uint8_t col, uint8_t row, uint8_t to_row) {
-  /*$7000*/ TICK(6);
+  /*$7000*/
   // The row it restores was this routine's result in A. Nothing reads it; the
   // adapter that did has gone.
   game_lores_vline_native((Cell){.col = col, .row = row}, to_row);
@@ -2881,7 +2661,6 @@ static uint8_t script_byte(void) {
 
 /// Graphics, hi-res, page 2, full screen. The reads are the writes.
 static void select_hires_page2(void) {
-  TICK(32);
   s_tone_period = 0x00;
   io_peek(0xc050);
   io_peek(0xc057);
@@ -2907,33 +2686,23 @@ static void spin(uint8_t inner, uint8_t middle, uint8_t outer) {
   for (;;) {
     // The 1.29 s hold on the cleared screen, and nothing else happens in it.
     // Three nested counters, so this innermost charge is 99.6% of the pause.
-    advance(4);
+    advance(5);
     if (--inner) {
-      TICK(1);
       continue;
     }
-    TICK(7);
     middle = (uint8_t)(middle - 1);
     if (middle) {
-      TICK(1);
       continue;
     }
-    TICK(7);
     outer = (uint8_t)(outer - 1);
     if (!outer)
       break;
-    TICK(1);
   }
 }
 
 /// Clear the lo-res occupancy map, one full-width row at a time from the
 /// bottom up. Ink 0 is black, so this erases.
 static void wipe_occupancy_map(void) {
-  // 972 cycles of its own, and a constant: the loop runs from the literal
-  // $27 down to zero whatever the game is doing. Measured at every call in
-  // both scenarios. The 74,043 cycles the routine takes in total are almost
-  // all lores_hline's, which still charges for each of its 40 rows.
-  TICK(972);
   uint8_t at = 0x27;
   set_ink(0x00);
 
@@ -2951,22 +2720,16 @@ static void wipe_occupancy_map(void) {
 
 /// One gap per bouncer, which is what the difficulty counts.
 static void open_wall_gaps(void) {
-  TICK(6);
   const uint8_t difficulty = s_difficulty;
   if (!difficulty) {
-    TICK(1);
     return;
   }
 
-  TICK(10);
   lores_plot(0x01, 0x01);
 
-  TICK(8);
   if (s_difficulty == 0x01) {
-    TICK(1);
     return;
   }
-  TICK(10);
   lores_plot(0x01, 0x26);
 }
 
@@ -2975,10 +2738,6 @@ static void open_wall_gaps(void) {
 /// \p ink is the six sides' colour, which the original inherits from
 /// game_draw_playfield rather than setting.
 static void draw_border(uint8_t ink) {
-  // 148 cycles of its own -- nine straight-line charges, no loop and no
-  // branch, so it cannot be anything else. The 73,939 the routine takes in
-  // total belong to the seven line drawers it calls, which still charge.
-  TICK(148);
   lores_hline(0x00, 0x00); // $2C is still $27 from the wipe
 
   lores_hline(0x27, 0x00);
@@ -3001,37 +2760,28 @@ static void draw_border(uint8_t ink) {
 /// Walk the pointer to the current level's script, skipping one whole script
 /// per level below it. DEX first, so level 1 skips nothing.
 static void seek_script(void) {
-  TICK(14);
   uint8_t left = s_script_index;
   s_script_ptr = 0x8000;
 
   for (;;) {
-    TICK(4);
     if (!--left) {
-      TICK(1);
       return;
     }
     for (;;) {
-      TICK(6);
       const uint8_t b = script_byte();
-      TICK(4);
       if (b == OP_END) {
-        TICK(1);
         break;
       }
-      TICK(3);
     }
   }
 }
 
 void game_draw_playfield_native(void) {
-  TICK(6);
   game_clear_hgr_native();
   select_hires_page2();
   spin(0x00, 0x00, 0x04); // the counts $7056 used to store into $02/$03
   wipe_occupancy_map();
 
-  TICK(21);
   s_wndtop = 0x14;
   s_shape = 0x15;
   set_ink(0x0d);
@@ -3043,104 +2793,63 @@ restart:
   seek_script();
 
   for (;;) {
-    TICK(6);
     const uint8_t op = script_byte();
 
-    TICK(4);
     if (op == OP_RESTART) {
-      TICK(9);
       s_script_index = 0x01;
       goto restart;
     }
-    TICK(1);
 
-    TICK(4);
     if (op == OP_HLINE) {
-      TICK(6);
       const uint8_t ink = script_byte();
-      TICK(9);
       const uint8_t col = script_byte();
-      TICK(9);
       const uint8_t last = script_byte();
-      TICK(9);
       const uint8_t row = script_byte();
-      TICK(12);
       set_ink(ink);
 
-      TICK(18);
       s_h2 = last;
       lores_hline(row, col);
 
-      TICK(6);
       plot_hline_at(ink, col, row, last);
-      TICK(3);
       continue;
     }
-    TICK(1);
 
-    TICK(4);
     if (op == OP_VLINE) {
-      TICK(6);
       const uint8_t ink = script_byte();
-      TICK(9);
       const uint8_t row = script_byte();
-      TICK(9);
       const uint8_t last = script_byte();
-      TICK(9);
       const uint8_t col = script_byte();
-      TICK(12);
       set_ink(ink);
 
       // The lo-res half puts $03 back where it found it, which is what let
       // the original's hi-res half run the same span without restating it.
       // Both spans are stated here.
-      TICK(6);
       lores_vline_at(col, row, last);
-      TICK(6);
       plot_vline_at(ink, col, row, last);
-      TICK(3);
       continue;
     }
-    TICK(1);
 
-    TICK(4);
     if (op == OP_PLOT) {
-      TICK(6);
       const uint8_t ink = script_byte();
-      TICK(9);
       const uint8_t col = script_byte();
-      TICK(9);
       const uint8_t row = script_byte();
-      TICK(12);
       set_ink(ink);
 
-      TICK(12);
       lores_plot(row, col);
-      TICK(6);
       game_plot_shape_native(ink, (Cell){.col = col, .row = row});
-      TICK(3);
       continue;
     }
-    TICK(1);
 
-    TICK(4);
     if (op == OP_STORE) {
-      TICK(6);
       const uint8_t v = script_byte();
-      TICK(7);
       s_level_time = v;
       continue;
     }
-    TICK(1);
 
-    TICK(4);
     if (op == OP_END) {
-      TICK(1);
-      TICK(6);
       return;
     }
     // Anything unrecognised is skipped. No script contains one.
-    TICK(3);
   }
 }
 
@@ -3169,13 +2878,7 @@ static uint8_t dot_index(uint8_t ink, uint8_t scanline, uint8_t col) {
 
 /// $60E7 -- draw the loaded shape into one cell, replacing what was there.
 void game_draw_cell_native(uint8_t ink, Cell c) {
-  // 343 cycles, constant: four scanlines every time, no data-dependent
-  // branch. Measured at all 18,739 calls across both scenarios, where it is
-  // this number without exception. The busiest routine in the game -- it is
-  // 3.1M of the 22M a play run spends -- so it is also the one where the
-  // charge-per-line bookkeeping cost the most reading.
-  /*$60E7*/ TICK(343);
-  uint16_t dest = cell_row_base(c.row);
+  /*$60E7*/ uint16_t dest = cell_row_base(c.row);
 
   for (unsigned line = 0; line < 4; ++line) {
     // Built in $06 in two steps, and written out between them because it is
@@ -3198,9 +2901,6 @@ void game_draw_cell_native(uint8_t ink, Cell c) {
 /// $60F7 fails the screen check, so whatever the author meant, it is load
 /// bearing.
 void game_merge_cell_native(uint8_t ink, Cell c) {
-  // 371 cycles, constant, for the same reason as $60E7: four scanlines and
-  // no branch. Measured at every call.
-  TICK(371);
   uint16_t dest = cell_row_base(c.row);
 
   for (unsigned line = 0; line < 4; ++line) {
@@ -3209,8 +2909,7 @@ void game_merge_cell_native(uint8_t ink, Cell c) {
         (uint8_t)((uint8_t)(((uint8_t)((parity << 7) | (ink >> 1))) << 2) | (c.col & 3));
 
     const uint16_t at = dest + c.col;
-    poke(at,
-         (uint8_t)(((kHgrPattern[idx] ^ 0x7f) & s_shape_mask[line]) | peek(at)));
+    poke(at, (uint8_t)(((kHgrPattern[idx] ^ 0x7f) & s_shape_mask[line]) | peek(at)));
     dest += 0x0400;
   }
 }
@@ -3218,24 +2917,11 @@ void game_merge_cell_native(uint8_t ink, Cell c) {
 /// $702B -- zero hi-res page 1, $2000 through $3FFF. The inner loop runs a
 /// full 256 bytes because Y wraps, so the terminating test is on the page.
 ///
-/// The whole routine costs one charge, not 8,192. 106,897 cycles is the sum of
-/// what the 6502 spent here, measured at every call in both scenarios, where
-/// it is that number every time -- there is no data dependence, the loop
-/// always clears the same 32 pages. It is 6.3 frames, 105 ms, and what it
-/// buys the viewer is a hi-res page wiping downward. That is the one thing
-/// this charge does *not* preserve: the clearing is now instantaneous and the
-/// six frames the host draws through the charge already show it finished.
-/// Agreed in the design -- the fills are not worth preserving -- and the
-/// duration is, because $7056 follows immediately with a 1.29 s hold and the
-/// two read as one pause.
-///
-/// The charge sits at the top so it covers the region up to the next one,
-/// which is select_hires_page2's. Every TICK is a yield point, so collapsing
-/// them moves where the game can be parked; here that is safe because nothing
-/// in the loop reads input or the clock.
+/// It costs no time at all now. On a 6502 this was 106,897 cycles -- 105 ms of
+/// hi-res page wiping downward -- and the design gave that up deliberately:
+/// the fill is not worth preserving, and $7056 follows immediately with a
+/// 1.29 s hold that still is, so the pair still reads as one pause.
 void game_clear_hgr_native(void) {
-  TICK(106897);
-
   for (uint8_t page = 0x20;;) {
     uint8_t y = 0;
     do {
@@ -3262,53 +2948,32 @@ void game_clear_hgr_native(void) {
 /// \p to_col. The original walked $02/$03 and left $02 on the endpoint, which
 /// its adapter returned in A; that is the return value here.
 void game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
-  // Data-dependent: the loop runs until the moving coordinate reaches the
-  // end, so the cost is not a constant and the per-pass charge stays. What
-  // collapses is the straight-line part -- the prologue and the two-charge
-  // epilogue, which always run exactly once -- and the pair that straddles
-  // the draw, since a charge stands for everything from itself to the next
-  // one and the drawer accounts for its own.
-  // Measured: 22n + 5 cycles of its own for an n-cell run, and both scenarios
-  // only ever ask for n = 5 or n = 40 (115 and 885).
-  /*$6148*/ TICK(13);
+  /*$6148*/
   // Loads the four scanline masks the cell drawers read. The mask it
   // returns was the original\'s result in A and nothing reads it.
   game_load_shape_masks(s_shape);
   for (;;) {
-    TICK(14);
     game_draw_cell_native(ink, c);
 
     if (c.col == to_col)
       break;
 
-    TICK(8);
     c.col = (uint8_t)(c.col + 1);
   }
 }
 
 /// $615A -- the same down a column: rows $03 through $08 in column $02.
 void game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
-  // Data-dependent: the loop runs until the moving coordinate reaches the
-  // end, so the cost is not a constant and the per-pass charge stays. What
-  // collapses is the straight-line part -- the prologue and the two-charge
-  // epilogue, which always run exactly once -- and the pair that straddles
-  // the draw, since a charge stands for everything from itself to the next
-  // one and the drawer accounts for its own.
-  // 22n + 5, the same shape as $6148. This one is the genuinely variable of
-  // the pair: 25 distinct costs over 881 calls, because the display lists
-  // draw vertical runs of every length.
-  /*$615A*/ TICK(13);
+  /*$615A*/
   // Loads the four scanline masks the cell drawers read. The mask it
   // returns was the original\'s result in A and nothing reads it.
   game_load_shape_masks(s_shape);
   for (;;) {
-    TICK(14);
     game_draw_cell_native(ink, c);
 
     if (c.row == to_row)
       break;
 
-    TICK(8);
     c.row = (uint8_t)(c.row + 1);
   }
 }
@@ -3320,24 +2985,13 @@ void game_lores_vline_native(Cell c, uint8_t to_row) {
   // The original saves the starting row on the stack, because the hi-res half
   // of a display list's 'V' runs the same span next and the loop below walks
   // c.row to the end of it. Every caller states both ends now.
-  // Data-dependent: the loop runs until the moving coordinate reaches the
-  // end, so the cost is not a constant and the per-pass charge stays. What
-  // collapses is the straight-line part -- the prologue and the two-charge
-  // epilogue, which always run exactly once -- and the pair that straddles
-  // the draw, since a charge stands for everything from itself to the next
-  // one and the drawer accounts for its own.
-  // 28n + 6, and both scenarios only ever run it full height: 1,126 at all
-  // eight calls, which is n = 40.
-  TICK(14);
 
   for (;;) {
-    TICK(20);
     lores_plot(c.row, c.col);
 
     if (c.row == to_row)
       break;
 
-    TICK(8);
     c.row = (uint8_t)(c.row + 1);
   }
 }
@@ -3350,8 +3004,12 @@ void game_lores_vline_native(Cell c, uint8_t to_row) {
 /// $6633-$6636, calls $64C8, and copies it back out; those eight ram_pokes
 /// were what a struct copy looks like without structs, and the block is the
 /// argument now.
-static void step_bouncer_slot(int slot, uint16_t block, uint16_t cycles,
-                              uint16_t back_block, uint16_t back_cycles) {
+static void step_bouncer_slot(
+    int slot,
+    uint16_t block,
+    uint16_t cycles,
+    uint16_t back_block,
+    uint16_t back_cycles) {
   GAME_CYCLES(block, cycles);
   Bouncer b = s_bouncers[slot];
   game_move_bouncer(&b);
@@ -3371,15 +3029,12 @@ static void step_bouncer_slot(int slot, uint16_t block, uint16_t cycles,
 /// trace caught it; the pinned site count could not, because the count was
 /// right.
 static uint8_t dequeue_key(void) {
-  TICK(10);
   const uint8_t at = s_ring_read;
   const uint8_t key = s_key_ring[at];
   if (!(key & 0x80)) {
-    TICK(1);
     return key;
   }
 
-  TICK(24);
   s_key_ring[at] = 0x00;
   s_ring_read = (uint8_t)((at + 1) & 0x0f);
   // X *is* live out of $6594 -- `apple2tc --ir` says so -- unlike X out of
@@ -3390,22 +3045,17 @@ static uint8_t dequeue_key(void) {
 /// $6594 -- step as many bouncers as the difficulty calls for, then fall into
 /// the key dequeue whose byte is the return value.
 uint8_t game_step_bouncers_native(void) {
-  TICK(6);
   const uint8_t difficulty = s_difficulty;
 
   if (!difficulty) {
-    TICK(3);
     return dequeue_key();
   }
-  TICK(1);
 
   step_bouncer_slot(0, 0x659c, 38, 0x65b7, 40);
 
   if (s_difficulty == 0x01) {
-    TICK(3);
     return dequeue_key();
   }
-  TICK(1);
 
   step_bouncer_slot(1, 0x65d9, 38, 0x65f4, 35);
   return dequeue_key();
@@ -3466,142 +3116,90 @@ static bool switch_pressed(uint16_t sw) {
 }
 
 uint8_t game_read_direction_native(uint8_t key) {
-  TICK(9);
-
   if (attract_mode()) {
-    TICK(6);
     if (s_joystick_selected) {
-      TICK(6);
       if (switch_pressed(0xc061)) {
-        TICK(12);
         return kCodeStop;
       }
-      TICK(1);
-    } else {
-      TICK(1);
     }
 
-    TICK(6);
     if (key & 0x80) {
-      TICK(8);
       return kCodeStop;
     }
-    TICK(1);
-    TICK(6);
     // Not a keypress, so nothing happened -- $00 out of an empty ring.
     return key;
   }
-  TICK(1);
 
   // Search the bindings from the last slot down, so that if the player has
   // bound the same key twice the higher slot wins.
-  TICK(6);
   uint8_t code = key;
   int slot = kInputCount - 1;
   for (;;) {
-    TICK(6);
     if (key == input_key(slot)) {
-      TICK(1);
-      TICK(4);
       code = input_code(slot);
       break;
     }
 
-    TICK(4);
     if (--slot < 0) {
-      TICK(3);
       break;
     }
-    TICK(1);
   }
   // X is not written back. The original leaves it on the matching slot, or
   // $FF, but nothing reads it: `apple2tc --ir` prints per-function register
   // liveness, and func_6c72's LiveOut is A, Y and the flags. Y is in that set,
   // so the joystick block below does maintain it.
 
-  TICK(4);
   if (code == kCodeJoystickOn) {
-    TICK(12);
     s_joystick_selected = true;
     return 0x01;
   }
-  TICK(1);
 
-  TICK(4);
   if (code == kCodeJoystickOff) {
-    TICK(12);
     s_joystick_selected = false;
     return 0x00;
   }
-  TICK(1);
 
-  TICK(4);
   if (code & 0x80) {
     // A direction. Hand it straight back.
-    TICK(6);
     return code;
   }
-  TICK(1);
 
-  TICK(6);
   const bool joystick = s_joystick_selected;
   if (!joystick) {
-    TICK(8);
     return code;
   }
-  TICK(1);
 
   // The joystick is two switch inputs read twice, with annunciator 2
   // selecting the pair -- four directions on two pins. Exactly one has to be
   // active: none or several is ambiguous and rejected.
-  TICK(12);
   int pressed = 0;
   uint8_t chosen = 0; // only read when exactly one input turned out active
   io_peek(0xc05b); // annunciator 2 on
   if (switch_pressed(0xc062)) {
-    TICK(4);
     chosen = 0;
     ++pressed;
-  } else {
-    TICK(1);
   }
 
-  TICK(6);
   if (switch_pressed(0xc063)) {
-    TICK(4);
     chosen = 3;
     ++pressed;
-  } else {
-    TICK(1);
   }
 
-  TICK(10);
   io_peek(0xc05a); // annunciator 2 off
   if (switch_pressed(0xc062)) {
-    TICK(4);
     chosen = 1;
     ++pressed;
-  } else {
-    TICK(1);
   }
 
-  TICK(6);
   if (switch_pressed(0xc063)) {
-    TICK(4);
     chosen = 2;
     ++pressed;
-  } else {
-    TICK(1);
   }
   // Y, unlike X, is live out of here -- see above.
 
-  TICK(4);
   if (pressed != 1) {
-    TICK(8);
     return 0x00;
   }
-  TICK(1);
-  TICK(10);
   return input_code(chosen);
 }
 
@@ -3634,12 +3232,10 @@ static void edit_key_blank(uint8_t slot) {
   // The original parks the slot at $0002 for the whole routine, because COUT
   // clobbers X and every step below needs it again. Here it is the parameter,
   // and the glyph blitter no longer has anything to clobber it with.
-  TICK(23);
   s_ch = slot_col(slot);
   s_cv = slot_row(slot);
   rom_fc68();
 
-  TICK(11);
   rom_cout(0xa0);
 
   // Both halves of the blink count X down to zero 256 times, and the X they
@@ -3649,25 +3245,20 @@ static void edit_key_blank(uint8_t slot) {
   // restores it. So the first pass of the delay is `slot` long and the other
   // 255 are a full 256. Transcribed rather than tidied: it is the delay's
   // actual duration.
-  TICK(2);
   uint8_t x = slot;
   uint8_t y = 0;
   for (;;) {
     // The dark half of the redefinition cursor's blink. Unlike the lit half
     // this one polls nothing, so it cannot hang -- but delete it and the
     // cursor stops blinking, which is the visible half of the pair.
-    advance(4);
+    advance(5);
     if (--x) {
-      TICK(1);
       continue;
     }
     // $75EC is `LDA #$41 / BEQ`, a branch that cannot be taken and a value
     // nothing reads. Four cycles of the delay and nothing else.
-    TICK(4);
-    TICK(4);
     if (!--y)
       break;
-    TICK(1);
   }
 }
 
@@ -3676,62 +3267,47 @@ static void edit_key_blank(uint8_t slot) {
 /// ran out or the key was rejected -- either way the blink starts again, and
 /// no acceptable key is 0.
 static uint8_t edit_key_prompt(uint8_t slot) {
-  TICK(23);
   s_ch = slot_col(slot);
   s_cv = slot_row(slot);
   rom_fc68();
 
-  TICK(13);
   const uint8_t glyph = slot_glyph(slot);
   rom_cout(glyph);
 
   // The slot again -- see edit_key_blank for why COUT leaves it in X.
-  TICK(2);
   uint8_t x = slot;
   uint8_t y = 0;
   for (;;) {
     // The redefinition cursor's blink, and the loop that waits for the key to
     // bind. Both halves matter: the rate is visible and the poll is the yield.
-    advance(4);
+    advance(5);
     if (--x) {
-      TICK(1);
       continue;
     }
 
     GAME_CYCLES_COORD(0x760f, 6);
     const uint8_t key = io_peek(0xc000);
     if (key & 0x80) {
-      TICK(1);
-      TICK(8);
       io_poke(0xc010, key); // clear the strobe
 
       // Anything from $A1 up -- every printable key -- plus the two arrows.
       // The carry the three compares leave is not written back: the caller's
       // next act on it is $7582's `CPX #$06`, which sets it.
       if (key >= 0xa1) {
-        TICK(1);
         return key;
       }
-      TICK(4);
       if (key == 0x88) { // left arrow
-        TICK(1);
         return key;
       }
-      TICK(4);
       if (key == 0x95) { // right arrow
-        TICK(1);
         return key;
       }
-      TICK(6);
       return 0;
     }
 
-    TICK(4);
     if (--y) {
-      TICK(1);
       continue;
     }
-    TICK(6);
     return 0;
   }
 }
@@ -3743,7 +3319,6 @@ uint8_t game_edit_key_native(uint8_t slot) {
     key = edit_key_prompt(slot);
   } while (!key);
 
-  TICK(9);
   return key;
 }
 
@@ -3761,25 +3336,29 @@ uint8_t game_edit_key_native(uint8_t slot) {
 /* shape was chosen.                                                          */
 
 void game_tick_sound_native(void) {
-  TICK(6);
   s_tone_passes = 0x14; // twenty
 
   for (;;) {
-    // One pass of the tone loop, and the pitch is the number of passes
-    // between clicks -- s_tone_countdown of them, counted down below. Fold
-    // this away and the note goes sharp.
-    advance(6);
+    // One pass of the tone loop. The pitch is the number of passes between
+    // clicks -- s_tone_countdown of them -- so a pass's duration *is* the
+    // note, and this is the charge that sets it.
+    //
+    // Three numbers rather than one, because the three kinds of pass really
+    // do take different times on a 6502 and the difference is audible. This
+    // is the bare pass, with nothing to count and nothing to say.
+    advance(38);
     const uint8_t period = s_tone_period;
     if (period) {
-      TICK(4);
       if (period < 0x80) {
-        TICK(8);
+        // Twelve more when there is a countdown to advance, which is every
+        // pass of an actual note: 50 against 38 is most of a semitone.
+        advance(12);
         const uint8_t left = (uint8_t)(s_tone_countdown - 1);
         s_tone_countdown = left;
         if (!left) {
           // The click, and the cycles between it and the previous one are
           // the half-period of the note.
-          advance(28);
+          advance(59);
           const uint8_t port = s_click_port;
           speaker_access(port);
 
@@ -3787,50 +3366,35 @@ void game_tick_sound_native(void) {
           // falls for as long as the head keeps moving.
           s_tone_period = (uint8_t)(s_tone_period + 2);
           s_tone_countdown = s_tone_period;
-        } else {
-          TICK(1);
         }
-      } else {
-        TICK(1);
       }
-    } else {
-      TICK(1);
     }
 
-    TICK(8);
     if (s_tone_period >= 0x80) {
       // Fallen off the bottom of the range: silence until something restarts
       // it. $80 is reached from below in steps of two, so this is the end of
       // one slide rather than a wrap.
-      TICK(6);
       s_tone_period = 0x00;
-    } else {
-      TICK(1);
     }
 
-    // Chosen afresh every pass, and defaulting to inaudible.
-    TICK(12);
+    // Chosen afresh every pass, and defaulting to inaudible. Picking a real
+    // port costs more than falling through to silence, and while the game is
+    // audible that difference is in every pass -- so it is part of the pitch
+    // too, and the note is flatter when you can hear it than when you cannot.
     s_click_port = 0x20;
     if (!attract_mode()) {
-      TICK(6);
+      advance(6);
       if (!s_sound_muted) {
-        TICK(6);
+        advance(5);
         s_click_port = 0x30;
-      } else {
-        TICK(1);
       }
-    } else {
-      TICK(1);
     }
 
-    TICK(8);
     const uint8_t left = (uint8_t)(s_tone_passes - 1);
     s_tone_passes = left;
     if (!left)
       break;
-    TICK(1);
   }
-  TICK(6);
 }
 
 /* ========================================================================== */
@@ -3864,56 +3428,34 @@ static void cout_digit(uint8_t digit) {
 void game_print_bcd_native(uint8_t byte) {
   const uint8_t high = (uint8_t)(byte >> 4);
 
-  TICK(15);
-  if (!high) {
-    TICK(1);
-  } else {
-    TICK(3);
+  if (high) {
     note_digit(high);
   }
 
-  TICK(8);
   if (digit_seen()) {
-    TICK(1);
-    TICK(14);
     cout_digit(high);
   } else {
     // A leading zero: dropped, and nothing is printed.
-    TICK(7);
   }
 
   const uint8_t low = (uint8_t)(byte & 0x0f);
 
-  TICK(10);
-  if (!low) {
-    TICK(1);
-  } else {
-    TICK(3);
+  if (low) {
     note_digit(low);
   }
 
-  TICK(8);
   if (digit_seen()) {
-    TICK(1);
-    TICK(14);
     cout_digit(low);
-    TICK(6);
-  } else {
-    TICK(10);
   }
 }
 
 /// $7226 -- called after the last byte of a number: if nothing significant was
 /// printed, the number was zero, and one "0" is printed for the whole of it.
 void game_print_zero_if_blank_native(void) {
-  TICK(5);
   if (digit_seen()) {
-    TICK(1);
-    TICK(6);
     return;
   }
 
-  TICK(5);
   rom_cout(kCharZero); // JMP $FDED -- a tail call, so no return address.
 }
 
@@ -3922,8 +3464,6 @@ void game_print_zero_if_blank_native(void) {
 /* ========================================================================== */
 
 void game_add_score_native(void) {
-  TICK(56);
-
   // Decimal mode for the whole run, and adc_dec16 rather than a second
   // hand-written BCD adder: it is the one the emulator and the generated code
   // both use, so it cannot disagree with them about the undefined corners of
@@ -3970,31 +3510,18 @@ void game_add_score_native(void) {
 /// byte the hi-res plotter takes. Here it is the byte, and the adapter asserts
 /// that the flag agreed with it.
 void game_set_ink_native(uint8_t ink) {
-  TICK(2);
-  if (!ink) {
-    TICK(1);
-  } else {
-    TICK(2);
-  }
-
-  TICK(3);
   rom_setcol(ink ? 0x05 : 0x00); // JMP $F864 -- a tail call.
 }
 
 /// $7019 -- read the byte the $000A pointer addresses and advance it. The
 /// display-list interpreter's only way of reading its script.
 uint8_t game_next_byte_native(void) {
-  TICK(14);
   const uint8_t b = peek(s_script_ptr);
 
   ++s_script_ptr;
-  if (s_script_ptr & 0xff) {
-    TICK(1);
-  } else {
+  if (!(s_script_ptr & 0xff)) {
     // The low byte wrapped, so the original had to bump the high one too.
-    TICK(5);
   }
-  TICK(6);
   return b;
 }
 
@@ -4015,24 +3542,14 @@ uint8_t game_next_byte_native(void) {
 /// straight back to the load -- so a byte at $1800 with bit 7 set would hang
 /// the game. Nothing enforces that; the original simply relies on it.
 uint8_t game_rand_byte_native(void) {
-  TICK(7);
   ++s_rand_ptr;
-  if (s_rand_ptr & 0xff) {
-    TICK(1);
-  } else {
-    TICK(5);
-  }
 
   for (;;) {
-    TICK(9);
     const uint8_t b = peek(s_rand_ptr);
     if (!(b & 0x80)) {
-      TICK(1);
-      TICK(6);
       return b;
     }
 
-    TICK(13);
     s_rand_ptr = 0x1800;
   }
 }
@@ -4054,34 +3571,25 @@ Cell game_place_apple_native(void) {
   // more work than it looks like.
   Cell at = {0, 0};
   for (;;) {
-    TICK(6);
     at.col = game_rand_byte_native();
 
-    TICK(9);
     at.row = game_rand_byte_native();
 
-    TICK(15);
     const bool taken = cell_taken(at.col, at.row);
 
-    TICK(2);
     if (!taken)
       break;
-    TICK(1);
   }
 
   // White on the occupancy map, so the snake's collision test sees it.
-  TICK(8);
   rom_setcol(0x0f);
 
-  TICK(12);
   rom_plot(at.row, at.col);
 
-  TICK(16);
   plot_shape_at(0x01, 0x09, at);
 
   // One more apple on screen. $77D0 watches this pair and calls back here when
   // it reaches zero.
-  TICK(32);
   bcd_inc16(s_apples_afield);
   return at;
 }
@@ -4090,14 +3598,12 @@ Cell game_place_apple_native(void) {
 /// added to itself once per level, in BCD, into $71CB. X is never touched in
 /// the original's loop, which is what makes it the same entry every time.
 void game_set_apple_value_native(void) {
-  TICK(20);
   s_apple_value[0] = 0x00;
   s_apple_value[1] = 0x00;
   const uint8_t per_apple = kAppleValueTable[s_difficulty];
   uint8_t levels = s_script_index;
 
   for (;;) {
-    TICK(28);
     uint16_t r = adc_dec16(per_apple, s_apple_value[0], 0x00);
     s_apple_value[0] = (uint8_t)r;
 
@@ -4106,10 +3612,8 @@ void game_set_apple_value_native(void) {
 
     if (!--levels)
       break;
-    TICK(1);
   }
 
-  TICK(8);
   // D is the whole of this routine's live-out set now that V has gone.
 }
 
@@ -4121,10 +3625,8 @@ void game_set_apple_value_native(void) {
 /// the caller has already loaded, and raise the two flags that say it is
 /// there: $0305 for the next draw and $6C46 to start the tone.
 void game_mark_head_native(uint8_t row, uint8_t col) {
-  TICK(6);
   rom_plot(row, col);
 
-  TICK(16);
   s_head_moved = true;
   s_tone_period = 0x01;
 
@@ -4135,26 +3637,17 @@ void game_mark_head_native(uint8_t row, uint8_t col) {
 /// it, merge shape 1 over the top so the head reads as a head rather than
 /// replacing the body cell underneath. $0305 is consumed here.
 void game_draw_head_native(uint8_t ink, Cell c) {
-  // 25 cycles of its own, 41 when $0305 says the head moved and the merge
-  // arm runs. Measured over 223 calls -- 219 of them the cheap way, since the
-  // head moves once per snake step and the playfield is redrawn far more
-  // often than that. Both numbers exclude the three routines called here.
-  TICK(25);
   game_plot_shape_native(ink, c);
 
   if (s_head_moved) {
-    TICK(16);
     s_shape = 0x01;
     { // was game_plot_shape_merge()
 
-      /*$6B93*/
-      game_load_shape_masks(s_shape);
-
+      /*$6B93*/ game_load_shape_masks(s_shape);
 
       // The high byte it returns was the original's result in A; nothing
       // reads it now.
       game_merge_cell_native(ink, c);
-
     }
   }
 
@@ -4170,16 +3663,12 @@ void game_draw_head_native(uint8_t ink, Cell c) {
 /// screen. Nothing about it runs when an apple is eaten; that path is $7743,
 /// and it touches four other counters and not this one.
 void game_award_extra_life_native(void) {
-  TICK(22);
   s_lives = (uint8_t)adc_dec16(s_lives, 0x01, 0x00);
   game_sound_sweep_native();
-
-  TICK(6);
 }
 
 /// $60E4 -- load a shape and draw it, which is the pair every caller wants.
 void game_plot_shape_native(uint8_t ink, Cell c) {
-  TICK(6);
   game_load_shape_masks(s_shape);
   game_draw_cell_native(ink, c); // JMP -- a tail call.
 }
@@ -4193,17 +3682,13 @@ void game_plot_shape_native(uint8_t ink, Cell c) {
 /// pitch rises; the second counts X up from 0, so the delay runs 256, 1, 2,
 /// ... 255 and it falls again.
 void game_sound_sweep_native(void) {
-  TICK(2);
   uint8_t x = 0x00;
 
   do {
-    TICK(4);
     uint8_t y = x;
     do {
       // The rising half of the sweep: x clicks apart, and x shrinks.
-      advance(4);
-      if (--y)
-        TICK(1);
+      advance(5);
     } while (y);
 
     // The click, at whichever port $6C2C last chose. Neither the Y it loads
@@ -4214,30 +3699,21 @@ void game_sound_sweep_native(void) {
     // mirror the cassette toggle and $C030-$C03F the speaker. But hardcoding
     // $30 here would pass too, and that would be a real bug: the mute would
     // stop working and no oracle in this repo looks at sound.
-    advance(12);
+    advance(13);
     speaker_access(s_click_port);
-    if (--x)
-      TICK(1);
   } while (x);
 
   do {
-    TICK(4);
     uint8_t y = x;
     do {
       // The falling half, x counting back up.
-      advance(4);
-      if (--y)
-        TICK(1);
+      advance(5);
     } while (y);
 
-    advance(12);
+    advance(13);
     // The click itself. The read *is* the write -- see the note above.
     speaker_access(s_click_port);
-    if (++x)
-      TICK(1);
   } while (x);
-
-  TICK(6);
 }
 
 /// $7590 -- show \p key as the binding of slot \p slot on the redefinition
@@ -4245,82 +3721,74 @@ void game_sound_sweep_native(void) {
 /// 'f' and 'g', which is where the arrow shapes live in the game's own font at
 /// $66A9.
 void game_show_key_native(uint8_t slot, uint8_t key) {
-  TICK(7);
-
   uint8_t glyph = key;
   if (key == 0x88) { // left arrow
-    TICK(2);
     glyph = 0xe6;
-  } else {
-    TICK(1);
   }
 
-  TICK(4);
   if (glyph == 0x95) { // right arrow
-    TICK(2);
     glyph = 0xe7;
-  } else {
-    TICK(1);
   }
 
   // The original parks the slot in X here because COUT would otherwise be the
   // last thing to touch it. Nothing reads it: the hi-res hook saves and
   // restores X without looking at it, and every use of the slot below is the
   // parameter.
-  TICK(23);
   s_ch = kKeyCH[slot];
   s_cv = kKeyCV[slot];
   rom_fc68();
 
-  TICK(10);
   rom_cout(glyph);
-
-  TICK(9);
 }
 
 /// $6B3D -- both side walls, each in two segments of different ink, with the
 /// seam at a row derived from $6255. The seam is what the player aims for.
 uint8_t game_draw_side_walls_native(void) {
+  // The snake's tempo, and the reason this is an advance rather than nothing.
+  //
+  // Both side walls are redrawn once per snake step, and on a 6502 that took
+  // 28,848 cycles -- measured at all 82 calls of a play run, where it is that
+  // number every time. It is 1.7 frames, 28 ms, a quarter of the 115 ms a
+  // step takes. Drawing is instant here now, so without this charge the step
+  // falls to 84 ms and the snake moves a quarter faster: not a rendering
+  // difference but a gameplay one, and the most perceptible thing in the game
+  // after the sound.
+  //
+  // This is the case the design's "drawing becomes instant, agreed" does not
+  // cover. What was agreed was giving up the *sight* of a fill sweeping down
+  // the screen. The time a redraw takes is a different thing when the game's
+  // main loop is paced by it.
+  advance(28848);
   // The random byte is thrown away. The call is not: $6C4B advances the
   // pointer at $000E, so this is what keeps apple placement from repeating
   // level to level.
-  TICK(6);
   (void)game_rand_byte_native();
 
-  TICK(26);
   s_shape = 0x15;
 
   uint8_t seed = s_life_timer;
   if (seed & 0x80) {
     // A negative seed is clamped, and $6255 reset so the next call starts from
     // a known place.
-    TICK(8);
     s_life_timer = 0xff;
     seed = 0x70;
-  } else {
-    TICK(1);
   }
 
   // How far down the upper segment reaches, from the timer: the walls close in
   // as a life runs out.
-  TICK(18);
   const uint8_t wall_top = (uint8_t)((seed >> 2) + 1);
   plot_vline_at(0x02, 0x00, 0x01, wall_top);
 
-  TICK(16);
   plot_vline_at(0x02, 0x27, 0x01, wall_top);
 
-  TICK(30);
   const uint8_t seam = (uint8_t)(wall_top + 1);
   // The lower segment.
   plot_vline_at(0x0d, 0x27, seam, 0x27);
 
-  TICK(18);
   plot_vline_at(0x0d, 0x00, seam, 0x27);
 
   // Tail call: SCRN of the bottom-centre cell, which is this routine's second
   // result -- the caller uses it to decide whether to draw the gate.
-  TICK(7);
   return scrn_cell((Cell){.col = 0x14, .row = 0x27});
 }
 
@@ -4344,7 +3812,6 @@ void game_read_key_native(void) {
   const uint8_t key = io_peek(0xc000);
 
   if (key & 0x80) {
-    TICK(21);
     io_poke(0xc010, key); // clear the strobe
     s_key_ring[at] = key;
 
@@ -4353,18 +3820,13 @@ void game_read_key_native(void) {
     // faster than the game reads them. Do not tidy it.
     const uint8_t next = (uint8_t)((at + 1) & 0x0f);
     if (next != s_ring_read) {
-      TICK(10);
       s_ring_write = next;
       return;
     }
-    TICK(1);
-  } else {
-    TICK(1);
   }
 
   // The RTS belongs to the routine before this one, and both early exits
   // share it -- as does the key dequeue, whose adapter still emits it.
-  TICK(6);
   // A and X are the live-out set, and both are set above on every path.
 }
 
@@ -4402,13 +3864,9 @@ static uint16_t hires_cursor(void) {
 }
 
 void game_cout_hook_native(uint8_t ch) {
-  TICK(9);
   const uint8_t glyph = (uint8_t)(ch & 0x7f);
 
   if (glyph >= 0x20) {
-    TICK(1);
-    TICK(82);
-
     // The original's SBC/ADC pairs honour the D flag. COUT is never reached in
     // decimal mode -- the ROM clears D at reset and neither BASIC nor the game
     // sets it around output -- so rather than carry dead decimal paths, fail
@@ -4426,21 +3884,15 @@ void game_cout_hook_native(uint8_t ch) {
     uint16_t dest = hires_cursor();
 
     for (unsigned row = 0; row < 8; ++row) {
-      TICK(33);
       poke(dest, peek((uint16_t)(src + row)));
 
       // One hi-res scanline down within the character cell, which is +$400.
       dest = (uint16_t)(dest + 0x0400);
 
       // `INX / CPX #8 / BNE`: the branch is taken on every pass but the last.
-      if (row != 7)
-        TICK(1);
     }
-
-    TICK(9);
   }
 
-  TICK(7);
   rom_cout1(ch); // JMP $FDF0 -- the PLA, high bit still on it
 }
 
@@ -4584,55 +4036,38 @@ static void click_speaker(void) {
 /* ========================================================================== */
 
 void game_pause_or_toggle_sound_native(uint8_t key) {
-  TICK(4);
   if (key == KEY_ESC) {
     for (;;) {
-      TICK(6);
       key = io_peek(0xc000);
       if (key & 0x80)
         break;
-      TICK(1);
     }
-    TICK(4);
     io_poke(0xc010, key);
-  } else {
-    TICK(1);
   }
 
-  TICK(4);
   if (key == KEY_CTRL_S) {
-    TICK(10);
     s_sound_muted = !s_sound_muted;
-  } else {
-    TICK(1);
   }
-
-  TICK(6);
 }
 
 LifeEnd game_play_loop_native(uint8_t *cell_out) {
-  TICK(6);
   game_find_nearest_apple();
 
   for (;;) {
     /* --- $628B: a key, and what the game makes of it -------------------- */
-    TICK(6);
     game_read_key_native();
-    TICK(6);
     uint8_t code;
     { // was game_read_direction()
 
       // The JSR stays here rather than moving into the native routine, because
       // game_step_bouncers's own adapter is what keeps $6216 -- the RTS it shares
       // with the unconverted game_read_key -- a probe site.
-      /*$6C72*/ TICK(6);
-      const uint8_t key = game_step_bouncers_native();
+      /*$6C72*/ const uint8_t key = game_step_bouncers_native();
       // $6216 is an RTS shared with game_read_key, so it stays a probe site even
       // though the routine that used to hold it is gone. Spelled with plain CYCLES
       // rather than GAME_CYCLES_SHARED because site_addrs() does not grep for that
       // form -- it would have kept probing and left the list, which is the silent
       // half of a hole rather than the loud one.
-      TICK(6);
 
       // The original saves the key on the stack across the $0302 test; here it is
       // an argument. The pushed byte is never observed: nothing between the PHA
@@ -4644,17 +4079,13 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     uint8_t shape;
 
   dispatch: /* $6291 */
-    TICK(2);
     if (!(code & 0x80)) {
-      TICK(1);
       goto autopilot;
     }
 
   steer: /* $6293 -- a key with the high bit on, so the player is steering */
-    TICK(10);
     s_click_count = 0x10;
     if (code == KEY_TURN_CW) {
-      TICK(14);
       shape = (uint8_t)(dir + 0x10);
       // $624E is left one below range here and normalised at $62B8, which is
       // the order the samples see; computing the wrap early would be tidier
@@ -4663,21 +4094,13 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       goto draw;
     }
 
-    TICK(1);
-    TICK(2);
-    TICK(1);
-    TICK(4);
     if (code == KEY_TURN_CCW) {
-      TICK(17);
       shape = (uint8_t)(dir + 0x04);
       s_direction = (uint8_t)(dir + 1);
       goto draw;
     }
 
-    TICK(1);
-    TICK(4);
     if (code == KEY_QUIT) {
-      TICK(12);
       return LIFE_QUIT;
     }
 
@@ -4706,17 +4129,12 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     }
 
     // $639B -- anything else is the pause/mute key.
-    TICK(1);
-    TICK(6);
     game_pause_or_toggle_sound_native(code);
-    TICK(3);
     goto pace;
 
   autopilot: /* $6308 -- no steering this step */
-    TICK(6);
     if (s_demo_mode) {
       uint8_t proposal = 0;
-      TICK(6);
       const SteerChoice choice = game_auto_steer(&proposal);
       if (choice == STEER_BOXED_IN) {
         // $6AB3 -- the auto-steer found nothing safe and gave up by jumping
@@ -4724,41 +4142,31 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
         // "carry straight on and take what comes".
         goto straight;
       }
-      TICK(2);
       if (choice == STEER_TURN) {
         // $6312 -- it proposed a turn. Act on it as though it had been typed,
         // re-entering below the high-bit test the way $6312 does.
-        TICK(3);
         code = proposal;
         goto steer;
       }
-      TICK(1);
-    } else {
-      TICK(1);
     }
 
   straight: /* $6315 */
-    TICK(11);
     shape = (uint8_t)(dir + 0x08);
 
   draw: /* $62A5 -- draw the head, then step it one cell */
   {
-    TICK(28);
     const Cell head = s_head;
     s_shape = shape;
     game_draw_head_native(0x0c, head);
 
     // $62B8 -- the direction back into 1..4, and the ink is the direction.
-    TICK(26);
     dir = (uint8_t)((((uint8_t)(s_direction - 1)) & 3) + 1);
     s_direction = dir;
     rom_setcol(dir);
 
-    TICK(14);
     rom_plot(head.row, head.col);
 
     // $62D1 -- advance the head, and see what is there.
-    TICK(42);
     const Cell next = {
         .col = (uint8_t)(head.col + kColDelta[dir]),
         .row = (uint8_t)(head.row + kRowDelta[dir]),
@@ -4766,54 +4174,34 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     s_head = next;
     const uint8_t cell = scrn_cell(next);
 
-    TICK(25);
     s_life_outcome = cell;
-    TICK(6);
     plot_shape_at(dir, 0x0c, next);
-    TICK(3);
 
     /* --- $6474: what did it move onto? ------------------------------- */
-    TICK(6);
     if (cell == 0) {
-      TICK(3);
-      TICK(8);
       rom_setcol(0x07);
-      TICK(14);
       rom_plot(next.row, next.col);
 
       // $633C -- the gate is column $14 of row 0.
-      TICK(8);
       if (next.col == 0x14) {
-        TICK(6);
         if (next.row == 0) {
-          TICK(6);
           return LIFE_GATE;
         }
-        TICK(1);
-      } else {
-        TICK(1);
       }
       goto tail;
     }
 
-    TICK(1);
-    TICK(4);
     if (cell == 0x0f) {
       // $6480 -- an apple. Marked here; the caller does the scoring.
-      TICK(14);
       s_click_count = 0x20;
       rom_setcol(0x07);
-      TICK(14);
       game_mark_head_native(next.row, next.col);
-      TICK(6);
       *cell_out = cell;
       return LIFE_APPLE;
     }
 
     // $6494 -- solid. Pause, buzzing, for a length taken byte by byte out
     // of ROM at $E000: nobody chose those numbers, they were simply there.
-    TICK(1);
-    TICK(6);
     // Both loops are DEY/BNE and DEX/BNE, which test *after* decrementing,
     // so a count of zero means 256 and not none. Ten of the bytes this reads
     // out of $E000 are zero, so that is the common case here rather than a
@@ -4827,31 +4215,22 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
         // The buzz after dying: 255 clicks whose spacing is whatever byte of
         // the ROM $E000+x happens to hold, which is why it is noise rather
         // than a note.
-        advance(4);
+        advance(5);
         --y;
-        if (y != 0)
-          TICK(1);
       } while (y != 0);
-      advance(12);
+      advance(13);
       click_speaker();
       --x;
-      if (x != 0)
-        TICK(1);
     } while (x != 0);
-    TICK(6);
     *cell_out = cell;
     return LIFE_CRASH;
   }
 
   tail: /* $63A1 -- trim the tail, unless the snake is still growing */
-    TICK(6);
     if (s_growth) {
-      TICK(15);
       s_growth = (uint8_t)(s_growth - 1);
       s_click_count = 0x07;
     } else {
-      TICK(1);
-      TICK(14);
       const Cell tail = s_tail;
       const uint8_t under = scrn_cell(tail);
 
@@ -4859,16 +4238,12 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       // the emulated stack here too: ram.probe hashes the live stack, and a
       // sample taken inside the plotter would otherwise see a byte on one
       // engine and not the other.
-      TICK(11);
       rom_setcol(0x00);
-      TICK(14);
       rom_plot(tail.row, tail.col);
-      TICK(25);
       plot_at(0x00, tail);
 
       // $63DA -- the byte that was under the tail is the direction the tail
       // must follow, so the same delta tables move it on.
-      TICK(44);
       const uint8_t tail_dir = under;
       const Cell tail_next = {
           .col = (uint8_t)(tail.col + kColDelta[tail_dir]),
@@ -4877,73 +4252,56 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       s_tail = tail_next;
       const uint8_t ahead = scrn_cell(tail_next);
 
-      TICK(32);
       plot_shape_at((uint8_t)(ahead + 0x0c), 0x0c, tail_next);
-      TICK(3);
     }
 
   pace: /* $640F -- the timer, the walls, and the delay that sets the speed */
-    TICK(20);
     click_speaker();
     {
       const uint8_t left = (uint8_t)(s_life_timer - 1);
       s_life_timer = left;
       if (left == 0) {
-        TICK(12);
         return LIFE_TIMEOUT;
       }
     }
 
-    TICK(1);
-    TICK(10);
     const uint8_t gate_cell = game_draw_side_walls_native();
-    TICK(4);
     if (gate_cell == 0) {
       // $642D -- the gate at the bottom is clear, so draw it. No edge charge
       // here: $6429's branch falls through to this and is only *taken* when
       // the cell is occupied.
-      TICK(31);
       s_shape = 0x15;
       plot_hline_at(0x0d, 0x12, 0x27, 0x16);
-      TICK(8);
       rom_setcol(0x0d);
-      TICK(10);
       rom_plot(0x27, 0x14);
-    } else {
-      TICK(1);
     }
 
     // $6450 -- the delay that sets the speed. $0300 iterations, each one
     // ticking the falling tone and taking a key, and counting $6473 down for
     // as long as the last move gave it something to say.
     // DEX/BNE again: $0300 of zero would mean 256 passes, not none.
-    TICK(4);
     uint8_t n = s_step_delay;
     do {
-      TICK(6);
       game_tick_sound_native();
       // The main loop's keyboard poll, ~1.2 ms apart. This is the yield the
       // whole game depends on: 82 passes per snake step, and the only place
       // between one step and the next where the host gets to draw or the
       // player gets to steer.
-      advance(11);
+      // 48 rather than the 58 the region measures, for the same reason as the
+      // death pause: game_read_key_native charges $6217's own 10 and that
+      // charge stays, because $6217 is where the replay coordinate and both
+      // sampling probes live.
+      advance(48);
       game_read_key_native();
-      TICK(6);
       if (s_click_count) {
         // The steering click. Its spacing is what makes the waveform
         // irregular the way the original is.
-        advance(18);
+        advance(41);
         click_speaker();
         s_click_count = (uint8_t)(s_click_count - 1);
-      } else {
-        TICK(1);
       }
-      TICK(10);
       --n;
-      if (n != 0)
-        TICK(1);
     } while (n != 0);
-    TICK(3);
   }
 }
 
@@ -5001,7 +4359,7 @@ static bool steer_try(
   s_steer_dir = dir;
   { // was game_move_ok()
 
-    /*$6AB8*/ TICK(0);
+    /*$6AB8*/
 
     uint8_t cell = 0;
     const MoveVerdict v = snake_move_verdict(s_steer_dir, &cell);
@@ -5011,16 +4369,16 @@ static bool steer_try(
     // initialiser above is there because the compiler cannot see that.
     switch (v) {
     case MOVE_TARGET_TAKEN:
-    // $6AD9 CMP #$0F left these.
-    move_taken = (cell != 0x0f);
-    break;
+      // $6AD9 CMP #$0F left these.
+      move_taken = (cell != 0x0f);
+      break;
     case MOVE_ROW_ZERO:
     case MOVE_OK:
-    move_taken = 0x00;
-    break;
+      move_taken = 0x00;
+      break;
     case MOVE_DEAD_END:
-    move_taken = 0x01;
-    break;
+      move_taken = 0x01;
+      break;
     }
   }
   GAME_CYCLES(after_addr, after_cycles);
@@ -5030,7 +4388,6 @@ static bool steer_try(
 }
 
 SteerChoice game_auto_steer(uint8_t *key_out) {
-  TICK(10);
   const uint8_t apple_row = s_apple.row;
   const uint8_t apple_col = s_apple.col;
   const uint8_t head_row = s_head.row;
@@ -5042,45 +4399,26 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
   // is a BNE, so its edge is charged when the move is *refused*; every later
   // test is a BEQ to the accept path and charges its edge the other way round.
   if (apple_row != head_row) {
-    TICK(4);
     uint8_t dir;
     if (apple_row >= head_row) {
-      TICK(1);
       dir = DIR_DOWN;
     } else {
-      TICK(2);
       dir = DIR_UP;
     }
     settled = steer_try(dir, 0x6a40, 10, 0x6a46, 2);
-    if (!settled)
-      TICK(1);
-  } else {
-    TICK(1);
   }
 
   // $6A5A -- the column, toward the apple and then away from it.
   if (!settled) {
-    TICK(10);
     if (apple_col >= head_col) {
       settled = steer_try(DIR_RIGHT, 0x6a62, 12, 0x6a6a, 2);
-      if (settled) {
-        TICK(1);
-      } else {
+      if (!(settled)) {
         settled = steer_try(DIR_LEFT, 0x6a6c, 12, 0x6a74, 2);
-        if (settled)
-          TICK(1);
-        else
-          TICK(3);
       }
     } else {
-      TICK(1);
       settled = steer_try(DIR_LEFT, 0x6a79, 12, 0x6a81, 2);
-      if (settled) {
-        TICK(1);
-      } else {
+      if (!(settled)) {
         settled = steer_try(DIR_RIGHT, 0x6a83, 12, 0x6a8b, 2);
-        if (settled)
-          TICK(1);
         // Refused: falls straight into $6A8D, where the other branch had to
         // spend a JMP to get.
       }
@@ -5089,25 +4427,15 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
 
   // $6A8D -- the row again, now as an escape rather than as progress.
   if (!settled) {
-    TICK(10);
     if (apple_row >= head_row) {
       settled = steer_try(DIR_DOWN, 0x6a95, 12, 0x6a9d, 2);
-      if (settled)
-        TICK(1);
-    } else {
-      TICK(1);
     }
     if (!settled) {
       settled = steer_try(DIR_UP, 0x6a9f, 12, 0x6aa7, 2);
-      if (settled) {
-        TICK(1);
-      } else {
+      if (!(settled)) {
         settled = steer_try(DIR_DOWN, 0x6aa9, 12, 0x6ab1, 2);
-        if (settled) {
-          TICK(1);
-        } else {
+        if (!(settled)) {
           // $6AB3 -- nothing is safe.
-          TICK(11);
           return STEER_BOXED_IN;
         }
       }
@@ -5116,16 +4444,11 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
 
   // $6A48 -- a direction was accepted. Already going that way means there is
   // nothing to say; otherwise name the key that turns to it.
-  TICK(10);
   const uint8_t dir = s_steer_dir;
   if (dir == s_direction) {
-    TICK(1);
-    TICK(6);
     *key_out = dir;
     return STEER_STRAIGHT;
   }
-  TICK(6);
-  TICK(6);
   *key_out = key_for_direction(dir);
   return STEER_TURN;
 }
@@ -5169,102 +4492,72 @@ static void clear_leading_zero_flag(void) {
 
 void game_status_panel(void) {
   // SCORE, row $14 column $00. Four BCD bytes at $7252, little-endian.
-  TICK(16);
   s_cv = 0x14;
   s_ch = 0x00;
   game_print_inline_str(0x72d8);
-  TICK(15);
   clear_leading_zero_flag();
   game_print_bcd_native(s_score[3]);
-  TICK(10);
   game_print_bcd_native(s_score[2]);
-  TICK(10);
   game_print_bcd_native(s_score[1]);
-  TICK(10);
   game_print_bcd_native(s_score[0]);
-  TICK(6);
   game_print_zero_if_blank_native();
 
   // HI SCORE, same row, column $14. Four bytes at $7256.
-  TICK(11);
   s_ch = 0x14;
   game_print_inline_str(0x7307);
-  TICK(15);
   clear_leading_zero_flag();
   game_print_bcd_native(s_hi_score[3]);
-  TICK(10);
   game_print_bcd_native(s_hi_score[2]);
-  TICK(10);
   game_print_bcd_native(s_hi_score[1]);
-  TICK(10);
   game_print_bcd_native(s_hi_score[0]);
-  TICK(6);
   game_print_zero_if_blank_native();
 
   // APPLES LEFT, row $15 column $00. Two bytes at $725A.
-  TICK(16);
   s_ch = 0x00;
   s_cv = 0x15;
   game_print_inline_str(0x733d);
-  TICK(15);
   clear_leading_zero_flag();
   game_print_bcd_native(s_apples_left[1]);
-  TICK(10);
   game_print_bcd_native(s_apples_left[0]);
-  TICK(6);
   game_print_zero_if_blank_native();
 
   // A space, which the next field's cursor move immediately overrides. It is
   // there to wipe the character one place past this field, left over from a
   // longer count earlier in the game.
-  TICK(8);
   rom_cout(0xa0);
 
   // VALUE, same row, column $14. Two bytes at $71CB -- the current worth of an
   // apple, which game_set_apple_value computes per level.
-  TICK(11);
   s_ch = 0x14;
   game_print_inline_str(0x736b);
-  TICK(15);
   clear_leading_zero_flag();
   game_print_bcd_native(s_apple_value[1]);
-  TICK(10);
   game_print_bcd_native(s_apple_value[0]);
-  TICK(6);
   game_print_zero_if_blank_native();
 
   // SNAKES LEFT, row $16 column $00. One byte at $725E, printed as though it
   // were the low half of a two-byte field: the high half is the literal 0
   // below, which prints nothing at all once leading zeros are suppressed. It
   // costs a call to keep the shape of every other field.
-  TICK(16);
   s_cv = 0x16;
   s_ch = 0x00;
   game_print_inline_str(0x7392);
-  TICK(11);
   clear_leading_zero_flag();
   game_print_bcd_native(0x00);
-  TICK(10);
   game_print_bcd_native(s_lives);
-  TICK(6);
   game_print_zero_if_blank_native();
 
   // LEVEL, same row, column $14. One byte at $7265.
-  TICK(11);
   s_ch = 0x14;
   game_print_inline_str(0x73b8);
-  TICK(15);
   clear_leading_zero_flag();
   game_print_bcd_native(s_level);
-  TICK(6);
   game_print_zero_if_blank_native();
 
   // Home the cursor. This CV write is the one that needs VTAB, because nothing
   // prints after it to recompute the line base.
-  TICK(11);
   s_cv = 0x00;
   rom_fc68();
-  TICK(6);
 }
 
 /* ========================================================================== */
@@ -5288,7 +4581,6 @@ void game_status_panel(void) {
 
 void game_bonus_screen(void) {
   // $78B3 -- double the apple's value into $78B0/$78B1, in BCD.
-  TICK(36);
   const uint16_t lo = adc_dec16(s_apple_value[0], s_apple_value[0], 0x00);
   s_bonus_amount[0] = (uint8_t)lo;
   const uint16_t hi = adc_dec16(s_apple_value[1], s_apple_value[1], (uint8_t)(lo >> 8) & 0x01);
@@ -5297,54 +4589,39 @@ void game_bonus_screen(void) {
   // Twice, because the bonus is twice the apple value and game_add_score adds
   // it once.
   game_add_score_native();
-  TICK(6);
   game_add_score_native();
-  TICK(6);
   game_status_panel();
 
   // $78D1 -- the frame, in ink 9: top and bottom edges, then both sides.
-  TICK(31);
   s_shape = 0x01;
   // Columns $0D-$1A, rows $10-$15. The two sides used to inherit their column
   // from the edge above: an hline left $02 at its own endpoint, so the
   // first vline ran down $1A, the right edge, and not the $0D it looks like.
   plot_hline_at(0x09, 0x0d, 0x10, 0x1a);
-  TICK(16);
   plot_hline_at(0x09, 0x0d, 0x15, 0x1a);
-  TICK(16);
   plot_vline_at(0x09, 0x1a, 0x10, 0x15);
-  TICK(16);
   plot_vline_at(0x09, 0x0d, 0x10, 0x15);
 
   // $7909 -- the interior, in ink 0, one row at a time from $11 to $14. The
   // original re-loads $02 each time and increments $03 in place, which is why
   // the rows are not written out as constants.
-  TICK(26);
   plot_hline_at(0x00, 0x0e, 0x11, 0x19);
-  TICK(16);
   plot_hline_at(0x00, 0x0e, 0x12, 0x19);
-  TICK(16);
   plot_hline_at(0x00, 0x0e, 0x13, 0x19);
-  TICK(16);
   plot_hline_at(0x00, 0x0e, 0x14, 0x19);
 
   // $7937 -- "BONUS: " and the amount, through the hi-res font.
-  TICK(16);
   s_ch = 0x0f;
   s_cv = 0x09;
   game_install_cout_vector();
   // The LDA #$4A flags are overwritten by the second load; only these outlive.
-  TICK(6);
   game_print_inline_str(0x7944);
-  TICK(15);
   s_h2 = 0x00;
   game_print_bcd_native(s_bonus_amount[1]);
-  TICK(10);
   game_print_bcd_native(s_bonus_amount[0]);
 
   // $795D -- COUT back to the ROM's, and $02 becomes the outermost counter of
   // the pause below.
-  TICK(15);
   s_csw = 0xfdf0;
   uint8_t passes = 0x20; // $02 was the outermost counter
 
@@ -5358,29 +4635,17 @@ void game_bonus_screen(void) {
   // are DEX/DEY loops, which test after decrementing -- a count of zero would
   // mean 256, and none of these start at zero.
   do {
-    TICK(2);
     uint8_t x = 0x80;
     do {
-      TICK(4);
       uint8_t y = x;
       do {
-        TICK(4);
         --y;
-        if (y != 0)
-          TICK(1);
       } while (y != 0);
-      TICK(12);
       click_speaker();
       --x;
-      if (x != 0)
-        TICK(1);
     } while (x != 0);
-    TICK(7);
     passes = (uint8_t)(passes - 1);
-    if (passes != 0)
-      TICK(1);
   } while (passes != 0);
-  TICK(6);
 }
 
 /* ========================================================================== */
@@ -5401,10 +4666,8 @@ void game_bonus_screen(void) {
 /* ========================================================================== */
 
 void game_begin_life(void) {
-  TICK(8);
   const uint8_t tail_col = game_start_life(0x14);
 
-  TICK(36);
   s_tail.col = tail_col; // from $6630, by way of $660F
   s_head.row = 0x27; // the bottom edge
   s_tail.row = 0x27; // the same cell
@@ -5417,14 +4680,10 @@ void game_begin_life(void) {
   // count of $0F suggests.
   uint8_t x = 0x0f;
   do {
-    TICK(9);
     s_key_ring[x] = 0x00;
     --x;
-    if (!(x & 0x80))
-      TICK(1);
   } while (!(x & 0x80));
 
-  TICK(11);
   s_ring_read = 0x00;
   s_ring_write = 0x00;
   game_play_one_life();
@@ -5456,28 +4715,18 @@ void game_begin_life(void) {
 
 void game_setup_screen(void) {
   // $7980 -- keep $0E/$0F inside the window game_rand_byte expects.
-  TICK(7);
   const uint8_t hi = (uint8_t)(s_rand_ptr >> 8);
   bool clamp_lo = hi >= 0x1f;
   if (!clamp_lo) {
-    TICK(4);
     clamp_lo = hi < 0x18;
-    if (!clamp_lo)
-      TICK(1);
-  } else {
-    TICK(1);
   }
   if (clamp_lo) {
-    TICK(8);
     s_rand_ptr &= 0xffde;
   }
-  TICK(13);
   s_rand_ptr = (uint16_t)((s_rand_ptr & 0x1fff) | 0x1800);
 
   // $73D8 -- the first call through here never asks anything.
-  TICK(6);
   if (!s_setup_seen) {
-    TICK(20);
     s_demo_mode = true;
     s_difficulty = 0x01;
     s_setup_seen = true;
@@ -5486,12 +4735,9 @@ void game_setup_screen(void) {
 
   // $73E9 -- the prompt, and the two counters that time it out. $02 is the
   // outer one and $03 the inner; both count *up* to zero.
-  TICK(1);
-  TICK(16);
   s_cv = 0x17;
   s_ch = 0x00;
   game_print_inline_str(0x73f3);
-  TICK(10);
   // $02 and $03 time the prompt out: the inner one wraps 256 times per tick of
   // the outer, and when the outer wraps nobody has answered.
   uint8_t outer_count = 0xe8;
@@ -5510,10 +4756,8 @@ wait: /* $741C */
       // The 7.8 s timeout into demo mode -- 36% of a play run's cycles, and
       // the longest wait in the game. It is also a polling loop, so this is
       // the yield that lets the player answer the prompt at all.
-      advance(4);
+      advance(5);
       ++ticks;
-      if (ticks != 0)
-        TICK(1);
     } while (ticks != 0);
 
     // The keyboard read. Already a charge, and it must stay one; it keeps its
@@ -5521,80 +4765,56 @@ wait: /* $741C */
     GAME_CYCLES_COORD(0x741f, 6);
     key = io_peek(0xc000);
     if (key & 0x80) {
-      TICK(1);
       break;
     }
 
-    TICK(7);
     const uint8_t inner = (uint8_t)(inner_count + 1);
     inner_count = inner;
     if (inner != 0) {
-      TICK(1);
       continue;
     }
 
     // $7428 -- once the inner counter wraps, try the joystick, if one is
     // selected. Each button stands in for a digit.
-    TICK(6);
     if (s_joystick_selected) {
-      TICK(10);
       io_peek(0xc05b);
       if (!(io_peek(0xc062) & 0x80)) {
-        TICK(5);
         key = 0xb1;
         break;
       }
-      TICK(1);
-      TICK(10);
       io_peek(0xc05a);
       if (!(io_peek(0xc062) & 0x80)) {
-        TICK(5);
         key = 0xb0;
         break;
       }
-      TICK(1);
-      TICK(6);
       if (!(io_peek(0xc063) & 0x80)) {
-        TICK(5);
         key = 0xb2;
         break;
       }
-      TICK(1);
-    } else {
-      TICK(1);
     }
 
     // $7451 -- the outer counter. When it wraps too, nobody is answering.
-    TICK(7);
     const uint8_t outer = (uint8_t)(outer_count + 1);
     outer_count = outer;
     if (outer == 0) {
-      TICK(20);
       s_demo_mode = true;
       s_difficulty = 0x01;
       io_poke(0xc010, 0x01);
       return;
     }
-    TICK(1);
   }
 
   // $7461 -- something was pressed. Clear the strobe with it still in A, the
   // way the original does.
-  TICK(8);
   io_poke(0xc010, key);
   if (key != 0xc3) {
-    TICK(4);
     if (key < 0xb0) {
-      TICK(1);
       goto wait;
     }
-    TICK(4);
     if (key >= 0xb3) {
-      TICK(1);
       goto wait;
     }
     // $7470 -- a digit. The subtract is a plain SBC with carry set.
-    TICK(24);
     s_difficulty = (uint8_t)(key - 0xb0);
     s_demo_mode = false;
     io_poke(0xc010, 0x00);
@@ -5603,51 +4823,32 @@ wait: /* $741C */
 
   // $747F -- C, so redefine the keys instead. Show the six current bindings,
   // draw the highlight, then walk them again asking for replacements.
-  TICK(1);
-  TICK(6);
   game_clear_hgr_native();
-  TICK(10);
   io_peek(0xc052);
   game_install_cout_vector();
   // The LDA #$4A flags are overwritten by the second load; only these outlive.
-  TICK(11);
   s_cv = 0x01;
   game_print_inline_str(0x748e);
 
-  TICK(2);
   for (uint8_t i = 0; i != 6; ++i) {
-    TICK(10);
     game_show_key_native(i, s_key_table[i]);
-    TICK(6);
-    if (i != 5)
-      TICK(1);
   }
 
-  TICK(26);
   plot_shape_at(0x02, 0x0c, (Cell){.col = 0x1e, .row = 0x12});
   // The stem below it, down the same column -- which the original inherited
   // from the plot above rather than restating.
-  TICK(21);
   s_shape = 0x0a;
   plot_vline_at(0x0c, 0x1e, 0x13, 0x1d);
   // At the stem's far end -- the vline above left $03 on $1D.
-  TICK(11);
   plot_shape_at(0x0e, 0x0c, (Cell){.col = 0x1e, .row = 0x1d});
 
-  TICK(2);
   for (uint8_t i = 0; i != 6; ++i) {
-    TICK(6);
     const uint8_t chosen = game_edit_key_native(i);
-    TICK(11);
     s_key_table[i] = chosen;
     game_show_key_native(i, chosen);
-    TICK(6);
-    if (i != 5)
-      TICK(1);
   }
 
   // $7587 -- COUT back to the ROM's.
-  TICK(16);
   s_csw = 0xfdf0;
 }
 
@@ -5676,7 +4877,6 @@ wait: /* $741C */
 /// through an indirect jump that the recording never took is invisible to it:
 /// the bytes get classified as data and never appear in the output. That is the
 /// case here, so these routines are decoded from the binary directly.
-
 
 /* ========================================================================== */
 /* $664A -- the game's own COUT handler.                                      */
@@ -5738,37 +4938,25 @@ wait: /* $741C */
 /// ram.probe compares only the live stack.
 ///
 void game_print_inline_str(uint16_t ret_addr) {
-
-  /*$7230*/ TICK(20);
-  s_str_ptr = ret_addr;
+  /*$7230*/ s_str_ptr = ret_addr;
   rom_fc68(); // VTAB to the current CV
 
   for (;;) {
     // The pointer is stepped before the read, which is why the caller passes
     // the address of the JSR's last byte rather than of the string.
-    /*$7239*/ TICK(7);
-    ++s_str_ptr;
-    if (!(s_str_ptr & 0xff)) {
-      /*$723D*/ TICK(5);
-    } else {
-      /*$723B*/ TICK(1);
-    }
+    /*$7239*/ ++s_str_ptr;
 
-    /*$723F*/ TICK(9);
-    const uint8_t ch = peek(s_str_ptr);
+    /*$723F*/ const uint8_t ch = peek(s_str_ptr);
     if (!ch) {
-      /*$7243*/ TICK(1);
-      break;
+      /*$7243*/ break;
     }
 
-    /*$7245*/ TICK(6);
-    rom_cout(ch);
-    /*$7248*/ TICK(3);
+    /*$7245*/ rom_cout(ch);
+    /*$7248*/
   }
 
-  /*$724B*/ TICK(18);
+  /*$724B*/
 }
-
 
 /* ========================================================================== */
 /* $6127, $60E7, $60E4 -- the hi-res cell plotter.                            */
@@ -5809,9 +4997,6 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* against the interpreter instruction for instruction.                       */
 /* ========================================================================== */
 
-
-
-
 /* ========================================================================== */
 /* $6148, $615A -- runs of cells.                                             */
 /*                                                                            */
@@ -5837,8 +5022,6 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* every time a caller changes.                                               */
 /* ========================================================================== */
 
-
-
 /* ========================================================================== */
 /* $7019, $7024, $7000 -- the screen-script primitives.                       */
 /*                                                                            */
@@ -5859,9 +5042,6 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* out what it is about to run into. Collision detection for free, at the     */
 /* cost of drawing everything twice.                                          */
 /* ========================================================================== */
-
-
-
 
 /* ========================================================================== */
 /* $71F3, $7226, $7267, $702B -- the score.                                   */
@@ -5890,10 +5070,6 @@ void game_print_inline_str(uint16_t ret_addr) {
 /// apart from the return address the JSR pushes, so they share one body here.
 /// No CYCLES of its own -- both call sites are already inside a counted block.
 
-
-
-
-
 /* ========================================================================== */
 /* $6B93 -- the merging cell plotter.                                         */
 /*                                                                            */
@@ -5921,7 +5097,6 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* routine fills the shape rather than dithering it. Reproduced exactly,      */
 /* including the lost bit, because the screen the game draws depends on it.   */
 /* ========================================================================== */
-
 
 /* ========================================================================== */
 /* $7045 -- draw the playfield, and run the level's display list.             */
@@ -5964,7 +5139,6 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* game_cout_hook already does at $669F.                                      */
 /* ========================================================================== */
 
-
 /* ========================================================================== */
 /* $6641, $660F, $6BEF, $6BDA, $71CD -- snake state and scoring setup.        */
 /*                                                                            */
@@ -5980,11 +5154,6 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* optional wall gaps in game_draw_playfield.                                 */
 /* ========================================================================== */
 
-
-
-
-
-
 /* ========================================================================== */
 /* $7642, $64A9, $7633 -- apples, and the sound trick.                        */
 /*                                                                            */
@@ -5996,15 +5165,9 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* the hot path, and muting cannot alter the game's speed.                    */
 /* ========================================================================== */
 
-
-
-
 /* ========================================================================== */
 /* $6217, $7590, $6B3D                                                        */
 /* ========================================================================== */
-
-
-
 
 /* ========================================================================== */
 /* $6AB8 -- is the next cell in direction $6B38 worth moving into?            */
@@ -6028,7 +5191,6 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* $6637/$6638 hold the target column and row: $6232[dir] + $624F and         */
 /* $6237[dir] + $6250, the direction deltas added to the snake's head.        */
 /* ========================================================================== */
-
 
 /* ========================================================================== */
 /* $64C8 -- move the bouncer one step.                                        */
@@ -6061,7 +5223,7 @@ void game_move_bouncer(Bouncer *b) {
   // unaffected.
   //
 
-  /*$64C8*/ TICK(12);
+  /*$64C8*/
 
   // The state the original leaves behind: A holds the row it loaded first, and
   // the flags come from that load.
@@ -6073,13 +5235,9 @@ void game_move_bouncer(Bouncer *b) {
 /* $728D, $6BFB                                                               */
 /* ========================================================================== */
 
-
-
 /* ========================================================================== */
 /* $6594, $69C3                                                               */
 /* ========================================================================== */
-
-
 
 /* ========================================================================== */
 /* $69A9, $75D1, $6C72 -- the rest of the input path.                         */
@@ -6091,9 +5249,6 @@ void game_move_bouncer(Bouncer *b) {
 /* list, are what now record which blocks rest on the binary alone.           */
 /* ========================================================================== */
 
-
-
-
 /* ========================================================================== */
 /* $6288 -- one life. See game_native.c for what it does.                     */
 /* ========================================================================== */
@@ -6103,7 +5258,6 @@ void game_move_bouncer(Bouncer *b) {
 /// return address, and A is not left holding the reason because nothing reads
 /// it there any more.
 static void game_play_one_life(void) {
-
   uint8_t cell = 0;
   switch (game_play_loop_native(&cell)) {
   case LIFE_GATE:
@@ -6128,21 +5282,17 @@ static void game_play_one_life(void) {
 /* $72CE -- the status panel. See game_native.c.                              */
 /* ========================================================================== */
 
-
 /* ========================================================================== */
 /* $78B3 -- the bonus screen. See game_native.c.                              */
 /* ========================================================================== */
-
 
 /* ========================================================================== */
 /* $6256 -- start a life. See game_native.c.                                  */
 /* ========================================================================== */
 
-
 /* ========================================================================== */
 /* $7980 -- the setup screen. See game_native.c.                              */
 /* ========================================================================== */
-
 
 /* ========================================================================== *
  * The top level                                                            *
@@ -6167,7 +5317,6 @@ static void game_play_one_life(void) {
 /// replaced that dispatch, so only the cold build compiles this.
 ///
 /// It goes away when snake-bytec1-ext does.
-
 
 /* ========================================================================== */
 /* $3750 and $7691 -- the top level                                           */
@@ -6226,34 +5375,22 @@ void game_cold_start(void) {
     // probe-acceptance.sh aligns the two builds on -- see GAME_CYCLES_ANCHOR.
     GAME_CYCLES_ANCHOR(0x3750, 2);
     for (unsigned i = 0; i != 256; ++i) {
-      TICK(13);
       poke((uint16_t)(0x1800 + page * 256 + i), peek((uint16_t)(0x3800 + page * 256 + i)));
-      if (i != 255)
-        TICK(1);
     }
-    TICK(20);
-    if (page != 7)
-      TICK(1);
   }
 
-  TICK(6);
   rom_setvid();
-  TICK(6);
   rom_setkbd();
-  TICK(29);
   s_step_delay = 0x52;
   s_difficulty = 0x01;
   s_demo_mode = true; // so the first pass plays itself
   s_script_index = 0x01;
   s_level_time = 0x64;
-  goto round;             // $3783: JMP $76C2
+  goto round; // $3783: JMP $76C2
 
 new_game: /* $7691 */
-  TICK(6);
   game_setup_screen();
-  TICK(6);
   game_promote_high_score();
-  TICK(40);
   s_script_index = 0x01;
   s_level = 0x01;
   s_score[0] = 0x00;
@@ -6264,16 +5401,13 @@ new_game: /* $7691 */
   s_apples_afield[0] = 0x00;
 
 new_level: /* $76B7 */
-  TICK(14);
   s_lives_at_level_start = s_lives;
   s_apples_quota[0] = 0x10;
 
 round: /* $76C2 */
-  TICK(6);
   s_apples_quota[1] = 0x00;
 
 start_round: /* $76C7 */
-  TICK(40);
   s_apples_afield[0] = 0x00;
   s_apples_afield[1] = 0x00;
   s_apples_eaten[0] = 0x00;
@@ -6281,202 +5415,133 @@ start_round: /* $76C7 */
   s_apples_left[0] = s_apples_quota[0];
   s_apples_left[1] = s_apples_quota[1];
   game_draw_playfield_native();
-  TICK(14);
   s_life_time = s_level_time;
   game_set_apple_value_native();
-  TICK(14);
-  io_peek(0xc054);       // page 1
-  io_peek(0xc053);       // mixed text/graphics
+  io_peek(0xc054); // page 1
+  io_peek(0xc053); // mixed text/graphics
   const Cell apple = game_place_apple_native();
-  TICK(6);
   // $76F6 redraws it, at the cell game_place_apple just chose.
   game_plot_shape_native(0x09, apple);
-  TICK(8);
   s_step_delay = 0x52;
-  TICK(23);
   s_head_moved = false;
   s_life_timer = s_life_time;
   s_wndtop = 0x14; // window top, so HOME clears only the status panel
   rom_home();
-  TICK(6);
   game_status_panel();
-  TICK(6);
   game_begin_life();
-  TICK(3);
   goto verdict; // $7716: JMP $7739 -- a fresh round asks the same question
 
 life: /* $7719 */
-  TICK(19);
   s_life_timer = s_life_time;
   s_wndtop = 0x14;
   rom_home();
-  TICK(6);
   game_status_panel();
-  TICK(8);
   if (s_step_delay >= 0x03) {
     // $7730 -- two steps faster each life, but never past 3.
-    TICK(8);
     s_step_delay = (uint8_t)(s_step_delay - 2);
-  } else {
-    TICK(1);
   }
-  TICK(6);
   game_play_one_life();
 
 verdict: /* $7739 -- $6253 says how the life ended */
-  TICK(8);
   if (s_life_outcome == 0x0f)
     goto ate_apple;
-  TICK(3);
-  TICK(4);
   if (s_life_outcome != 0x00)
     goto not_apple;
   goto round_cleared;
 
 ate_apple: /* $773E */
-  TICK(1);
-  TICK(76);
   bcd_sub16(s_apples_afield, 0x01);
   bcd_sub16(s_apples_left, 0x01);
   bcd_add16(s_apples_eaten, 0x01);
 
   // $777B -- points only for the first $11 apples of the round. The high
   // byte must be zero and the low one below $11, both BCD.
-  if (s_apples_eaten[1]) {
-    TICK(1);
-  } else {
-    TICK(8);
-    if (s_apples_eaten[0] >= 0x11) {
-      TICK(1);
-    } else {
-      TICK(6);
+  if (!(s_apples_eaten[1])) {
+    if (!(s_apples_eaten[0] >= 0x11)) {
       game_add_score_native();
     }
   }
 
-  TICK(18);
   s_growth = (uint8_t)(s_growth + 0x0a); // ten more cells of snake
 
   // $7793 -- anything left in the round?
   if (s_apples_left[0]) {
-    TICK(1);
     goto next_apple;
   }
-  TICK(6);
   if (s_apples_left[1]) {
-    TICK(1);
     goto next_apple;
   }
 
   /* $779A -- that was the last one. Draw the bar across the bottom, put the
      marker on it, and stop the clock for the run to the gate -- see
      s_life_time for why $FF stops it rather than lengthening it. */
-  TICK(31);
   s_shape = 0x15;
   plot_hline_at(0x06, 0x12, 0x00, 0x16);
-  TICK(16);
   plot_shape_at(0x15, 0x00, (Cell){.col = 0x14, .row = 0x00});
-  TICK(14);
   s_life_time = 0xff;
   rom_setcol(0x00);
-  TICK(10);
   rom_plot(0x00, 0x14);
-  TICK(3);
   goto life;
 
 next_apple: /* $77D0 -- place one only when both countdown bytes are zero */
-  TICK(6);
   if (s_apples_afield[0]) {
-    TICK(3);
     goto life;
   }
-  TICK(1);
-  TICK(6);
   if (s_apples_afield[1]) {
-    TICK(3);
     goto life;
   }
-  TICK(1);
-  TICK(6);
   game_place_apple_native();
-  TICK(3);
   goto life;
 
 round_cleared: /* $77EA */
-  TICK(32);
-  {
-    const uint16_t r = adc_dec16(s_level, 0x01, 0x00);
-    s_level = (uint8_t)r;
-  }
+{
+  const uint16_t r = adc_dec16(s_level, 0x01, 0x00);
+  s_level = (uint8_t)r;
+}
   s_script_index = (uint8_t)(s_script_index + 1);
   // $77F8 -- no life was lost this round, so it earns a bonus.
   if (s_lives == s_lives_at_level_start) {
-    TICK(6);
     game_bonus_screen();
-  } else {
-    TICK(1);
   }
-  TICK(6);
   game_award_extra_life_native();
-  TICK(3);
   goto new_level;
 
 not_apple: /* $77E8 */
-  TICK(1);
-  TICK(4);
   if (s_life_outcome != 0xfe) {
-    TICK(1);
     goto ended;
   }
-  TICK(6);
   if (s_apples_left[1]) {
-    TICK(1);
     goto harder;
   }
-  TICK(6);
   if (!s_apples_left[0]) {
-    TICK(1);
     goto ended;
   }
 
 harder: /* $7817 -- three more apples in the round, and three more to come */
-  TICK(54);
   bcd_add16(s_apples_quota, 0x03);
   bcd_add16(s_apples_left, 0x03);
   game_place_apple_native();
-  TICK(6);
   game_place_apple_native();
-  TICK(6);
   game_place_apple_native();
-  TICK(3);
   goto life;
 
 ended: /* $7847 */
-  TICK(8);
   if (s_life_outcome == 0xff) {
-    TICK(3);
     goto new_game; // the player pressed the quit key
   }
-  TICK(1);
-  TICK(4);
   // $FE means the snake ran out of room rather than died, and that just starts
   // another life. Anything else falls through to the pause. Note the sense:
   // the original *branches away* when it is not $FE, so equality is the
   // fall-through, not the exception.
   if (s_life_outcome == 0xfe) {
-    TICK(3);
     goto life;
   }
-  TICK(1);
-  TICK(6);
   if (s_demo_mode) {
-    TICK(1);
     goto lose_life; // the demo does not wait to be told to carry on
   }
 
   /* $785D -- "PRESS SPACE BAR TO CONTINUE", then wait for space or the
      paddle button, whichever the setup screen selected. */
-  TICK(16);
   s_cv = 0x17;
   s_ch = 0x00;
   game_print_inline_str(0x7867);
@@ -6485,36 +5550,31 @@ ended: /* $7847 */
     // that waits for it. Nothing bounds this one -- the game sits here until
     // the player presses something -- so losing it hangs the program outright
     // rather than merely making it stutter.
-    advance(6);
+    // Eight, not sixteen: a pass of this loop costs 16 cycles, but half of
+    // that is $7890's own charge below, which survives because the address
+    // carries the replay coordinate. Charging the measured region here as
+    // well would count it twice -- and did, until the block-head trace ran
+    // 22% short and said so.
+    advance(8);
     if (s_joystick_selected) {
-      TICK(6);
       // The button reads with bit 7 *clear* when pressed on this path.
       if (!(io_peek(0xc061) & 0x80)) {
-        TICK(1);
         break;
       }
-    } else {
-      TICK(1);
     }
     // $7890 is on the replay coordinate -- see GAME_CYCLES_COORD.
     GAME_CYCLES_COORD(0x7890, 8);
     const uint8_t key = io_peek(0xc000);
     if (key == 0xa0) {
-      TICK(4);
       io_poke(0xc010, key);
       break;
     }
-    TICK(1);
   }
 
 lose_life: /* $789A */
-  TICK(6);
   if (!s_lives) {
-    TICK(3);
     goto new_game;
   }
-  TICK(1);
-  TICK(19);
   {
     const uint16_t r = sbc_dec16(s_lives, 0x01, 0x01);
     s_lives = (uint8_t)r;
@@ -6532,135 +5592,114 @@ lose_life: /* $789A */
 /* RAM $0000-$0802. Outside this: the game image, the ROM, and $FF. */
 #define SB_ENTRY_RAM_LEN 0x803
 static const uint8_t kSnakeByteEntryRam[SB_ENTRY_RAM_LEN] = {
-  76, 60, 212, 76, 58, 219, 255, 255, 255, 255, 76, 153, 225, 255, 0, 107,
-  255, 0, 255, 4, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  0, 40, 0, 24, 0, 3, 255, 255, 128, 5, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 221, 255, 40, 240, 253, 27, 253, 255, 255, 255, 255, 0, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 0, 255, 255, 255, 255, 255, 10, 0,
-  80, 55, 85, 255, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 56, 255,
-  255, 255, 255, 255, 255, 255, 255, 1, 8, 3, 8, 3, 8, 3, 8, 0,
-  192, 255, 255, 0, 192, 255, 255, 255, 255, 255, 0, 255, 255, 0, 8, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 255, 255, 255, 255, 255, 3,
-  76, 255, 0, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 142, 0, 0,
-  55, 80, 0, 0, 0, 142, 221, 64, 0, 0, 0, 0, 0, 10, 255, 3,
-  8, 230, 184, 208, 2, 230, 185, 173, 6, 2, 201, 58, 176, 10, 201, 32,
-  240, 239, 56, 233, 48, 56, 233, 208, 96, 128, 79, 199, 82, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 0, 255, 127, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 1, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 101, 235, 216, 220, 236, 99, 236,
-  151, 14, 236, 90, 231, 218, 241, 34, 216, 193, 241, 0, 1, 1, 168, 250,
-  140, 49, 52, 49, 54, 48, 0, 49, 0, 48, 0, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  89, 250, 3, 224, 69, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 193,
-  208, 208, 204, 197, 160, 221, 219, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 255, 255, 255, 255, 255, 255, 255, 255,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 255, 255, 255, 255, 255, 255, 255, 255,
-  221, 195, 193, 204, 204, 160, 177, 180, 177, 182, 176, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 255, 255, 255, 255, 255, 255, 255, 255,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 255, 255, 255, 255, 255, 255, 255, 255,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 255, 255, 255, 255, 255, 255, 255, 255,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 255, 255, 255, 255, 255, 255, 255, 255,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 255, 255, 255, 255, 255, 255, 255, 255,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-  160, 160, 160, 160, 160, 160, 160, 160, 193, 255, 255, 255, 255, 255, 255, 255,
-  0, 0, 0,
+    76,  60,  212, 76,  58,  219, 255, 255, 255, 255, 76,  153, 225, 255, 0,   107, 255, 0,   255,
+    4,   0,   255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0,   40,  0,   24,  0,   3,
+    255, 255, 128, 5,   255, 255, 255, 255, 255, 255, 255, 255, 255, 221, 255, 40,  240, 253, 27,
+    253, 255, 255, 255, 255, 0,   255, 255, 255, 255, 255, 255, 255, 255, 255, 0,   255, 255, 255,
+    255, 255, 10,  0,   80,  55,  85,  255, 0,   255, 255, 255, 255, 255, 255, 255, 255, 255, 56,
+    255, 255, 255, 255, 255, 255, 255, 255, 1,   8,   3,   8,   3,   8,   3,   8,   0,   192, 255,
+    255, 0,   192, 255, 255, 255, 255, 255, 0,   255, 255, 0,   8,   255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 0,   255, 255, 255, 255, 255, 3,   76,  255, 0,   255, 255, 255, 255, 255,
+    255, 0,   0,   0,   0,   142, 0,   0,   55,  80,  0,   0,   0,   142, 221, 64,  0,   0,   0,
+    0,   0,   10,  255, 3,   8,   230, 184, 208, 2,   230, 185, 173, 6,   2,   201, 58,  176, 10,
+    201, 32,  240, 239, 56,  233, 48,  56,  233, 208, 96,  128, 79,  199, 82,  255, 255, 255, 255,
+    255, 255, 255, 255, 255, 0,   255, 127, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 1,   0,   0,   255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 101, 235, 216, 220, 236,
+    99,  236, 151, 14,  236, 90,  231, 218, 241, 34,  216, 193, 241, 0,   1,   1,   168, 250, 140,
+    49,  52,  49,  54,  48,  0,   49,  0,   48,  0,   255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 89,  250, 3,   224, 69,  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 193, 208, 208, 204, 197, 160,
+    221, 219, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 255, 255, 255, 255, 255, 255, 255, 255, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 255,
+    255, 255, 255, 255, 255, 255, 255, 221, 195, 193, 204, 204, 160, 177, 180, 177, 182, 176, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 255, 255, 255, 255, 255, 255,
+    255, 255, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 255, 255, 255, 255, 255, 255, 255, 255, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 255, 255, 255, 255, 255, 255, 255, 255, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 255, 255,
+    255, 255, 255, 255, 255, 255, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 255, 255, 255, 255, 255, 255, 255,
+    255, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
+    160, 160, 160, 160, 160, 160, 160, 193, 255, 255, 255, 255, 255, 255, 255, 0,   0,   0,
 };
 
 #define SB_ENTRY_A 0x37
@@ -6765,4 +5804,3 @@ void init_emulated(void) {
   io_peek(0xc000);
   io_poke(0xc010, 0);
 }
-
