@@ -600,9 +600,15 @@ end — usually the next code address — before writing down its shape.
 
 ### Getting the machine out of the code
 
-Step 6's real content. The machine shows up in four disguises — storage at
-addresses, status flags, registers, and lookup tables at addresses — and each
-one has a method that works and an approach that feels right and is wrong.
+Step 6's real content. The machine shows up in five disguises — storage at
+addresses, status flags, registers, lookup tables at addresses, and 16-bit
+values split across two bytes — and each one has a method that works and an
+approach that feels right and is wrong.
+
+Snake Byte ended with none of the five: no register, no flag, no emulated
+stack, no address standing in for a variable, and no split pointer. That is
+worth stating because the estimate along the way was always "a handful of these
+are irreducible", and it was wrong every time.
 
 **`[process]` The order of a storage move is what makes the gate evidence.**
 Move the storage with the memory probe *untouched* first, and require the gate
@@ -678,13 +684,42 @@ liveness is true of the *generated* program. When the caller that did the
 reading becomes hand-written C, the claim stops holding and the comment
 asserting it stays. Three of Snake Byte's did.
 
-**`[process]` The floor is where the machine's own dispatch is the interface.**
-Not every register reference goes. Snake Byte's last fifteen are one thing: the
-game repoints the ROM's output vector at its own renderer, so the hook is
-entered through `JMP ($36)` and *cannot* take arguments — it reads its slot out
-of X and restores the caller's X and Y on the way out. Removing those would mean
-changing what the machine's dispatch is, not what the file says. Recognising the
-floor is part of finishing; chipping at it is not.
+**`[process]` There was no floor, and predicting one was the mistake.** This
+entry used to say the opposite: that Snake Byte's last fifteen register
+references were irreducible, because the game repoints the ROM's output vector
+at its own renderer, so the hook is entered through `JMP ($36)` and cannot take
+arguments. Every clause of that is true and the conclusion was still wrong.
+
+Y was saved and restored by two routines and read for a value by none — a
+promise with nobody to keep it to. X was the slot the *caller* had just put
+there: the ROM's COUT1 never touches X, and the hook saves and restores it
+without looking, so "whatever COUT left behind" is whatever you left behind,
+and every caller already had it as a parameter. The stack went the same way:
+a 6502 pushes because JSR clobbers registers, and a C call cannot touch a
+caller's local, so all 21 PHA/PLA pairs were protecting values from nothing.
+
+The general point is not "there is never a floor" — it is that **a floor is a
+claim and gets the same treatment as any other**. Two wrong liveness claims in
+this file were produced by reading a routine's body; this was produced by
+reading a *dispatch mechanism* and stopping at the first true sentence about
+it. Keep going until the answer is a measurement or a closed argument.
+
+**`[6502]` A byte pair is a 16-bit value unless it is an arithmetic one.** The
+tell that a pair should merge is a helper recombining it at every use. The tell
+that it should *not* is arithmetic that carries between the halves explicitly:
+Snake Byte's BCD counters stay as byte arrays because the game adds them a byte
+at a time with its own carry, and folding them into one integer would invent a
+meaning the game never uses. Merge the pointers, keep the counters, and where a
+routine writes one half of a merged value, spell it as a mask or a shift --
+that distinction was hidden by the split, not expressed by it.
+
+**`[process]` The last flag out is the one with two arms.** Deleting an arm
+because a run never took it is the unexercised-path trap. Deleting it because
+the regions that set the flag are *closed* is sound: Snake Byte's six SED/CLD
+regions were checked mechanically and contain only helpers that take their
+decimal-ness as an argument, and no call into the code with the other arm. Then
+the arm is unreachable by construction and the measurement -- 3,942 tests, all
+binary -- is corroboration rather than evidence.
 
 **`[process]` Comments outlive the code they describe, especially after a
 merge.** A `\file` block here still explained an adapter split — marshalling,
@@ -838,7 +873,7 @@ rather than here because their order turned out to be game-independent but their
    independently.
 
    That was right as far as it went, and it understated the step. What it
-   describes is the *first* disguise the machine wears. There are four, and
+   describes is the *first* disguise the machine wears. There are five, and
    they come off in this order because each one makes the next legible:
 
    1. **Names**, while the trace oracle is still at full strength. A rename's
@@ -851,11 +886,20 @@ rather than here because their order turned out to be game-independent but their
       poisoning rather than deleting.
    4. **Lookup tables** — arrays, once you have *derived* each extent from the
       next code address rather than from the data you can see.
+   5. **Byte pairs** — a 16-bit value split across two 8-bit halves because
+      that is all a 6502 can address. The tell is a helper that recombines
+      them at every use. Merge it, and where a routine really does write one
+      half, say so with a mask or a shift: the split was hiding that
+      distinction, not expressing it.
 
    Expect roughly half of what you find in steps 2 and 3 to be dead: stores that
    existed only because an oracle hashed the address, or because the original
-   left a register set and nobody has checked since. Expect a floor, and expect
-   it to be the machine's own dispatch rather than a tail of stragglers.
+   left a register set and nobody has checked since.
+
+   **Do not budget for a floor.** Snake Byte's was predicted at 15 register
+   references and turned out to be 0, including the emulated stack. Each
+   "irreducible" case had a true-sounding reason attached to it, which is
+   exactly what made it survive three rounds of auditing.
 
 ---
 
