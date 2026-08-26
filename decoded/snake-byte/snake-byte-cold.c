@@ -343,22 +343,21 @@ static void emulated_entry_point(void) {
 /// \p carry_out, the bit shifted out of the second ASL -- which VTABZ adds
 /// straight back in.
 uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
-  /*$FBC1*/ TICK(20);
+  // 40 cycles, 41 for an odd line -- the text-page twin of GBASCALC, with the
+  // same one-cycle branch. Measured at all 145 calls.
+  /*$FBC1*/ TICK(40);
   // LSR: the carry is the line's low bit, and it is what decides the ADC below.
   const uint8_t odd = line & 0x01;
   const uint8_t page = (uint8_t)(((line >> 1) & 0x03) | 0x04);
   uint8_t band = line & 0x18;
 
-  if (!odd) {
-    /*$FBCC*/ TICK(1);
-  } else {
-    /*$FBCE*/ TICK(2);
+  if (odd) {
+    /*$FBCE*/ TICK(1);
     // ADC #$7F with the carry the LSR just set, i.e. +$80: the second half of
     // the band.
     band = (uint8_t)((uint16_t)(band + 0x007f) + odd);
   }
 
-  /*$FBD0*/ TICK(19);
   // ASL twice, then OR the original back in -- the original does this in BASL
   // itself, which is why the band is stored there first. The second shift's
   // carry out is what VTABZ adds straight back in, which is why it is returned
@@ -379,17 +378,17 @@ uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
 /// the +1 that steps to the next line -- the same trick HOME plays with
 /// CLREOLZ's. The carry going *in* is BASCALC's, from its second ASL.
 bool rom_vtabz(uint8_t line) {
-  /*$FC24*/ TICK(6);
+  // 18 cycles of its own, flat: no branch, and BASCALC charges separately.
+  /*$FC24*/ TICK(18);
   bool carry;
   const uint8_t base = rom_bascalc(line, &carry);
 
-  /*$FC27*/ TICK(6);
   const uint16_t r = ((uint16_t)base + s_wndlft) + carry;
   // VTABZ adds WNDLFT to BASL and leaves BASH exactly as BASCALC set it, so
   // this really is a write of one half.
   s_bas = (uint16_t)((s_bas & 0xff00) | (uint8_t)r);
 
-  /*$FC2B*/ TICK(6);
+  /*$FC2B*/
   return ((r >> 8) & 0x01) != 0;
 }
 
@@ -1130,22 +1129,22 @@ static void rom_cout1(uint8_t ch);
 /// build a text address, and this one shifts by two and ORs, which lands on
 /// the lo-res page instead.
 static void rom_gbascalc(uint8_t row) {
-  /*$F847*/ TICK(20);
+  // 40 cycles, or 41 when the row is odd. Measured at all 9,913 calls, which
+  // split 4,911 even to 5,002 odd, and the two values are the only ones.
+  // The odd path costs the one extra because $F852's BCC is not taken and the
+  // ADC runs instead; charging the base here and the difference on the branch
+  // keeps that exact and lets the else-arm, which existed only to hold a
+  // charge, go away.
+  /*$F847*/ TICK(40);
   const uint8_t odd = (uint8_t)(row & 0x01);
   /*$F84D*/ const uint8_t page = (uint8_t)(((row >> 0x01) & 0x03) | 0x04);
   /*$F850*/ uint8_t band = (uint8_t)(row & 0x18);
 
   if (odd) {
-    /*$F854*/ TICK(2);
+    /*$F854*/ TICK(1);
     band = (uint8_t)((band + 0x7f) + odd);
-  } else {
-    // $F852 BCC -- the branch itself, taken here (not modelled by the block
-    // above's own cost, which is the not-taken total; see the design doc on
-    // edge costs).
-    /*$F852*/ TICK(1);
   }
 
-  /*$F856*/ TICK(19);
   /*$F85C*/ s_gbas = (uint16_t)((uint8_t)((uint8_t)(band << 0x02) | band) | (page << 8));
 
   /*$F85E*/
@@ -1177,7 +1176,10 @@ static void rom_plot1(uint8_t col) {
 /// which is $F0 with the carry set and $EF without; only the low bit of the
 /// row can make the difference, so the sum is one of the two masks.
 void rom_plot(uint8_t row, uint8_t col) {
-  /*$F800*/ TICK(11);
+  // 23 cycles of its own, 24 for an odd row -- $F808's BCC again, and the
+  // same treatment as GBASCALC's. Measured at all 1,394 calls. This excludes
+  // the two routines it calls, which charge for themselves.
+  /*$F800*/ TICK(23);
   const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
   // PHP/PLP across GBASCALC, to carry the LSR's bit past a call that clobbers
@@ -1185,19 +1187,14 @@ void rom_plot(uint8_t row, uint8_t col) {
   // trip, so it is simply the value.
   /*$F802*/ rom_gbascalc(half);
 
-  /*$F805*/ TICK(8);
   const uint8_t carry = (uint8_t)(row & 0x01);
   /*$F806*/ uint8_t mask = 0x0f;
 
   if (upper) {
-    /*$F80A*/ TICK(2);
+    /*$F80A*/ TICK(1);
     mask = (uint8_t)(((uint16_t)mask + 0x00e0) + carry);
-  } else {
-    // $F808 BCC -- the branch itself, taken here.
-    /*$F808*/ TICK(1);
   }
 
-  /*$F80C*/ TICK(3);
   s_mask = mask;
   rom_plot1(col); // JMP -- a tail call.
 }
@@ -1285,27 +1282,25 @@ uint8_t rom_scrn(uint8_t row, uint8_t col) {
   // The row's low bit says which half of the byte holds this cell, and the
   // ROM keeps it across GBASCALC on the stack -- as the whole status
   // register, because LSR put it in the carry and PHP is one byte.
-  /*$F871*/ TICK(11);
+  // 31 cycles of its own, 38 for an odd row: the four LSRs that shift the
+  // upper nibble down cost seven more than the BCC that skips them. Measured
+  // at all 8,519 calls, and those are the only two values.
+  /*$F871*/ TICK(31);
   const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
 
   /*$F873*/ rom_gbascalc(half);
 
-  /*$F876*/ TICK(11);
   uint8_t cell = peek((uint16_t)(s_gbas + col));
 
   // The original brackets GBASCALC with PHP/PLP to keep the LSR's carry. It is
   // read by nothing here.
 
   if (upper) {
-    /*$F87B*/ TICK(8);
+    /*$F87B*/ TICK(7);
     cell = (uint8_t)(cell >> 0x04);
-  } else {
-    // $F879 BCC -- the branch itself, taken here.
-    /*$F879*/ TICK(1);
   }
 
-  /*$F87F*/ TICK(8);
   /*$F881*/
   return cell & 0x0f;
 }
@@ -4078,16 +4073,19 @@ void game_mark_head_native(uint8_t row, uint8_t col) {
 /// it, merge shape 1 over the top so the head reads as a head rather than
 /// replacing the body cell underneath. $0305 is consumed here.
 void game_draw_head_native(uint8_t ink, Cell c) {
-  TICK(6);
+  // 25 cycles of its own, 41 when $0305 says the head moved and the merge
+  // arm runs. Measured over 223 calls -- 219 of them the cheap way, since the
+  // head moves once per snake step and the playfield is redrawn far more
+  // often than that. Both numbers exclude the three routines called here.
+  TICK(25);
   game_plot_shape_native(ink, c);
 
-  TICK(6);
   if (s_head_moved) {
-    TICK(11);
+    TICK(16);
     s_shape = 0x01;
     { // was game_plot_shape_merge()
 
-      /*$6B93*/ TICK(6);
+      /*$6B93*/
       game_load_shape_masks(s_shape);
 
 
@@ -4096,11 +4094,8 @@ void game_draw_head_native(uint8_t ink, Cell c) {
       game_merge_cell_native(ink, c);
 
     }
-  } else {
-    TICK(1);
   }
 
-  TICK(12);
   s_head_moved = false;
   // Only V and D are live out, and neither is touched here.
 }
