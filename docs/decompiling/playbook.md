@@ -7,11 +7,15 @@ transfers.
 Written in skill shape (when to use → procedure → red flags) so it can be
 promoted to a `.claude/skills/` skill once it has survived a second game.
 
-**Maturity (Snake Byte, 2026-08-02/07).** Steps 1–3 have been executed and
-step 4a with them; their findings below are measured, not predicted. Step 4b —
-retargeting the entry — and steps 5–6 remain untested: treat those as hypothesis
-and correct them here as reality intervenes. The per-step status is on each step
-in the Procedure section, which is the copy to keep current.
+**Maturity (Snake Byte, 2026-08-02 to 08-25).** Every step has now been
+executed once, including step 6, which was the last to go and took the longest.
+The findings below are measured rather than predicted — but *once*, on one
+binary, so they are a strong prior and not a law. The per-step status is on each
+step in the Procedure section, which is the copy to keep current.
+
+The one thing a second game should expect to differ on is **cost**. The order
+of the work turned out to be game-independent; how much oracle each step spends
+did not.
 
 **Scope tags:** `[6502]` true of 6502 / Apple II work generally ·
 `[apple2tc]` true of this decompiler · `[game]` observed once, may not generalize
@@ -594,6 +598,100 @@ end — usually the next code address — before writing down its shape.
 
 ---
 
+### Getting the machine out of the code
+
+Step 6's real content. The machine shows up in four disguises — storage at
+addresses, status flags, registers, and lookup tables at addresses — and each
+one has a method that works and an approach that feels right and is wrong.
+
+**`[process]` The order of a storage move is what makes the gate evidence.**
+Move the storage with the memory probe *untouched* first, and require the gate
+to read *trace PASS, screen PASS, memory FAIL*. That failure is the only proof
+the oracle was watching those bytes. Narrow the probe afterwards, then mutate
+each new edge address and watch memory alone catch it. Narrowing first is
+indistinguishable from narrowing over bytes nothing writes, and you will never
+find out which you did. Snake Byte: 34 edges across four slices, all 34 caught.
+
+**`[process]` Classify every site; do not inspect them.** For a flag or a
+register, split all its occurrences into reads and writes, then ask per name
+which reads a write can reach. This is a script, and it is the difference
+between an answer and an impression. On Snake Byte it retired five of seven
+status flags and 290 of 307 register references — and the two impressions that
+survived contact were both wrong.
+
+**`[tool]` A liveness claim must come from the fixpoint, not from reading.** To
+find what a routine reads on entry, run read-before-write to a fixpoint *over
+the call graph*. Two claims here were made by reading a body, and both were
+wrong the same way — the answer was in a callee. `rom_cout` reads X and Y only
+through the vector it dispatches through. The carry looked live across a call
+and was written by the callee every time. Knowing the failure mode after the
+first did not prevent the second. It is a dozen lines of script.
+
+**`[process]` Poison, do not delete, to test whether a store is dead.** Assign a
+*wrong* value and run the gate. Deleting leaves the previous value in place,
+which can coincidentally be the one a reader wanted; poisoning cannot. 42
+register writes and 18 flag writes were cleared this way in batches, which also
+makes it cheap: one build and one gate run per batch, not per site.
+
+**`[process]` A store becomes dead the moment its storage leaves RAM, and no
+warning fires.** These read as faithfulness and are scaffolding: the routine
+already computed the value in a local and committed it through the struct it was
+handed, and the store existed only because a memory oracle hashed the address.
+Snake Byte had seven. `-Wall` says nothing about a dead store to an emulated-RAM
+array, and — separately — nothing about a *file-scope static* that is written
+and never read. One was written at fourteen sites and read at none for an entire
+build with every warning and every check green. `-Wunused-but-set-variable`
+covers locals only.
+
+**`[process]` Thread a global and delete its writes in two commits.** The
+intermediate state — written, never read — is exactly what no warning catches,
+so gate it on its own. Otherwise a mistake in either half gets attributed to the
+other.
+
+**`[6502]` Inheritance is sometimes a value the caller can state, and sometimes
+not.** Two globals can look identical on paper — both inherited across calls,
+both documented as globals for that reason — and be different things. Check each
+reader: if every writer's value is readable at the call site, it is an argument
+and the inheritance becomes something the code says out loud. If a caller
+genuinely means "whatever was last used", it is a global and passing one would
+invent a value the original does not have. Snake Byte's ink threaded; its shape
+did not.
+
+**`[process]` A value the code cannot state can still be measured.** Delay loops
+that count down from an uninitialised register are the common case. Do not
+delete the dependency and do not preserve it blindly: assert what you think the
+value is over full runs of every scenario, then pass it as an argument with a
+comment saying it was measured rather than proved. Two of Snake Byte's were
+zero, every time, and one of them was zero because the loop before it had just
+wrapped Y.
+
+**`[6502]` A flag that survives an audit may still be three edges of one
+idiom.** Snake Byte's carry survived one audit as "genuinely crosses a call",
+then turned out to be exactly this: a routine ending on a `CMP` whose caller
+reaches an `ADC` with no `CLC` in front of it, so the compare's carry *is* the
++1. Those are return values. A global flag was hiding a real data dependency
+behind something that looked like residue, which is why the wrong conclusion was
+easy to reach and hard to notice.
+
+**`[apple2tc]` A live-out claim sourced to the decompiler expires.** `--ir`
+liveness is true of the *generated* program. When the caller that did the
+reading becomes hand-written C, the claim stops holding and the comment
+asserting it stays. Three of Snake Byte's did.
+
+**`[process]` The floor is where the machine's own dispatch is the interface.**
+Not every register reference goes. Snake Byte's last fifteen are one thing: the
+game repoints the ROM's output vector at its own renderer, so the hook is
+entered through `JMP ($36)` and *cannot* take arguments — it reads its slot out
+of X and restores the caller's X and Y on the way out. Removing those would mean
+changing what the machine's dispatch is, not what the file says. Recognising the
+floor is part of finishing; chipping at it is not.
+
+**`[process]` Comments outlive the code they describe, especially after a
+merge.** A `\file` block here still explained an adapter split — marshalling,
+accessors, "variables live at their original addresses" — directly above the
+code that had eliminated all three. Sweep the header whenever a file absorbs
+another one, and re-read every comment naming a variable you just deleted.
+
 ### What "converted" is worth, and how to report it
 
 *(added 2026-08-24, after taking one game through the whole cleanup)*
@@ -684,9 +782,10 @@ Step 4 is deliberately two steps, and only the first has been run. That split is
 the whole point of it — see the step itself.
 
 The cleanup that follows conversion has its own six steps, and one game has now
-been through all of them; they live in `HANDOFF.md` rather than here because
-their order turned out to be game-independent but their *costs* were not. What
-transfers is in "What 'converted' is worth" above.
+been through all of them and out the other side; they live in `HANDOFF.md`
+rather than here because their order turned out to be game-independent but their
+*costs* were not. What transfers is in "Getting the machine out of the code" and
+"What 'converted' is worth" above.
 
 1. **Scope.** *(executed)* Count blocks by address range. Identify the
    ROM/library share and the distinct entry points crossing into it. Decide the
@@ -733,9 +832,30 @@ transfers is in "What 'converted' is worth" above.
    hand, rewriting idiom-based ones. Reloop each function — dominator tree, back
    edges for natural loops, then iterative region matching (sequence / if-then /
    if-then-else / while / do-while). Keep address-derived names throughout.
-6. **Vertical reverse engineering.** *(untested)* One subsystem at a time:
-   promote zero page to locals and parameters, extract structs from data tables,
-   apply meaningful names. Verify and commit each slice independently.
+6. **Vertical reverse engineering.** *(executed 2026-08-24/25)* One subsystem
+   at a time: promote zero page to locals and parameters, extract structs from
+   data tables, apply meaningful names. Verify and commit each slice
+   independently.
+
+   That was right as far as it went, and it understated the step. What it
+   describes is the *first* disguise the machine wears. There are four, and
+   they come off in this order because each one makes the next legible:
+
+   1. **Names**, while the trace oracle is still at full strength. A rename's
+      oracle is a compile, not the gate: build at `-O2` before and after and
+      diff the disassembly.
+   2. **Storage** — variables out of emulated RAM, in slices, each spending one
+      narrowing of the memory oracle. This is the step with a required order;
+      see "Getting the machine out of the code".
+   3. **Status flags and registers** — classified, not inspected, and tested by
+      poisoning rather than deleting.
+   4. **Lookup tables** — arrays, once you have *derived* each extent from the
+      next code address rather than from the data you can see.
+
+   Expect roughly half of what you find in steps 2 and 3 to be dead: stores that
+   existed only because an oracle hashed the address, or because the original
+   left a register set and nobody has checked since. Expect a floor, and expect
+   it to be the machine's own dispatch rather than a tail of stragglers.
 
 ---
 

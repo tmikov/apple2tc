@@ -4,28 +4,39 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
-**Start here (2026-08-24, later the same day).** The six cleanup steps were
-done, and so is the gap that entry used to describe: **the game's own state is
-out of emulated RAM.** 314 `ram_peek`/`ram_poke` calls are down to 16, and all
-16 read read-only tables in the loaded image. The plotting state is threaded
-and the status flags are audited: five of the seven are gone entirely, and 222
-references are down to 100, all of them `c` and `d`.
+**Start here (2026-08-25).** **The machine is out of the game's code.** That
+was the whole of step 6 and it is done — not the six cleanup steps, which
+finished on 2026-08-24, but the thing those steps turned out to be a prologue
+to. In four passes:
 
-Read **"The game's state, and the flags"** under "What is left" before doing
-anything similar. It is the method rather than the result: what order a storage
-move has to be done in for the gate to be evidence, what turns out to be a dead
-store the moment its byte leaves RAM, and which flag claims survived being
-checked. Two of them did not.
+| | was | now | what stays |
+| --- | --- | --- | --- |
+| `ram_peek`/`ram_poke` | 314 | **3** | the entry-state loader |
+| `s_status_*` | 222 | **62** | `c` on three edges, `d` for BCD |
+| `s_a`/`s_x`/`s_y` | 307 | **15** | COUT's X/Y promise, the entry load |
+| `branchTarget` | 122 | **0** | — |
 
-**What the artifact still is not.** Step 6, and the loose ends -- see items 2-4.
-The registers are done: 307 references are 15, and every one of them is the
-machine's own dispatch being the interface.
+Read **"Getting the machine out of the code"** in the playbook before doing any
+of this to another binary. It is the method rather than the result, and the
+method matters more than usual here because three of the four passes had an
+approach that felt right and was wrong: narrowing a probe in the same step as
+the move it accommodates, deriving liveness by reading a routine's body, and
+sizing a table to the data you can see.
 
-The gate is weaker than it once was, and this is the thing most likely to
-mislead a green run: the block-head trace compares **six** addresses, not 113,
-so control flow inside the game is not compared at all. The screen and memory
-at 6,808 and 9,524 samples are the gate, and both were narrowed further by the
-state migration — see the hole list at the top of `ram-cold.probe`.
+**What the artifact still is not.** Step 6's `CYCLES` question — which is not
+what the old plan said it was, see item 3 — and the loose ends. The game's own
+C is done.
+
+**Before trusting a green run.** The block-head trace compares **six**
+addresses, not 113, so control flow inside the game is not compared at all. The
+screen and memory at 6,808 and 9,524 samples are the gate, and both have been
+narrowed repeatedly by the state migration — the hole list at the top of
+`ram-cold.probe` says what each hole cost and why. And **half of `a2rom` is
+converted by reading rather than by running**: nothing scrolls and nothing
+emits Ctrl-G, so `rom_wait`, `rom_fc68`'s scroll and `rom_coutz`'s bell and
+backspace arms are green because the gate never enters them. They are on
+probe-acceptance.sh's unverified list, which is the thing to check before
+believing a pass.
 
 **Last commit:** run `git log -1`; this line has been stale before. The tree is
 clean and nothing is pushed.
@@ -544,15 +555,17 @@ phantom differences.
 
 ### Cleaning up the C
 
-**Status, 2026-08-24.** Steps 0, 1, 2, 3 and 5 are done. Step 4 is half done.
-Step 6 is characterised but deliberately not started — see its entry for why it
-is two steps and why neither is what unblocks the adapters.
+**Status, 2026-08-25.** Steps 0 through 5 are done, and so is everything the
+plan's step 6 was standing in front of — see "Getting the machine out of the
+code" below. What is left of step 6 itself is the `CYCLES` question, which is
+not what the plan said it was: item 3.
 
-**Read this count honestly.** "Zero `ram_peek(0x...)`" was reported at one
-point as if the emulated machine had gone. It had not: that number counts *hex
-literals only*. `ram_peek(kApplesLeft)` is the same emulated-RAM access with a
-name on it, and there are still 314 of them. The steps below are done as
-written; the artifact is not finished.
+**Read a count here honestly.** "Zero `ram_peek(0x...)`" was once reported as
+if the emulated machine had gone. It had not — that number counted *hex
+literals only*, and `ram_peek(kApplesLeft)` is the same access with a name on
+it. The column below is every form, which is why it started at 314 rather than
+at the 0 that was being celebrated. Pick the measure that cannot be satisfied
+by a rename.
 
 ```
                                   now    was    note
@@ -572,10 +585,10 @@ adapters left                         0     42
 
 What remains, in order of how well-defined it is:
 
-0. ~~**What the plan's six steps did not cover.**~~ **Done 2026-08-24**, in six
-   commits. The game's variables are C variables, the plotting state is
-   threaded, and the status flags are audited. See "The game's state, and the
-   flags" below for what was actually established, which is more useful than
+0. ~~**What the plan's six steps did not cover.**~~ **Done 2026-08-24/25.** The
+   game's variables are C variables, the plotting state is threaded, the status
+   flags and registers are audited, and the lookup tables are arrays. See
+   "Getting the machine out of the code" below, which is the method rather than
    the fact that it is finished.
 
 1. ~~**Step 4's adapters.**~~ **Done 2026-08-24 — there are none left.** The
@@ -595,13 +608,38 @@ What remains, in order of how well-defined it is:
    stale. As of 2026-08-24 the file has 839 `TICK` (an addressless charge), 16
    `GAME_CYCLES` (a charge on an edge, deliberately not probing) and 11
    probing sites, of which the cold trace installs 6.
-4. **Loose ends:** 451 unknown nonzero bytes in `coverage.txt`, probe phase 3,
-   and `robotron`/`bolo`, which have never been regenerated against any of this.
+4. **Loose ends:** **350** unknown nonzero bytes in `coverage.txt` (was 451;
+   three table extents were derived and declared on 2026-08-25, and
+   `$616B-$61FF` resolved into 140 bytes of table plus 9 bytes of unreached
+   *code*), probe phase 3, and `robotron`/`bolo`, which have never been
+   regenerated against any of this.
 
 
-### The registers
+## Getting the machine out of the code
 
-Done 2026-08-24, same method as the flags: classify, do not inspect.
+The four sections below are what step 6 actually turned out to be, in the order
+they were done: **storage** out of emulated RAM, then the **status flags**, then
+the **registers**, then the **lookup tables**. Each made the next legible, which
+is why the order is worth keeping.
+
+They are kept here at length because they are this game's record. **The
+transferable copy is the playbook's "Getting the machine out of the code"** —
+read that one first if the next binary is not Snake Byte; this is the evidence
+behind it.
+
+Three of the four had an approach that felt right and was wrong, and each
+section says which:
+
+| pass | the wrong instinct |
+| --- | --- |
+| storage | narrow the probe in the same step as the move it accommodates |
+| flags | quote "in `rom_*`, registers are the algorithm" instead of checking it |
+| registers | derive liveness by reading a routine's body |
+| tables | size a table to the data you can see, or to what a run reaches |
+
+### The registers, and the tables
+
+Done 2026-08-24 and 08-25, same method as the flags: classify, do not inspect.
 
 **Compute which registers a routine reads on entry; do not read it off.** A
 fixpoint over read-before-write, following calls, is twelve lines of Python and
@@ -701,8 +739,8 @@ unverified list. The gate is green on them because it never enters them.
 
 ### The game's state, and the flags
 
-Done 2026-08-24. The interesting part is the method and what it turned up, not
-the counts.
+Done 2026-08-24, and first of the four. The interesting part is the method and
+what it turned up, not the counts.
 
 **Storage moves are done in the order that produces evidence.** Move the
 storage with `ram-cold.probe` untouched and read the gate: it must say *trace
