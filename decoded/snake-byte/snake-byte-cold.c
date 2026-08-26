@@ -3227,44 +3227,55 @@ void game_clear_hgr_native(void) {
 /// \p to_col. The original walked $02/$03 and left $02 on the endpoint, which
 /// its adapter returned in A; that is the return value here.
 void game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
-  /*$6148*/ TICK(6);
+  // Data-dependent: the loop runs until the moving coordinate reaches the
+  // end, so the cost is not a constant and the per-pass charge stays. What
+  // collapses is the straight-line part -- the prologue and the two-charge
+  // epilogue, which always run exactly once -- and the pair that straddles
+  // the draw, since a charge stands for everything from itself to the next
+  // one and the drawer accounts for its own.
+  // Measured: 22n + 5 cycles of its own for an n-cell run, and both scenarios
+  // only ever ask for n = 5 or n = 40 (115 and 885).
+  /*$6148*/ TICK(13);
   // Loads the four scanline masks the cell drawers read. The mask it
   // returns was the original\'s result in A and nothing reads it.
   game_load_shape_masks(s_shape);
   for (;;) {
-    TICK(6);
+    TICK(14);
     game_draw_cell_native(ink, c);
 
-    TICK(8);
     if (c.col == to_col)
       break;
 
     TICK(8);
     c.col = (uint8_t)(c.col + 1);
   }
-  TICK(1);
-  TICK(6);
 }
 
 /// $615A -- the same down a column: rows $03 through $08 in column $02.
 void game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
-  /*$615A*/ TICK(6);
+  // Data-dependent: the loop runs until the moving coordinate reaches the
+  // end, so the cost is not a constant and the per-pass charge stays. What
+  // collapses is the straight-line part -- the prologue and the two-charge
+  // epilogue, which always run exactly once -- and the pair that straddles
+  // the draw, since a charge stands for everything from itself to the next
+  // one and the drawer accounts for its own.
+  // 22n + 5, the same shape as $6148. This one is the genuinely variable of
+  // the pair: 25 distinct costs over 881 calls, because the display lists
+  // draw vertical runs of every length.
+  /*$615A*/ TICK(13);
   // Loads the four scanline masks the cell drawers read. The mask it
   // returns was the original\'s result in A and nothing reads it.
   game_load_shape_masks(s_shape);
   for (;;) {
-    TICK(6);
+    TICK(14);
     game_draw_cell_native(ink, c);
 
-    TICK(8);
     if (c.row == to_row)
       break;
 
     TICK(8);
     c.row = (uint8_t)(c.row + 1);
   }
-  TICK(1);
-  TICK(6);
 }
 
 /// $7000 -- the lo-res half of a vertical run. Unlike the hi-res one it puts
@@ -3274,20 +3285,26 @@ void game_lores_vline_native(Cell c, uint8_t to_row) {
   // The original saves the starting row on the stack, because the hi-res half
   // of a display list's 'V' runs the same span next and the loop below walks
   // c.row to the end of it. Every caller states both ends now.
+  // Data-dependent: the loop runs until the moving coordinate reaches the
+  // end, so the cost is not a constant and the per-pass charge stays. What
+  // collapses is the straight-line part -- the prologue and the two-charge
+  // epilogue, which always run exactly once -- and the pair that straddles
+  // the draw, since a charge stands for everything from itself to the next
+  // one and the drawer accounts for its own.
+  // 28n + 6, and both scenarios only ever run it full height: 1,126 at all
+  // eight calls, which is n = 40.
+  TICK(14);
 
   for (;;) {
-    TICK(12);
+    TICK(20);
     lores_plot(c.row, c.col);
 
-    TICK(8);
     if (c.row == to_row)
       break;
 
     TICK(8);
     c.row = (uint8_t)(c.row + 1);
   }
-  TICK(1);
-  TICK(13);
 }
 
 /* ========================================================================== */
