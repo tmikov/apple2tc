@@ -851,14 +851,16 @@ cold_compare hires play-hires.pkeys play-hires-cold.pkeys
 # sequence *is* the waveform -- which makes it an exact check on any change to
 # the game's timing, and the only oracle the sound has ever had.
 #
-# Note what it does *not* cover, and why that is probably a bug rather than a
-# property: every access below is to port $20, the cassette output, which is
-# where the game sends clicks while it is demoing itself. Both cold scenarios
-# stay in demo mode for all 1,300 frames -- measured -- even though
-# play-cold.pkeys presses '0' for difficulty at coordinate 1322 and is meant to
-# play. The same one cause would explain $664A running zero times here. See
-# HANDOFF.md, item 3 under "What remains", before trusting these baselines as a
-# statement about the sound.
+# --probe is not optional here, and leaving it off is a trap that cost most of
+# an afternoon. The replay coordinate is a counter the *probe script* defines,
+# so --key-file without --probe cannot honour a .pkeys stamp: the keys arrive
+# at the wrong moments, the game never leaves its self-playing demo, and every
+# measurement taken that way is wrong while looking entirely plausible.
+#
+# play sends clicks to both $30 (the speaker) and $20 (the cassette output,
+# which is where they go while the game demos itself). hires is all $20,
+# because it presses C at the attract screen and edits keys rather than
+# playing.
 for sc in play:toggle-play.txt hires:toggle-hires.txt; do
   name=${sc%%:*}; want=${sc#*:}
   case $name in
@@ -867,7 +869,8 @@ for sc in play:toggle-play.txt hires:toggle-hires.txt; do
   esac
   A2_TOGGLE_DUMP="$regen/toggle-$name.txt" \
     "$bin/decoded/snake-byte/snake-byte-cold-run" --frames=1300 --no-sound \
-    --key-file="$here/$keys" > /dev/null 2>&1
+    --key-file="$here/$keys" --probe="$here/trace-cold.probe" \
+    --probe-out=/dev/null > /dev/null 2>&1
   if ! diff -q "$here/$want" "$regen/toggle-$name.txt" > /dev/null; then
     echo "FAIL [toggle/$name]: the speaker timeline changed" >&2
     diff "$here/$want" "$regen/toggle-$name.txt" | head -5 >&2

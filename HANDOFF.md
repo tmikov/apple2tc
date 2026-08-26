@@ -269,13 +269,17 @@ short version.
 | screen | 6,808 samples | 9,524 |
 | memory (`ram-cold.probe`) | 6,808 | 9,524 |
 
-**It runs it zero times again, and nobody noticed** (measured 2026-08-25).
-Across full runs of both cold scenarios `rom_cout` is entered 463 times and
-*every one* goes to `$FDF0`; `game_install_cout_vector` is never called, so the
-hi-res hook, `game_show_key_native`, `edit_key_blank` and `cout_left_x` all run
-**0** times. Whatever `hires` covers now, it is not the hi-res text path. This
-needs chasing: the paragraph below describes what the scenario was added to do,
-and it is no longer doing it.
+**A retracted claim, kept because the mistake is worth knowing.** On
+2026-08-25 this paragraph said `$664A` "runs zero times again, and nobody
+noticed", with counts to back it up. That was wrong. Re-measured with
+`--probe` present, the hi-res hook runs **exactly 205 times** and
+`game_install_cout_vector` once, as the paragraph below always said.
+
+The cause: `--key-file` without `--probe` cannot honour a `.pkeys` stamp,
+because the replay coordinate is a counter the *probe script* defines. Drop the
+probe and the keys land at the wrong moments, the game never leaves its
+self-playing demo, and every number you take is wrong while looking entirely
+plausible. **Any ad-hoc run against a `.pkeys` file needs `--probe` too.**
 
 `hires` was added 2026-08-23 and is not optional decoration: without it the
 cold build ran `game_cout_hook_native` **zero** times under the gate. Its keys
@@ -689,44 +693,25 @@ What remains, in order of how well-defined it is:
    `toggle-hires.txt` are the baselines, and probe-acceptance.sh checks them.
    **The gate is 28 checks now, not 26.**
 
-   **START HERE INSTEAD OF TASK 2: the cold scenarios' keys look broken.**
-   Found 2026-08-26 while recording the toggle baselines, and it is probably
-   one defect behind three symptoms that have been read as three separate
-   gaps.
+   **The toggle baselines must be recorded with `--probe`, and this cost most
+   of an afternoon.** The replay coordinate is a counter the *probe script*
+   defines, so `--key-file` without `--probe` cannot honour a `.pkeys` stamp:
+   the keys land at the wrong moments, the game never leaves its self-playing
+   demo, and every measurement taken that way is wrong while looking entirely
+   plausible. Two "findings" of mine on 2026-08-26 were nothing but this, and
+   both are retracted:
 
-   `play-cold.pkeys` presses `'0'` for difficulty at coordinate 1322 -- it is
-   meant to answer the prompt and play. Measured directly, with the binary
-   checked rather than assumed: **`s_demo_mode` is set at the first pace loop
-   and never clears**, for all 1,300 frames, in both cold scenarios. The game
-   self-plays the whole run.
+   - "`$664A` runs 0 times against the claimed 205." It runs **exactly 205**.
+     The number in this file was right.
+   - "Neither scenario produces audible sound." `play` produces 114,800
+     audible passes and its toggle dump spans ports `$30` and `$20`.
 
-   Three things follow from that, and each was recorded elsewhere as its own
-   finding:
+   What is actually true: `play` plays, with sound. `hires` presses `C` at the
+   attract screen and edits keys instead of playing, so it stays in demo mode
+   and all its clicks go to `$20`, the cassette output. That is the scenario
+   behaving as designed, not a gap.
 
-   - `game_install_cout_vector` is never called, so `$664A` and the hi-res text
-     path run **0** times -- against the 205 per run this file claims under
-     "Snake Byte" above.
-   - Every one of the 1,612 speaker accesses goes to port `$20`, the cassette
-     output, because that is what the game does while demoing itself. So the
-     toggle baselines cover timing but never the audible branch.
-   - Several conversions -- the registers especially -- rest on reading rather
-     than running, because the code they touch is on that unreached path.
-
-   The suspect is `make-cold-keys.sh`'s re-stamping: drop the eleven
-   `CALL 14160` keys and subtract 181,207 from the rest. If that constant or
-   the drop is wrong, the keys land at the wrong instants or never arrive.
-
-   **First check, and it is cheap:** does the *booting* build leave demo mode
-   with `play.pkeys`? `play.pkeys` is the recorded original (23 keys) and
-   `play-cold.pkeys` the derivation (12). If the original plays and the
-   derivation does not, the derivation is wrong and the cold gate has been
-   covering less than it says for some time.
-
-   Do that before Task 2. If the keys are broken, every measurement taken
-   against the cold scenarios deserves re-reading -- including the ones in
-   this file.
-
-   Then pick up at Task 2. The calibration step is the one to get right: deleting
+   Pick up at Task 2. The calibration step is the one to get right: deleting
    the arithmetic ticks *shortens the intervals between toggles*, so each
    surviving advance takes the measured total of the region it stands for, not
    what its old `TICK` charged.
