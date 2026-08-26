@@ -2899,22 +2899,23 @@ static void spin(uint8_t inner, uint8_t middle, uint8_t outer) {
 /// Clear the lo-res occupancy map, one full-width row at a time from the
 /// bottom up. Ink 0 is black, so this erases.
 static void wipe_occupancy_map(void) {
-  TICK(13);
+  // 972 cycles of its own, and a constant: the loop runs from the literal
+  // $27 down to zero whatever the game is doing. Measured at every call in
+  // both scenarios. The 74,043 cycles the routine takes in total are almost
+  // all lores_hline's, which still charges for each of its 40 rows.
+  TICK(972);
   uint8_t at = 0x27;
   set_ink(0x00);
 
   for (;;) {
-    TICK(16);
     s_h2 = 0x27;
     lores_hline(at, 0x00);
 
-    TICK(7);
     const uint8_t row = (uint8_t)(at - 1);
     at = row;
     // BPL: row 0 is drawn, and the loop ends one step later.
     if (row & 0x80)
       break;
-    TICK(1);
   }
 }
 
@@ -2944,36 +2945,26 @@ static void open_wall_gaps(void) {
 /// \p ink is the six sides' colour, which the original inherits from
 /// game_draw_playfield rather than setting.
 static void draw_border(uint8_t ink) {
-  TICK(10);
+  // 148 cycles of its own -- nine straight-line charges, no loop and no
+  // branch, so it cannot be anything else. The 73,939 the routine takes in
+  // total belong to the seven line drawers it calls, which still charge.
+  TICK(148);
   lores_hline(0x00, 0x00); // $2C is still $27 from the wipe
 
-  TICK(10);
   lores_hline(0x27, 0x00);
 
   // The four sides, twice: once on the lo-res occupancy map and once in
   // hi-res. Four of these seven used to leave the endpoint out and inherit
   // $27 from the call above; it is written at each of them now.
-  TICK(21);
   lores_vline_at(0x00, 0x00, 0x27);
-
-  TICK(16);
   lores_vline_at(0x27, 0x00, 0x27);
-
-  TICK(19);
   plot_hline_at(ink, 0x00, 0x00, 0x27);
-
-  TICK(16);
   plot_hline_at(ink, 0x00, 0x27, 0x27);
-
-  TICK(14);
   plot_vline_at(ink, 0x00, 0x00, 0x27);
-
-  TICK(16);
   plot_vline_at(ink, 0x27, 0x00, 0x27);
 
   // Ink 3 over columns $12-$16 of the bottom row, on top of the border just
   // laid down: the gap the snake leaves through.
-  TICK(26);
   plot_hline_at(0x03, 0x12, 0x27, 0x16);
 }
 
@@ -3148,25 +3139,22 @@ static uint8_t dot_index(uint8_t ink, uint8_t scanline, uint8_t col) {
 
 /// $60E7 -- draw the loaded shape into one cell, replacing what was there.
 void game_draw_cell_native(uint8_t ink, Cell c) {
-  /*$60E7*/ TICK(0);
-  TICK(22);
+  // 343 cycles, constant: four scanlines every time, no data-dependent
+  // branch. Measured at all 18,739 calls across both scenarios, where it is
+  // this number without exception. The busiest routine in the game -- it is
+  // 3.1M of the 22M a play run spends -- so it is also the one where the
+  // charge-per-line bookkeeping cost the most reading.
+  /*$60E7*/ TICK(343);
   uint16_t dest = cell_row_base(c.row);
 
   for (unsigned line = 0; line < 4; ++line) {
-    TICK(16);
     // Built in $06 in two steps, and written out between them because it is
     // zero page and a probe may sample there.
-    TICK(62);
     const uint8_t idx = dot_index(ink, (uint8_t)line, c.col);
 
     poke(dest + c.col, (uint8_t)(kHgrPattern[idx] & s_shape_mask[line]));
     dest += 0x0400; // one scanline down, i.e. +4 on the high byte
-
-    if (line != 3)
-      TICK(1);
   }
-
-  TICK(6);
   // The carry is what the loop's CPX #4 leaves.
 }
 
@@ -3180,11 +3168,12 @@ void game_draw_cell_native(uint8_t ink, Cell c) {
 /// $60F7 fails the screen check, so whatever the author meant, it is load
 /// bearing.
 void game_merge_cell_native(uint8_t ink, Cell c) {
-  TICK(22);
+  // 371 cycles, constant, for the same reason as $60E7: four scanlines and
+  // no branch. Measured at every call.
+  TICK(371);
   uint16_t dest = cell_row_base(c.row);
 
   for (unsigned line = 0; line < 4; ++line) {
-    TICK(85);
     const uint8_t parity = (uint8_t)(line & 1);
     const uint8_t idx =
         (uint8_t)((uint8_t)(((uint8_t)((parity << 7) | (ink >> 1))) << 2) | (c.col & 3));
@@ -3193,12 +3182,7 @@ void game_merge_cell_native(uint8_t ink, Cell c) {
     poke(at,
          (uint8_t)(((kHgrPattern[idx] ^ 0x7f) & s_shape_mask[line]) | peek(at)));
     dest += 0x0400;
-
-    if (line != 3)
-      TICK(1);
   }
-
-  TICK(6);
 }
 
 /// $702B -- zero hi-res page 1, $2000 through $3FFF. The inner loop runs a
