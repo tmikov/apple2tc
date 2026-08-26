@@ -3123,10 +3123,37 @@ text page took four lines and removed the ambiguity immediately.
 that there was a playable build was made from headless evidence, with the
 caveat stated but not acted on. The caveat was the finding.
 
-### Still untested
+### Still untested **[done the same day -- see the next entry]**
 
 The wall-clock path has no test after this fix either. Catching it needs the
 pacing state moved out of the sokol translation unit into `a2host.c`, where a
 stub engine -- the interface is 13 functions -- could drive it and assert that a
 repaint with elapsed time runs a non-zero number of cycles. That is a real
 refactor and is deliberately not bundled with the fix.
+
+---
+
+## 2026-08-25 (after that) — The interval goes over by value
+
+**Status:** validated · **Scope:** apple2tc
+
+The refactor above, done. Worth its own entry for one reason.
+
+The freeze was possible because the elapsed interval was a **callback**: the
+host called back into the front end from inside `simulate_frame`, and by then
+the front end had advanced the marker the callback measured from. Moving one
+assignment fixed it. Passing the interval **by value** at the moment the front
+end knows it makes it unrepresentable -- `a2host_begin_repaint(elapsed_sec)`
+takes the number and returns how many frames are due, and nothing the caller
+does afterwards can change it.
+
+That is the general shape: **a value read at a distance, at a moment its owner
+does not control, is a bug waiting for someone to reorder two lines.** Prefer
+handing the value over. `a2host_set_elapsed_fn` is gone; the "does this front
+end have a display" question it was doubling as is now
+`a2host_set_wall_clock_pacing()`, said out loud.
+
+The test is `tests/pacing`: a stub engine (13 functions and `g_debug`) driving
+a2host with no window, which `a2host` being deliberately sokol-free is what
+makes possible. Thirteen checks. Mutation-tested -- setting the stored interval
+to zero, which is exactly what the original bug did, fails two of them.

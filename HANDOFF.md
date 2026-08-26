@@ -377,12 +377,18 @@ is not a hang and not a boot -- the entry snapshot was taken at `$3750` with
 BASIC's text page still on screen, so the cold build inherits it and then
 switches to hi-res. Confirmed working 2026-08-25.
 
-**The wall-clock path has no test.** Every check in this file is fixed-step by
-construction -- `--key-file`, `--hash-frames` and `--headless` all set
-`a2host_fixed_step()` -- because reproducibility is what each exists for. The
-mode a person uses is therefore covered by nothing, and it was totally broken
-for nine days before a bug report found it. Launch the game after touching
-anything in `lib/a2host`. See the 2026-08-25 "Four oracles" log entry.
+**The wall-clock path now has a test, and did not for nine days.** Every other
+check in this file is fixed-step by construction -- `--key-file`,
+`--hash-frames` and `--headless` all set `a2host_fixed_step()` -- because
+reproducibility is what each exists for, so the mode a person actually uses was
+covered by nothing and was totally broken without anyone noticing.
+`tests/pacing` covers it now: a stub engine drives a2host with no window and
+asserts that a repaint reporting elapsed time runs a non-zero cycle budget.
+`run-tests.sh` runs it.
+
+Still launch the game after touching `lib/a2host`. The test covers the pacing
+arithmetic, not the window, the renderer or the audio. See the 2026-08-25
+"Four oracles" log entry.
 
 ```bash
 cmake -G Ninja -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug
