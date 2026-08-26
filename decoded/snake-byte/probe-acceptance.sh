@@ -851,10 +851,14 @@ cold_compare hires play-hires.pkeys play-hires-cold.pkeys
 # sequence *is* the waveform -- which makes it an exact check on any change to
 # the game's timing, and the only oracle the sound has ever had.
 #
-# Note what it does *not* cover: both scenarios run in attract mode, and the
-# game deliberately routes clicks to $C020 (the cassette output, inaudible)
-# whenever attract mode is set. So every access below is port $20 and no
-# audible sound is produced. The cycles are the useful column.
+# Note what it does *not* cover, and why that is probably a bug rather than a
+# property: every access below is to port $20, the cassette output, which is
+# where the game sends clicks while it is demoing itself. Both cold scenarios
+# stay in demo mode for all 1,300 frames -- measured -- even though
+# play-cold.pkeys presses '0' for difficulty at coordinate 1322 and is meant to
+# play. The same one cause would explain $664A running zero times here. See
+# HANDOFF.md, item 3 under "What remains", before trusting these baselines as a
+# statement about the sound.
 for sc in play:toggle-play.txt hires:toggle-hires.txt; do
   name=${sc%%:*}; want=${sc#*:}
   case $name in

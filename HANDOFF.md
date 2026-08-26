@@ -689,15 +689,44 @@ What remains, in order of how well-defined it is:
    `toggle-hires.txt` are the baselines, and probe-acceptance.sh checks them.
    **The gate is 28 checks now, not 26.**
 
-   **What that oracle does not cover.** All 1,612 recorded accesses are to port
-   `$20`, the cassette output. The game routes clicks there whenever attract
-   mode is set, and both cold scenarios run in attract mode because nothing
-   answers the difficulty prompt. So the cycles are the useful column and no
-   audible sound is produced in either recording -- the same shape of gap as
-   `$664A`. It matters most for the sound rewrite, which is deliberately out of
-   scope for that plan.
+   **START HERE INSTEAD OF TASK 2: the cold scenarios' keys look broken.**
+   Found 2026-08-26 while recording the toggle baselines, and it is probably
+   one defect behind three symptoms that have been read as three separate
+   gaps.
 
-   Pick up at Task 2. The calibration step is the one to get right: deleting
+   `play-cold.pkeys` presses `'0'` for difficulty at coordinate 1322 -- it is
+   meant to answer the prompt and play. Measured directly, with the binary
+   checked rather than assumed: **`s_demo_mode` is set at the first pace loop
+   and never clears**, for all 1,300 frames, in both cold scenarios. The game
+   self-plays the whole run.
+
+   Three things follow from that, and each was recorded elsewhere as its own
+   finding:
+
+   - `game_install_cout_vector` is never called, so `$664A` and the hi-res text
+     path run **0** times -- against the 205 per run this file claims under
+     "Snake Byte" above.
+   - Every one of the 1,612 speaker accesses goes to port `$20`, the cassette
+     output, because that is what the game does while demoing itself. So the
+     toggle baselines cover timing but never the audible branch.
+   - Several conversions -- the registers especially -- rest on reading rather
+     than running, because the code they touch is on that unreached path.
+
+   The suspect is `make-cold-keys.sh`'s re-stamping: drop the eleven
+   `CALL 14160` keys and subtract 181,207 from the rest. If that constant or
+   the drop is wrong, the keys land at the wrong instants or never arrive.
+
+   **First check, and it is cheap:** does the *booting* build leave demo mode
+   with `play.pkeys`? `play.pkeys` is the recorded original (23 keys) and
+   `play-cold.pkeys` the derivation (12). If the original plays and the
+   derivation does not, the derivation is wrong and the cold gate has been
+   covering less than it says for some time.
+
+   Do that before Task 2. If the keys are broken, every measurement taken
+   against the cold scenarios deserves re-reading -- including the ones in
+   this file.
+
+   Then pick up at Task 2. The calibration step is the one to get right: deleting
    the arithmetic ticks *shortens the intervals between toggles*, so each
    surviving advance takes the measured total of the region it stands for, not
    what its old `TICK` charged.
