@@ -107,6 +107,35 @@ static void speaker_access(uint8_t port);
     s_remaining_cycles -= (n);             \
   } while (0)
 
+/// The same charge, at a site where the duration is *perceptible* -- audible,
+/// or visible as a pause -- and which therefore must never be deleted.
+///
+/// The distinction is the whole of the virtual-clock design. Most of this
+/// file's charges pay for arithmetic nobody can hear or see, and they exist
+/// only because the 6502 spent the cycles; those can be folded away or
+/// dropped. The sites spelled `advance` cannot, for one of two reasons:
+///
+///   - **It sets a pitch.** The Apple II speaker is a one-bit cone and
+///     reading $C030 flips it, so the note *is* the interval between reads.
+///     Shorten the interval and the tone goes sharp. These are the tone
+///     loop, the apple sweep, the death buzz and the pace loop's click.
+///   - **It is the only yield in a loop that waits for input.** Every charge
+///     is a suspend point: `cycles_expired()` parks the game here and hands
+///     the host its window to draw and poll the keyboard. Delete the last
+///     charge in a polling loop and the window never opens -- the game spins
+///     forever with a frozen display and no way to answer.
+///
+/// The second failure is invisible to the whole gate. Under probe-stamped
+/// replay the key counter advances at the keyboard *read*, so a spinning loop
+/// keeps incrementing it and receives its keys without a frame ever
+/// happening: every check passes and the real game hangs. That is why playing
+/// it is a required step and not a courtesy.
+///
+/// A macro rather than a comment convention so the count is greppable -- 17
+/// sites, against 775 plain `TICK`s -- and so deleting one is a compile-time
+/// visible act rather than the removal of an indistinguishable line.
+#define advance(n) TICK(n)
+
 
 /// The zero-page fragment $00B1-$00C8 the run data carried: the six-byte
 /// CHRGET routine Applesoft assembles there at boot. Small enough to read,
@@ -468,7 +497,11 @@ void rom_wait(uint8_t n) {
     // The inner loop: A down to zero, one SBC per pass.
     uint8_t inner = n;
     for (;;) {
-      /*$FCAA*/ TICK(4);
+      // WAIT is called only by BELL1, where it is the silence between the
+      // bell's clicks -- so this charge is the tone. Neither scenario emits
+      // Ctrl-G, so nothing in the gate covers it; it survives on the argument
+      // rather than on a measurement, which is worth saying plainly.
+      /*$FCAA*/ advance(4);
       const uint16_t r = (uint16_t)(inner - 0x0001) - (uint8_t)(0x01 - carry);
       carry = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
       inner = (uint8_t)r;
@@ -2872,7 +2905,9 @@ static void select_hires_page2(void) {
 /// the column is not read until draw_border writes it.
 static void spin(uint8_t inner, uint8_t middle, uint8_t outer) {
   for (;;) {
-    TICK(4);
+    // The 1.29 s hold on the cleared screen, and nothing else happens in it.
+    // Three nested counters, so this innermost charge is 99.6% of the pause.
+    advance(4);
     if (--inner) {
       TICK(1);
       continue;
@@ -3618,7 +3653,10 @@ static void edit_key_blank(uint8_t slot) {
   uint8_t x = slot;
   uint8_t y = 0;
   for (;;) {
-    TICK(4);
+    // The dark half of the redefinition cursor's blink. Unlike the lit half
+    // this one polls nothing, so it cannot hang -- but delete it and the
+    // cursor stops blinking, which is the visible half of the pair.
+    advance(4);
     if (--x) {
       TICK(1);
       continue;
@@ -3652,7 +3690,9 @@ static uint8_t edit_key_prompt(uint8_t slot) {
   uint8_t x = slot;
   uint8_t y = 0;
   for (;;) {
-    TICK(4);
+    // The redefinition cursor's blink, and the loop that waits for the key to
+    // bind. Both halves matter: the rate is visible and the poll is the yield.
+    advance(4);
     if (--x) {
       TICK(1);
       continue;
@@ -3725,7 +3765,10 @@ void game_tick_sound_native(void) {
   s_tone_passes = 0x14; // twenty
 
   for (;;) {
-    TICK(6);
+    // One pass of the tone loop, and the pitch is the number of passes
+    // between clicks -- s_tone_countdown of them, counted down below. Fold
+    // this away and the note goes sharp.
+    advance(6);
     const uint8_t period = s_tone_period;
     if (period) {
       TICK(4);
@@ -3734,7 +3777,9 @@ void game_tick_sound_native(void) {
         const uint8_t left = (uint8_t)(s_tone_countdown - 1);
         s_tone_countdown = left;
         if (!left) {
-          TICK(28);
+          // The click, and the cycles between it and the previous one are
+          // the half-period of the note.
+          advance(28);
           const uint8_t port = s_click_port;
           speaker_access(port);
 
@@ -4155,7 +4200,8 @@ void game_sound_sweep_native(void) {
     TICK(4);
     uint8_t y = x;
     do {
-      TICK(4);
+      // The rising half of the sweep: x clicks apart, and x shrinks.
+      advance(4);
       if (--y)
         TICK(1);
     } while (y);
@@ -4168,7 +4214,7 @@ void game_sound_sweep_native(void) {
     // mirror the cassette toggle and $C030-$C03F the speaker. But hardcoding
     // $30 here would pass too, and that would be a real bug: the mute would
     // stop working and no oracle in this repo looks at sound.
-    TICK(12);
+    advance(12);
     speaker_access(s_click_port);
     if (--x)
       TICK(1);
@@ -4178,12 +4224,13 @@ void game_sound_sweep_native(void) {
     TICK(4);
     uint8_t y = x;
     do {
-      TICK(4);
+      // The falling half, x counting back up.
+      advance(4);
       if (--y)
         TICK(1);
     } while (y);
 
-    TICK(12);
+    advance(12);
     // The click itself. The read *is* the write -- see the note above.
     speaker_access(s_click_port);
     if (++x)
@@ -4774,15 +4821,18 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     // three quarters of a frame and shifts everything after it.
     uint8_t x = 0xff;
     do {
-      TICK(6);
+      advance(6);
       uint8_t y = peek(0xe000 + x);
       do {
-        TICK(4);
+        // The buzz after dying: 255 clicks whose spacing is whatever byte of
+        // the ROM $E000+x happens to hold, which is why it is noise rather
+        // than a note.
+        advance(4);
         --y;
         if (y != 0)
           TICK(1);
       } while (y != 0);
-      TICK(12);
+      advance(12);
       click_speaker();
       --x;
       if (x != 0)
@@ -4872,11 +4922,17 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     do {
       TICK(6);
       game_tick_sound_native();
-      TICK(11);
+      // The main loop's keyboard poll, ~1.2 ms apart. This is the yield the
+      // whole game depends on: 82 passes per snake step, and the only place
+      // between one step and the next where the host gets to draw or the
+      // player gets to steer.
+      advance(11);
       game_read_key_native();
       TICK(6);
       if (s_click_count) {
-        TICK(18);
+        // The steering click. Its spacing is what makes the waveform
+        // irregular the way the original is.
+        advance(18);
         click_speaker();
         s_click_count = (uint8_t)(s_click_count - 1);
       } else {
@@ -5451,12 +5507,17 @@ wait: /* $741C */
     // leaves it zero, so only the first arrival could ever differ.
     uint8_t ticks = 0;
     do {
-      TICK(4);
+      // The 7.8 s timeout into demo mode -- 36% of a play run's cycles, and
+      // the longest wait in the game. It is also a polling loop, so this is
+      // the yield that lets the player answer the prompt at all.
+      advance(4);
       ++ticks;
       if (ticks != 0)
         TICK(1);
     } while (ticks != 0);
 
+    // The keyboard read. Already a charge, and it must stay one; it keeps its
+    // probe as well because it is on the replay coordinate.
     GAME_CYCLES_COORD(0x741f, 6);
     key = io_peek(0xc000);
     if (key & 0x80) {
@@ -6420,7 +6481,11 @@ ended: /* $7847 */
   s_ch = 0x00;
   game_print_inline_str(0x7867);
   for (;;) {
-    TICK(6);
+    // "PRESS SPACE BAR TO CONTINUE", and this is the only yield in the loop
+    // that waits for it. Nothing bounds this one -- the game sits here until
+    // the player presses something -- so losing it hangs the program outright
+    // rather than merely making it stutter.
+    advance(6);
     if (s_joystick_selected) {
       TICK(6);
       // The button reads with bit 7 *clear* when pressed on this path.
