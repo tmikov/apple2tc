@@ -601,11 +601,32 @@ at the 0 that was being celebrated. Pick the measure that cannot be satisfied
 by a rename.
 
 Measured 2026-08-25 over `snake-byte-cold.c` with comments stripped, so a
-mention inside an explanation cannot inflate a row:
+mention inside an explanation cannot inflate a row.
+
+**The memory row was wrong for a day and the way it was wrong is instructive.**
+It counted `ram_peek`/`ram_poke` -- the *externally linked* spelling -- and
+reported 3. The file reads memory through the `static` `peek`/`poke` as well,
+which is 20 more calls. That is the trap two rows below this one, arriving
+from a new direction: a measure that a *different spelling* satisfies is no
+better than one a rename satisfies. Count the thing, not the identifier.
+
+What the 19 real `s_ram` accesses are -- the remaining four `peek()` calls
+address `$C0xx`, which `peek` routes to `io_peek`, so they are not memory:
+
+| what | n | can it go? |
+| --- | --- | --- |
+| video memory: text, lo-res and hi-res screen | 8 | no -- that *is* the screen |
+| the loaded image, read through a pointer: display lists, inline strings, `game_rand_byte`'s walk | 4 | maybe, as const arrays |
+| ROM bytes read as data (`$E000`, the death pause's delay lengths) | 1 | no |
+| the cold start's `$3800`->`$1800` relocation | 1 | no -- the game moves its own data |
+| loading the images and the entry state into `s_ram` | 5 | no |
+
 
 ```
                                   now     was    note
-ram_peek/ram_poke, any form          3    314   the entry-state loader, nothing else
+memory accesses into s_ram          19    314   see below -- and note that the
+                                                "3" this row said until
+                                                2026-08-25 counted one spelling
 s_status_* references                0    222   both survivors went 2026-08-25
 s_a / s_x / s_y references           0    307
 s_sp, push8/pop8                     0     42   the emulated stack
