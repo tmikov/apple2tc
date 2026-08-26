@@ -637,6 +637,8 @@ tmpN_U8 temporaries                   0
 dead `ret` / `ret_addr` parameters    0    121   one real `ret_addr` remains, and it
                                                 is an argument: the inline string's
                                                 address, which the original popped
+TICK statements                    839          47 adjacent runs could merge;
+                                                measured and rejected, see below
 compiler warnings of its own          0          at -Wall
 adapters left                         0     42
 lines                            6,792  16,195   the generated ext build, for scale
@@ -740,6 +742,20 @@ count, `rom_coutz(ch)` carries the character through eleven branches as a
 parameter instead of in A, and SETIO's `X`/`Y` turn out to be the built-in
 device's vector -- `$FD1B` for KEYIN, `$FDF0` for COUT1 -- which is the first
 time reading it says so.
+
+**Adjacent `TICK`s are not merged, and that is deliberate** (2026-08-25). 47
+runs of consecutive `TICK` statements could collapse into 47 single ones, 839
+sites down to 790. It was tried, measured, and not kept. `TICK` is not an
+accumulator: it tests `s_remaining_cycles <= 0` and may call `cycles_expired()`
+before charging, so merging two removes a test and lets a frame boundary land
+later. Measured over both scenarios: 4 and 3 frame video hashes of 1,300
+changed, frame cycle counts moved by up to 56, and the run drifted 4 cycles in
+22.1 million.
+
+Nothing about the program changed -- the program-defined probes are byte
+identical at all 16,332 samples -- but 49 fewer statements does not buy a
+permanent difference in a real oracle. Anyone gating the cold build on frame
+hashes later would inherit the drift and have no way to tell it from a bug.
 
 **The lookup tables are arrays** (2026-08-25). Thirteen of them, and the last
 `ram_peek` of game data went with them -- the three that remain are the

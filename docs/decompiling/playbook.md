@@ -721,6 +721,31 @@ decimal-ness as an argument, and no call into the code with the other arm. Then
 the arm is unreachable by construction and the measurement -- 3,942 tests, all
 binary -- is corroboration rather than evidence.
 
+**`[6502]` Merging adjacent cycle charges is not free, and the cheap oracle
+cannot see why.** Consecutive `TICK(a); TICK(b);` look obviously mergeable and
+the arithmetic is identical, but a cycle-charging macro usually also tests
+whether the budget is spent and yields if it is. Merging removes one such test,
+so a frame boundary lands later by up to the second charge.
+
+Snake Byte, measured before and after over two full scenarios: 4 frames of
+1,300 and 3 of 1,300 changed their video hash, frame cycle counts moved by up
+to 56, and the whole run drifted 4 cycles in 22.1 million. The program does the
+same work in the same time; only where the host slices a frame moves.
+
+**Snake Byte tried this, measured it, and did not keep it** -- which is the
+useful part. The program did the same work in the same time, the
+program-defined probes were byte identical at all 16,332 samples, and the
+change was still not worth having:
+it buys 49 fewer statements and costs a permanent, unrecoverable difference in
+a real oracle. Anyone who later gates the cold build on frame hashes, or
+re-records a `.frames` file for it, would inherit the drift with no way to tell
+it from a bug.
+
+The trade to weigh is *49 statements against an oracle you keep*. Cosmetic
+consolidation is the cheapest kind of change to give up, so give it up first.
+If you do merge, merge only against oracles that sample at program-defined
+instants, and measure frame hashes both ways before deciding rather than after.
+
 **`[process]` Comments outlive the code they describe, especially after a
 merge.** A `\file` block here still explained an adapter split — marshalling,
 accessors, "variables live at their original addresses" — directly above the
@@ -1083,3 +1108,4 @@ already tests for from the other side. 74 spellings flipped, each one named.
 | An emulated stack around a C call | A 6502 pushes because JSR clobbers registers. A C call cannot touch a caller's local, so every PHA/PLA bracketing one is protecting a value from nothing. Check balance per routine before removing -- a loop that pops at the top and pushes at the bottom looks unbalanced statically and is not. |
 | A flag with two arms, one of which never runs | Do not delete the arm because a run never took it; that is the unexercised-path trap. Delete it when the regions that set the flag are *closed* -- Snake Byte's six SED/CLD regions contain only helpers that take their decimal-ness as an argument, and no call into the code with the other arm. Then it is unreachable by construction, and the measurement is corroboration rather than evidence. |
 | Counting one spelling of an accessor | The same trap as counting hex literals, from a new direction. Snake Byte's memory row read "3 remaining" because it counted `ram_peek`/`ram_poke`, the externally-linked pair; the file also reads through the `static` `peek`/`poke`, which was 20 more. Grep for the *effect* -- every read of the RAM array -- not for a name. And check whether the accessor routes some addresses elsewhere: four of those `peek` calls were $C0xx, which is IO, not memory. |
+| Consecutive cycle charges treated as obviously mergeable | The arithmetic is identical; the control flow is not. A charging macro that also tests the frame budget loses a test when two merge, so frame boundaries move -- Snake Byte's moved on 4 frames of 1,300. Tried and not kept: 49 fewer statements is not worth a permanent difference in an oracle someone may later want to use. |
