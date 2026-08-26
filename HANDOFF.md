@@ -404,7 +404,7 @@ ninja -C cmake-build-debug
 
 cd tests && ./run-tests.sh ../cmake-build-debug     # expect: Success!
 cd decoded/snake-byte && ./verify.sh ../../cmake-build-debug   # expect: 4x PASS
-./probe-acceptance.sh ../../cmake-build-debug                 # the real gate
+./probe-acceptance.sh ../../cmake-build-debug                 # the real gate: 28 PASS
 ./decompile.sh                                                # regenerates the c1 variants
 ```
 
@@ -664,7 +664,45 @@ What remains, in order of how well-defined it is:
    nothing.
 2. ~~**Step 4's remainder: `s_a`/`s_x`/`s_y`.**~~ **Done.** 307 references are
    **15**, and all 15 are load-bearing. See "The registers" below.
-3. **Step 6**, on the terms in its entry -- but **re-measure first**: its table
+3. **Step 6 -- and it is now designed, planned and started.** `TICK` turned out
+   to be doing three jobs, and the one that matters is not obvious: **it is the
+   coroutine's suspend point.** The game runs on its own thread;
+   `cycles_expired()` parks it wherever it is and hands control to the host,
+   which draws and polls the keyboard in that window. Delete all 839 and
+   nothing hands control back -- no drawing, no input, `--frames` never ends.
+
+   The design is `docs/superpowers/specs/2026-08-25-snake-byte-virtual-clock-design.md`
+   and the plan is `docs/superpowers/plans/2026-08-25-virtual-clock.md`. In
+   short: one virtual clock in 6502 cycles, advanced only where a duration is
+   *perceptible* -- audible, or visible as a pause -- which is about ten sites.
+   The other ~830 go. The coroutine machinery is untouched, so there is no
+   yield API to build and no control inversion.
+
+   Why cycles stay the unit: the Apple II speaker is one bit, reading `$C030`
+   flips it, so pitch *is* the interval between reads. A 1 kHz tone is a toggle
+   every ~510 cycles against a 17,030-cycle frame. Sound needs cycle
+   resolution, and `a2_sound_spkr()` already takes cycles -- so the audio
+   timeline and the pacing clock are the same clock.
+
+   **Task 1 is done** (commit `992878e`): `speaker_access()` records every
+   `$C0xx` access and the cycle it happened on, `toggle-play.txt` and
+   `toggle-hires.txt` are the baselines, and probe-acceptance.sh checks them.
+   **The gate is 28 checks now, not 26.**
+
+   **What that oracle does not cover.** All 1,612 recorded accesses are to port
+   `$20`, the cassette output. The game routes clicks there whenever attract
+   mode is set, and both cold scenarios run in attract mode because nothing
+   answers the difficulty prompt. So the cycles are the useful column and no
+   audible sound is produced in either recording -- the same shape of gap as
+   `$664A`. It matters most for the sound rewrite, which is deliberately out of
+   scope for that plan.
+
+   Pick up at Task 2. The calibration step is the one to get right: deleting
+   the arithmetic ticks *shortens the intervals between toggles*, so each
+   surviving advance takes the measured total of the region it stands for, not
+   what its old `TICK` charged.
+
+4. **Step 6's old entry below is superseded** by item 3. Its `CYCLES` table
    of 130 probing / 721 charge-only sites predates the conversions and is
    stale. As of 2026-08-24 the file has 839 `TICK` (an addressless charge), 16
    `GAME_CYCLES` (a charge on an edge, deliberately not probing) and 11
