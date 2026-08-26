@@ -269,6 +269,14 @@ short version.
 | screen | 6,808 samples | 9,524 |
 | memory (`ram-cold.probe`) | 6,808 | 9,524 |
 
+**It runs it zero times again, and nobody noticed** (measured 2026-08-25).
+Across full runs of both cold scenarios `rom_cout` is entered 463 times and
+*every one* goes to `$FDF0`; `game_install_cout_vector` is never called, so the
+hi-res hook, `game_show_key_native`, `edit_key_blank` and `cout_left_x` all run
+**0** times. Whatever `hires` covers now, it is not the hi-res text path. This
+needs chasing: the paragraph below describes what the scenario was added to do,
+and it is no longer doing it.
+
 `hires` was added 2026-08-23 and is not optional decoration: without it the
 cold build ran `game_cout_hook_native` **zero** times under the gate. Its keys
 are derived, not recorded — `make-cold-keys.sh play-hires.pkeys
@@ -598,8 +606,9 @@ mention inside an explanation cannot inflate a row:
 ```
                                   now     was    note
 ram_peek/ram_poke, any form          3    314   the entry-state loader, nothing else
-s_status_* references               62    222   c 27 (three edges), d 35 (BCD)
-s_a / s_x / s_y references          16    307   COUT's X/Y promise, the entry load
+s_status_* references                0    222   both survivors went 2026-08-25
+s_a / s_x / s_y references           0    307
+s_sp, push8/pop8                     0     42   the emulated stack
 branchTarget                         0    122   never read; 2 left inside one macro
 ram_peek(0x...) with a hex literal    0    115
 bb_N: labels                          0    141
@@ -731,12 +740,21 @@ path no recording takes.
 compared against `snake-byte.b33` byte for byte instead. That check is worth
 repeating after any edit to them.
 
-**The 15 that remain are the floor, and they are one thing.** Eleven are COUT's
-promise to preserve X and Y. The game repoints CSWL/CSWH at its own hi-res
-renderer, so the hook is entered through `JMP ($36)` and *cannot* take
-arguments: it reads its slot out of X and restores the caller's X and Y on the
-way out. Three more are the entry-state load. Removing any of them would mean
-changing what the machine's own dispatch is, not what this file says.
+**~~The 15 that remain are the floor.~~ They were not** (2026-08-25). The claim
+was that COUT is reached through `JMP ($36)` and *cannot* take arguments, so the
+hook must read its slot out of X. Checked:
+
+- **Y was a closed loop.** COUT1 saved it and put it back; the hook did the
+  same. Nothing ever read it for a value, so the promise had nobody to keep it
+  to.
+- **X was the slot, and the comment was wrong.** `cout_left_x()` said the value
+  was "whatever COUT left behind ... an amount that depends on the ROM". COUT1
+  never touches X and the hook saves and restores it without looking, so what
+  COUT leaves is what its caller put there. The delay's first pass is `slot`
+  long, and the callers already have `slot` as a parameter.
+
+Calling something the floor is a claim like any other. This one was made from
+the same kind of reading that produced the two wrong liveness claims above.
 
 ### The carry
 
@@ -760,6 +778,20 @@ over the call graph; it is a dozen lines and it does not miss callees.
 
 `D` stays entirely: 17 reads, every one choosing between a binary and a BCD
 arm, plus the `assert_binary_mode` gates.
+
+**The flags went the same day.** `C` was already local in every routine that
+read it. `D` was not deleted because both scenarios take the binary arm 3,942
+times out of 3,942 -- that is two scenarios, not a proof -- but because every
+SED/CLD region in the file is *closed*: checked mechanically, all six contain
+only `adc_dec16`, `sbc_dec16` and the `bcd_*` helpers, which take their
+decimal-ness as an argument, and not one ROM call. The monitor is only ever
+entered in binary. `game_bonus_screen` looked like the counter-example and is
+not: its `$78C7` CLD comes before it prints.
+
+**And the emulated stack.** Every PHA/PLA bracketed a call that could not reach
+the C local it was protecting -- a 6502 pushes because JSR clobbers registers,
+and a C call does not touch a caller's local. `rom_fc68` looked unbalanced and
+was not: the scroll pops at the top of each pass and pushes at the bottom.
 
 **Half of a2rom is converted by reading, not by running**, and this has not
 changed: nothing scrolls and nothing emits Ctrl-G, so `rom_wait`, `rom_fc68`'s
