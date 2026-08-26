@@ -3024,3 +3024,56 @@ The `\file` block heading the converted half still described the
 "still living at their original addresses", accessors. Every clause of it had
 been false since the merge, and it sat directly above the code that disproved
 it. Worth a sweep whenever a file absorbs another one.
+
+---
+
+## 2026-08-25 (later) — The lookup tables, and what an unexamined reason costs
+
+**Status:** validated · **Scope:** apple2tc
+
+Thirteen tables were still `ram_peek(kTable + i)`, and the reason recorded for
+leaving them was that they are "the image, not variables that happen to live in
+it". Asked why, that reason did not survive being said out loud: a lookup
+indexed by a small integer is an array, and the sentence was standing in for
+*"I have not derived the extents."* Nine of them were already derived and
+written down in `known-data.txt`, three lines away.
+
+Worth naming as a failure mode of its own. A plausible-sounding reason attached
+to a leftover is harder to dislodge than no reason at all, because it stops the
+question being asked again. The tell is that it explains why the thing is
+*acceptable* rather than why it is *correct*.
+
+### Deriving the extents was the actual work, and one of them mattered
+
+`$6174`'s shape masks: the data ends at `$61DF`, 27 shapes, the last `$1A`,
+which is the largest shape the code names anywhere. Sizing the array to that
+would have been wrong. `game_play_loop` draws the tail with shape `ahead + $0C`
+where `ahead` is a lo-res cell value and therefore 0-15, so shape reaches `$1B`
+and the index reaches 111 -- four past the data, into the zero padding that runs
+to the code at `$6200`.
+
+Measuring did not save this either: the maximum index across full runs of both
+scenarios is **107**, one short of the first index that would have been out of
+bounds. An array sized to what the recordings reach would have been an
+out-of-bounds read the first time a tail walked into a cell holding 15.
+
+So the extent has to come from the *next code address*, which is what the
+playbook already said and what `known-data.txt` exists to record. The three
+newly derived regions are in it now, and `coverage.txt`'s unknown-nonzero count
+falls from 451 to 350 -- with `$616B-$61FF` resolving into 140 bytes of table
+plus 9 bytes of unreached *code* (`LDA $C000 / STA $C010 / STA $09 / RTS`),
+which is not table data and is still unknown.
+
+### The gate cannot check a table
+
+It only covers entries something reads, and the whole point of the extent
+argument is the entries nothing reads yet. All 13 arrays were therefore compared
+against `snake-byte.b33` byte for byte: 13/13 exact. That is a dozen lines of
+script and it is the only check that covers the tail.
+
+### Where this leaves the artifact
+
+Three `ram_peek`/`ram_poke` calls remain and all three are the entry-state
+loader filling `s_ram` in the first place. Step 6's four passes -- storage,
+flags, registers, tables -- are done, and the playbook's "Getting the machine
+out of the code" is the transferable copy of how.

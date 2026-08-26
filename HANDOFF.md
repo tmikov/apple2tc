@@ -567,20 +567,24 @@ it. The column below is every form, which is why it started at 314 rather than
 at the 0 that was being celebrated. Pick the measure that cannot be satisfied
 by a rename.
 
+Measured 2026-08-25 over `snake-byte-cold.c` with comments stripped, so a
+mention inside an explanation cannot inflate a row:
+
 ```
-                                  now    was    note
+                                  now     was    note
 ram_peek/ram_poke, any form          3    314   the entry-state loader, nothing else
-s_status_* references               62    222   c 27, d 35; the other five are gone
-s_a / s_x / s_y references          15    307   11 are COUT's X/Y promise, 3 the
-                                                entry load; see "The registers"
-branchTarget                         0    122   never read; 5 left inside one macro
-unused `ret` parameters              0      4   leftovers from the adapter era
+s_status_* references               62    222   c 27 (three edges), d 35 (BCD)
+s_a / s_x / s_y references          16    307   COUT's X/Y promise, the entry load
+branchTarget                         0    122   never read; 2 left inside one macro
 ram_peek(0x...) with a hex literal    0    115
 bb_N: labels                          0    141
 tmpN_U8 temporaries                   0
-ret_addr parameters                   0    117   push16/pop16 unused
+dead `ret` / `ret_addr` parameters    0    121   one real `ret_addr` remains, and it
+                                                is an argument: the inline string's
+                                                address, which the original popped
 compiler warnings of its own          0          at -Wall
 adapters left                         0     42
+lines                            6,792  16,195   the generated ext build, for scale
 ```
 
 What remains, in order of how well-defined it is:
