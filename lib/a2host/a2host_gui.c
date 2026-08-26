@@ -240,7 +240,6 @@ static void frame_cb(void) {
   }
 
   unsigned due = run_due_frames();
-  lastRunTick_ = curFrameTick_;
 
   for (unsigned i = 0; i != due; ++i) {
     a2host_simulate_frame();
@@ -256,6 +255,15 @@ static void frame_cb(void) {
       break;
     }
   }
+
+  // After the loop, not before it. In wall-clock mode a2host_simulate_frame()
+  // sizes the frame from elapsed_since_last_frame(), which is exactly this
+  // difference -- so advancing lastRunTick_ first leaves every repaint
+  // measuring zero elapsed time, running zero cycles, and the machine never
+  // moves. run_due_frames() has already taken what it needs for fixed step,
+  // where curFrameTick_ does not change across the loop either, so both modes
+  // see the same value they did before.
+  lastRunTick_ = curFrameTick_;
 
   update_screen();
   update_screen_image();
