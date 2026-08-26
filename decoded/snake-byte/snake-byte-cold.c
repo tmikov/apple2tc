@@ -163,7 +163,6 @@ static uint8_t s_v2;      ///< VLINE's bottom row
 static uint8_t s_mask;    ///< which nibble of a lo-res byte a PLOT touches
 static uint8_t s_color;   ///< the lo-res colour, both nibbles
 static uint8_t s_invflg;  ///< COUT1 ANDs the character with this: $FF normal
-static uint8_t s_ysav1;   ///< where COUT1 parks Y
 static uint16_t s_csw; ///< the character output vector the game repoints
 static uint16_t s_ksw; ///< the character input vector; nothing reads it
 static uint8_t s_a2l;     ///< SETKBD/SETVID scratch
@@ -538,10 +537,9 @@ void rom_wait(uint8_t n) {
 /// nothing in this build reads the emulated call stack, so `push16` and
 /// `pop16` are unused here and the routines are ordinary C functions.
 ///
-/// What has not changed is that CPU state is not passed or returned: it lives
-/// in the globals of `apple2tc/system2-inc.h` (`s_a`, `s_x`, `s_y`,
-/// `s_status_*`, `s_ram`). Giving the ROM entry points real parameters is the
-/// next step; `rom_plot` wants a row and a column, not A and Y.
+/// The CPU state that used to be passed in those globals is gone: the ROM
+/// entry points take parameters and return values, `rom_plot` wants a row and
+/// a column rather than A and Y, and nothing in this file names A, X or Y.
 ///
 /// `push8`/`pop8` are still here and are not the same thing: PHA/PHP inside a
 /// routine, which the routine pops itself before it returns.
@@ -1084,7 +1082,8 @@ static void game_play_one_life(void);
 /// of it has *internal linkage*:
 ///
 ///   - `s_a`, `s_x`, `s_y`, `s_sp`, `s_status_*`, `s_ram`, `s_pc`, `s_cycles`,
-///     `s_remaining_cycles` are all `static`.
+///     `s_remaining_cycles` are all `static`. This file no longer uses the
+///     registers at all, but the header still defines them.
 ///   - `peek`, `poke`, `peek16`, `ram_peek16al`, `push8`, `pop8`, `push16`,
 ///     `pop16`, `adc_decimal`, `sbc_decimal` are all `static`.
 ///   - The `CYCLES()` macro expands to references to `s_pc`, `s_cycles`,
@@ -1843,17 +1842,16 @@ static void rom_cout1(uint8_t ch) {
     /*$FDF2*/ TICK(1);
   }
 
-  // Y is saved and restored around the call because COUT promises its callers
-  // that it preserves it. That promise is why s_y is still a variable at all
-  // in this file -- see game_cout_hook_native, which reads it.
+  // The original saves Y in YSAV1 across the call and puts it back, because
+  // COUT promises its callers it preserves Y. Nothing in this file ever reads
+  // Y for a value, so the promise has nobody to keep it to: saving and
+  // restoring were the only two things that touched it.
   /*$FDF6*/ TICK(12);
-  s_ysav1 = s_y;
   /*$FDF8*/ push8(ch);
   rom_coutz(ch); // JSR $FB78
 
   /*$FDFC*/ TICK(13);
   (void)pop8();
-  /*$FDFD*/ s_y = s_ysav1;
 
   /*$FDFF*/
 }
@@ -3656,15 +3654,6 @@ static uint8_t slot_glyph(int slot) {
   return kArrowGlyph[slot];
 }
 
-/// Both halves of the blink count X down to zero 256 times, and the X they
-/// start from is whatever COUT left behind -- the original never initialises
-/// it. So the first pass is a different length from the other 255, by an
-/// amount that depends on the ROM. Transcribed rather than tidied: it is the
-/// delay's actual duration.
-static uint8_t cout_left_x(void) {
-  return s_x;
-}
-
 /// $75D1 -- the dark half: erase the glyph and wait, polling nothing.
 static void edit_key_blank(uint8_t slot) {
   // The original parks the slot at $0002 for the whole routine, because COUT
@@ -3676,11 +3665,17 @@ static void edit_key_blank(uint8_t slot) {
   rom_fc68();
 
   TICK(11);
-  s_x = slot;
   rom_cout(0xa0);
 
+  // Both halves of the blink count X down to zero 256 times, and the X they
+  // start from is whatever COUT left behind -- the original never initialises
+  // it. What COUT leaves is what its caller put there, which is the slot: the
+  // ROM's COUT1 does not touch X at all, and the hi-res hook saves and
+  // restores it. So the first pass of the delay is `slot` long and the other
+  // 255 are a full 256. Transcribed rather than tidied: it is the delay's
+  // actual duration.
   TICK(2);
-  uint8_t x = cout_left_x();
+  uint8_t x = slot;
   uint8_t y = 0;
   for (;;) {
     TICK(4);
@@ -3704,18 +3699,17 @@ static void edit_key_blank(uint8_t slot) {
 /// no acceptable key is 0.
 static uint8_t edit_key_prompt(uint8_t slot) {
   TICK(23);
-  s_x = slot;
   s_ch = slot_col(slot);
   s_cv = slot_row(slot);
   rom_fc68();
 
   TICK(13);
-  s_x = slot;
   const uint8_t glyph = slot_glyph(slot);
   rom_cout(glyph);
 
+  // The slot again -- see edit_key_blank for why COUT leaves it in X.
   TICK(2);
-  uint8_t x = cout_left_x();
+  uint8_t x = slot;
   uint8_t y = 0;
   for (;;) {
     TICK(4);
@@ -4300,8 +4294,11 @@ void game_show_key_native(uint8_t slot, uint8_t key) {
     TICK(1);
   }
 
+  // The original parks the slot in X here because COUT would otherwise be the
+  // last thing to touch it. Nothing reads it: the hi-res hook saves and
+  // restores X without looking at it, and every use of the slot below is the
+  // parameter.
   TICK(23);
-  s_x = slot; // read back by the COUT hook, which is why it is set here
   s_ch = kKeyCH[slot];
   s_cv = kKeyCV[slot];
   rom_fc68();
@@ -4458,10 +4455,11 @@ void game_cout_hook_native(uint8_t ch) {
     // and Y, the source and the destination all die at the closing brace, and
     // nothing outside reads them. See the block's header for why the aliasing
     // had to be shown to be unobservable before they could be split out.
-    const uint8_t saved_x = s_x, saved_y = s_y;
+    // The original saves the caller's X and Y here and puts them back at the
+    // end, because it uses X as the scanline counter. That counter is the loop
+    // variable below, so there is nothing left to save from.
     const uint16_t src = glyph_rows(glyph);
     uint16_t dest = hires_cursor();
-    s_x = 0x00;
 
     for (unsigned row = 0; row < 8; ++row) {
       TICK(33);
@@ -4469,7 +4467,6 @@ void game_cout_hook_native(uint8_t ch) {
 
       // One hi-res scanline down within the character cell, which is +$400.
       dest = (uint16_t)(dest + 0x0400);
-      s_x = (uint8_t)(row + 1);
 
       // `INX / CPX #8 / BNE`: the branch is taken on every pass but the last.
       if (row != 7)
@@ -4477,8 +4474,6 @@ void game_cout_hook_native(uint8_t ch) {
     }
 
     TICK(9);
-    s_x = saved_x;
-    s_y = saved_y;
   }
 
   TICK(7);
@@ -6735,7 +6730,6 @@ void init_emulated(void) {
   s_mask = kSnakeByteEntryRam[0x2e];
   s_color = kSnakeByteEntryRam[0x30];
   s_invflg = kSnakeByteEntryRam[0x32];
-  s_ysav1 = kSnakeByteEntryRam[0x35];
   s_csw = (uint16_t)(kSnakeByteEntryRam[0x36] | (kSnakeByteEntryRam[0x37] << 8));
   s_ksw = (uint16_t)(kSnakeByteEntryRam[0x38] | (kSnakeByteEntryRam[0x39] << 8));
   s_a2l = kSnakeByteEntryRam[0x3e];
@@ -6748,9 +6742,8 @@ void init_emulated(void) {
      leaving one member out to save a line would make it something else. The
      ten *residue* carry writes -- game routines setting it because the
      original left it set -- are a different thing and are gone. */
-  s_a = SB_ENTRY_A;
-  s_x = SB_ENTRY_X;
-  s_y = SB_ENTRY_Y;
+  // The registers are not loaded: there are none left to load into. SP is,
+  // because push8/pop8 still model the 6502's stack pointer.
   s_sp = SB_ENTRY_SP;
   s_status_d = (SB_ENTRY_STATUS & 0x08) != 0;
   s_status_c = (SB_ENTRY_STATUS & 0x01) != 0;
