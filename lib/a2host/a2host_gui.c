@@ -58,12 +58,6 @@ void a2host_gui_set_event_hook(a2host_gui_event_hook hook) {
   event_hook_ = hook;
 }
 
-/// Wall-clock pacing, handed to a2host. Only consulted for runs that are not
-/// required to be reproducible.
-static double elapsed_since_last_frame(void) {
-  return stm_sec(curFrameTick_ - lastRunTick_);
-}
-
 /// Submit the audio produced during the frame that just ran.
 static void frame_done(void) {
   if (a2host_sound_enabled())
@@ -187,48 +181,6 @@ static void update_screen_image(void) {
   sg_update_image(bind_.fs_images[SLOT_tex], &imgData);
 }
 
-/// Emulated time owed but not yet run, in seconds. Only used in fixed-step
-/// mode; see run_due_frames().
-static double stepDebt_ = 0.0;
-
-/// How many emulated frames to run for this repaint.
-///
-/// In wall-clock mode the answer is always one: a2host_simulate_frame() sizes
-/// the frame by however long the repaint took, so a faster monitor just means
-/// smaller slices and the machine keeps real time by itself.
-///
-/// In fixed-step mode -- replay, frame hashing, --trace-keys -- it does not.
-/// Every call advances the machine by exactly 1/60 s no matter how long the
-/// repaint took, so one call per repaint ties the machine's speed to the
-/// monitor's refresh rate: 2.4x on a 144 Hz display, and unbounded if the
-/// front end ever free-runs. That is what made --trace-keys unusable for the
-/// thing it exists for, which is capturing a session someone is playing.
-///
-/// So run whole 1/60 s quanta, and only when the clock says they are due. The
-/// quantum stays exactly what it was -- this changes when frames happen, never
-/// how big they are, so nothing about a run's reproducibility moves.
-static unsigned run_due_frames(void) {
-  if (!a2host_fixed_step())
-    return 1;
-
-  stepDebt_ += stm_sec(stm_diff(curFrameTick_, lastRunTick_));
-  // After a stall -- a breakpoint, a dragged window -- catch up a little and
-  // then give up on the rest, rather than run a minute of emulation in one
-  // repaint and stall again submitting the audio for it.
-  const double kMaxDebt = 4.0 / 60.0;
-  if (stepDebt_ > kMaxDebt)
-    stepDebt_ = kMaxDebt;
-
-  unsigned frames = (unsigned)(stepDebt_ * 60.0);
-  stepDebt_ -= frames / 60.0;
-  // The subtraction is exact in intent but not in binary: a rounding error of
-  // one ulp the wrong way leaves a debt just below zero, and converting a
-  // negative double to unsigned next time round is undefined behaviour.
-  if (stepDebt_ < 0.0)
-    stepDebt_ = 0.0;
-  return frames;
-}
-
 static void frame_cb(void) {
   curFrameTick_ = stm_now();
   if (!haveFirstTick_) {
@@ -239,7 +191,10 @@ static void frame_cb(void) {
     lastRunTick_ = curFrameTick_;
   }
 
-  unsigned due = run_due_frames();
+  // The elapsed time goes over by value, here, while it is still true. The
+  // host owns the pacing; this front end only owns the clock.
+  const unsigned due = a2host_begin_repaint(stm_sec(stm_diff(curFrameTick_, lastRunTick_)));
+  lastRunTick_ = curFrameTick_;
 
   for (unsigned i = 0; i != due; ++i) {
     a2host_simulate_frame();
@@ -255,15 +210,6 @@ static void frame_cb(void) {
       break;
     }
   }
-
-  // After the loop, not before it. In wall-clock mode a2host_simulate_frame()
-  // sizes the frame from elapsed_since_last_frame(), which is exactly this
-  // difference -- so advancing lastRunTick_ first leaves every repaint
-  // measuring zero elapsed time, running zero cycles, and the machine never
-  // moves. run_due_frames() has already taken what it needs for fixed step,
-  // where curFrameTick_ does not change across the loop either, so both modes
-  // see the same value they did before.
-  lastRunTick_ = curFrameTick_;
 
   update_screen();
   update_screen_image();
@@ -348,7 +294,7 @@ sapp_desc sokol_main(int argc, char *argv[]) {
   if (a2host_headless())
     a2host_run_headless(); // Does not return.
 
-  a2host_set_elapsed_fn(elapsed_since_last_frame);
+  a2host_set_wall_clock_pacing();
   a2host_set_frame_done_fn(frame_done);
 
   return (sapp_desc){

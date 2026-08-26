@@ -107,11 +107,45 @@ a2_iostate_t *a2host_io(void) {
   return &io_;
 }
 
-static a2host_elapsed_fn elapsed_fn_ = NULL;
+/// Set by a front end with a real display; see a2host_set_wall_clock_pacing().
+static bool wall_clock_ = false;
+/// Seconds handed over by the last a2host_begin_repaint(), used to size the
+/// frame in wall-clock mode.
+static double pending_elapsed_ = 0.0;
+/// Emulated time owed but not yet run, in seconds. Fixed-step mode only.
+static double step_debt_ = 0.0;
 static a2host_frame_done_fn frame_done_fn_ = NULL;
 
-void a2host_set_elapsed_fn(a2host_elapsed_fn fn) {
-  elapsed_fn_ = fn;
+void a2host_set_wall_clock_pacing(void) {
+  wall_clock_ = true;
+}
+
+unsigned a2host_begin_repaint(double elapsed_sec) {
+  // A monotonic clock should never hand back a negative interval, but the
+  // conversion to unsigned below is undefined if one ever arrives.
+  if (!(elapsed_sec > 0.0))
+    elapsed_sec = 0.0;
+
+  if (!a2host_fixed_step()) {
+    pending_elapsed_ = elapsed_sec;
+    return 1;
+  }
+
+  step_debt_ += elapsed_sec;
+  // After a stall -- a breakpoint, a dragged window -- catch up a little and
+  // then give up on the rest, rather than run a minute of emulation in one
+  // repaint and stall again submitting the audio for it.
+  const double kMaxDebt = 4.0 / 60.0;
+  if (step_debt_ > kMaxDebt)
+    step_debt_ = kMaxDebt;
+
+  unsigned frames = (unsigned)(step_debt_ * 60.0);
+  step_debt_ -= frames / 60.0;
+  // The subtraction is exact in intent but not in binary: a rounding error of
+  // one ulp the wrong way leaves a debt just below zero.
+  if (step_debt_ < 0.0)
+    step_debt_ = 0.0;
+  return frames;
 }
 void a2host_set_frame_done_fn(a2host_frame_done_fn fn) {
   frame_done_fn_ = fn;
@@ -539,7 +573,7 @@ void a2host_init_emulation(void) {
 /// monitor that is not 60 Hz the machine ran at the monitor's speed. The
 /// budget below is right; pacing the calls is the front end's job.
 bool a2host_fixed_step(void) {
-  return !elapsed_fn_ || trace_keys_ || key_presses_ || hash_file_ ||
+  return !wall_clock_ || trace_keys_ || key_presses_ || hash_file_ ||
          (g_debug & (DebugASM | DebugMem)) != 0;
 }
 
@@ -560,7 +594,7 @@ void a2host_simulate_frame(void) {
     if (a2host_fixed_step()) {
       runCycles = (unsigned)((1.0 / 60.0) * clock_freq_);
     } else {
-      double elapsed = elapsed_fn_();
+      const double elapsed = pending_elapsed_;
       runCycles = (unsigned)((elapsed < 0.200 ? elapsed : 0.200) * clock_freq_);
     }
     run_emulated(runCycles);

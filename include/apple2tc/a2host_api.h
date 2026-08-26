@@ -60,13 +60,33 @@ void a2host_simulate_frame(void);
 /// True when a2host_simulate_frame() advances the machine by a fixed 1/60 s of
 /// emulated time rather than by however much wall clock has passed.
 ///
-/// A windowed front end must consult this. In the wall-clock mode, calling
-/// simulate once per rendered frame is self-correcting: a faster monitor means
-/// smaller slices. In fixed mode it is not — one quantum per rendered frame
-/// runs the machine at the monitor's rate, so a 144 Hz display runs it at
-/// 2.4x. Pace the calls off a clock instead, running whole quanta only when
-/// they are due. See a2host_gui.c's frame_cb.
+/// A front end does not need to consult this: a2host_begin_repaint() already
+/// does, and returns the right number of frames for either mode. It is exposed
+/// because tests assert on it.
 bool a2host_fixed_step(void);
+
+/// Declare that this front end paces against a wall clock, i.e. that it has a
+/// real display and no obligation to be reproducible. The console front end
+/// never calls this, so a headless run is always fixed-step.
+void a2host_set_wall_clock_pacing(void);
+
+/// Start a repaint. \p elapsed_sec is the wall-clock time since the previous
+/// call. Returns how many times to call a2host_simulate_frame() now.
+///
+/// The elapsed time is *pushed*, once, at the moment the front end knows it --
+/// it used to be a callback the host invoked from inside simulate_frame, and
+/// that cost nine days: the front end advanced its own "last repaint" marker
+/// before the loop, so the callback measured zero, every frame ran zero cycles
+/// and every windowed build was frozen. Nothing the caller does after this
+/// returns can affect the value now.
+///
+/// In wall-clock mode the answer is always 1, because simulate_frame sizes the
+/// frame from \p elapsed_sec and a faster monitor just means smaller slices.
+/// In fixed-step mode -- replay, frame hashing, tracing -- each frame is a
+/// fixed 1/60 s of emulated time, so calling once per repaint would tie the
+/// machine's speed to the refresh rate (2.4x on a 144 Hz display). There the
+/// answer is however many whole quanta the clock says are due.
+unsigned a2host_begin_repaint(double elapsed_sec);
 
 /// Emit this frame's hash if asked, and advance the frame counter. Returns true
 /// when the frame limit is reached.
@@ -83,16 +103,6 @@ void a2host_run_headless(void);
 void a2host_shutdown(void);
 
 /* --- Front-end hooks ------------------------------------------------------ */
-
-/// Seconds since the previous frame. Installed by a front end that paces
-/// against a wall clock.
-///
-/// Consulted **only** when the run is not required to be reproducible. Replay,
-/// frame hashing and tracing always use a fixed 1/60 s budget instead, which is
-/// what makes those runs deterministic. When no function is installed — the
-/// console front end — every frame uses the fixed budget.
-typedef double (*a2host_elapsed_fn)(void);
-void a2host_set_elapsed_fn(a2host_elapsed_fn fn);
 
 /// Called at the end of each simulated frame, after the engine has run.
 /// The GUI uses it to submit audio.

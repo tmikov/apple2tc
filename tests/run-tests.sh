@@ -332,6 +332,23 @@ if ! diff -q frontend-run.txt frontend-emu.txt > /dev/null; then
 fi
 rm frontend-run.txt frontend-emu.txt
 
+# ...but that check, and every other check in this repo, runs the host in
+# *fixed-step* mode -- because reproducibility is what they all exist for. The
+# wall-clock mode a person plays on had no coverage at all, and was totally
+# broken for nine days before a bug report found it: a2host_gui advanced its
+# "last repaint" marker before running the frame, so every repaint measured
+# zero elapsed time and ran zero cycles.
+#
+# pacing-test drives a2host directly with a stub engine, no window, and asserts
+# the thing that was false: a repaint reporting elapsed time runs a non-zero
+# cycle budget. See tests/pacing/pacing_test.c.
+if ! "$bin/tests/pacing/pacing-test" > pacing-out.txt; then
+  echo "FAIL: a2host pacing" >&2
+  cat pacing-out.txt >&2
+  exit 1
+fi
+rm pacing-out.txt
+
 # --- Probes -----------------------------------------------------------------
 #
 # The probe compiler is tested through --probe-dump, which compiles a script,
