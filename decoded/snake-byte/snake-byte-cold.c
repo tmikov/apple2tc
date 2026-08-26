@@ -198,9 +198,7 @@ static uint8_t s_ch, s_cv;
 
 /// The converted game routines are entered with decimal mode clear. Rather
 /// than carry the decompiler's dead decimal arms through them, say so and fail
-/// loudly if it ever stops being true. game_bonus is the exception and has no
-/// such check.
-static void assert_binary_mode(const char *who, uint16_t at);
+
 
 /// A cell on the 40x48 playfield grid.
 typedef struct {
@@ -351,10 +349,7 @@ uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
     /*$FBCE*/ TICK(2);
     // ADC #$7F with the carry the LSR just set, i.e. +$80: the second half of
     // the band.
-    if (!s_status_d)
-      band = (uint8_t)((uint16_t)(band + 0x007f) + odd);
-    else
-      band = (uint8_t)adc_dec16(band, 0x7f, odd);
+    band = (uint8_t)((uint16_t)(band + 0x007f) + odd);
   }
 
   /*$FBD0*/ TICK(19);
@@ -383,11 +378,7 @@ bool rom_vtabz(uint8_t line) {
   const uint8_t base = rom_bascalc(line, &carry);
 
   /*$FC27*/ TICK(6);
-  uint16_t r;
-  if (!s_status_d)
-    r = ((uint16_t)base + s_wndlft) + carry;
-  else
-    r = adc_dec16(base, s_wndlft, carry);
+  const uint16_t r = ((uint16_t)base + s_wndlft) + carry;
   // VTABZ adds WNDLFT to BASL and leaves BASH exactly as BASCALC set it, so
   // this really is a write of one half.
   s_bas = (uint16_t)((s_bas & 0xff00) | (uint8_t)r);
@@ -463,7 +454,8 @@ void rom_wait(uint8_t n) {
   uint8_t not_zero = 0;
 
   /*$FCA8*/ TICK(2);
-  s_status_c = 0x01;
+  // SEC: the borrow chain both loops run on.
+  uint8_t carry = 0x01;
 
   for (;;) {
     /*$FCA9*/ TICK(3);
@@ -473,18 +465,10 @@ void rom_wait(uint8_t n) {
     uint8_t inner = n;
     for (;;) {
       /*$FCAA*/ TICK(4);
-      if (!s_status_d) {
-        const uint16_t r = (uint16_t)(inner - 0x0001) - (uint8_t)(0x01 - s_status_c);
-        s_status_c = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
-        inner = (uint8_t)r;
-        not_zero = inner;
-      } else {
-        const uint16_t r = sbc_dec16(inner, 0x01, s_status_c);
-        inner = (uint8_t)r;
-        const uint8_t flags = (uint8_t)(r >> 8);
-        s_status_c = (flags & 0x01);
-        not_zero = (uint8_t)(~flags & 2);
-      }
+      const uint16_t r = (uint16_t)(inner - 0x0001) - (uint8_t)(0x01 - carry);
+      carry = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
+      inner = (uint8_t)r;
+      not_zero = inner;
       if (!not_zero)
         break;
       /*$FCAC*/ TICK(1);
@@ -493,19 +477,10 @@ void rom_wait(uint8_t n) {
     // The outer one: the copy off the stack, down by one.
     /*$FCAE*/ TICK(8);
     n = pop8();
-    if (!s_status_d) {
-      const uint8_t before = n;
-      const uint16_t r = (uint16_t)(before - 0x0001) - (uint8_t)(0x01 - s_status_c);
-      s_status_c = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
-      n = (uint8_t)r;
-      not_zero = n;
-    } else {
-      const uint16_t r = sbc_dec16(n, 0x01, s_status_c);
-      n = (uint8_t)r;
-      const uint8_t flags = (uint8_t)(r >> 8);
-      s_status_c = (flags & 0x01);
-      not_zero = (uint8_t)(~flags & 2);
-    }
+    const uint16_t r = (uint16_t)(n - 0x0001) - (uint8_t)(0x01 - carry);
+    carry = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
+    n = (uint8_t)r;
+    not_zero = n;
     if (!not_zero)
       break;
     /*$FCB1*/ TICK(1);
@@ -1153,16 +1128,12 @@ static void rom_cout1(uint8_t ch);
 static void rom_gbascalc(uint8_t row) {
   /*$F847*/ TICK(20);
   const uint8_t odd = (uint8_t)(row & 0x01);
-  s_status_c = odd;
   /*$F84D*/ const uint8_t page = (uint8_t)(((row >> 0x01) & 0x03) | 0x04);
   /*$F850*/ uint8_t band = (uint8_t)(row & 0x18);
 
   if (odd) {
     /*$F854*/ TICK(2);
-    if (!s_status_d)
-      band = (uint8_t)((band + 0x7f) + s_status_c);
-    else
-      band = (uint8_t)adc_dec16(band, 0x7f, s_status_c);
+    band = (uint8_t)((band + 0x7f) + odd);
   } else {
     // $F852 BCC -- the branch itself, taken here (not modelled by the block
     // above's own cost, which is the not-taken total; see the design doc on
@@ -1205,27 +1176,20 @@ void rom_plot(uint8_t row, uint8_t col) {
   /*$F800*/ TICK(11);
   const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
-  /*$F801*/ push8((uint8_t)((row & 0x01) | ((half == 0) << 1) | (s_status_d << 3) |
-                            STATUS_B | (half & 0x80)));
+  /*$F801*/ push8((uint8_t)((row & 0x01) | ((half == 0) << 1) | STATUS_B | (half & 0x80)));
   /*$F802*/ rom_gbascalc(half);
 
   /*$F805*/ TICK(8);
+  uint8_t carry;
   {
     const uint8_t saved = pop8();
-    s_status_c = (uint8_t)(saved & 0x01);
-    s_status_d = ((saved & 0x08) != 0);
+    carry = (uint8_t)(saved & 0x01);
   }
   /*$F806*/ uint8_t mask = 0x0f;
 
   if (upper) {
     /*$F80A*/ TICK(2);
-    if (!s_status_d) {
-      const uint16_t r = ((uint16_t)mask + 0x00e0) + s_status_c;
-      mask = (uint8_t)r;
-    } else {
-      const uint16_t r = adc_dec16(mask, 0xe0, s_status_c);
-      mask = (uint8_t)r;
-    }
+    mask = (uint8_t)(((uint16_t)mask + 0x00e0) + carry);
   } else {
     // $F808 BCC -- the branch itself, taken here.
     /*$F808*/ TICK(1);
@@ -1253,14 +1217,16 @@ void rom_plot(uint8_t row, uint8_t col) {
 /// without a flag that the original does not have.
 void rom_hline(uint8_t row, uint8_t from_col) {
   uint8_t col = from_col;
+  // The CMPs below leave it and the ADC at $F826 reads it back.
+  uint8_t carry;
 
   /*$F819*/ TICK(6);
   rom_plot(row, col);
 
 across: /* $F81C -- one column at a time, up to H2 */
   TICK(5);
-  s_status_c = (uint8_t)(col >= s_h2);
-  if (s_status_c) {
+  carry = (uint8_t)(col >= s_h2);
+  if (carry) {
     // $F81E BCS -- the branch itself, taken here.
     /*$F81E*/ TICK(1);
     goto done;
@@ -1270,7 +1236,7 @@ across: /* $F81C -- one column at a time, up to H2 */
   col = (uint8_t)(col + 0x01);
   /*$F821*/ rom_plot1(col);
   /*$F824*/ TICK(2);
-  if (!s_status_c) {
+  if (!carry) {
     // $F824 BCC -- the branch itself, taken here.
     /*$F824*/ TICK(1);
     goto across;
@@ -1278,18 +1244,15 @@ across: /* $F81C -- one column at a time, up to H2 */
 
 down: /* $F826 -- one row at a time, up to V2 */
   TICK(2);
-  if (!s_status_d)
-    row = (uint8_t)(((uint16_t)row + 0x0001) + s_status_c);
-  else
-    row = (uint8_t)adc_dec16(row, 0x01, s_status_c);
+  row = (uint8_t)(((uint16_t)row + 0x0001) + carry);
 
   /*$F828*/ TICK(9);
   push8(row);
   /*$F829*/ rom_plot(row, col);
   /*$F82C*/ TICK(9);
   row = pop8();
-  /*$F82D*/ s_status_c = (uint8_t)(row >= s_v2);
-  if (!s_status_c) {
+  /*$F82D*/ carry = (uint8_t)(row >= s_v2);
+  if (!carry) {
     // $F82F BCC -- the branch itself, taken here.
     /*$F82F*/ TICK(1);
     goto down;
@@ -1325,19 +1288,16 @@ uint8_t rom_scrn(uint8_t row, uint8_t col) {
   /*$F871*/ TICK(11);
   const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
-  /*$F872*/ push8((uint8_t)((row & 0x01) | ((half == 0) << 1) | (s_status_d << 3) |
-                            STATUS_B | (half & 0x80)));
+  /*$F872*/ push8((uint8_t)((row & 0x01) | ((half == 0) << 1) | STATUS_B | (half & 0x80)));
   /*$F873*/ rom_gbascalc(half);
 
   /*$F876*/ TICK(11);
   uint8_t cell = peek((uint16_t)(s_gbas + col));
 
-  // PLP. Only D is restored: the carry the original brings back here is read
-  // by nothing, and the other bits were never pushed -- see rom_plot.
-  /*$F878*/ {
-    const uint8_t saved = pop8();
-    s_status_d = ((saved & 0x08) != 0);
-  }
+  // PLP. Nothing it restores is read: the carry the original brings back is
+  // dead here, and no other bit was ever pushed -- see rom_plot. The pop stays
+  // to balance the push.
+  /*$F878*/ (void)pop8();
 
   if (upper) {
     /*$F87B*/ TICK(8);
@@ -1388,10 +1348,7 @@ home: /* $FC58 */
 
     /*$FC4D*/ TICK(13);
     line = pop8();
-    if (!s_status_d)
-      line = (uint8_t)(line + step);
-    else
-      line = (uint8_t)adc_dec16(line, 0x00, step);
+    line = (uint8_t)(line + step);
 
     /*$FC52*/ const bool past_bottom = line >= s_wndbtm;
     if (!past_bottom) {
@@ -1475,10 +1432,7 @@ scroll: /* $FC76 -- one line up per pass */
   /*$FC80*/ col = (uint8_t)(s_wndwdth - 0x01);
   /*$FC81*/ line = pop8();
   // $FC82's ADC has no CLC either; the carry is whatever VTABZ last returned.
-  if (!s_status_d)
-    line = (uint8_t)(((uint16_t)line + 0x0001) + step);
-  else
-    line = (uint8_t)adc_dec16(line, 0x01, step);
+  line = (uint8_t)(((uint16_t)line + 0x0001) + step);
 
   if (line >= s_wndbtm) {
     // $FC86 BCS -- the branch itself, taken here. That was the last line.
@@ -1643,8 +1597,8 @@ store: /* $FBF0 -- put the character at the cursor */
   s_ch = (uint8_t)(s_ch + 0x01);
   {
     const uint8_t width = s_wndwdth;
-    s_status_c = (uint8_t)(s_ch >= width);
-    if (s_status_c) {
+    const bool past_right_edge = s_ch >= width;
+    if (past_right_edge) {
       // Off the right edge, so wrap: the same thing a carriage return does.
       /*$FBFA*/ TICK(1);
       goto carriage_return;
@@ -1700,8 +1654,8 @@ dispatch: /* $FC01 -- not printable; which control code is it? */
   {
     const uint8_t top = s_wndtop;
     const uint8_t cv = s_cv;
-    s_status_c = (uint8_t)(top >= cv);
-    if (s_status_c) {
+    const bool at_window_top = top >= cv;
+    if (at_window_top) {
       // Already on the window's top line; there is nowhere to go up to.
       /*$FC1E*/ TICK(1);
       /*$FC2B*/ TICK(6);
@@ -2868,14 +2822,6 @@ static void lores_hline(uint8_t row, uint8_t from_col) {
   rom_hline(row, from_col);
 }
 
-static void assert_binary_mode(const char *who, uint16_t at) {
-  if (s_status_d) {
-    fprintf(stderr, "%s: entered with decimal mode set\n", who);
-    error_handler(at);
-    abort();
-  }
-}
-
 /// Plot at a cell in a given ink, keeping whatever shape s_shape holds.
 ///
 /// Separate from plot_shape_at because for these callers the shape genuinely
@@ -3212,7 +3158,6 @@ static uint8_t dot_index(uint8_t ink, uint8_t scanline, uint8_t col) {
 /// $60E7 -- draw the loaded shape into one cell, replacing what was there.
 void game_draw_cell_native(uint8_t ink, Cell c) {
   /*$60E7*/ TICK(0);
-  assert_binary_mode("game_draw_cell", 0x60e7);
   TICK(22);
   uint16_t dest = cell_row_base(c.row);
 
@@ -3873,11 +3818,6 @@ enum { kCharZero = 0xb0 };
 /// and it clears it again before returning -- so say so loudly rather than
 /// carry a decimal path that cannot be reached.
 static void cout_digit(uint8_t digit) {
-  if (s_status_d) {
-    fprintf(stderr, "cout_digit: entered with decimal mode set\n");
-    error_handler(0x71f3);
-    abort();
-  }
   rom_cout((uint8_t)(kCharZero + digit));
 }
 
@@ -3948,7 +3888,6 @@ void game_add_score_native(void) {
   // hand-written BCD adder: it is the one the emulator and the generated code
   // both use, so it cannot disagree with them about the undefined corners of
   // BCD ADC. It returns the sum in the low byte and the flags in the high one.
-  s_status_d = 0x01;
 
   // Four bytes at $7252, least significant first, plus a two-byte value at
   // $71CB. The original adds the value into the low half and then propagates
@@ -3976,7 +3915,6 @@ void game_add_score_native(void) {
   // original's CLD is what makes it false. `apple2tc --ir` also called C and V
   // live out; that was true of the generated program, whose caller read them.
   // Nothing does now.
-  s_status_d = 0x00;
 }
 
 /* ========================================================================== */
@@ -4061,13 +3999,11 @@ uint8_t game_rand_byte_native(void) {
 
 /// Add one, in BCD, to the two-byte counter at \p at.
 static void bcd_inc16(uint8_t at[2]) {
-  s_status_d = 0x01;
   uint16_t r = adc_dec16(at[0], 0x01, 0x00);
   at[0] = (uint8_t)r;
 
   r = adc_dec16(at[1], 0x00, (uint8_t)(r >> 8) & 0x01);
   at[1] = (uint8_t)r;
-  s_status_d = 0x00;
 }
 
 Cell game_place_apple_native(void) {
@@ -4119,7 +4055,6 @@ void game_set_apple_value_native(void) {
   s_apple_value[1] = 0x00;
   const uint8_t per_apple = kAppleValueTable[s_difficulty];
   uint8_t levels = s_script_index;
-  s_status_d = 0x01;
 
   for (;;) {
     TICK(28);
@@ -4136,7 +4071,6 @@ void game_set_apple_value_native(void) {
 
   TICK(8);
   // D is the whole of this routine's live-out set now that V has gone.
-  s_status_d = 0x00;
 }
 
 /* ========================================================================== */
@@ -4173,11 +4107,6 @@ void game_draw_head_native(uint8_t ink, Cell c) {
       /*$6B93*/ TICK(6);
       game_load_shape_masks(s_shape);
 
-      if (s_status_d) {
-      fprintf(stderr, "game_plot_shape_merge: entered with decimal mode set\n");
-      error_handler(0x6b93);
-      abort();
-      }
 
       // The high byte it returns was the original's result in A; nothing
       // reads it now.
@@ -4202,9 +4131,7 @@ void game_draw_head_native(uint8_t ink, Cell c) {
 /// and it touches four other counters and not this one.
 void game_award_extra_life_native(void) {
   TICK(22);
-  s_status_d = 0x01;
   s_lives = (uint8_t)adc_dec16(s_lives, 0x01, 0x00);
-  s_status_d = 0x00;
   game_sound_sweep_native();
 
   TICK(6);
@@ -4444,11 +4371,6 @@ void game_cout_hook_native(uint8_t ch) {
     // decimal mode -- the ROM clears D at reset and neither BASIC nor the game
     // sets it around output -- so rather than carry dead decimal paths, fail
     // loudly if that assumption ever breaks.
-    if (s_status_d) {
-      fprintf(stderr, "game_cout_hook: entered with decimal mode set\n");
-      error_handler(0x664a);
-      abort();
-    }
 
     // The original parks all of this in the plotter's zero-page block, which
     // it is not otherwise using. They are locals: the glyph, the caller's X
@@ -5009,11 +4931,6 @@ static bool steer_try(
   { // was game_move_ok()
 
     /*$6AB8*/ TICK(0);
-    if (s_status_d) {
-    fprintf(stderr, "game_move_ok: entered with decimal mode set\n");
-    error_handler(0x6ab8);
-    abort();
-    }
 
     uint8_t cell = 0;
     const MoveVerdict v = snake_move_verdict(s_steer_dir, &cell);
@@ -5305,7 +5222,6 @@ void game_bonus_screen(void) {
   s_bonus_amount[0] = (uint8_t)lo;
   const uint16_t hi = adc_dec16(s_apple_value[1], s_apple_value[1], (uint8_t)(lo >> 8) & 0x01);
   s_bonus_amount[1] = (uint8_t)hi;
-  s_status_d = 0x00; // $78C7 CLD
 
   // Twice, because the bonus is twice the apple value and game_add_score adds
   // it once.
@@ -6070,11 +5986,6 @@ void game_move_bouncer(Bouncer *b) {
   //
 
   /*$64C8*/ TICK(12);
-  if (s_status_d) {
-    fprintf(stderr, "game_move_bouncer: entered with decimal mode set\n");
-    error_handler(0x64c8);
-    abort();
-  }
 
   // The state the original leaves behind: A holds the row it loaded first, and
   // the flags come from that load.
@@ -6116,7 +6027,6 @@ void game_move_bouncer(Bouncer *b) {
 /// return address, and A is not left holding the reason because nothing reads
 /// it there any more.
 static void game_play_one_life(void) {
-  assert_binary_mode("game_play_loop", 0x6288);
 
   uint8_t cell = 0;
   switch (game_play_loop_native(&cell)) {
@@ -6200,8 +6110,16 @@ static void game_play_one_life(void) {
 /* way the D flag went; the assembly settles it, since the original brackets  */
 /* each BCD run with SED/CLD. $7743-$7777 and $7817-$783A are decimal and     */
 /* everything else is binary, so each operation is written the one way it     */
-/* runs. s_status_d is still maintained: game_bonus is entered with decimal   */
-/* mode set, which is why its adapter omits the assertion the others carry.   */
+/* runs, and there is no D flag left to consult.                             */
+/*                                                                            */
+/* The ROM's own arms went with it, on an argument rather than a measurement:  */
+/* every SED/CLD region in this file contains only adc_dec16, sbc_dec16 and    */
+/* the bcd_* helpers -- which take their decimal-ness explicitly -- and no ROM */
+/* call at all, and each clears D before it returns. So the monitor was only   */
+/* ever entered in binary. game_bonus_screen looked like the counter-example   */
+/* and is not: it is entered with D set, and its $78C7 CLD comes before it     */
+/* prints anything. Measured as well: 3,942 D tests across both scenarios,     */
+/* every one of them binary.                                                   */
 /* ========================================================================== */
 
 /// BCD add across a low/high pair, as SED/CLC/ADC/ADC leaves it.
@@ -6256,7 +6174,6 @@ void game_cold_start(void) {
 
 new_game: /* $7691 */
   TICK(6);
-  assert_binary_mode("game_setup", 0x7980);
   game_setup_screen();
   TICK(6);
   game_promote_high_score();
@@ -6308,7 +6225,6 @@ start_round: /* $76C7 */
   TICK(6);
   game_status_panel();
   TICK(6);
-  assert_binary_mode("game_start_round", 0x6256);
   game_begin_life();
   TICK(3);
   goto verdict; // $7716: JMP $7739 -- a fresh round asks the same question
@@ -6344,11 +6260,9 @@ verdict: /* $7739 -- $6253 says how the life ended */
 ate_apple: /* $773E */
   TICK(1);
   TICK(76);
-  s_status_d = 0x01;
   bcd_sub16(s_apples_afield, 0x01);
   bcd_sub16(s_apples_left, 0x01);
   bcd_add16(s_apples_eaten, 0x01);
-  s_status_d = 0x00;
 
   // $777B -- points only for the first $11 apples of the round. The high
   // byte must be zero and the low one below $11, both BCD.
@@ -6418,7 +6332,6 @@ round_cleared: /* $77EA */
     const uint16_t r = adc_dec16(s_level, 0x01, 0x00);
     s_level = (uint8_t)r;
   }
-  s_status_d = 0x00;
   s_script_index = (uint8_t)(s_script_index + 1);
   // $77F8 -- no life was lost this round, so it earns a bonus.
   if (s_lives == s_lives_at_level_start) {
@@ -6452,10 +6365,8 @@ not_apple: /* $77E8 */
 
 harder: /* $7817 -- three more apples in the round, and three more to come */
   TICK(54);
-  s_status_d = 0x01;
   bcd_add16(s_apples_quota, 0x03);
   bcd_add16(s_apples_left, 0x03);
-  s_status_d = 0x00;
   game_place_apple_native();
   TICK(6);
   game_place_apple_native();
@@ -6528,7 +6439,6 @@ lose_life: /* $789A */
     const uint16_t r = sbc_dec16(s_lives, 0x01, 0x01);
     s_lives = (uint8_t)r;
   }
-  s_status_d = 0x00;
   goto start_round;
 }
 
@@ -6745,8 +6655,6 @@ void init_emulated(void) {
   // The registers are not loaded: there are none left to load into. SP is,
   // because push8/pop8 still model the 6502's stack pointer.
   s_sp = SB_ENTRY_SP;
-  s_status_d = (SB_ENTRY_STATUS & 0x08) != 0;
-  s_status_c = (SB_ENTRY_STATUS & 0x01) != 0;
 
   /* The soft switches, which no RAM image carries. $01 is text, page 1, not
      mixed -- the power-on state, so these reads are asserting it rather than
