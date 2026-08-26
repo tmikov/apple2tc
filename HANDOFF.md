@@ -641,8 +641,10 @@ tmpN_U8 temporaries                   0
 dead `ret` / `ret_addr` parameters    0    121   one real `ret_addr` remains, and it
                                                 is an argument: the inline string's
                                                 address, which the original popped
-TICK statements                    839          47 adjacent runs could merge;
-                                                measured and rejected, see below
+TICK statements                    773          838 before the virtual clock; the
+                                                drawing routines were folded
+advance statements                  17          the charges that are load bearing,
+                                                and cannot be folded at all
 compiler warnings of its own          0          at -Wall
 adapters left                         0     42
 lines                            6,792  16,195   the generated ext build, for scale
@@ -731,19 +733,68 @@ What remains, in order of how well-defined it is:
      in the design. The 105 ms itself survives, which is what matters, since
      `$7056` follows with a 1.29 s hold and the two read as one pause.
 
-   Pick up at Task 3. The calibration step is the one to get right: deleting
-   the arithmetic ticks *shortens the intervals between toggles*, so each
-   surviving advance takes the measured total of the region it stands for, not
-   what its old `TICK` charged. Task 3's routines are not all constant-cost --
-   the five with data-dependent trip counts (`rom_hline`, `rom_clreolz`,
-   `game_plot_hline_native`, `game_plot_vline_native`,
-   `game_lores_vline_native`) keep a per-iteration charge and collapse only
-   the straight-line remainder.
+   **Tasks 3 and 4 are done too** (`31a40a3`, `c5f219b`, `f021230`,
+   `f0ef213`). The drawing routines were measured and folded, and the
+   seventeen charges that are load bearing are now spelled `advance(n)`
+   instead of `TICK(n)` -- a macro that expands to the same thing, so that
+   deleting one is a visible act. `advance` marks two different failures:
+   a charge that sets a pitch (the tone loop, the apple sweep, the death
+   buzz, the pace loop's click) and a charge that is the only yield in a loop
+   that waits for input (the setup prompt, the death pause, both halves of
+   the redefinition blink). See the macro's comment in the file.
+
+   **Measure self cost, not total.** This is the trap in task 3 and it is
+   easy to fall into: `draw_border`'s 73,939 cycles are almost all the seven
+   line drawers it calls, and those still charge. Collapsing to the total
+   would have counted them twice. The instrumentation that gets this right is
+   an accumulator that only counts the routine's *own* charges, saved and
+   zeroed on entry and restored on exit, with `__attribute__((cleanup))` so
+   that early returns still report -- four of these routines have them.
+
+   **Do not trust a cost that is constant only in the recordings.**
+   `rom_clreolz` measures 567 at all 32 calls and `rom_hline` 642 at all 168,
+   but both are loops whose trip count depends on their arguments; the
+   scenarios simply never vary them. They were left alone. The same reasoning
+   is why the three line drawers carry a formula (22n + 5, 28n + 6) in their
+   comments rather than the number that was measured.
+
+   **What the collapses cost, measured rather than assumed.** Over both cold
+   scenarios and over a 4,000-frame free run with no keys at all: the run's
+   total cycle count and its *final* frame hash are byte-identical to before
+   -- 22,147,950 and 68,182,955 -- so nothing drifts and nothing accumulates.
+   What moves is where the clock crosses a frame boundary: 170 and 287 frames
+   of 1,300 changed their hash, the longest stretch with the game parked went
+   from 1 frame to 7, and the free run shows 13 fewer distinct images out of
+   1,065. All of that is `game_clear_hgr_native`'s 106,897-cycle charge and
+   its siblings, and all of it is the fills no longer being drawn
+   progressively. It is the frame-hash oracle the design already gave up, now
+   with a number on it. Compare the 2026-08-25 note below on merging adjacent
+   `TICK`s, which was rejected for a *fraction* of this -- the difference is
+   that this buys the design and that bought 49 statements.
+
+   **Where the count actually stands: 838 charging sites before, 790 now**
+   (773 `TICK` plus 17 `advance`). That is the honest number and it is not
+   the ~10 the design describes, **because the plan does not contain the step
+   that gets there.** The spec's stage 2 is "delete the ~830, install the
+   calibrated advances"; the plan's tasks 2-4 only fold the drawing routines,
+   which are 48 sites. The remaining ~773 are the game's logic, the ROM text
+   path and the display-list interpreter, and no task enumerates them. Anyone
+   picking this up should treat that as the next piece of *planning*, not of
+   coding.
+
+   **Task 5 -- playing it -- is outstanding and cannot be done from a
+   script.** What has been checked: the release windowed target links, and a
+   4,000-frame free run with no probe and no keys terminates normally, which
+   is the mechanical half of the hang test (every polling loop still yields,
+   or `--frames` would never end). What has *not* been checked is the half
+   that needs a person: that the snake moves at a sane speed, that keys steer
+   it, and that the sound is recognisably the same. Run
+   `cmake-build-release/decoded/snake-byte/snake-byte-cold`.
 
 4. **Step 6's old entry below is superseded** by item 3. Its `CYCLES` table
    of 130 probing / 721 charge-only sites predates the conversions and is
-   stale. As of 2026-08-26 the file has **834** `TICK` (an addressless charge;
-   839 before task 2 collapsed `game_clear_hgr_native`'s six into one), 16
+   stale. As of 2026-08-26 the file has **773** `TICK` and **17** `advance`
+   (both an addressless charge; 838 `TICK` before the virtual-clock work), 16
    `GAME_CYCLES` (a charge on an edge, deliberately not probing) and 11
    probing sites, of which the cold trace installs 6.
 4. **Loose ends:** **350** unknown nonzero bytes in `coverage.txt` (was 451;
