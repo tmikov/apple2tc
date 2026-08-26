@@ -459,7 +459,6 @@ void rom_wait(uint8_t n) {
 
   for (;;) {
     /*$FCA9*/ TICK(3);
-    push8(n);
 
     // The inner loop: A down to zero, one SBC per pass.
     uint8_t inner = n;
@@ -476,7 +475,6 @@ void rom_wait(uint8_t n) {
 
     // The outer one: the copy off the stack, down by one.
     /*$FCAE*/ TICK(8);
-    n = pop8();
     const uint16_t r = (uint16_t)(n - 0x0001) - (uint8_t)(0x01 - carry);
     carry = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
     n = (uint8_t)r;
@@ -1176,15 +1174,13 @@ void rom_plot(uint8_t row, uint8_t col) {
   /*$F800*/ TICK(11);
   const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
-  /*$F801*/ push8((uint8_t)((row & 0x01) | ((half == 0) << 1) | STATUS_B | (half & 0x80)));
+  // PHP/PLP across GBASCALC, to carry the LSR's bit past a call that clobbers
+  // the flags. The bit is `row & 0x01`, and nothing else survived the round
+  // trip, so it is simply the value.
   /*$F802*/ rom_gbascalc(half);
 
   /*$F805*/ TICK(8);
-  uint8_t carry;
-  {
-    const uint8_t saved = pop8();
-    carry = (uint8_t)(saved & 0x01);
-  }
+  const uint8_t carry = (uint8_t)(row & 0x01);
   /*$F806*/ uint8_t mask = 0x0f;
 
   if (upper) {
@@ -1247,10 +1243,8 @@ down: /* $F826 -- one row at a time, up to V2 */
   row = (uint8_t)(((uint16_t)row + 0x0001) + carry);
 
   /*$F828*/ TICK(9);
-  push8(row);
   /*$F829*/ rom_plot(row, col);
   /*$F82C*/ TICK(9);
-  row = pop8();
   /*$F82D*/ carry = (uint8_t)(row >= s_v2);
   if (!carry) {
     // $F82F BCC -- the branch itself, taken here.
@@ -1288,16 +1282,14 @@ uint8_t rom_scrn(uint8_t row, uint8_t col) {
   /*$F871*/ TICK(11);
   const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
-  /*$F872*/ push8((uint8_t)((row & 0x01) | ((half == 0) << 1) | STATUS_B | (half & 0x80)));
+
   /*$F873*/ rom_gbascalc(half);
 
   /*$F876*/ TICK(11);
   uint8_t cell = peek((uint16_t)(s_gbas + col));
 
-  // PLP. Nothing it restores is read: the carry the original brings back is
-  // dead here, and no other bit was ever pushed -- see rom_plot. The pop stays
-  // to balance the push.
-  /*$F878*/ (void)pop8();
+  // The original brackets GBASCALC with PHP/PLP to keep the LSR's carry. It is
+  // read by nothing here.
 
   if (upper) {
     /*$F87B*/ TICK(8);
@@ -1338,7 +1330,6 @@ home: /* $FC58 */
 
   for (;;) { /* $FC46 -- CLRSC2, one line per pass */
     TICK(9);
-    push8(line);
     /*$FC47*/ rom_vtabz(line);
     /*$FC4A*/ TICK(6);
     // $FC5C loaded Y with 0 and CLREOLZ is the only thing that moves it, so
@@ -1347,7 +1338,6 @@ home: /* $FC58 */
     const bool step = rom_clreolz(0x00);
 
     /*$FC4D*/ TICK(13);
-    line = pop8();
     line = (uint8_t)(line + step);
 
     /*$FC52*/ const bool past_bottom = line >= s_wndbtm;
@@ -1423,14 +1413,12 @@ void rom_fc68(void) {
   /*$FC6E*/ TICK(17);
   s_cv = (uint8_t)(s_cv - 0x01);
   /*$FC70*/ line = s_wndtop;
-  /*$FC72*/ push8(line);
   /*$FC73*/ step = rom_vtabz(line);
 
 scroll: /* $FC76 -- one line up per pass */
   TICK(28);
   /*$FC78*/ s_bas2 = s_bas;
   /*$FC80*/ col = (uint8_t)(s_wndwdth - 0x01);
-  /*$FC81*/ line = pop8();
   // $FC82's ADC has no CLC either; the carry is whatever VTABZ last returned.
   line = (uint8_t)(((uint16_t)line + 0x0001) + step);
 
@@ -1441,7 +1429,6 @@ scroll: /* $FC76 -- one line up per pass */
   }
 
   /*$FC88*/ TICK(9);
-  push8(line);
   /*$FC89*/ step = rom_vtabz(line);
 
 copy: /* $FC8C -- one character, right to left */
@@ -1801,11 +1788,9 @@ static void rom_cout1(uint8_t ch) {
   // Y for a value, so the promise has nobody to keep it to: saving and
   // restoring were the only two things that touched it.
   /*$FDF6*/ TICK(12);
-  /*$FDF8*/ push8(ch);
   rom_coutz(ch); // JSR $FB78
 
   /*$FDFC*/ TICK(13);
-  (void)pop8();
 
   /*$FDFF*/
 }
@@ -3292,9 +3277,9 @@ void game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
 /// $03 back where it found it, because the caller draws the hi-res run over
 /// the same coordinates next.
 void game_lores_vline_native(Cell c, uint8_t to_row) {
-  // The original saves the starting row and puts it back, which is what lets
-  // the hi-res half of a display list's 'V' run the same span after it.
-  push8(c.row);
+  // The original saves the starting row on the stack, because the hi-res half
+  // of a display list's 'V' runs the same span next and the loop below walks
+  // c.row to the end of it. Every caller states both ends now.
 
   for (;;) {
     TICK(12);
@@ -3309,7 +3294,6 @@ void game_lores_vline_native(Cell c, uint8_t to_row) {
   }
   TICK(1);
   TICK(13);
-  (void)pop8();
 }
 
 /* ========================================================================== */
@@ -4792,7 +4776,6 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       // sample taken inside the plotter would otherwise see a byte on one
       // engine and not the other.
       TICK(11);
-      push8(under);
       rom_setcol(0x00);
       TICK(14);
       rom_plot(tail.row, tail.col);
@@ -4802,7 +4785,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       // $63DA -- the byte that was under the tail is the direction the tail
       // must follow, so the same delta tables move it on.
       TICK(44);
-      const uint8_t tail_dir = pop8();
+      const uint8_t tail_dir = under;
       const Cell tail_next = {
           .col = (uint8_t)(tail.col + kColDelta[tail_dir]),
           .row = (uint8_t)(tail.row + kRowDelta[tail_dir]),
@@ -4856,7 +4839,6 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       TICK(6);
       game_tick_sound_native();
       TICK(11);
-      push8(n);
       game_read_key_native();
       TICK(6);
       if (s_click_count) {
@@ -4867,7 +4849,6 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
         TICK(1);
       }
       TICK(10);
-      n = pop8();
       --n;
       if (n != 0)
         TICK(1);
@@ -6652,9 +6633,9 @@ void init_emulated(void) {
      leaving one member out to save a line would make it something else. The
      ten *residue* carry writes -- game routines setting it because the
      original left it set -- are a different thing and are gone. */
-  // The registers are not loaded: there are none left to load into. SP is,
-  // because push8/pop8 still model the 6502's stack pointer.
-  s_sp = SB_ENTRY_SP;
+  // No registers are loaded: there are none left, and the emulated stack went
+  // with them -- every PHA/PLA in this file bracketed a call that could not
+  // reach the C local it was protecting.
 
   /* The soft switches, which no RAM image carries. $01 is text, page 1, not
      mixed -- the power-on state, so these reads are asserting it rather than
