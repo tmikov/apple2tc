@@ -423,7 +423,11 @@ bool ExternRoutines::run(const std::vector<std::pair<uint16_t, std::string>> &ex
   /// inside another routine being declared here disappears along with it. So
   /// the decision waits until the dead blocks are gone -- see the end of this
   /// function.
-  std::vector<std::pair<Function *, std::vector<BasicBlock *>>> returnIntoCaller{};
+  ///
+  /// The exits are their addresses and not the blocks: deleting the body is
+  /// what makes an exit target unreachable, so the wait above is exactly long
+  /// enough for the blocks to be freed underneath us.
+  std::vector<std::pair<Function *, std::vector<uint32_t>>> returnIntoCaller{};
 
   for (auto &[addr, name] : externs) {
     BasicBlock *entry = start_->findBasicBlock(addr);
@@ -437,8 +441,13 @@ bool ExternRoutines::run(const std::vector<std::pair<uint16_t, std::string>> &ex
     ef->setName(name);
     ef->setDecompileLevel(Function::DecompileLevel::Normal);
     ef->setExternal(addr);
-    if (!alt.empty())
-      returnIntoCaller.emplace_back(ef, std::move(alt));
+    if (!alt.empty()) {
+      std::vector<uint32_t> altAddrs{};
+      altAddrs.reserve(alt.size());
+      for (BasicBlock *bb : alt)
+        altAddrs.push_back(bb->getAddress().value_or(0x10000));
+      returnIntoCaller.emplace_back(ef, std::move(altAddrs));
+    }
 
     // A predecessor can be present twice (JSR func, func), so use a set.
     PrimitiveSetVector<Instruction *> preds{};
@@ -506,8 +515,8 @@ bool ExternRoutines::run(const std::vector<std::pair<uint16_t, std::string>> &ex
       continue;
 
     std::string targetList{};
-    for (BasicBlock *bb : targets)
-      targetList += format(" $%04X", bb->getAddress().value_or(0x10000));
+    for (uint32_t a : targets)
+      targetList += format(" $%04X", a);
     std::string siteList{};
     for (uint32_t a : sites)
       siteList += format(" $%04X", a);
