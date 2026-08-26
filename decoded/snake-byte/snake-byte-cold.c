@@ -150,16 +150,22 @@ static uint8_t s_wndlft;  ///< text window: left, width, top, bottom
 static uint8_t s_wndwdth;
 static uint8_t s_wndtop;
 static uint8_t s_wndbtm;
-static uint8_t s_gbasl, s_gbash; ///< lo-res line base, from GBASCALC and V2
-static uint8_t s_basl, s_bash;   ///< text line base, from BASCALC and CV
-static uint8_t s_bas2l, s_bas2h; ///< the scroll's destination line
+/* Addresses, not byte pairs. The 6502 splits a pointer into two zero-page
+   bytes because that is all it can address; nothing here has two halves that
+   mean different things. Where a routine really does write one half -- VTABZ
+   rewrites only the low byte, and the glyph blitter does 8-bit arithmetic on
+   each -- the code says so with a mask or a shift, which is what the split
+   used to be hiding. */
+static uint16_t s_gbas;  ///< lo-res line base, from GBASCALC and V2
+static uint16_t s_bas;   ///< text line base, from BASCALC and CV
+static uint16_t s_bas2;  ///< the scroll's destination line
 static uint8_t s_v2;      ///< VLINE's bottom row
 static uint8_t s_mask;    ///< which nibble of a lo-res byte a PLOT touches
 static uint8_t s_color;   ///< the lo-res colour, both nibbles
 static uint8_t s_invflg;  ///< COUT1 ANDs the character with this: $FF normal
 static uint8_t s_ysav1;   ///< where COUT1 parks Y
-static uint8_t s_cswl, s_cswh; ///< the character output vector the game repoints
-static uint8_t s_kswl, s_kswh; ///< the character input vector; nothing reads it
+static uint16_t s_csw; ///< the character output vector the game repoints
+static uint16_t s_ksw; ///< the character input vector; nothing reads it
 static uint8_t s_a2l;     ///< SETKBD/SETVID scratch
 
 /// $002C, and still one byte doing two jobs.
@@ -175,10 +181,6 @@ static uint8_t s_a2l;     ///< SETKBD/SETVID scratch
 static uint8_t s_h2;
 
 /// The three pointer pairs, low byte first, as ram_peek16al read them.
-static inline uint16_t gbas16(void) { return (uint16_t)(s_gbasl | (s_gbash << 8)); }
-static inline uint16_t bas16(void) { return (uint16_t)(s_basl | (s_bash << 8)); }
-static inline uint16_t bas2_16(void) { return (uint16_t)(s_bas2l | (s_bas2h << 8)); }
-static inline uint16_t csw16(void) { return (uint16_t)(s_cswl | (s_cswh << 8)); }
 
 /// $0024/$0025 -- CH and CV, the text cursor, out of emulated RAM.
 ///
@@ -341,7 +343,7 @@ uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
   /*$FBC1*/ TICK(20);
   // LSR: the carry is the line's low bit, and it is what decides the ADC below.
   const uint8_t odd = line & 0x01;
-  s_bash = (uint8_t)(((line >> 1) & 0x03) | 0x04);
+  const uint8_t page = (uint8_t)(((line >> 1) & 0x03) | 0x04);
   uint8_t band = line & 0x18;
 
   if (!odd) {
@@ -357,14 +359,14 @@ uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
   }
 
   /*$FBD0*/ TICK(19);
-  s_basl = band;
-  // ASL twice, then OR the original back in. The second shift's carry out is
-  // what VTABZ adds straight back in, which is why it is returned rather than
-  // left in a flag.
+  // ASL twice, then OR the original back in -- the original does this in BASL
+  // itself, which is why the band is stored there first. The second shift's
+  // carry out is what VTABZ adds straight back in, which is why it is returned
+  // rather than left in a flag.
   const uint16_t shifted = (uint16_t)(band << 0x02);
   *carry_out = ((shifted & 0x01ff) >> 8) != 0;
-  const uint8_t addr_lo = (uint8_t)shifted | s_basl;
-  s_basl = addr_lo;
+  const uint8_t addr_lo = (uint8_t)shifted | band;
+  s_bas = (uint16_t)(addr_lo | (page << 8));
   return addr_lo;
 }
 
@@ -387,7 +389,9 @@ bool rom_vtabz(uint8_t line) {
     r = ((uint16_t)base + s_wndlft) + carry;
   else
     r = adc_dec16(base, s_wndlft, carry);
-  s_basl = (uint8_t)r;
+  // VTABZ adds WNDLFT to BASL and leaves BASH exactly as BASCALC set it, so
+  // this really is a write of one half.
+  s_bas = (uint16_t)((s_bas & 0xff00) | (uint8_t)r);
 
   /*$FC2B*/ TICK(6);
   return ((r >> 8) & 0x01) != 0;
@@ -421,7 +425,7 @@ bool rom_clreolz(uint8_t col) {
 
   for (;;) {
     /*$FCA0*/ TICK(13);
-    poke((uint16_t)(bas16() + col), space);
+    poke((uint16_t)(s_bas + col), space);
 
     const uint8_t next = (uint8_t)(col + 1);
     col = next;
@@ -1151,7 +1155,7 @@ static void rom_gbascalc(uint8_t row) {
   /*$F847*/ TICK(20);
   const uint8_t odd = (uint8_t)(row & 0x01);
   s_status_c = odd;
-  /*$F84D*/ s_gbash = (uint8_t)(((row >> 0x01) & 0x03) | 0x04);
+  /*$F84D*/ const uint8_t page = (uint8_t)(((row >> 0x01) & 0x03) | 0x04);
   /*$F850*/ uint8_t band = (uint8_t)(row & 0x18);
 
   if (odd) {
@@ -1168,8 +1172,7 @@ static void rom_gbascalc(uint8_t row) {
   }
 
   /*$F856*/ TICK(19);
-  s_gbasl = band;
-  /*$F85C*/ s_gbasl = (uint8_t)((uint8_t)(band << 0x02) | s_gbasl);
+  /*$F85C*/ s_gbas = (uint16_t)((uint8_t)((uint8_t)(band << 0x02) | band) | (page << 8));
 
   /*$F85E*/
 }
@@ -1181,7 +1184,7 @@ static void rom_plot1(uint8_t col) {
   // matching half of COLOR, leaving the other half alone. `(old ^ colour) &
   // mask ^ old` is the ROM's way of saying that in three instructions.
   /*$F80E*/ TICK(28);
-  const uint16_t at = (uint16_t)(gbas16() + col);
+  const uint16_t at = (uint16_t)(s_gbas + col);
   const uint8_t old = peek(at);
   /*$F816*/ poke(at, (uint8_t)(((old ^ s_color) & s_mask) ^ old));
 
@@ -1328,7 +1331,7 @@ uint8_t rom_scrn(uint8_t row, uint8_t col) {
   /*$F873*/ rom_gbascalc(half);
 
   /*$F876*/ TICK(11);
-  uint8_t cell = peek((uint16_t)(gbas16() + col));
+  uint8_t cell = peek((uint16_t)(s_gbas + col));
 
   // PLP. Only D is restored: the carry the original brings back here is read
   // by nothing, and the other bits were never pushed -- see rom_plot.
@@ -1469,8 +1472,7 @@ void rom_fc68(void) {
 
 scroll: /* $FC76 -- one line up per pass */
   TICK(28);
-  /*$FC78*/ s_bas2l = s_basl;
-  /*$FC7C*/ s_bas2h = s_bash;
+  /*$FC78*/ s_bas2 = s_bas;
   /*$FC80*/ col = (uint8_t)(s_wndwdth - 0x01);
   /*$FC81*/ line = pop8();
   // $FC82's ADC has no CLC either; the carry is whatever VTABZ last returned.
@@ -1493,7 +1495,7 @@ copy: /* $FC8C -- one character, right to left */
   TICK(15);
   {
     const uint8_t at = col;
-    /*$FC8E*/ poke((uint16_t)(bas2_16() + at), peek((uint16_t)(bas16() + at)));
+    /*$FC8E*/ poke((uint16_t)(s_bas2 + at), peek((uint16_t)(s_bas + at)));
     /*$FC90*/ const uint8_t next = (uint8_t)(at - 0x01);
     negative = (uint8_t)(next & 0x80);
     col = next;
@@ -1636,7 +1638,7 @@ emit: /* $FB94 JMP $FBFD */
 
 store: /* $FBF0 -- put the character at the cursor */
   TICK(9);
-  /*$FBF2*/ poke((uint16_t)(bas16() + s_ch), ch);
+  /*$FBF2*/ poke((uint16_t)(s_bas + s_ch), ch);
 
   /*$FBF4*/ TICK(13);
   s_ch = (uint8_t)(s_ch + 0x01);
@@ -1799,7 +1801,7 @@ void rom_cout(uint8_t ch) {
   uint16_t vector;
 
   /*$FDED*/ TICK(5);
-            vector = csw16(); // JMP ($36)
+            vector = s_csw; // JMP ($36)
             switch (vector) {
             case 0xfdf0:
               rom_cout1(ch);
@@ -1903,8 +1905,7 @@ void rom_setkbd(void) {
   }
 
   /*$FEA9*/ TICK(14);
-  s_kswl = low;
-  s_kswh = page;
+  s_ksw = (uint16_t)(low | (page << 8));
 
   /*$FEAD*/
 }
@@ -1947,8 +1948,7 @@ void rom_setvid(void) {
   }
 
   /*$FEA9*/ TICK(14);
-  s_cswl = low;
-  s_cswh = page;
+  s_csw = (uint16_t)(low | (page << 8));
 
   /*$FEAD*/
 }
@@ -2015,19 +2015,19 @@ static uint8_t s_shape_mask[4] = {0xff, 0xff, 0xff, 0xff};
  * oracle compares 6,808 and 9,524 samples.
  */
 
-/// $6000/$6030 -- each hi-res cell row's base address, split into low and high
-/// halves. 48 rows; kHgrLineHi ends at $605F where the shape masks began.
-static const uint8_t kHgrLineLo[48] = {
-    0x00, 0x00, 0x80, 0x80, 0x00, 0x00, 0x80, 0x80, 0x00, 0x00, 0x80, 0x80,
-    0x00, 0x00, 0x80, 0x80, 0x28, 0x28, 0xa8, 0xa8, 0x28, 0x28, 0xa8, 0xa8,
-    0x28, 0x28, 0xa8, 0xa8, 0x28, 0x28, 0xa8, 0xa8, 0x50, 0x50, 0xd0, 0xd0,
-    0x50, 0x50, 0xd0, 0xd0, 0x50, 0x50, 0xd0, 0xd0, 0x50, 0x50, 0xd0, 0xd0,
-};
-static const uint8_t kHgrLineHi[48] = {
-    0x20, 0x30, 0x20, 0x30, 0x21, 0x31, 0x21, 0x31, 0x22, 0x32, 0x22, 0x32,
-    0x23, 0x33, 0x23, 0x33, 0x20, 0x30, 0x20, 0x30, 0x21, 0x31, 0x21, 0x31,
-    0x22, 0x32, 0x22, 0x32, 0x23, 0x33, 0x23, 0x33, 0x20, 0x30, 0x20, 0x30,
-    0x21, 0x31, 0x21, 0x31, 0x22, 0x32, 0x22, 0x32, 0x23, 0x33, 0x23, 0x33,
+/// $6000/$6030 -- each hi-res cell row's base address. The original splits the
+/// 48 addresses into parallel low and high tables because a 6502 indexes bytes;
+/// one table of addresses is the same data said once. kHgrLineHi ended at
+/// $605F, where the shape masks began.
+static const uint16_t kHgrLineBase[48] = {
+    0x2000, 0x3000, 0x2080, 0x3080, 0x2100, 0x3100,
+    0x2180, 0x3180, 0x2200, 0x3200, 0x2280, 0x3280,
+    0x2300, 0x3300, 0x2380, 0x3380, 0x2028, 0x3028,
+    0x20a8, 0x30a8, 0x2128, 0x3128, 0x21a8, 0x31a8,
+    0x2228, 0x3228, 0x22a8, 0x32a8, 0x2328, 0x3328,
+    0x23a8, 0x33a8, 0x2050, 0x3050, 0x20d0, 0x30d0,
+    0x2150, 0x3150, 0x21d0, 0x31d0, 0x2250, 0x3250,
+    0x22d0, 0x32d0, 0x2350, 0x3350, 0x23d0, 0x33d0,
 };
 
 /// $6064 -- dot patterns, indexed by dot_index(): ink 0-15, scanline parity,
@@ -2332,8 +2332,7 @@ void game_load_shape_masks(uint8_t shape) {
 void game_install_cout_vector(void) {
   /*$6641*/ TICK(16);
   // CSWL/CSWH at $36/$37, pointed at $664A.
-  s_cswl = 0x4a;
-  s_cswh = 0x66;
+  s_csw = 0x664a;
 }
 
 /* ========================================================================== */
@@ -3203,7 +3202,7 @@ restart:
 
 /// The address of a cell row's first scanline, from the split table.
 static uint16_t cell_row_base(uint8_t row) {
-  return (uint16_t)(kHgrLineLo[row] | (kHgrLineHi[row] << 8));
+  return kHgrLineBase[row];
 }
 
 /// Index into the 128-byte dot table at $6064: 16 inks of 8, four column
@@ -4428,8 +4427,11 @@ static uint16_t glyph_rows(uint8_t glyph) {
 /// text line, CH at $24 is the column; `- 4 + $20` on the high byte is
 /// `+ $1C`, which maps $04xx (text page 1) onto $20xx (hi-res page 1).
 static uint16_t hires_cursor(void) {
-  const uint8_t hi = (uint8_t)(s_bash - 0x04 + 0x20);
-  const uint8_t lo = (uint8_t)(s_basl + s_ch);
+  // Each half separately, and that is not an accident of the split: the low
+  // byte wraps at 8 bits without carrying into the high one, so a cursor near
+  // the end of a line addresses the start of the same hi-res row.
+  const uint8_t hi = (uint8_t)((s_bas >> 8) - 0x04 + 0x20);
+  const uint8_t lo = (uint8_t)((s_bas & 0xff) + s_ch);
   return (uint16_t)(lo | (hi << 8));
 }
 
@@ -5361,8 +5363,7 @@ void game_bonus_screen(void) {
   // $795D -- COUT back to the ROM's, and $02 becomes the outermost counter of
   // the pause below.
   TICK(15);
-  s_cswl = 0xf0;
-  s_cswh = 0xfd;
+  s_csw = 0xfdf0;
   uint8_t passes = 0x20; // $02 was the outermost counter
 
   // $7969 -- hold the screen. Everything from $794D on keeps its probe: the
@@ -5660,8 +5661,7 @@ wait: /* $741C */
 
   // $7587 -- COUT back to the ROM's.
   TICK(16);
-  s_cswl = 0xf0;
-  s_cswh = 0xfd;
+  s_csw = 0xfdf0;
 }
 
 /* ========================================================================== *
@@ -6727,22 +6727,17 @@ void init_emulated(void) {
   s_wndwdth = kSnakeByteEntryRam[0x21];
   s_wndtop = kSnakeByteEntryRam[0x22];
   s_wndbtm = kSnakeByteEntryRam[0x23];
-  s_gbasl = kSnakeByteEntryRam[0x26];
-  s_gbash = kSnakeByteEntryRam[0x27];
-  s_basl = kSnakeByteEntryRam[0x28];
-  s_bash = kSnakeByteEntryRam[0x29];
-  s_bas2l = kSnakeByteEntryRam[0x2a];
-  s_bas2h = kSnakeByteEntryRam[0x2b];
+  s_gbas = (uint16_t)(kSnakeByteEntryRam[0x26] | (kSnakeByteEntryRam[0x27] << 8));
+  s_bas = (uint16_t)(kSnakeByteEntryRam[0x28] | (kSnakeByteEntryRam[0x29] << 8));
+  s_bas2 = (uint16_t)(kSnakeByteEntryRam[0x2a] | (kSnakeByteEntryRam[0x2b] << 8));
   s_h2 = kSnakeByteEntryRam[0x2c];
   s_v2 = kSnakeByteEntryRam[0x2d];
   s_mask = kSnakeByteEntryRam[0x2e];
   s_color = kSnakeByteEntryRam[0x30];
   s_invflg = kSnakeByteEntryRam[0x32];
   s_ysav1 = kSnakeByteEntryRam[0x35];
-  s_cswl = kSnakeByteEntryRam[0x36];
-  s_cswh = kSnakeByteEntryRam[0x37];
-  s_kswl = kSnakeByteEntryRam[0x38];
-  s_kswh = kSnakeByteEntryRam[0x39];
+  s_csw = (uint16_t)(kSnakeByteEntryRam[0x36] | (kSnakeByteEntryRam[0x37] << 8));
+  s_ksw = (uint16_t)(kSnakeByteEntryRam[0x38] | (kSnakeByteEntryRam[0x39] << 8));
   s_a2l = kSnakeByteEntryRam[0x3e];
 
   /* Registers. SP matters most -- the live stack bytes above are meaningless
