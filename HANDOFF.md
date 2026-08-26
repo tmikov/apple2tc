@@ -365,6 +365,25 @@ everything and link cleanly while being silently wrong. Both are marked
 
 ## Build and verify
 
+**To actually play it**, which is not something any check above does:
+
+```bash
+ninja -C cmake-build-release
+cmake-build-release/decoded/snake-byte/snake-byte-cold
+```
+
+It opens on `APPLE ][` and `]CALL 14160` for about an eighth of a second. That
+is not a hang and not a boot -- the entry snapshot was taken at `$3750` with
+BASIC's text page still on screen, so the cold build inherits it and then
+switches to hi-res. Confirmed working 2026-08-25.
+
+**The wall-clock path has no test.** Every check in this file is fixed-step by
+construction -- `--key-file`, `--hash-frames` and `--headless` all set
+`a2host_fixed_step()` -- because reproducibility is what each exists for. The
+mode a person uses is therefore covered by nothing, and it was totally broken
+for nine days before a bug report found it. Launch the game after touching
+anything in `lib/a2host`. See the 2026-08-25 "Four oracles" log entry.
+
 ```bash
 cmake -G Ninja -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug
 ninja -C cmake-build-debug

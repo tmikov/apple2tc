@@ -3077,3 +3077,56 @@ Three `ram_peek`/`ram_poke` calls remain and all three are the entry-state
 loader filling `s_ram` in the first place. Step 6's four passes -- storage,
 flags, registers, tables -- are done, and the playbook's "Getting the machine
 out of the code" is the transferable copy of how.
+
+---
+
+## 2026-08-25 (last) — Four oracles, one shared blind spot
+
+**Status:** validated · **Scope:** apple2tc
+
+The decompiled game was reported as "shows the BASIC screen and just hangs". It
+was not the decompilation. Every *windowed* build in the repo had been frozen
+since 2026-08-16, and nothing noticed for nine days.
+
+The mechanism is in the decision log for its own sake -- `frame_cb` advanced
+`lastRunTick_` before the simulate loop rather than after, so wall-clock mode
+measured zero elapsed time and ran zero cycles per repaint -- but the reason it
+survived is the part worth keeping.
+
+### The oracles all share an assumption, and it is a correct one
+
+`tests/run-tests.sh` compares `a2emu --headless` against `a2run`. `verify.sh`
+replays cycle-stamped keys. `probe-acceptance.sh` replays probe-stamped keys.
+The frame hashes need a fixed sampling clock. Every one of them is **fixed
+step**, and every one of them is fixed step *for a good reason*: they exist to
+be reproducible, and wall-clock pacing is exactly what makes a run
+irreproducible.
+
+So the project has four independent-looking checks that are not independent in
+the dimension that mattered. `a2host_fixed_step()` is literally the predicate
+that separates "everything we test" from "how anyone actually runs it", and it
+was never on either side of a comparison.
+
+**Ask of any oracle set: what do they all assume?** Not "what does each one
+cover" -- they were each doing their job. The blind spot was in the union.
+
+### Two smaller things
+
+**A plausible screen is not a working screen.** `snake-byte-cold` legitimately
+opens on `APPLE ][ / ]CALL 14160`, because its entry snapshot was taken at
+`$3750` with BASIC's text page still on screen. Someone reporting that as the
+symptom is describing something real *and* something expected, and the two had
+to be separated before the actual fault was visible. Decoding the snapshot's
+text page took four lines and removed the ambiguity immediately.
+
+**"Never actually launched" is a reason to check, not a footnote.** The claim
+that there was a playable build was made from headless evidence, with the
+caveat stated but not acted on. The caveat was the finding.
+
+### Still untested
+
+The wall-clock path has no test after this fix either. Catching it needs the
+pacing state moved out of the sokol translation unit into `a2host.c`, where a
+stub engine -- the interface is 13 functions -- could drive it and assert that a
+repaint with elapsed time runs a non-zero number of cycles. That is a real
+refactor and is deliberately not bundled with the fix.
