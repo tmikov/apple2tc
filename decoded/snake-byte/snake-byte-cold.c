@@ -65,6 +65,8 @@
 /// as more of this file turns into ordinary C.
 
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "apple2tc/a2host_api.h"
 #include "apple2tc/a2io.h"
@@ -82,6 +84,10 @@
 // data labels: 284
 
 #include "apple2tc/system2-inc.h"
+
+/// Defined next to click_speaker; declared here because the sound routines
+/// above it also toggle the speaker.
+static void speaker_access(uint8_t port);
 
 /// Charge the cycles the original spent, without naming the address.
 ///
@@ -3725,7 +3731,7 @@ void game_tick_sound_native(void) {
         if (!left) {
           TICK(28);
           const uint8_t port = s_click_port;
-          peek((uint16_t)(0xc000 + port));
+          speaker_access(port);
 
           // Two INC $6C46: every click lengthens the period, so the pitch
           // falls for as long as the head keeps moving.
@@ -4158,7 +4164,7 @@ void game_sound_sweep_native(void) {
     // $30 here would pass too, and that would be a real bug: the mute would
     // stop working and no oracle in this repo looks at sound.
     TICK(12);
-    peek((uint16_t)(0xc000 + s_click_port));
+    speaker_access(s_click_port);
     if (--x)
       TICK(1);
   } while (x);
@@ -4174,7 +4180,7 @@ void game_sound_sweep_native(void) {
 
     TICK(12);
     // The click itself. The read *is* the write -- see the note above.
-    peek((uint16_t)(0xc000 + s_click_port));
+    speaker_access(s_click_port);
     if (++x)
       TICK(1);
   } while (x);
@@ -4466,8 +4472,31 @@ static uint8_t scrn_cell(Cell c) {
 /// pass went looking: the address is $C000 + $6C49, and the built-in symbol
 /// database resolves the $C000 to KBD, so the disassembly reads `LDA KBD,Y`
 /// and the index is what makes it the speaker.
+/// Every access to the speaker soft switch goes through here.
+///
+/// The Apple II speaker is a one-bit cone and reading $C030 flips it, so the
+/// waveform is entirely the sequence of these accesses and the cycles they
+/// happen on. That makes the sequence an exact oracle for any change to this
+/// program's timing: dump it before and after, and it must be identical. It is
+/// also the only check the sound has ever had.
+///
+/// $C020 is the cassette output, which is where a muted click goes.
+static void speaker_access(uint8_t port) {
+  static FILE *dump;
+  static int tried;
+  if (!tried) {
+    const char *path = getenv("A2_TOGGLE_DUMP");
+    tried = 1;
+    if (path)
+      dump = fopen(path, "w");
+  }
+  if (dump)
+    fprintf(dump, "%u %u\n", (unsigned)s_cycles, (unsigned)port);
+  peek((uint16_t)(0xc000 + port));
+}
+
 static void click_speaker(void) {
-  peek(0xc000 + s_click_port);
+  speaker_access(s_click_port);
 }
 
 /* ========================================================================== */

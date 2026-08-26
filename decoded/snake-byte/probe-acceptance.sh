@@ -846,6 +846,32 @@ cold_compare() {
 cold_compare play  play.pkeys       play-cold.pkeys
 cold_compare hires play-hires.pkeys play-hires-cold.pkeys
 
+# The speaker's toggle timeline: every $C0xx access and the cycle it happened
+# on. The Apple II speaker is one bit and reading $C030 flips it, so this
+# sequence *is* the waveform -- which makes it an exact check on any change to
+# the game's timing, and the only oracle the sound has ever had.
+#
+# Note what it does *not* cover: both scenarios run in attract mode, and the
+# game deliberately routes clicks to $C020 (the cassette output, inaudible)
+# whenever attract mode is set. So every access below is port $20 and no
+# audible sound is produced. The cycles are the useful column.
+for sc in play:toggle-play.txt hires:toggle-hires.txt; do
+  name=${sc%%:*}; want=${sc#*:}
+  case $name in
+    play) keys=play-cold.pkeys ;;
+    hires) keys=play-hires-cold.pkeys ;;
+  esac
+  A2_TOGGLE_DUMP="$regen/toggle-$name.txt" \
+    "$bin/decoded/snake-byte/snake-byte-cold-run" --frames=1300 --no-sound \
+    --key-file="$here/$keys" > /dev/null 2>&1
+  if ! diff -q "$here/$want" "$regen/toggle-$name.txt" > /dev/null; then
+    echo "FAIL [toggle/$name]: the speaker timeline changed" >&2
+    diff "$here/$want" "$regen/toggle-$name.txt" | head -5 >&2
+    exit 1
+  fi
+  echo "[toggle/$name] PASS: $(wc -l < "$here/$want" | tr -d " ") speaker accesses match"
+done
+
 echo "--- coverage over all scenarios ---"
 coverage_report trace "$here/blocks.txt" 0
 # Baseline 20, and the number is a statement about the recordings rather than
