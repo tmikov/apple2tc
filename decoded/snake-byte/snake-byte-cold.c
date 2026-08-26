@@ -3203,27 +3203,36 @@ void game_merge_cell_native(uint8_t ink, Cell c) {
 
 /// $702B -- zero hi-res page 1, $2000 through $3FFF. The inner loop runs a
 /// full 256 bytes because Y wraps, so the terminating test is on the page.
+///
+/// The whole routine costs one charge, not 8,192. 106,897 cycles is the sum of
+/// what the 6502 spent here, measured at every call in both scenarios, where
+/// it is that number every time -- there is no data dependence, the loop
+/// always clears the same 32 pages. It is 6.3 frames, 105 ms, and what it
+/// buys the viewer is a hi-res page wiping downward. That is the one thing
+/// this charge does *not* preserve: the clearing is now instantaneous and the
+/// six frames the host draws through the charge already show it finished.
+/// Agreed in the design -- the fills are not worth preserving -- and the
+/// duration is, because $7056 follows immediately with a 1.29 s hold and the
+/// two read as one pause.
+///
+/// The charge sits at the top so it covers the region up to the next one,
+/// which is select_hires_page2's. Every TICK is a yield point, so collapsing
+/// them moves where the game can be parked; here that is safe because nothing
+/// in the loop reads input or the clock.
 void game_clear_hgr_native(void) {
-  TICK(12);
+  TICK(106897);
 
   for (uint8_t page = 0x20;;) {
     uint8_t y = 0;
     do {
-      TICK(12);
       poke((uint16_t)(page << 8) + y, 0x00);
       ++y;
-      if (y)
-        TICK(1);
     } while (y);
 
-    TICK(12);
     ++page;
     if (page == 0x40)
       break;
-    TICK(1);
   }
-
-  TICK(6);
 }
 
 /* ========================================================================== */

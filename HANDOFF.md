@@ -711,14 +711,39 @@ What remains, in order of how well-defined it is:
    and all its clicks go to `$20`, the cassette output. That is the scenario
    behaving as designed, not a gap.
 
-   Pick up at Task 2. The calibration step is the one to get right: deleting
+   **Task 2 is done** (commit `3aa669e`), and it is the method the rest
+   follows. `game_clear_hgr_native` charged 8,192 times inside its page loop
+   and now charges once, `TICK(106897)`, at the top. The constant is measured
+   rather than summed by hand: instrument the entry and exit, run both cold
+   scenarios, and confirm the number is the same at *every* call -- it was, at
+   all five, which is what licenses treating the cost as a constant.
+
+   Two results from it worth carrying forward:
+
+   - **The gate did not move.** 28 PASS, both toggle timelines byte-identical,
+     both cold screen probes still matching at 6,808 and 9,524 samples. So no
+     screen sample lands inside the fill, and this is the first evidence for
+     the design's hypothesis that the game's logic does not depend on the
+     clock. It is evidence, not proof -- the routine has no input poll.
+   - **What a collapse spends is the animation, not the duration.** The host
+     draws about six frames while the single charge is absorbed, and all six
+     now show a cleared page rather than one wiping downward. That was agreed
+     in the design. The 105 ms itself survives, which is what matters, since
+     `$7056` follows with a 1.29 s hold and the two read as one pause.
+
+   Pick up at Task 3. The calibration step is the one to get right: deleting
    the arithmetic ticks *shortens the intervals between toggles*, so each
    surviving advance takes the measured total of the region it stands for, not
-   what its old `TICK` charged.
+   what its old `TICK` charged. Task 3's routines are not all constant-cost --
+   the five with data-dependent trip counts (`rom_hline`, `rom_clreolz`,
+   `game_plot_hline_native`, `game_plot_vline_native`,
+   `game_lores_vline_native`) keep a per-iteration charge and collapse only
+   the straight-line remainder.
 
 4. **Step 6's old entry below is superseded** by item 3. Its `CYCLES` table
    of 130 probing / 721 charge-only sites predates the conversions and is
-   stale. As of 2026-08-24 the file has 839 `TICK` (an addressless charge), 16
+   stale. As of 2026-08-26 the file has **834** `TICK` (an addressless charge;
+   839 before task 2 collapsed `game_clear_hgr_native`'s six into one), 16
    `GAME_CYCLES` (a charge on an edge, deliberately not probing) and 11
    probing sites, of which the cold trace installs 6.
 4. **Loose ends:** **350** unknown nonzero bytes in `coverage.txt` (was 451;
