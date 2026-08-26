@@ -641,13 +641,12 @@ tmpN_U8 temporaries                   0
 dead `ret` / `ret_addr` parameters    0    121   one real `ret_addr` remains, and it
                                                 is an argument: the inline string's
                                                 address, which the original popped
-TICK statements                    773          838 before the virtual clock; the
-                                                drawing routines were folded
-advance statements                  17          the charges that are load bearing,
-                                                and cannot be folded at all
+TICK statements                      0          838 before the virtual clock
+advance statements                  21          the whole of the clock: every site
+                                                where a duration is perceptible
 compiler warnings of its own          0          at -Wall
 adapters left                         0     42
-lines                            6,792  16,195   the generated ext build, for scale
+lines                            5,806  16,195   the generated ext build, for scale
 ```
 
 What remains, in order of how well-defined it is:
@@ -772,29 +771,77 @@ What remains, in order of how well-defined it is:
    `TICK`s, which was rejected for a *fraction* of this -- the difference is
    that this buys the design and that bought 49 statements.
 
-   **Where the count actually stands: 838 charging sites before, 790 now**
-   (773 `TICK` plus 17 `advance`). That is the honest number and it is not
-   the ~10 the design describes, **because the plan does not contain the step
-   that gets there.** The spec's stage 2 is "delete the ~830, install the
-   calibrated advances"; the plan's tasks 2-4 only fold the drawing routines,
-   which are 48 sites. The remaining ~773 are the game's logic, the ROM text
-   path and the display-list interpreter, and no task enumerates them. Anyone
-   picking this up should treat that as the next piece of *planning*, not of
-   coding.
+   **The collapse is done: 838 charging sites, and now 21** (commit
+   `7451af0`). There is no `TICK` left in the file at all; the 21 are
+   `advance(n)`, and the routines underneath are what they always were.
+   The file lost 962 lines.
 
-   **Task 5 -- playing it -- is outstanding and cannot be done from a
-   script.** What has been checked: the release windowed target links, and a
-   4,000-frame free run with no probe and no keys terminates normally, which
-   is the mechanical half of the hang test (every polling loop still yields,
-   or `--frames` would never end). What has *not* been checked is the half
-   that needs a person: that the snake moves at a sane speed, that keys steer
-   it, and that the sound is recognisably the same. Run
-   `cmake-build-release/decoded/snake-byte/snake-byte-cold`.
+   The plan's tasks 2-4 only fold the drawing routines, which is 48 sites, and
+   for a while this file said the plan therefore could not reach its goal.
+   That was wrong, and worth recording as a mistake rather than quietly
+   fixing: the spec expresses an *idea* -- most charges are arithmetic that
+   happens to consume time, a few actively advance it, remove the first group
+   -- and how to get there was for the work to figure out, not something the
+   plan had to enumerate. Reading a plan's task list as the boundary of the
+   task is how you end up delivering 6% of a design and calling it blocked.
+
+   **Why deleting the clock is safe, which is not obvious.** The cold gate is
+   keyed on *code events*, not on time. `screen.probe` and `ram-cold.probe`
+   sample at `$6217` and `$760F` -- the game's own keyboard reads -- and the
+   replay stamps ride a counter incremented at those same addresses.
+   `screen.probe` has a section headed "Why not frame hashes". So the design's
+   hypothesis is not merely plausible, it is what the probe language was built
+   for: all six cold checks pass unchanged, and `$6217` fires 6,808 times
+   before and after.
+
+   **Calibration is per site: each `advance` takes the measured cost of the
+   region from itself to the next charge.** Three ways that goes wrong, all
+   found by measurement after a check went red:
+
+   - **A region can contain a surviving `GAME_CYCLES_COORD`, and those charge
+     for themselves.** Counting them in the `advance` too made the death pause
+     cost 24 cycles a poll instead of 16. Two of the 21 sites are deliberately
+     *below* their measured region for this reason. Nothing caught it but the
+     block-head trace running 22% short -- and that check nearly did not catch
+     it either, because its margin was 5%.
+   - **The tone loop needs three numbers.** A silent pass is 38 cycles, one
+     counting toward a click is 50, and while the game is audible it is 61.
+     38 against 50 is most of a semitone.
+   - **Redrawing the walls is the snake's tempo.** 28,848 cycles, once per
+     step, constant at all 82 calls. Delete it and a step falls from 115 ms to
+     84 and the game plays a quarter faster. The design's "drawing becomes
+     instant, agreed" was about giving up the *sight* of a fill sweeping down
+     the screen; it is a different question when the main loop is paced by the
+     redraw. This is the one site the spec's own survivor list does not have.
+
+   **What it cost, measured against the build this work started from.** The
+   play scenario makes 573 speaker accesses before and after, in an identical
+   port sequence; the audible tone is 0.3% flat at the median and 4.3% at the
+   worst, inside a semitone. A snake step is 111.7 ms against 114.9. The
+   toggle baselines are **re-recorded**, because the waveform really does move
+   by a few percent -- they still catch the next regression, but they no
+   longer certify this change, and the ear is what certifies it.
+
+   **Task 5 -- playing it -- is outstanding, and it now matters more than it
+   did.** What has been checked mechanically: the release windowed target
+   links, and a 6,000-frame free run with no probe and no keys terminates
+   normally, so every polling loop still yields -- `--frames` would never end
+   otherwise. The longest stretch with the game parked is 2 frames.
+
+   What has *not* been checked is everything the gate structurally cannot see.
+   The toggle oracle was re-recorded, so it no longer certifies this change;
+   the numbers above say the tone is inside a semitone and the tempo inside
+   3%, but "inside a semitone" is an argument and not a verdict. Run
+   `cmake-build-release/decoded/snake-byte/snake-byte-cold` and confirm: the
+   difficulty prompt appears and times out into demo, a digit is accepted, the
+   snake moves at a sane speed, keys steer it, and the tone and the death buzz
+   sound like the game. A hang is the expected failure mode and no automated
+   check in this repo can produce one.
 
 4. **Step 6's old entry below is superseded** by item 3. Its `CYCLES` table
    of 130 probing / 721 charge-only sites predates the conversions and is
-   stale. As of 2026-08-26 the file has **773** `TICK` and **17** `advance`
-   (both an addressless charge; 838 `TICK` before the virtual-clock work), 16
+   stale. As of 2026-08-26 the file has **no** `TICK` and **21** `advance`
+   (an addressless charge; 838 `TICK` before the virtual-clock work), 16
    `GAME_CYCLES` (a charge on an edge, deliberately not probing) and 11
    probing sites, of which the cold trace installs 6.
 4. **Loose ends:** **350** unknown nonzero bytes in `coverage.txt` (was 451;
