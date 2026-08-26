@@ -30,7 +30,7 @@ public:
   }
 
   std::pair<iterator, bool> insert(K key) {
-    auto tmpRes = map_.template try_emplace(key, vec_.size());
+    auto tmpRes = map_.try_emplace(key, vec_.size());
     if (tmpRes.second) {
       // Inserted a new element.
       vec_.push_back(key);
