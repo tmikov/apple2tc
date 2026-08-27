@@ -1671,6 +1671,17 @@ enum { DIR_RIGHT = 1, DIR_UP = 2, DIR_LEFT = 3, DIR_DOWN = 4 };
 static const uint8_t kColDelta[5] = {0x00, 0x01, 0x00, 0xff, 0x00};
 static const uint8_t kRowDelta[5] = {0x00, 0x00, 0xff, 0x00, 0x01};
 
+/// Which shape the head is drawn with, by how it is turning and which way it
+/// ends up facing. The original computes these by adding $10, $04 or $08 to
+/// the direction, which is the same table with the rows implied.
+typedef enum { TURN_CW, TURN_CCW, TURN_STRAIGHT } Turn;
+
+static const uint8_t kSnakeShape[3][5] = {
+    [TURN_CW] = {0, 0x11, 0x12, 0x13, 0x14},
+    [TURN_CCW] = {0, 0x05, 0x06, 0x07, 0x08},
+    [TURN_STRAIGHT] = {0, 0x09, 0x0a, 0x0b, 0x0c},
+};
+
 /// The sixteen-entry ring the keyboard scan fills and the play loop drains.
 static uint8_t s_key_ring[16];
 
@@ -3625,7 +3636,7 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
   steer: /* a key with the high bit on, so the player is steering */
     s_click_count = 0x10;
     if (code == KEY_TURN_CW) {
-      shape = (uint8_t)(dir + 0x10);
+      shape = kSnakeShape[TURN_CW][dir];
       // $624E is left one below range here and normalised at $62B8, which is
       // the order the samples see; computing the wrap early would be tidier
       // and would not match.
@@ -3634,7 +3645,7 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
     }
 
     if (code == KEY_TURN_CCW) {
-      shape = (uint8_t)(dir + 0x04);
+      shape = kSnakeShape[TURN_CCW][dir];
       s_direction = (uint8_t)(dir + 1);
       goto draw;
     }
@@ -3679,7 +3690,7 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
     }
 
   straight: /* $6315 */
-    shape = (uint8_t)(dir + 0x08);
+    shape = kSnakeShape[TURN_STRAIGHT][dir];
 
   draw: /* draw the head, then step it one cell */
   {
