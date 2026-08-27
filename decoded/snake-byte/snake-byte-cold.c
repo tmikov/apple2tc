@@ -1391,12 +1391,6 @@ static Bouncer s_bouncers[2] = {
 /// writes them; kKeyDefaults is the same six as shipped and is never written.
 static uint8_t s_key_table[6] = {0xc9, 0xca, 0xcb, 0xcd, 0x88, 0x95};
 
-/// the loaded shape's four scanline masks, which game_load_shape
-/// copies out of kShapeMaskTable and the two hi-res cell drawers read.
-/// $FF FF FF FF in the shipped image, which is what a shape of all dots
-/// would leave there.
-static uint8_t s_shape_mask[4] = {0xff, 0xff, 0xff, 0xff};
-
 /* --- The game's own tables ------------------------------------------------ */
 /*
  * Read-only data inside the loaded image, and const arrays here. They were
@@ -1586,10 +1580,6 @@ static const uint8_t kArrowGlyph[6] = {
  * of the sweep, read by nothing. the apple Cell are the answer and are real.
  */
 
-/// The direction $6A32 settled on. game_move_ok and key_for_direction both
-/// read it back rather than being passed it.
-static uint8_t s_steer_dir = 0x02;
-
 /// The cell the sweep decided to steer towards.
 static Cell s_apple = {.col = 0x13, .row = 0x1d};
 
@@ -1619,7 +1609,7 @@ static bool s_joystick_selected;
  * They are C variables now, and no longer aliased with anything -- the glyph
  * blitter, which used to borrow all nine for a font pointer and the caller's
  * registers, has its own locals. Making them actual parameters is the step
- * after this one, and each needs its own argument first: s_shape turned out to
+ * after this one, and each needs its own argument first: s_snake.shape turned out to
  * be a genuine global, because bouncer_step erases with whatever was last left
  * in it.
  */
@@ -1632,14 +1622,6 @@ static bool s_joystick_selected;
  * unrelated -- see the second enum. That is not a naming problem to be tidied
  * away; it is a union the original wrote by hand, and the names say so.
  */
-/// which shape to draw. game_load_shape turns it into the four
-/// scanline masks at $6060.
-///
-/// A variable and not a parameter, which is what the original makes it:
-/// bouncer_step erases where the bouncer was using whatever was last left
-/// here, so the value outlives any one call. Every path that could have made
-/// that a hazard was checked -- see the note below.
-static uint8_t s_shape;
 
 /// SCRN one cell. Defined further down, next to the plot helpers.
 static uint8_t scrn_cell(Cell c);
@@ -1690,14 +1672,44 @@ static uint8_t s_key_ring[16];
 static uint8_t s_ring_read;
 static uint8_t s_ring_write;
 
-/// The direction the snake is travelling, DIR_RIGHT..DIR_DOWN.
-static uint8_t s_direction = DIR_UP;
-
-/// The head's cell, and the tail's. The snake itself is not stored -- the
-/// lo-res screen is the occupancy map, and the tail walks it by reading the
-/// colour it finds to work out which way the body went.
-static Cell s_head = {.col = 0x14, .row = 0x24};
-static Cell s_tail = {.col = 0x14, .row = 0x27};
+/// Everything belonging to the snake currently on the playfield.
+static struct {
+  /// The head's cell, and the tail's. The snake itself is not stored -- the
+  /// lo-res screen is the occupancy map, and the tail walks it by reading the
+  /// colour it finds to work out which way the body went.
+  Cell head, tail;
+  uint8_t direction; ///< the direction the snake is travelling, DIR_RIGHT..DIR_DOWN
+  /// Segments still owed. While it is nonzero the tail is not trimmed, so the
+  /// snake grows; a life starts with ten and each apple adds ten more.
+  uint8_t growth;
+  /// The head moved this step, so the next draw merges the head shape over
+  /// the cell. game_mark_head raises it, game_draw_head reads it and clears
+  /// it.
+  bool head_moved;
+  /// which shape to draw. game_load_shape turns it into the four
+  /// scanline masks at $6060.
+  ///
+  /// A variable and not a parameter, which is what the original makes it:
+  /// bouncer_step erases where the bouncer was using whatever was last left
+  /// here, so the value outlives any one call. Every path that could have
+  /// made that a hazard was checked -- see the note below.
+  uint8_t shape;
+  /// the loaded shape's four scanline masks, which game_load_shape
+  /// copies out of kShapeMaskTable and the two hi-res cell drawers read.
+  /// $FF FF FF FF in the shipped image, which is what a shape of all dots
+  /// would leave there.
+  uint8_t shape_mask[4];
+  /// The direction $6A32 settled on. game_move_ok and key_for_direction both
+  /// read it back rather than being passed it.
+  uint8_t steer_dir;
+} s_snake = {
+    .head = {.col = 0x14, .row = 0x24},
+    .tail = {.col = 0x14, .row = 0x27},
+    .direction = DIR_UP,
+    .growth = 0x07,
+    .shape_mask = {0xff, 0xff, 0xff, 0xff},
+    .steer_dir = 0x02,
+};
 
 /// How the life ended, which $7739 reads the moment the play loop returns:
 /// $00 the gate, $0F an apple, $FF the quit key, $FE the timer, anything
@@ -1712,10 +1724,6 @@ static Cell s_tail = {.col = 0x14, .row = 0x27};
 /// (0x00-0x0F) can ever collide with them.
 static uint8_t s_life_outcome;
 
-/// Segments still owed. While it is nonzero the tail is not trimmed, so the
-/// snake grows; a life starts with ten and each apple adds ten more.
-static uint8_t s_growth = 0x07;
-
 /// The life timer -- see s_life_time for what seeds it and why $FF stops it.
 static uint8_t s_life_timer = 0x61;
 
@@ -1729,7 +1737,7 @@ static uint8_t s_click_count;
 /* ========================================================================== */
 
 uint8_t game_start_life(uint8_t head_col) {
-  s_head.col = head_col;
+  s_snake.head.col = head_col;
 
   // Opposite corners, converging. The original's nine stores are these two.
   const Bouncer a = {.col = 0x01, .row = 0x01, .dx = +1, .dy = +1};
@@ -1747,7 +1755,7 @@ void game_load_shape_masks(uint8_t shape) {
   uint8_t last = 0;
   for (unsigned line = 0; line < 4; ++line) {
     last = kShapeMaskTable[(uint8_t)((uint8_t)(shape << 2) + line)];
-    s_shape_mask[line] = last;
+    s_snake.shape_mask[line] = last;
   }
 }
 
@@ -1768,7 +1776,7 @@ void game_install_cout_vector(void) {
 /*                                                                            */
 /* The plots go through plot_at and plot_shape_at. Which one a call uses is    */
 /* the point: the erase at $654C deliberately does *not* name a shape. It      */
-/* reuses whatever s_shape holds, and the mask that shape selects decides      */
+/* reuses whatever s_snake.shape holds, and the mask that shape selects decides      */
 /* which pixels get cleared. Tidying that away would change the screen.        */
 /* ========================================================================== */
 
@@ -1846,7 +1854,7 @@ void bouncer_step(Bouncer *b) {
 
   rom_plot(b->row, b->col);
 
-  s_shape = SHAPE_BOUNCER;
+  s_snake.shape = SHAPE_BOUNCER;
 
   if (want_row == 0) {
     // Off the board: not redrawn, and the position is not committed.
@@ -1928,7 +1936,7 @@ static uint8_t s_level = 0x01;
 /// the clamp.
 static uint8_t s_life_time = 0x64;
 
-/* --- The settings block: s_step_delay-s_head_moved -------------------------------------- */
+/* --- The settings block: s_step_delay-s_snake.head_moved -------------------------------------- */
 /*
  * Six bytes that outlive a life, set once at $376E and then kept up to date as
  * the game goes on. Everything else about a life is torn down and rebuilt.
@@ -1961,10 +1969,6 @@ static uint8_t s_script_index;
 /// is computed by game_set_apple_value from the difficulty and the level
 /// number; that routine never reads this byte.
 static uint8_t s_level_time;
-
-/// The head moved this step, so the next draw merges the head shape over
-/// the cell. game_mark_head raises it, game_draw_head reads it and clears it.
-static bool s_head_moved;
 
 /* --- The three zero-page pointers: $000A-$000F ---------------------------- */
 /*
@@ -2068,7 +2072,7 @@ void game_find_nearest_apple(void) {
   static const uint8_t kApple = CELL_APPLE;
   static const uint8_t kLastRow = 0x27;
 
-  Cell c = {.col = s_head.col, .row = 1};
+  Cell c = {.col = s_snake.head.col, .row = 1};
   bool found = false;
 
   for (;;) { // leftwards
@@ -2086,7 +2090,7 @@ void game_find_nearest_apple(void) {
   }
 
   if (!found) {
-    c.col = s_head.col;
+    c.col = s_snake.head.col;
 
     for (;;) { // rightwards
       const uint8_t v = cell_at(c);
@@ -2135,8 +2139,8 @@ static const struct {
 MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
   // The head plus this direction's deltas.
   const Cell target = {
-      .col = (uint8_t)(kColDelta[dir] + s_head.col),
-      .row = (uint8_t)(kRowDelta[dir] + s_head.row),
+      .col = (uint8_t)(kColDelta[dir] + s_snake.head.col),
+      .row = (uint8_t)(kRowDelta[dir] + s_snake.head.row),
   };
 
   const uint8_t cell = cell_at(target);
@@ -2206,10 +2210,10 @@ static void lores_hline(uint8_t row, uint8_t from_col) {
   rom_hline(row, from_col);
 }
 
-/// Plot at a cell in a given ink, keeping whatever shape s_shape holds.
+/// Plot at a cell in a given ink, keeping whatever shape s_snake.shape holds.
 ///
 /// Separate from plot_shape_at because for these callers the shape genuinely
-/// is inherited -- see s_shape -- and passing one would be inventing a value
+/// is inherited -- see s_snake.shape -- and passing one would be inventing a value
 /// the original does not have.
 static void plot_at(uint8_t ink, Cell c) {
   game_plot_shape(ink, c);
@@ -2367,7 +2371,7 @@ void game_draw_playfield(void) {
   wipe_occupancy_map();
 
   s_mon.wndtop = 0x14;
-  s_shape = SHAPE_SOLID;
+  s_snake.shape = SHAPE_SOLID;
   set_ink(INK_WALL_BOTTOM);
 
   open_wall_gaps();
@@ -2469,7 +2473,7 @@ void game_draw_cell(uint8_t ink, Cell c) {
     // zero page and a probe may sample there.
     const uint8_t idx = dot_index(ink, (uint8_t)line, c.col);
 
-    poke(dest + c.col, (uint8_t)(kHgrPattern[idx] & s_shape_mask[line]));
+    poke(dest + c.col, (uint8_t)(kHgrPattern[idx] & s_snake.shape_mask[line]));
     dest += 0x0400; // one scanline down, i.e. +4 on the high byte
   }
   // The carry is what the loop's CPX #4 leaves.
@@ -2493,7 +2497,7 @@ void game_merge_cell(uint8_t ink, Cell c) {
         (uint8_t)((uint8_t)(((uint8_t)((parity << 7) | (ink >> 1))) << 2) | (c.col & 3));
 
     const uint16_t at = dest + c.col;
-    poke(at, (uint8_t)(((kHgrPattern[idx] ^ 0x7f) & s_shape_mask[line]) | peek(at)));
+    poke(at, (uint8_t)(((kHgrPattern[idx] ^ 0x7f) & s_snake.shape_mask[line]) | peek(at)));
     dest += 0x0400;
   }
 }
@@ -2534,7 +2538,7 @@ void game_clear_hgr(void) {
 void game_plot_hline(uint8_t ink, Cell c, uint8_t to_col) {
   // Loads the four scanline masks the cell drawers read. The mask it
   // returns was the original\'s result in A and nothing reads it.
-  game_load_shape_masks(s_shape);
+  game_load_shape_masks(s_snake.shape);
   for (;;) {
     game_draw_cell(ink, c);
 
@@ -2549,7 +2553,7 @@ void game_plot_hline(uint8_t ink, Cell c, uint8_t to_col) {
 void game_plot_vline(uint8_t ink, Cell c, uint8_t to_row) {
   // Loads the four scanline masks the cell drawers read. The mask it
   // returns was the original\'s result in A and nothing reads it.
-  game_load_shape_masks(s_shape);
+  game_load_shape_masks(s_snake.shape);
   for (;;) {
     game_draw_cell(ink, c);
 
@@ -3188,27 +3192,27 @@ void game_set_apple_value(void) {
 
 /// mark the head on the lo-res occupancy map, at the row and column
 /// the caller has already loaded, and raise the two flags that say it is
-/// there: s_head_moved for the next draw and s_tone_period to start the tone.
+/// there: s_snake.head_moved for the next draw and s_tone_period to start the tone.
 void game_mark_head(uint8_t row, uint8_t col) {
   rom_plot(row, col);
 
-  s_head_moved = true;
+  s_snake.head_moved = true;
   s_tone_period = 0x01;
 
   // A and its flags are live out of $6BEF, unlike almost everything else here.
 }
 
-/// draw the cell the caller set up, and if s_head_moved says the head is on
+/// draw the cell the caller set up, and if s_snake.head_moved says the head is on
 /// it, merge shape 1 over the top so the head reads as a head rather than
-/// replacing the body cell underneath. s_head_moved is consumed here.
+/// replacing the body cell underneath. s_snake.head_moved is consumed here.
 void game_draw_head(uint8_t ink, Cell c) {
   game_plot_shape(ink, c);
 
-  if (s_head_moved) {
-    s_shape = SHAPE_APPLE;
+  if (s_snake.head_moved) {
+    s_snake.shape = SHAPE_APPLE;
     { // was game_plot_shape_merge()
 
-      game_load_shape_masks(s_shape);
+      game_load_shape_masks(s_snake.shape);
 
       // The high byte it returns was the original's result in A; nothing
       // reads it now.
@@ -3216,7 +3220,7 @@ void game_draw_head(uint8_t ink, Cell c) {
     }
   }
 
-  s_head_moved = false;
+  s_snake.head_moved = false;
   // Only V and D are live out, and neither is touched here.
 }
 
@@ -3234,7 +3238,7 @@ void game_award_extra_life(void) {
 
 /// load a shape and draw it, which is the pair every caller wants.
 void game_plot_shape(uint8_t ink, Cell c) {
-  game_load_shape_masks(s_shape);
+  game_load_shape_masks(s_snake.shape);
   game_draw_cell(ink, c); // JMP -- a tail call.
 }
 
@@ -3329,7 +3333,7 @@ uint8_t game_draw_side_walls(void) {
   // level to level.
   (void)game_rand_byte();
 
-  s_shape = SHAPE_SOLID;
+  s_snake.shape = SHAPE_SOLID;
 
   uint8_t seed = s_life_timer;
   if (seed & 0x80) {
@@ -3524,7 +3528,7 @@ static uint8_t turn_for_key(uint8_t key, uint8_t dir) {
 /// Draw \p shape into \p c with ink \p ink, through the plotter's zero-page
 /// argument block.
 static void plot_shape_at(uint8_t shape, uint8_t ink, Cell c) {
-  s_shape = shape;
+  s_snake.shape = shape;
   game_plot_shape(ink, c);
 }
 
@@ -3624,7 +3628,7 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
       code = game_read_direction(key);
     }
 
-    uint8_t dir = s_direction;
+    uint8_t dir = s_snake.direction;
     uint8_t shape;
 
   dispatch: /* $6291 */
@@ -3639,13 +3643,13 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
       // $624E is left one below range here and normalised at $62B8, which is
       // the order the samples see; computing the wrap early would be tidier
       // and would not match.
-      s_direction = (uint8_t)(dir - 1);
+      s_snake.direction = (uint8_t)(dir - 1);
       goto draw;
     }
 
     if (code == KEY_TURN_CCW) {
       shape = kSnakeShape[TURN_CCW][dir];
-      s_direction = (uint8_t)(dir + 1);
+      s_snake.direction = (uint8_t)(dir + 1);
       goto draw;
     }
 
@@ -3693,13 +3697,13 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
 
   draw: /* draw the head, then step it one cell */
   {
-    const Cell head = s_head;
-    s_shape = shape;
+    const Cell head = s_snake.head;
+    s_snake.shape = shape;
     game_draw_head(INK_SNAKE, head);
 
     // $62B8 -- the direction back into 1..4, and the ink is the direction.
-    dir = (uint8_t)((((uint8_t)(s_direction - 1)) & 3) + 1);
-    s_direction = dir;
+    dir = (uint8_t)((((uint8_t)(s_snake.direction - 1)) & 3) + 1);
+    s_snake.direction = dir;
     rom_setcol(dir);
 
     rom_plot(head.row, head.col);
@@ -3709,7 +3713,7 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
         .col = (uint8_t)(head.col + kColDelta[dir]),
         .row = (uint8_t)(head.row + kRowDelta[dir]),
     };
-    s_head = next;
+    s_snake.head = next;
     const uint8_t cell = scrn_cell(next);
 
     s_life_outcome = cell;
@@ -3765,11 +3769,11 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
   }
 
   tail: /* trim the tail, unless the snake is still growing */
-    if (s_growth) {
-      s_growth = (uint8_t)(s_growth - 1);
+    if (s_snake.growth) {
+      s_snake.growth = (uint8_t)(s_snake.growth - 1);
       s_click_count = 0x07;
     } else {
-      const Cell tail = s_tail;
+      const Cell tail = s_snake.tail;
       const uint8_t under = scrn_cell(tail);
 
       // The original keeps `under` on the stack across the erase. It stays on
@@ -3787,7 +3791,7 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
           .col = (uint8_t)(tail.col + kColDelta[tail_dir]),
           .row = (uint8_t)(tail.row + kRowDelta[tail_dir]),
       };
-      s_tail = tail_next;
+      s_snake.tail = tail_next;
       const uint8_t ahead = scrn_cell(tail_next);
 
       // ahead + 0x0c is a computed shape-table offset (ahead is the
@@ -3812,7 +3816,7 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
       // $642D -- the gate at the bottom is clear, so draw it. No edge charge
       // here: $6429's branch falls through to this and is only *taken* when
       // the cell is occupied.
-      s_shape = SHAPE_SOLID;
+      s_snake.shape = SHAPE_SOLID;
       plot_hline_at(INK_WALL_BOTTOM, 0x12, 0x27, 0x16);
       rom_setcol(INK_WALL_BOTTOM);
       rom_plot(0x27, 0x14);
@@ -3892,11 +3896,11 @@ static bool steer_try(uint8_t dir) {
      run: inverting the sense of the return below fails the play screen. */
   uint8_t move_taken = 0;
 
-  s_steer_dir = dir;
+  s_snake.steer_dir = dir;
   { // was game_move_ok()
 
     uint8_t cell = 0;
-    const MoveVerdict v = snake_move_verdict(s_steer_dir, &cell);
+    const MoveVerdict v = snake_move_verdict(s_snake.steer_dir, &cell);
 
     // Turn the verdict back into what the callers at $6A40 branch on. The
     // switch covers every MoveVerdict, so move_taken is always assigned; the
@@ -3923,8 +3927,8 @@ static bool steer_try(uint8_t dir) {
 SteerChoice game_auto_steer(uint8_t *key_out) {
   const uint8_t apple_row = s_apple.row;
   const uint8_t apple_col = s_apple.col;
-  const uint8_t head_row = s_head.row;
-  const uint8_t head_col = s_head.col;
+  const uint8_t head_row = s_snake.head.row;
+  const uint8_t head_col = s_snake.head.col;
 
   bool settled = false;
 
@@ -3977,8 +3981,8 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
 
   // $6A48 -- a direction was accepted. Already going that way means there is
   // nothing to say; otherwise name the key that turns to it.
-  const uint8_t dir = s_steer_dir;
-  if (dir == s_direction) {
+  const uint8_t dir = s_snake.steer_dir;
+  if (dir == s_snake.direction) {
     *key_out = dir;
     return STEER_STRAIGHT;
   }
@@ -4119,7 +4123,7 @@ void game_bonus_screen(void) {
   game_status_panel();
 
   // $78D1 -- the frame, in ink 9: top and bottom edges, then both sides.
-  s_shape = SHAPE_APPLE;
+  s_snake.shape = SHAPE_APPLE;
   // Columns $0D-$1A, rows $10-$15. The two sides used to inherit their column
   // from the edge above: an hline left $02 at its own endpoint, so the
   // first vline ran down $1A, the right edge, and not the $0D it looks like.
@@ -4194,11 +4198,11 @@ void game_bonus_screen(void) {
 void game_begin_life(void) {
   const uint8_t tail_col = game_start_life(0x14);
 
-  s_tail.col = tail_col; // from $6630, by way of $660F
-  s_head.row = 0x27; // the bottom edge
-  s_tail.row = 0x27; // the same cell
-  s_direction = DIR_UP;
-  s_growth = 0x0a; // ten
+  s_snake.tail.col = tail_col; // from $6630, by way of $660F
+  s_snake.head.row = 0x27; // the bottom edge
+  s_snake.tail.row = 0x27; // the same cell
+  s_snake.direction = DIR_UP;
+  s_snake.growth = 0x0a; // ten
   s_life_timer = 0x64;
 
   // $6279 -- empty the sixteen-entry key ring at $623C. DEX/BPL, so it runs
@@ -4365,7 +4369,7 @@ wait: /* $741C */
   plot_shape_at(0x02, INK_SNAKE, (Cell){.col = 0x1e, .row = 0x12});
   // The stem below it, down the same column -- which the original inherited
   // from the plot above rather than restating.
-  s_shape = SHAPE_STEM;
+  s_snake.shape = SHAPE_STEM;
   plot_vline_at(INK_SNAKE, 0x1e, 0x13, 0x1d);
   // At the stem's far end -- the vline above left $03 on $1D. 0x0e is
   // another one-off shape-table entry, same reasoning as the 0x02 above.
@@ -4470,7 +4474,7 @@ void game_print_inline_str(uint16_t ret_addr) {
 /*                                                                            */
 /* Arguments. The original passed all three in zero page; the cell is a        */
 /* parameter here and only the shape is still a variable:                     */
-/*   s_shape  picks four AND masks from the table at $6174 ($00)              */
+/*   s_snake.shape  picks four AND masks from the table at $6174 ($00)              */
 /*   c.col    the byte offset within the cell row ($02)                       */
 /*   c.row    cell row, 0-47 ($03)                                            */
 /* Scratch, which was $04-$07 and is now four locals:                          */
@@ -4885,7 +4889,7 @@ start_round: /* $76C7 */
   // $76F6 redraws it, at the cell game_place_apple just chose.
   game_plot_shape(INK_APPLE, apple);
   s_step_delay = 0x52;
-  s_head_moved = false;
+  s_snake.head_moved = false;
   s_life_timer = s_life_time;
   s_mon.wndtop = 0x14; // window top, so HOME clears only the status panel
   rom_home();
@@ -4924,7 +4928,7 @@ ate_apple: /* $773E */
     }
   }
 
-  s_growth = (uint8_t)(s_growth + 0x0a); // ten more cells of snake
+  s_snake.growth = (uint8_t)(s_snake.growth + 0x0a); // ten more cells of snake
 
   // $7793 -- anything left in the round?
   if (s_apples_left[0]) {
@@ -4937,7 +4941,7 @@ ate_apple: /* $773E */
   /* that was the last one. Draw the bar across the bottom, put the
      marker on it, and stop the clock for the run to the gate -- see
      s_life_time for why $FF stops it rather than lengthening it. */
-  s_shape = SHAPE_SOLID;
+  s_snake.shape = SHAPE_SOLID;
   // 0x06 is not one of the nine named Ink values (0x00,0x02,0x03,0x05,0x07,
   // 0x09,0x0c,0x0d,0x0f) -- a one-off bar colour used only here, left bare
   // on purpose rather than inventing a tenth Ink member for it.
@@ -5209,7 +5213,7 @@ void init_emulated(void) {
      line above no longer initialises it. Take it from the same snapshot, or
      the first read before any write would see zero where the booting build
      sees what BASIC left there. */
-  s_shape = kSnakeByteEntryRam[0x00];
+  s_snake.shape = kSnakeByteEntryRam[0x00];
   s_mon.ch = kSnakeByteEntryRam[0x24];
   s_mon.cv = kSnakeByteEntryRam[0x25];
   s_mon.wndlft = kSnakeByteEntryRam[0x20];
