@@ -52,7 +52,7 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-here=$(cd "$(dirname "$0")" && pwd)
+here=$(cd "$(dirname "$0")/.." && pwd)
 # Resolved against the caller's directory while that is still where we are; the
 # default is relative to the script instead.
 if [ -n "$bin" ]; then

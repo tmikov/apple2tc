@@ -30,7 +30,7 @@
 #              always read from the script's directory.
 
 set -u
-here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
 if [ $# -gt 2 ]; then
   echo "usage: $0 [build-dir] [out-dir]" >&2

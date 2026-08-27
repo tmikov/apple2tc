@@ -20,10 +20,18 @@ reference/            the builds the gate compares against -- see below
 testdata/             the original binary, the recording, keys, probes, baselines
 as-generated/         what the decompiler emitted in 2022, kept as the record
 
-probe-acceptance.sh   the gate. 31 checks, about two and a half minutes
-verify.sh             the older frame-hash comparison, for the booting builds
-decompile.sh          regenerates everything under reference/
+scripts/              the gate and the generators -- you do not need to run
+                      these to read or build the game
 ```
+
+The one worth knowing about is the gate, which is how anything here is trusted:
+
+```
+./scripts/probe-acceptance.sh ../../cmake-build-debug     # 31 checks, ~2m30s
+```
+
+Run it from this directory, not from `scripts/` -- the build directory argument
+is relative to where you are.
 
 Build and play:
 

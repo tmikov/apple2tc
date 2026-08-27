@@ -4,14 +4,17 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
-**The directory was reorganised on 2026-08-27** (`023c28f`, `e6c9e9e`). The
+**The directory was reorganised on 2026-08-27** (`023c28f`, `e6c9e9e`,
+`scripts/` after them). The
 artifact is `decoded/snake-byte/snake-byte.c` — it used to be
 `snake-byte-cold.c`, and the name it now has was held by a 2022 fossil that is
 `as-generated/snake-byte-simple-c.c`. Scaffolding moved into `reference/`
 (the builds the gate compares against), `testdata/` (binary, recording, keys,
-probes, baselines) and `as-generated/`. The scripts stayed at top level because
-each computes its own directory. The `-cold` fixtures kept their names: they
-describe the scenario, not the build.
+probes, baselines), `as-generated/` and `scripts/`. Each script now resolves
+its `here` to the directory *above* itself, which is the only thing that made
+moving them non-trivial. Run the gate from the game's directory, not from
+`scripts/`: `./scripts/probe-acceptance.sh ../../cmake-build-debug`. The
+`-cold` fixtures kept their names — they describe the scenario, not the build.
 
 **Start here (2026-08-25).** **The machine is out of the game's code.** That
 was the whole of step 6 and it is done — not the six cleanup steps, which
@@ -313,8 +316,8 @@ plausible. **Any ad-hoc run against a `.pkeys` file needs `--probe` too.**
 
 `hires` was added 2026-08-23 and is not optional decoration: without it the
 cold build ran `game_cout_hook_native` **zero** times under the gate. Its keys
-are derived, not recorded — `make-cold-keys.sh play-hires.pkeys
-play-hires-cold.pkeys 181207`.
+are derived, not recorded — `scripts/make-cold-keys.sh testdata/play-hires.pkeys
+testdata/play-hires-cold.pkeys 181207`.
 
 Both probes sample at `$6217` **and `$760F`**. `$6217` is the in-game keyboard
 ingest and `$760F` is the redefinition screen's; sampling only the first meant
@@ -359,8 +362,10 @@ which kind of drift it is: whitespace-stripped identical means layout only,
 differing tokens mean the decompiler's output really changed.
 
 It takes a build directory and an optional output directory
-(`decompile.sh [build-dir] [out-dir]`), reads its inputs relative to the script
-rather than the caller's cwd, and defaults to regenerating in place.
+(`scripts/decompile.sh [build-dir] [out-dir]`), reads its inputs relative to the
+directory above the script rather than the caller's cwd, and defaults to
+regenerating in place — into `reference/` and `testdata/`, mirroring the
+committed layout.
 
 **There is no such thing as decompiler-generated code here** (2026-08-24). It
 was treated as a category once, as a reason to defer moving `$0024/$0025` until

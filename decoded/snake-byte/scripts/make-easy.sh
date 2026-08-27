@@ -24,7 +24,7 @@
 #
 # The quota is BCD ($7817 does its arithmetic under SED), so $02 is 2.
 set -e
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 python3 - <<'PY'
 src, dst = 'testdata/snake-byte.b33', 'testdata/snake-byte-easy.b33'
 d = bytearray(open(src, 'rb').read())

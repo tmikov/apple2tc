@@ -21,7 +21,7 @@
 
 set -eu
 
-here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 bin=${1:-$here/../../cmake-build-debug}
 prog=$bin/decoded/snake-byte/snake-bytec1-ext-run
 

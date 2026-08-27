@@ -55,7 +55,7 @@ fi
 
 bin=$1
 a2run="$bin/tools/a2run/a2run"
-here=$(dirname "$0")
+here=$(dirname "$0")/..
 
 [ -x "$a2run" ] || { echo "Error: not found: $a2run" >&2; exit 1; }
 
@@ -108,7 +108,7 @@ done
 # about the wrong file.
 regen=$(mktemp -d)
 trap 'rm -rf "$regen"' EXIT
-"$here/decompile.sh" "$bin" "$regen" > /dev/null 2>&1 || {
+"$here/scripts/decompile.sh" "$bin" "$regen" > /dev/null 2>&1 || {
   echo "FAIL [regen]: decompile.sh failed against $bin" >&2
   exit 1
 }
@@ -958,7 +958,7 @@ echo "[warn] PASS: clean under$warn_names"
 # keys to a program that has stopped drawing frames.
 #
 # Two checks, and the static one is the real guarantee.
-awk -f "$here/yield-lint.awk" "$here/snake-byte.c" || exit 1
+awk -f "$here/scripts/yield-lint.awk" "$here/snake-byte.c" || exit 1
 echo "[yield] PASS: every loop that reads input can suspend"
 
 # And a live one, because a lint can only see what it knows to look for.

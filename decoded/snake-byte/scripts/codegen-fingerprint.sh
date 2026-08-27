@@ -16,7 +16,7 @@
 #              to or removed from the translation unit
 #
 set -e
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 cc -I ../../include -std=gnu11 -O2 -g0 -DNDEBUG -S -o - "${1:-snake-byte.c}" |
   grep -v '^[[:space:]]*\.file\|^[[:space:]]*\.ident\|^[[:space:]]*#' |
   sed 's/\.L[A-Z]*[0-9][0-9]*/.L#/g' | sha256sum | cut -c1-16
