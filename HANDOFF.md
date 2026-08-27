@@ -23,12 +23,18 @@ approach that felt right and was wrong: narrowing a probe in the same step as
 the move it accommodates, deriving liveness by reading a routine's body, and
 sizing a table to the data you can see.
 
-**What the artifact still is not.** Step 6's `CYCLES` question — which is not
-what the old plan said it was, see item 3 — and the loose ends. The game's own
-C is done.
+**What the artifact still is not.** Step 6's `CYCLES` question is **answered**:
+the virtual clock landed on 2026-08-26, 838 charging sites became 23, and the
+game was played on macOS to confirm it. See item 3. What is left is the loose
+ends, and stage 4 of the design -- restructuring the sound routine with
+understanding rather than mechanically -- which was always out of scope. The
+game's own C is done.
 
-**Before trusting a green run.** The block-head trace compares **six**
-addresses, not 113, so control flow inside the game is not compared at all. The
+**Before trusting a green run.** Two defects reached the user through a fully
+green gate on 2026-08-26 -- the game hung on ESC, and three compiler warnings
+-- so start from what the checks do not cover. The block-head trace compares
+**six** addresses, not 113, so control flow inside the game is not compared at
+all. The
 screen and memory at 6,808 and 9,524 samples are the gate, and both have been
 narrowed repeatedly by the state migration — the hole list at the top of
 `ram-cold.probe` says what each hole cost and why. And **half of `a2rom` is
@@ -672,7 +678,7 @@ What remains, in order of how well-defined it is:
    nothing.
 2. ~~**Step 4's remainder: `s_a`/`s_x`/`s_y`.**~~ **Done.** 307 references are
    **15**, and all 15 are load-bearing. See "The registers" below.
-3. **Step 6 -- and it is now designed, planned and started.** `TICK` turned out
+3. **Step 6 -- done, and confirmed by playing it.** `TICK` turned out
    to be doing three jobs, and the one that matters is not obvious: **it is the
    coroutine's suspend point.** The game runs on its own thread;
    `cycles_expired()` parks it wherever it is and hands control to the host,
@@ -876,20 +882,24 @@ What remains, in order of how well-defined it is:
    never ran looks exactly like zero warnings out of a clean file. Check that a
    comparison actually did the work before believing what it says.
 
-   **The rest of task 5 is still outstanding.** What has been checked mechanically: the release windowed target
-   links, and a 6,000-frame free run with no probe and no keys terminates
-   normally, so every polling loop still yields -- `--frames` would never end
-   otherwise. The longest stretch with the game parked is 2 frames.
+   **Task 5 is done: the game plays correctly on macOS** (2026-08-26), with
+   the sound right and ESC pausing and resuming. **The virtual-clock arc is
+   complete.**
 
-   What has *not* been checked is everything the gate structurally cannot see.
-   The toggle oracle was re-recorded, so it no longer certifies this change;
-   the numbers above say the tone is inside a semitone and the tempo inside
-   3%, but "inside a semitone" is an argument and not a verdict. Run
-   `cmake-build-release/decoded/snake-byte/snake-byte-cold` and confirm: the
-   difficulty prompt appears and times out into demo, a digit is accepted, the
-   snake moves at a sane speed, keys steer it, and the tone and the death buzz
-   sound like the game. A hang is the expected failure mode and no automated
-   check in this repo can produce one.
+   It is worth being exact about what that confirmation is worth, because it
+   is the only evidence for most of this work. The toggle oracle was
+   re-recorded, so it does not certify the collapse; the measurements say the
+   tone is inside a semitone and the tempo inside 3%, but those are arguments.
+   Someone playing it is the verdict, and both defects that reached the user
+   -- the ESC hang and three compiler warnings -- were found that way and by
+   nothing else. The mechanical checks that ran alongside (release target
+   links, 6,000-frame free run terminates, longest parked stretch 2 frames)
+   were all green while the game hung.
+
+   Two of the three checks added since exist to close that gap where it can be
+   closed: `[yield]` derives the set of loops that must be able to suspend, and
+   `[warn]` runs every compiler rather than the configured one. Neither would
+   have caught the *sound* being wrong. That still needs ears.
 
 4. **Step 6's old entry below is superseded** by item 3. Its `CYCLES` table
    of 130 probing / 721 charge-only sites predates the conversions and is
