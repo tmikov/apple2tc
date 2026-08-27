@@ -7,7 +7,7 @@ transfers.
 Written in skill shape (when to use → procedure → red flags) so it can be
 promoted to a `.claude/skills/` skill once it has survived a second game.
 
-**Maturity (Snake Byte, 2026-08-02 to 08-26).** Every step has now been
+**Maturity (Snake Byte, 2026-08-02 to 08-27).** Every step has now been
 executed once, including step 6, which was the last to go and took the longest.
 Step 6 then turned out to have a sixth disguise nobody had counted — the clock
 itself — and removing it is the newest material here. The findings below are
@@ -181,6 +181,30 @@ analysis.
 **`[6502]` Verify in vertical slices, not horizontal phases.** A frame-hash
 mismatch tells you *that* something broke, not *where*. Converting one subsystem
 at a time keeps every failure attributable to one change.
+
+### Proving an edit changed no code
+
+Renames and comment deletions should emit identical instructions, and comparing
+compiler output is the cheapest way to know. Compare `-S` output, not binaries,
+and filter three things that move for reasons that are not code changes:
+
+- **`-g0`** — debug info carries line numbers, so any edit moves it.
+- **`-DNDEBUG`** — `assert()` bakes `__LINE__` into the text section, so
+  deleting a *comment* changes the emitted code. Note what this also hides: the
+  assert's whole argument is elided, so a change to an assert's condition is
+  invisible to the check.
+- **label renumbering** — compilers number internal labels sequentially, so
+  adding or removing a function renumbers everything after it. Normalise
+  `.L<n>` to a placeholder.
+
+**A rename still changes the hash, and that is not a failure.** Assembly text
+contains symbol names. The check for a rename is: identical *after* normalising
+the old names to the new ones in the old output. Expect to be told this by a
+confused implementer if you write it down wrong.
+
+One trap that will cost you an afternoon: compile the old version **in its own
+directory**, or a relative `#include` fails, the compiler aborts before emitting
+anything, and the empty output compares equal to nothing at all.
 
 ### Hand-decompiling
 
@@ -905,6 +929,87 @@ the instance: a static check that every loop reading an input port contains a
 charge finds the whole class, takes twenty lines of `awk`, and does not decay
 when timing changes.
 
+### Calibrate the oracle against the change, by mutating what you just changed
+
+A gate tells you it is green. It does not tell you whether it was *looking*.
+The cheap way to find out is to break the thing you just changed, on purpose,
+in the specific ways it could plausibly be wrong, and see which checks notice.
+
+Done here after a 218-line, 21-`goto` top-level state machine was re-nested
+into four loops. Four structural mutations were planted — the un-rotated form,
+an exit that unwinds one level too far, and each of two duplicated
+initialisations deleted:
+
+| planted bug | 1,300-frame gate | 20,000-frame trace | 40,000-frame screen |
+| --- | --- | --- | --- |
+| loop init hoisted to the top | **caught** | — | — |
+| exit unwinds too far | missed | missed | **caught** |
+| first init deleted | missed | missed | **caught** |
+| second init deleted | missed | missed | **caught** |
+
+Three of four survived everything the work had cited as evidence. The code was
+right — but nobody knew that from the gate, they knew it from having reasoned
+carefully. Raising the budget turned reasoning into measurement.
+
+**Two corollaries worth having separately:**
+
+**A big number is not coverage until you know its distribution.** The rewrite
+cited "20,298,539 block heads match". Of one scenario's 260,128 hits, 252,364
+were a single address and the address most relevant to the change fired zero
+times. Before quoting a count as evidence, sort it by what produced it. A
+number that large is *reassuring* in a way that is very hard to argue with,
+which is exactly why it should be checked.
+
+**Do not let a check's budget encode a derived constant.** Two builds were
+compared at 1,300 and 1,150 frames, the 150 being how long one of them spends
+booting before the comparison can start. Raise both proportionally and it
+breaks, because the offset is absolute, not proportional. The fix was to give
+both sides the *same* budget and rely on the existing "longer side is truncated
+to the shorter" rule — the un-booted build always gets further per frame, so
+the invariant holds without anyone computing the offset. Prefer
+over-provisioning plus a comparison that truncates, over a tuned number that
+has to be re-derived whenever anything moves.
+
+### Making it readable, after it is correct
+
+A decompilation that passes its oracles is not yet something a person will
+tinker with. That is a separate pass, and it is mostly about deleting.
+
+**Comments in decompiled code sort into three piles, and only one should go.**
+
+- **Constraints stay.** "Computing the wrap early would be tidier and would not
+  match." This is the most valuable kind of comment in a decompilation and
+  there will be dozens: each one stops a future reader making a change that
+  looks obviously correct. Losing one costs a bug that no test catches.
+- **Narration goes.** "$624E is left one below range here and normalised at
+  $62B8, which is the order the samples see." The reader cannot check it,
+  cannot act on it, and it stands between them and the code.
+- **Unverified-path warnings stay.** Routines transcribed from the binary that
+  no scenario executes. That is a fact about how far the code can be trusted,
+  and usually nothing else records it.
+
+Bias toward keeping. Deleting one narration comment too few costs nothing.
+
+**Naming a domain partially is worse than not naming it.** Once `INK_SNAKE`
+exists, a reader infers that a bare `0x0c` nearby is *not* an ink — so every
+member of the domain must be named, or the exceptions must be marked as
+deliberate. The same trap caught a helper introduced for "the three routines
+that write the screen" when there were four: three call sites named, one not,
+and the name now actively misleads. Either cover the domain or annotate what
+you left out.
+
+**Names that encode a distinction which has since dissolved are pure cost.** A
+`_native` suffix separated hand-written from generated code; once nothing is
+generated it is noise on every call site, and here it was 140 of them. The tell
+is a qualifier that is true of everything.
+
+**Group the globals before renaming them.** Decompiled code arrives as a flat
+sheet of file-scope variables, and no function signature says what it touches.
+The groups are usually already implied by a comment ("these belong to the ROM
+routines, not the game") — that sentence should be a type. Grouping also
+separates the program's own state from the emulator's leftovers, which is the
+distinction a reader most needs and the one flat naming hides.
+
 ### Derive the set; a list written before the work is a starting point
 
 A design that enumerates the things to keep is telling you what the author could
@@ -1065,6 +1170,12 @@ The rule that costs nothing: whatever the generated C called at that site, call
 that, with the same return address. It is also what keeps the callee's probe
 sites firing, and the return address is what keeps the emulated stack the same
 if a probe fires inside.
+
+**A green gate is a claim about the gate, not about the code.** Before citing
+one, ask what it would take for it to be green and the code wrong — then build
+that and check. See "Calibrate the oracle against the change" above; three of
+four plausible breakages of a rewritten function survived the gate that had
+just approved it.
 
 **A warning you cannot see is still a warning.** gcc and clang disagree about
 which C constructs deserve a diagnostic — labels with nothing after them, a
