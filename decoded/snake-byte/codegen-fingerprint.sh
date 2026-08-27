@@ -8,8 +8,10 @@
 # changes, and each one looks exactly like a real difference:
 #
 #   -g0        debug info carries line numbers, so any edit moves it
-#   -DNDEBUG   assert() bakes __LINE__ into the text section, so deleting a
-#              *comment* changes the emitted code
+#   -DNDEBUG   with NDEBUG, assert() calls are completely elided, not just line
+#              numbers. This file has one assert() whose condition changes would
+#              be invisible to this tool; such changes must be verified by code
+#              review instead of fingerprinting
 #   .L#        gcc renumbers its internal labels whenever a function is added
 #              to or removed from the translation unit
 #
