@@ -660,6 +660,12 @@ typedef enum {
   /// Moved onto something solid. \p cell_out receives the occupancy byte,
   /// which is how the caller tells a wall from the snake's own tail.
   LIFE_CRASH,
+  /// Not a life-ending outcome. snake_step()'s signal that the head landed
+  /// on an empty, non-gate cell and the life goes on to `tail:`. Kept last
+  /// and named apart from the four real endings above so it cannot be
+  /// mistaken for one; game_play_loop() never returns it, so no caller
+  /// outside snake_step() ever sees it.
+  LIFE_CONTINUE,
 } LifeEnd;
 
 /// play one life: steer, move, draw and pace the snake until
@@ -3589,6 +3595,90 @@ void game_pause_or_toggle_sound(uint8_t key) {
   }
 }
 
+/// draw the head in \p shape, then step it one cell in \p dir and see what
+/// it landed on. \p cell_out receives the occupancy byte the head landed on,
+/// which is only meaningful for LIFE_CRASH; the buzz in that branch runs to
+/// completion before this returns.
+///
+/// \p dir is the direction going in; game_play_loop's callers pass whatever
+/// they had before the normalisation below, because it is that
+/// normalisation -- reading s_snake.direction fresh -- that actually decides
+/// which way the head moves, the same way $62B8 does.
+///
+/// Returns LIFE_CONTINUE for the one case that is not an ending: an empty,
+/// non-gate cell, where the original falls through to `tail:`.
+static LifeEnd snake_step(uint8_t dir, uint8_t shape, uint8_t *cell_out) {
+  const Cell head = s_snake.head;
+  s_snake.shape = shape;
+  game_draw_head(INK_SNAKE, head);
+
+  // $62B8 -- the direction back into 1..4, and the ink is the direction.
+  dir = (uint8_t)((((uint8_t)(s_snake.direction - 1)) & 3) + 1);
+  s_snake.direction = dir;
+  rom_setcol(dir);
+
+  rom_plot(head.row, head.col);
+
+  // $62D1 -- advance the head, and see what is there.
+  const Cell next = {
+      .col = (uint8_t)(head.col + kColDelta[dir]),
+      .row = (uint8_t)(head.row + kRowDelta[dir]),
+  };
+  s_snake.head = next;
+  const uint8_t cell = scrn_cell(next);
+
+  s_life_outcome = cell;
+  plot_shape_at(dir, INK_SNAKE, next);
+
+  /* --- $6474: what did it move onto? ------------------------------- */
+  if (cell == CELL_EMPTY) {
+    rom_setcol(INK_HEAD_MARK);
+    rom_plot(next.row, next.col);
+
+    // $633C -- the gate is column $14 of row 0.
+    if (next.col == 0x14) {
+      if (next.row == 0) {
+        return LIFE_GATE;
+      }
+    }
+    return LIFE_CONTINUE;
+  }
+
+  if (cell == CELL_APPLE) {
+    // $6480 -- an apple. Marked here; the caller does the scoring.
+    s_sound.click_count = 0x20;
+    rom_setcol(INK_HEAD_MARK);
+    game_mark_head(next.row, next.col);
+    *cell_out = cell;
+    return LIFE_APPLE;
+  }
+
+  // $6494 -- solid. Pause, buzzing, for a length taken byte by byte out
+  // of ROM at $E000: nobody chose those numbers, they were simply there.
+  // Both loops are DEY/BNE and DEX/BNE, which test *after* decrementing,
+  // so a count of zero means 256 and not none. Ten of the bytes this reads
+  // out of $E000 are zero, so that is the common case here rather than a
+  // corner: getting it wrong costs 12,790 cycles of the pause, which is
+  // three quarters of a frame and shifts everything after it.
+  uint8_t x = 0xff;
+  do {
+    advance(6);
+    uint8_t y = peek(0xe000 + x);
+    do {
+      // The buzz after dying: 255 clicks whose spacing is whatever byte of
+      // the ROM $E000+x happens to hold, which is why it is noise rather
+      // than a note.
+      advance(5);
+      --y;
+    } while (y != 0);
+    advance(13);
+    click_speaker();
+    --x;
+  } while (x != 0);
+  *cell_out = cell;
+  return LIFE_CRASH;
+}
+
 LifeEnd game_play_loop(uint8_t *cell_out) {
   game_find_nearest_apple();
 
@@ -3670,75 +3760,13 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
 
   draw: /* draw the head, then step it one cell */
   {
-    const Cell head = s_snake.head;
-    s_snake.shape = shape;
-    game_draw_head(INK_SNAKE, head);
-
-    // $62B8 -- the direction back into 1..4, and the ink is the direction.
-    dir = (uint8_t)((((uint8_t)(s_snake.direction - 1)) & 3) + 1);
-    s_snake.direction = dir;
-    rom_setcol(dir);
-
-    rom_plot(head.row, head.col);
-
-    // $62D1 -- advance the head, and see what is there.
-    const Cell next = {
-        .col = (uint8_t)(head.col + kColDelta[dir]),
-        .row = (uint8_t)(head.row + kRowDelta[dir]),
-    };
-    s_snake.head = next;
-    const uint8_t cell = scrn_cell(next);
-
-    s_life_outcome = cell;
-    plot_shape_at(dir, INK_SNAKE, next);
-
-    /* --- $6474: what did it move onto? ------------------------------- */
-    if (cell == CELL_EMPTY) {
-      rom_setcol(INK_HEAD_MARK);
-      rom_plot(next.row, next.col);
-
-      // $633C -- the gate is column $14 of row 0.
-      if (next.col == 0x14) {
-        if (next.row == 0) {
-          return LIFE_GATE;
-        }
-      }
-      goto tail;
-    }
-
-    if (cell == CELL_APPLE) {
-      // $6480 -- an apple. Marked here; the caller does the scoring.
-      s_sound.click_count = 0x20;
-      rom_setcol(INK_HEAD_MARK);
-      game_mark_head(next.row, next.col);
+    uint8_t cell = 0;
+    const LifeEnd outcome = snake_step(dir, shape, &cell);
+    if (outcome != LIFE_CONTINUE) {
       *cell_out = cell;
-      return LIFE_APPLE;
+      return outcome;
     }
-
-    // $6494 -- solid. Pause, buzzing, for a length taken byte by byte out
-    // of ROM at $E000: nobody chose those numbers, they were simply there.
-    // Both loops are DEY/BNE and DEX/BNE, which test *after* decrementing,
-    // so a count of zero means 256 and not none. Ten of the bytes this reads
-    // out of $E000 are zero, so that is the common case here rather than a
-    // corner: getting it wrong costs 12,790 cycles of the pause, which is
-    // three quarters of a frame and shifts everything after it.
-    uint8_t x = 0xff;
-    do {
-      advance(6);
-      uint8_t y = peek(0xe000 + x);
-      do {
-        // The buzz after dying: 255 clicks whose spacing is whatever byte of
-        // the ROM $E000+x happens to hold, which is why it is noise rather
-        // than a note.
-        advance(5);
-        --y;
-      } while (y != 0);
-      advance(13);
-      click_speaker();
-      --x;
-    } while (x != 0);
-    *cell_out = cell;
-    return LIFE_CRASH;
+    goto tail;
   }
 
   tail: /* trim the tail, unless the snake is still growing */
@@ -4750,6 +4778,12 @@ static void game_play_one_life(void) {
   case LIFE_CRASH:
     s_life_outcome = cell;
     break;
+  case LIFE_CONTINUE:
+    // Never returned here: game_play_loop() converts snake_step()'s
+    // LIFE_CONTINUE straight into `goto tail` and keeps playing, so this
+    // switch never sees it. The case exists so the compiler catches it if
+    // that stops being true.
+    abort();
   }
 }
 
