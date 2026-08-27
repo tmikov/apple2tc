@@ -1387,10 +1387,6 @@ static Bouncer s_bouncers[2] = {
     {.col = 0x26, .row = 0x01, .dx = -1, .dy = +1},
 };
 
-/// the six bound keys, in slot order. The key-redefinition screen
-/// writes them; kKeyDefaults is the same six as shipped and is never written.
-static uint8_t s_key_table[6] = {0xc9, 0xca, 0xcb, 0xcd, 0x88, 0x95};
-
 /* --- The game's own tables ------------------------------------------------ */
 /*
  * Read-only data inside the loaded image, and const arrays here. They were
@@ -1499,7 +1495,7 @@ static const uint8_t kSteerKey[5] = {
     0xcd,
 };
 
-/// the six keys as shipped. The live six at $6C63 are s_key_table,
+/// the six keys as shipped. The live six at $6C63 are s_input.bindings,
 /// which the redefinition screen writes; these are never written.
 static const uint8_t kKeyDefaults[6] = {
     0xc9,
@@ -1599,9 +1595,6 @@ static struct {
   bool muted;    ///< toggled by Ctrl-S
 } s_sound = {.port = 0x20, .passes = 0x0f};
 
-/// the player chose the joystick at the setup prompt.
-static bool s_joystick_selected;
-
 /* --- The plotter's arguments ---------------------------------------------- */
 /*
  * Nine bytes that lived at $0000-$0008 because the 6502 had nowhere else to
@@ -1665,14 +1658,22 @@ static const uint8_t kSnakeShape[3][5] = {
     [TURN_STRAIGHT] = {0, 0x09, 0x0a, 0x0b, 0x0c},
 };
 
-/// The sixteen-entry ring the keyboard scan fills and the play loop drains.
-static uint8_t s_key_ring[16];
-
-/// Where the play loop reads next, and where the scan writes next. The scan
-/// refuses to advance the write cursor onto the read one, which is the ring's
-/// only full test. Both wrap with `& $0F`.
-static uint8_t s_ring_read;
-static uint8_t s_ring_write;
+/// The keyboard ring the poll fills and the play loop drains, and the six
+/// bindings the redefinition screen edits.
+static struct {
+  /// The sixteen-entry ring the keyboard scan fills and the play loop
+  /// drains. Only a byte with bit 7 set counts as present.
+  uint8_t ring[16];
+  /// Where the play loop reads next, and where the scan writes next. The
+  /// scan refuses to advance the write cursor onto the read one, which is
+  /// the ring's only full test. Both wrap with `& $0F`.
+  uint8_t read, write;
+  /// the six bound keys, in slot order. The key-redefinition screen
+  /// writes them; kKeyDefaults is the same six as shipped and is never
+  /// written.
+  uint8_t bindings[6];
+  bool joystick; ///< the player chose the joystick at the setup prompt
+} s_input = {.bindings = {0xc9, 0xca, 0xcb, 0xcd, 0x88, 0x95}};
 
 /// Everything belonging to the snake currently on the playfield.
 static struct {
@@ -2604,14 +2605,14 @@ static void step_bouncer_slot(int slot) {
 /// trace caught it; the pinned site count could not, because the count was
 /// right.
 static uint8_t dequeue_key(void) {
-  const uint8_t at = s_ring_read;
-  const uint8_t key = s_key_ring[at];
+  const uint8_t at = s_input.read;
+  const uint8_t key = s_input.ring[at];
   if (!(key & 0x80)) {
     return key;
   }
 
-  s_key_ring[at] = 0x00;
-  s_ring_read = (uint8_t)((at + 1) & 0x0f);
+  s_input.ring[at] = 0x00;
+  s_input.read = (uint8_t)((at + 1) & 0x0f);
   // X *is* live out of $6594 -- `apple2tc --ir` says so -- unlike X out of
   // $6C72, where the same check let the write go. So it is maintained.
   return key;
@@ -2653,7 +2654,7 @@ uint8_t game_step_bouncers(void) {
 enum { kInputCount = 6 };
 
 static uint8_t input_key(int i) {
-  return s_key_table[i];
+  return s_input.bindings[i];
 }
 
 static uint8_t input_code(int i) {
@@ -2685,7 +2686,7 @@ static bool switch_pressed(uint16_t sw) {
 
 uint8_t game_read_direction(uint8_t key) {
   if (attract_mode()) {
-    if (s_joystick_selected) {
+    if (s_input.joystick) {
       if (switch_pressed(0xc061)) {
         return kCodeStop;
       }
@@ -2718,12 +2719,12 @@ uint8_t game_read_direction(uint8_t key) {
   // so the joystick block below does maintain it.
 
   if (code == kCodeJoystickOn) {
-    s_joystick_selected = true;
+    s_input.joystick = true;
     return 0x01;
   }
 
   if (code == kCodeJoystickOff) {
-    s_joystick_selected = false;
+    s_input.joystick = false;
     return 0x00;
   }
 
@@ -2732,7 +2733,7 @@ uint8_t game_read_direction(uint8_t key) {
     return code;
   }
 
-  const bool joystick = s_joystick_selected;
+  const bool joystick = s_input.joystick;
   if (!joystick) {
     return code;
   }
@@ -3374,19 +3375,19 @@ void game_read_key(void) {
   // $6217 is on the replay coordinate, and is also where ram.probe and
   // screen.probe take their samples. It keeps its probe for both reasons.
   GAME_CYCLES_COORD(0x6217, 10);
-  const uint8_t at = s_ring_write;
+  const uint8_t at = s_input.write;
   const uint8_t key = io_peek(0xc000);
 
   if (key & 0x80) {
     io_poke(0xc010, key); // clear the strobe
-    s_key_ring[at] = key;
+    s_input.ring[at] = key;
 
     // The $0F is the ring's size and nothing checks it: widening it to $1F
     // passes every oracle, because no recording ever presses sixteen keys
     // faster than the game reads them. Do not tidy it.
     const uint8_t next = (uint8_t)((at + 1) & 0x0f);
-    if (next != s_ring_read) {
-      s_ring_write = next;
+    if (next != s_input.read) {
+      s_input.write = next;
       return;
     }
   }
@@ -4207,12 +4208,12 @@ void game_begin_life(void) {
   // count of $0F suggests.
   uint8_t x = 0x0f;
   do {
-    s_key_ring[x] = 0x00;
+    s_input.ring[x] = 0x00;
     --x;
   } while (!(x & 0x80));
 
-  s_ring_read = 0x00;
-  s_ring_write = 0x00;
+  s_input.read = 0x00;
+  s_input.write = 0x00;
   game_play_one_life();
 }
 
@@ -4303,7 +4304,7 @@ wait: /* $741C */
 
     // $7428 -- once the inner counter wraps, try the joystick, if one is
     // selected. Each button stands in for a digit.
-    if (s_joystick_selected) {
+    if (s_input.joystick) {
       io_peek(0xc05b);
       if (!(io_peek(0xc062) & 0x80)) {
         key = 0xb1;
@@ -4358,7 +4359,7 @@ wait: /* $741C */
   game_print_inline_str(0x748e);
 
   for (uint8_t i = 0; i != 6; ++i) {
-    game_show_key(i, s_key_table[i]);
+    game_show_key(i, s_input.bindings[i]);
   }
 
   // 0x02: the arrowhead's own shape-table entry, a one-off outside Shape's
@@ -4374,7 +4375,7 @@ wait: /* $741C */
 
   for (uint8_t i = 0; i != 6; ++i) {
     const uint8_t chosen = game_edit_key(i);
-    s_key_table[i] = chosen;
+    s_input.bindings[i] = chosen;
     game_show_key(i, chosen);
   }
 
@@ -5022,7 +5023,7 @@ ended: /* $7847 */
     // well would count it twice -- and did, until the block-head trace ran
     // 22% short and said so.
     advance(8);
-    if (s_joystick_selected) {
+    if (s_input.joystick) {
       // The button reads with bit 7 *clear* when pressed on this path.
       if (!(io_peek(0xc061) & 0x80)) {
         break;
