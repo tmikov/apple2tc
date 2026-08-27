@@ -195,6 +195,36 @@ typedef struct {
   uint8_t row;
 } Cell;
 
+/// Lo-res colour, and also the ink index the hi-res cell drawers take. The
+/// game uses one numbering for both. Named for what each is used to draw,
+/// because that is the question somebody changing them will have.
+typedef enum {
+  INK_ERASE = 0x00,      ///< black, i.e. rub out whatever is there
+  INK_WALL_TOP = 0x02,   ///< the side walls above the seam
+  INK_GATE = 0x03,       ///< the gap the snake leaves through, and the bouncers
+  INK_OCCUPIED = 0x05,   ///< the occupancy map's "something is here"
+  INK_HEAD_MARK = 0x07,  ///< the head's own mark on the occupancy map
+  INK_APPLE = 0x09,
+  INK_SNAKE = 0x0c,
+  INK_WALL_BOTTOM = 0x0d, ///< the side walls below the seam
+  INK_WHITE = 0x0f,
+} Ink;
+
+/// Which of the shape table's entries a cell drawer stamps. Shapes are stored
+/// four scanline masks apiece; see game_load_shape_masks.
+typedef enum {
+  SHAPE_APPLE = 0x01,   ///< also merged over the head so it reads as a head
+  SHAPE_STEM = 0x0a,    ///< the arrow's stem on the redefinition screen
+  SHAPE_SOLID = 0x15,   ///< the default: a full cell, used for walls and text
+  SHAPE_BOUNCER = 0x1a,
+} Shape;
+
+/// What the lo-res occupancy map holds at a cell. Anything else is solid.
+typedef enum {
+  CELL_EMPTY = 0x00,
+  CELL_APPLE = 0x0f,
+} CellContent;
+
 /// One of the two objects that ricochet around the playfield. The original
 /// keeps them as four parallel pairs of bytes and copies one set into
 /// $6633-$6636 before stepping it -- a hand-rolled calling convention, which
@@ -1751,7 +1781,7 @@ static int8_t reflect(int8_t d) {
 /// own. Folding them in here is what broke the first attempt -- 4 cycles
 /// missing three times over, and every oracle diverged at once.
 static bool cell_taken(uint8_t col, uint8_t row) {
-  return rom_scrn(row, col) != 0x00;
+  return rom_scrn(row, col) != CELL_EMPTY;
 }
 
 void bouncer_step(Bouncer *b) {
@@ -1793,13 +1823,13 @@ void bouncer_step(Bouncer *b) {
 
   // Erase where it was. Ink 0 is black, and the shape is whatever the caller
   // last left in $00 -- see the header.
-  rom_setcol(0x00);
+  rom_setcol(INK_ERASE);
 
-  plot_at(0x00, (Cell){.col = b->col, .row = b->row});
+  plot_at(INK_ERASE, (Cell){.col = b->col, .row = b->row});
 
   rom_plot(b->row, b->col);
 
-  s_shape = 0x1a;
+  s_shape = SHAPE_BOUNCER;
 
   if (want_row == 0) {
     // Off the board: not redrawn, and the position is not committed.
@@ -1808,9 +1838,9 @@ void bouncer_step(Bouncer *b) {
 
   b->row = want_row;
   b->col = want_col;
-  rom_setcol(0x03);
+  rom_setcol(INK_GATE);
 
-  plot_shape_at(0x1a, 0x03, (Cell){.col = b->col, .row = b->row});
+  plot_shape_at(SHAPE_BOUNCER, INK_GATE, (Cell){.col = b->col, .row = b->row});
 
   rom_plot(b->row, b->col);
 }
@@ -2018,7 +2048,7 @@ static uint8_t cell_at(Cell c) {
 }
 
 void game_find_nearest_apple(void) {
-  static const uint8_t kApple = 0x0f;
+  static const uint8_t kApple = CELL_APPLE;
   static const uint8_t kLastRow = 0x27;
 
   Cell c = {.col = s_head.col, .row = 1};
@@ -2096,7 +2126,7 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
   *cell_out = cell;
 
   // Empty or an apple, and nothing else, may be stepped into.
-  if (cell != 0x00 && cell != 0x0f) {
+  if (cell != CELL_EMPTY && cell != CELL_APPLE) {
     return MOVE_TARGET_TAKEN;
   }
 
@@ -2114,7 +2144,7 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
         .row = (uint8_t)(target.row + kNeighbour[i].drow),
     };
 
-    if (cell_at(n) == 0x00) {
+    if (cell_at(n) == CELL_EMPTY) {
       ++free_neighbours;
     }
   }
@@ -2241,7 +2271,7 @@ static void spin(uint8_t inner, uint8_t middle, uint8_t outer) {
 /// bottom up. Ink 0 is black, so this erases.
 static void wipe_occupancy_map(void) {
   uint8_t at = 0x27;
-  set_ink(0x00);
+  set_ink(INK_ERASE);
 
   for (;;) {
     s_h2 = 0x27;
@@ -2291,7 +2321,7 @@ static void draw_border(uint8_t ink) {
 
   // Ink 3 over columns $12-$16 of the bottom row, on top of the border just
   // laid down: the gap the snake leaves through.
-  plot_hline_at(0x03, 0x12, 0x27, 0x16);
+  plot_hline_at(INK_GATE, 0x12, 0x27, 0x16);
 }
 
 /// Walk the pointer to the current level's script, skipping one whole script
@@ -2320,11 +2350,11 @@ void game_draw_playfield(void) {
   wipe_occupancy_map();
 
   s_wndtop = 0x14;
-  s_shape = 0x15;
-  set_ink(0x0d);
+  s_shape = SHAPE_SOLID;
+  set_ink(INK_WALL_BOTTOM);
 
   open_wall_gaps();
-  draw_border(0x0d);
+  draw_border(INK_WALL_BOTTOM);
 
 restart:
   seek_script();
@@ -3028,7 +3058,7 @@ void game_add_score(void) {
 /// byte the hi-res plotter takes. Here it is the byte, and the adapter asserts
 /// that the flag agreed with it.
 void game_set_ink(uint8_t ink) {
-  rom_setcol(ink ? 0x05 : 0x00); // JMP $F864 -- a tail call.
+  rom_setcol(ink ? INK_OCCUPIED : INK_ERASE); // JMP $F864 -- a tail call.
 }
 
 /// read the byte the $000A pointer addresses and advance it. The
@@ -3100,11 +3130,11 @@ Cell game_place_apple(void) {
   }
 
   // White on the occupancy map, so the snake's collision test sees it.
-  rom_setcol(0x0f);
+  rom_setcol(INK_WHITE);
 
   rom_plot(at.row, at.col);
 
-  plot_shape_at(0x01, 0x09, at);
+  plot_shape_at(SHAPE_APPLE, INK_APPLE, at);
 
   // One more apple on screen. $77D0 watches this pair and calls back here when
   // it reaches zero.
@@ -3158,7 +3188,7 @@ void game_draw_head(uint8_t ink, Cell c) {
   game_plot_shape(ink, c);
 
   if (s_head_moved) {
-    s_shape = 0x01;
+    s_shape = SHAPE_APPLE;
     { // was game_plot_shape_merge()
 
       game_load_shape_masks(s_shape);
@@ -3282,7 +3312,7 @@ uint8_t game_draw_side_walls(void) {
   // level to level.
   (void)game_rand_byte();
 
-  s_shape = 0x15;
+  s_shape = SHAPE_SOLID;
 
   uint8_t seed = s_life_timer;
   if (seed & 0x80) {
@@ -3295,15 +3325,15 @@ uint8_t game_draw_side_walls(void) {
   // How far down the upper segment reaches, from the timer: the walls close in
   // as a life runs out.
   const uint8_t wall_top = (uint8_t)((seed >> 2) + 1);
-  plot_vline_at(0x02, 0x00, 0x01, wall_top);
+  plot_vline_at(INK_WALL_TOP, 0x00, 0x01, wall_top);
 
-  plot_vline_at(0x02, 0x27, 0x01, wall_top);
+  plot_vline_at(INK_WALL_TOP, 0x27, 0x01, wall_top);
 
   const uint8_t seam = (uint8_t)(wall_top + 1);
   // The lower segment.
-  plot_vline_at(0x0d, 0x27, seam, 0x27);
+  plot_vline_at(INK_WALL_BOTTOM, 0x27, seam, 0x27);
 
-  plot_vline_at(0x0d, 0x00, seam, 0x27);
+  plot_vline_at(INK_WALL_BOTTOM, 0x00, seam, 0x27);
 
   // Tail call: SCRN of the bottom-centre cell, which is this routine's second
   // result -- the caller uses it to decide whether to draw the gate.
@@ -3648,7 +3678,7 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
   {
     const Cell head = s_head;
     s_shape = shape;
-    game_draw_head(0x0c, head);
+    game_draw_head(INK_SNAKE, head);
 
     // $62B8 -- the direction back into 1..4, and the ink is the direction.
     dir = (uint8_t)((((uint8_t)(s_direction - 1)) & 3) + 1);
@@ -3666,11 +3696,11 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
     const uint8_t cell = scrn_cell(next);
 
     s_life_outcome = cell;
-    plot_shape_at(dir, 0x0c, next);
+    plot_shape_at(dir, INK_SNAKE, next);
 
     /* --- $6474: what did it move onto? ------------------------------- */
-    if (cell == 0) {
-      rom_setcol(0x07);
+    if (cell == CELL_EMPTY) {
+      rom_setcol(INK_HEAD_MARK);
       rom_plot(next.row, next.col);
 
       // $633C -- the gate is column $14 of row 0.
@@ -3682,10 +3712,10 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
       goto tail;
     }
 
-    if (cell == 0x0f) {
+    if (cell == CELL_APPLE) {
       // $6480 -- an apple. Marked here; the caller does the scoring.
       s_click_count = 0x20;
-      rom_setcol(0x07);
+      rom_setcol(INK_HEAD_MARK);
       game_mark_head(next.row, next.col);
       *cell_out = cell;
       return LIFE_APPLE;
@@ -3729,9 +3759,9 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
       // the emulated stack here too: ram.probe hashes the live stack, and a
       // sample taken inside the plotter would otherwise see a byte on one
       // engine and not the other.
-      rom_setcol(0x00);
+      rom_setcol(INK_ERASE);
       rom_plot(tail.row, tail.col);
-      plot_at(0x00, tail);
+      plot_at(INK_ERASE, tail);
 
       // $63DA -- the byte that was under the tail is the direction the tail
       // must follow, so the same delta tables move it on.
@@ -3743,7 +3773,7 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
       s_tail = tail_next;
       const uint8_t ahead = scrn_cell(tail_next);
 
-      plot_shape_at((uint8_t)(ahead + 0x0c), 0x0c, tail_next);
+      plot_shape_at((uint8_t)(ahead + 0x0c), INK_SNAKE, tail_next);
     }
 
   pace: /* the timer, the walls, and the delay that sets the speed */
@@ -3757,13 +3787,13 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
     }
 
     const uint8_t gate_cell = game_draw_side_walls();
-    if (gate_cell == 0) {
+    if (gate_cell == CELL_EMPTY) {
       // $642D -- the gate at the bottom is clear, so draw it. No edge charge
       // here: $6429's branch falls through to this and is only *taken* when
       // the cell is occupied.
-      s_shape = 0x15;
-      plot_hline_at(0x0d, 0x12, 0x27, 0x16);
-      rom_setcol(0x0d);
+      s_shape = SHAPE_SOLID;
+      plot_hline_at(INK_WALL_BOTTOM, 0x12, 0x27, 0x16);
+      rom_setcol(INK_WALL_BOTTOM);
       rom_plot(0x27, 0x14);
     }
 
@@ -3853,7 +3883,7 @@ static bool steer_try(uint8_t dir) {
     switch (v) {
     case MOVE_TARGET_TAKEN:
       // $6AD9 CMP #$0F left these.
-      move_taken = (cell != 0x0f);
+      move_taken = (cell != CELL_APPLE);
       break;
     case MOVE_ROW_ZERO:
     case MOVE_OK:
@@ -4068,22 +4098,22 @@ void game_bonus_screen(void) {
   game_status_panel();
 
   // $78D1 -- the frame, in ink 9: top and bottom edges, then both sides.
-  s_shape = 0x01;
+  s_shape = SHAPE_APPLE;
   // Columns $0D-$1A, rows $10-$15. The two sides used to inherit their column
   // from the edge above: an hline left $02 at its own endpoint, so the
   // first vline ran down $1A, the right edge, and not the $0D it looks like.
-  plot_hline_at(0x09, 0x0d, 0x10, 0x1a);
-  plot_hline_at(0x09, 0x0d, 0x15, 0x1a);
-  plot_vline_at(0x09, 0x1a, 0x10, 0x15);
-  plot_vline_at(0x09, 0x0d, 0x10, 0x15);
+  plot_hline_at(INK_APPLE, 0x0d, 0x10, 0x1a);
+  plot_hline_at(INK_APPLE, 0x0d, 0x15, 0x1a);
+  plot_vline_at(INK_APPLE, 0x1a, 0x10, 0x15);
+  plot_vline_at(INK_APPLE, 0x0d, 0x10, 0x15);
 
   // $7909 -- the interior, in ink 0, one row at a time from $11 to $14. The
   // original re-loads $02 each time and increments $03 in place, which is why
   // the rows are not written out as constants.
-  plot_hline_at(0x00, 0x0e, 0x11, 0x19);
-  plot_hline_at(0x00, 0x0e, 0x12, 0x19);
-  plot_hline_at(0x00, 0x0e, 0x13, 0x19);
-  plot_hline_at(0x00, 0x0e, 0x14, 0x19);
+  plot_hline_at(INK_ERASE, 0x0e, 0x11, 0x19);
+  plot_hline_at(INK_ERASE, 0x0e, 0x12, 0x19);
+  plot_hline_at(INK_ERASE, 0x0e, 0x13, 0x19);
+  plot_hline_at(INK_ERASE, 0x0e, 0x14, 0x19);
 
   // $7937 -- "BONUS: " and the amount, through the hi-res font.
   s_ch = 0x0f;
@@ -4309,13 +4339,13 @@ wait: /* $741C */
     game_show_key(i, s_key_table[i]);
   }
 
-  plot_shape_at(0x02, 0x0c, (Cell){.col = 0x1e, .row = 0x12});
+  plot_shape_at(0x02, INK_SNAKE, (Cell){.col = 0x1e, .row = 0x12});
   // The stem below it, down the same column -- which the original inherited
   // from the plot above rather than restating.
-  s_shape = 0x0a;
-  plot_vline_at(0x0c, 0x1e, 0x13, 0x1d);
+  s_shape = SHAPE_STEM;
+  plot_vline_at(INK_SNAKE, 0x1e, 0x13, 0x1d);
   // At the stem's far end -- the vline above left $03 on $1D.
-  plot_shape_at(0x0e, 0x0c, (Cell){.col = 0x1e, .row = 0x1d});
+  plot_shape_at(0x0e, INK_SNAKE, (Cell){.col = 0x1e, .row = 0x1d});
 
   for (uint8_t i = 0; i != 6; ++i) {
     const uint8_t chosen = game_edit_key(i);
@@ -4702,10 +4732,10 @@ static void game_play_one_life(void) {
   uint8_t cell = 0;
   switch (game_play_loop(&cell)) {
   case LIFE_GATE:
-    s_life_outcome = 0x00;
+    s_life_outcome = CELL_EMPTY;
     break;
   case LIFE_APPLE:
-    s_life_outcome = 0x0f;
+    s_life_outcome = CELL_APPLE;
     break;
   case LIFE_QUIT:
     s_life_outcome = 0xff;
@@ -4826,7 +4856,7 @@ start_round: /* $76C7 */
   io_peek(0xc053); // mixed text/graphics
   const Cell apple = game_place_apple();
   // $76F6 redraws it, at the cell game_place_apple just chose.
-  game_plot_shape(0x09, apple);
+  game_plot_shape(INK_APPLE, apple);
   s_step_delay = 0x52;
   s_head_moved = false;
   s_life_timer = s_life_time;
@@ -4848,9 +4878,9 @@ life: /* $7719 */
   game_play_one_life();
 
 verdict: /* s_life_outcome says how the life ended */
-  if (s_life_outcome == 0x0f)
+  if (s_life_outcome == CELL_APPLE)
     goto ate_apple;
-  if (s_life_outcome != 0x00)
+  if (s_life_outcome != CELL_EMPTY)
     goto not_apple;
   goto round_cleared;
 
@@ -4880,11 +4910,11 @@ ate_apple: /* $773E */
   /* that was the last one. Draw the bar across the bottom, put the
      marker on it, and stop the clock for the run to the gate -- see
      s_life_time for why $FF stops it rather than lengthening it. */
-  s_shape = 0x15;
+  s_shape = SHAPE_SOLID;
   plot_hline_at(0x06, 0x12, 0x00, 0x16);
-  plot_shape_at(0x15, 0x00, (Cell){.col = 0x14, .row = 0x00});
+  plot_shape_at(SHAPE_SOLID, INK_ERASE, (Cell){.col = 0x14, .row = 0x00});
   s_life_time = 0xff;
-  rom_setcol(0x00);
+  rom_setcol(INK_ERASE);
   rom_plot(0x00, 0x14);
   goto life;
 
