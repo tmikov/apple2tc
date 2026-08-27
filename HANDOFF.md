@@ -645,7 +645,9 @@ TICK statements                      0          838 before the virtual clock
 advance statements                  23          the whole of the clock: every site
                                                 where a duration is perceptible,
                                                 plus two that only yield
-compiler warnings of its own          0          at -Wall
+compiler warnings of its own          0          under cc, clang and gcc; gated by
+                                                [warn]. One dead `ovf8` remains
+                                                at -Wall and predates the file
 adapters left                         0     42
 lines                            5,806  16,195   the generated ext build, for scale
 ```
@@ -853,6 +855,26 @@ What remains, in order of how well-defined it is:
    subshell outlives a check finishing in a second and then fires into a
    recycled pid, which killed `probe-acceptance.sh` during its own first run.
    macOS has no `timeout(1)`, so neither uses one.
+
+   **And three C23-extension warnings** (commit `e6b74bf`). Deleting the charge
+   that followed a label left `done:` and `out:` ending their functions with no
+   statement, and `last_line:` followed by a declaration. Two were mine; `out:`
+   was already bare.
+
+   The lesson is not the labels, it is **which compiler you look at**: gcc
+   diagnoses none of these and clang diagnoses all three, so a Linux box stays
+   green while the Mac prints three warnings. The `[warn]` check therefore runs
+   *every* C compiler it can find rather than the one CMake configured, because
+   checking the configured one would have reproduced the original failure. It
+   uses default warnings, not `-Wall`, to match the real build; `-Wall` adds one
+   pre-existing dead `ovf8`, left alone deliberately.
+
+   A second thing worth carrying: I first reported all three as a regression on
+   the strength of a comparison **that had never compiled**. The old file was
+   built from a scratch directory, a relative `#include` failed, and the run
+   aborted before producing any diagnostic. Zero warnings out of a compiler that
+   never ran looks exactly like zero warnings out of a clean file. Check that a
+   comparison actually did the work before believing what it says.
 
    **The rest of task 5 is still outstanding.** What has been checked mechanically: the release windowed target
    links, and a 6,000-frame free run with no probe and no keys terminates
