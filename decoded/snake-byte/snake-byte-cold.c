@@ -183,25 +183,11 @@ static uint8_t s_a2l; ///< SETKBD/SETVID scratch
 /// accessors below carry the meaning instead.
 static uint8_t s_h2;
 
-/// The three pointer pairs, low byte first, as ram_peek16al read them.
-
-/// CH and CV, the text cursor, out of emulated RAM.
-///
-/// The last two addresses in this block that anything still *computes* with.
-/// The ROM's BASCALC turns CV into BASL/BASH, CLREOL and COUT1 step CH along a
-/// line, and the game sets both before every field it prints. All of that is
-/// C now; the bytes at $24/$25 are no longer read by anybody.
-///
-/// Moved even though the ROM owns them, because the ROM is being decompiled
-/// too -- a routine that is still emitted as a switch over block ids is not a
-/// different kind of code, only a less finished one. There is no version of
-/// this artifact in which the monitor keeps its state in a 64K array.
-///
-/// Initialised from the entry snapshot, like the plotter's block.
+/// CH and CV, the text cursor, and the only two of the monitor's bytes that
+/// anything still computes with: BASCALC turns CV into a line base, CLREOL and
+/// COUT1 step CH along a line, and the game sets both before every field it
+/// prints. Initialised from the entry snapshot.
 static uint8_t s_ch, s_cv;
-
-/// The converted game routines are entered with decimal mode clear. Rather
-/// than carry the decompiler's dead decimal arms through them, say so and fail
 
 /// A cell on the 40x48 playfield grid.
 typedef struct {
@@ -527,7 +513,7 @@ typedef enum {
 /// occupancy map held at the target, which the original leaves in A.
 MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out);
 
-/// copy the score at $7252 over the high score at $7256 if it beats
+/// copy s_score over s_hi_score if it beats
 /// it, comparing BCD bytes most significant first.
 void game_promote_high_score(void);
 
@@ -555,8 +541,8 @@ void game_clear_hgr_native(void);
 /// display list from $8000.
 void game_draw_playfield_native(void);
 
-/// sweep columns outward from the snake for an apple, leaving the
-/// answer at $6B3B/$6B3C.
+/// Sweep columns outward from the snake looking for an apple, and leave the
+/// nearest one where the auto-steer will find it.
 void game_find_nearest_apple(void);
 
 /// turn \p key, the byte just taken off the ring, into the code the
@@ -570,7 +556,7 @@ uint8_t game_read_direction_native(uint8_t key);
 uint8_t game_edit_key_native(uint8_t slot);
 
 /// the program's entry, and the outermost loop: relocate the level
-/// data, initialise $0300-$0304, then new game -> level -> round -> life
+/// data, initialise the game's state, then new game -> level -> round -> life
 /// forever. Never returns; the game has no way out.
 void game_cold_start(void);
 
@@ -590,7 +576,7 @@ void game_print_bcd_native(uint8_t byte);
 /// print a single "0" if the number just printed was all zeros.
 void game_print_zero_if_blank_native(void);
 
-/// add the two-byte BCD value at $71CB to the four-byte score.
+/// add the two-byte BCD value in s_apple_value to the four-byte score.
 void game_add_score_native(void);
 
 /// set the lo-res plot colour from an ink byte: 0 erases, anything
@@ -637,20 +623,20 @@ void game_read_key_native(void);
 /// the ROM's COUT1 so the cursor still moves.
 void game_cout_hook_native(uint8_t ch);
 
-/// Why a life ended. The original says all of this in one byte at $6253, which
-/// its caller at $7739 reads the moment the routine returns; game_play_loop's
-/// adapter is what puts the byte back.
+/// Why a life ended. The original said all of this in a single byte, which its
+/// caller read the moment the routine returned; the value still goes into
+/// s_life_outcome for the code that has not been converted yet.
 typedef enum {
-  /// Reached the gate: column $14 of row 0. $6253 stays 0.
+  /// Reached the gate at the bottom of the playfield.
   LIFE_GATE,
-  /// Moved onto an apple. $6253 is $0F.
+  /// Moved onto an apple.
   LIFE_APPLE,
-  /// The quit key. $6253 is $FF.
+  /// The player pressed the quit key.
   LIFE_QUIT,
-  /// The level timer at $6255 ran out. $6253 is $FE.
+  /// The level timer ran out.
   LIFE_TIMEOUT,
-  /// Moved onto something solid. $6253 is that cell, which is what
-  /// \p cell_out receives -- the caller distinguishes the cases by it.
+  /// Moved onto something solid. \p cell_out receives the occupancy byte,
+  /// which is how the caller tells a wall from the snake's own tail.
   LIFE_CRASH,
 } LifeEnd;
 
@@ -674,9 +660,8 @@ typedef enum {
   STEER_BOXED_IN,
 } SteerChoice;
 
-/// steer toward the apple at $6B3B/$6B3C, trying candidate directions
-/// in order of usefulness and taking the first that snake_move_verdict()
-/// allows. Leaves the direction it settled on in $6B38, as the original does.
+/// Steer toward the nearest apple, trying candidate directions in order of
+/// usefulness and taking the first that snake_move_verdict() allows.
 SteerChoice game_auto_steer(uint8_t *key_out);
 
 /// draw the status panel: six labelled BCD fields in a 2x3 grid
@@ -705,109 +690,11 @@ void game_setup_screen(void);
 /// print the NUL-terminated string that follows the call.
 void game_print_inline_str(uint16_t ret_addr);
 
-/* --- $60E4/$60E7/$6127: the hi-res cell plotter -------------------------- */
-
-/// load the four scanline masks for shape $00 into $6060.
-
-/// draw the currently-loaded shape into the cell at row $03,
-/// column $02, in ink $01.
-
-/// load the shape for $00, then draw it. The form nearly every
-/// caller uses.
-
-/// plot a horizontal run of cells, from column $02 through column
-/// $08 inclusive, along row $03.
-
-/// plot a vertical run of cells, from row $03 through row $08
-/// inclusive, down column $02.
-
-/* --- $7000/$7019/$7024: the screen-script primitives ---------------------- */
-
-/// fetch the next byte of the display list into A and advance the
-/// $0A/$0B pointer.
-
-/// set the lo-res colour from the ink flag in Z: black if zero,
-/// grey otherwise. Tail-calls the ROM's SETCOL.
-
-/// plot a vertical run on the lo-res occupancy map, from row $03
-/// through row $08 inclusive at column $02, leaving $03 unchanged.
-
-/* --- $702B/$71F3/$7226/$7267: the score ---------------------------------- */
-
-/// print one BCD byte as two digits, suppressing leading zeros via
-/// the $002C flag.
-
-/// print '0' if $002C shows no digit was printed. Called once at the
-/// end of a multi-byte number.
-
-/// add $71CC:$71CB to the four-byte BCD score at $7252.
-
-/// zero hi-res page 1, $2000 through $3FFF.
-
-/* --- $6B93 --------------------------------------------------------------- */
-
-/// load the shape for $00 and merge it into the cell at row $03,
-/// column $02, setting bits rather than replacing the byte.
-
-/// clear the screen, draw the border, then interpret the current
-/// level's display list at $8000. See game.c for the opcodes.
-
-/* --- snake state and scoring setup --------------------------------------- */
-
-/// point CSWL/CSWH at $664A so COUT reaches game_cout_hook.
-
-/// adapter for game_start_life(): head column in A, both bouncers
-/// placed at opposite corners.
-
-/// PLOT the head onto the lo-res map and raise $0305 and $6C46.
-
-/// draw the caller's cell, merging shape 1 over it when $0305 is set.
-
-/// set the per-apple score at $71CB/$71CC to $71C8[difficulty] times
-/// the level, in BCD.
-
-/* --- apples and sound ---------------------------------------------------- */
-
-/// place a new apple on a free cell, found by rejection sampling.
-
-/// a rising then falling pitch sweep, clicked through $6C49.
-
-/// count one apple eaten and play the sweep.
-
-/// poll the keyboard into the 16-entry ring buffer at $623C.
-
-/// show the character in A at slot X of the key-redefinition screen.
-
-/// draw both side walls in two inks, with a randomly placed seam.
-
-/// can the snake step in direction $6B38? Returns A = 0 / Z set for
-/// yes, and refuses dead ends one move early.
-
-/// step the bouncer at $6633/$6634 by its deltas, reflecting off
-/// whatever it hits.
+/// Step \p b one cell along its deltas and redraw it, reflecting off whatever
+/// it hits.
 void game_move_bouncer(Bouncer *b);
 
-/// copy the score at $7252 over the high score at $7256 if it beats
-/// it, comparing BCD bytes most significant first.
-
-/// twenty passes of a falling tone, driven by the period at $6C46.
-
-/// step the bouncers the difficulty calls for, then return the next
-/// queued key in A.
-
-/// find an apple by sweeping columns outward from the snake, leaving
-/// the result at $6B3B/$6B3C.
-
-/// adapter for game_pause_or_toggle_sound_native(): ESC pauses until
-/// a key, Ctrl-S toggles the sound flag at $69C2.
-
-/// blink slot X of the key-redefinition screen and wait for a
-/// replacement key.
-
-/// turn the next key, or the joystick, into a direction.
-
-/// play one life, and leave the reason it ended in $6253, which is
-/// what the caller at $7739 reads.
+/// Play one life, and leave the reason it ended in s_life_outcome.
 static void game_play_one_life(void);
 
 /* ========================================================================== *
@@ -828,8 +715,6 @@ static void rom_cout1(uint8_t ch);
 /* output.                                                                    */
 /* ========================================================================== */
 
-/// $F847 GBASCALC. Compute the lo-res base address for row A into GBASL/GBASH
-/// ($26/$27).
 /// $F847 GBASCALC. The lo-res twin of BASCALC: a row 0-47 in A becomes that
 /// row's base address in GBASL/GBASH.
 ///
@@ -1610,7 +1495,7 @@ static const uint8_t kKeyDefaults[6] = {
 };
 
 /// what one apple is worth, indexed by difficulty 0-2. Three bytes:
-/// $71CB is s_apple_value, which is where the table stops.
+/// s_apple_value is s_apple_value, which is where the table stops.
 static const uint8_t kAppleValueTable[3] = {
     0x10,
     0x15,
@@ -1674,9 +1559,9 @@ static const uint8_t kArrowGlyph[6] = {
 
 /* --- The auto-steer's answer ---------------------------------------------- */
 /*
- * $6B38-$6B3C. $6B39/$6B3A were the apple sweep's cursor, left wherever the
+ * $6B38-the apple Cell. $6B39/$6B3A were the apple sweep's cursor, left wherever the
  * search stopped, and went the same way as the three above: written at the end
- * of the sweep, read by nothing. $6B3B/$6B3C are the answer and are real.
+ * of the sweep, read by nothing. the apple Cell are the answer and are real.
  */
 
 /// The direction $6A32 settled on. game_move_ok and key_for_direction both
@@ -1686,7 +1571,7 @@ static uint8_t s_steer_dir = 0x02;
 /// The cell the sweep decided to steer towards.
 static Cell s_apple = {.col = 0x13, .row = 0x1d};
 
-/* --- Sound: $6C46-$6C49 and $69C2 ----------------------------------------- */
+/* --- Sound: s_tone_period-s_click_port and $69C2 ----------------------------------------- */
 
 /// The tone's period, and its on/off switch: 0 is silent.
 static uint8_t s_tone_period;
@@ -1734,24 +1619,6 @@ static bool s_joystick_selected;
 /// that a hazard was checked -- see the note below.
 static uint8_t s_shape;
 
-/// The block itself, moved out of emulated RAM and split into variables now
-/// that the glyph blitter no longer shares it.
-///
-/// They are still variables rather than parameters, which is the next step and
-/// not this one. What changed is that nothing can reach them by address, and
-/// each one has a type and a name instead of an index.
-/// The lo-res colour is gone from here. It was a global for the reason
-/// s_shape still is -- the original inherits it: draw_border drew six runs in
-/// whatever ink game_draw_playfield had set, and the redefinition screen's
-/// stem took the ink of the arrow plotted above it. But every one of those
-/// inheritances turned out to be readable at the call site, so the run helpers
-/// take the ink as an argument and the inheritance is written down instead of
-/// implied.
-///
-/// s_shape did not thread and is still below. plot_at's two callers -- the
-/// bouncer erase and the tail erase -- genuinely erase with whatever shape was
-/// last used, so passing one would invent a value the original does not have.
-
 /// SCRN one cell. Defined further down, next to the plot helpers.
 static uint8_t scrn_cell(Cell c);
 
@@ -1761,30 +1628,9 @@ static uint8_t scrn_cell(Cell c);
 static void plot_at(uint8_t ink, Cell c);
 static void plot_shape_at(uint8_t shape, uint8_t ink, Cell c);
 
-/// The glyph blitter at $664A used to park five values in this block -- the
-/// glyph, the caller's X and Y, and a source and destination pointer. They are
-/// locals in game_cout_hook_native now.
-///
-/// Splitting them out needed an argument, because bouncer_step erases with
-/// whatever was last left in s_shape: a COUT through the hi-res hook between a
-/// shape write and that erase used to change which cells got erased. The
-/// argument is that it cannot happen. The hook is installed in exactly two
-/// places, game_bonus_screen and game_setup_screen, and each restores CSWL
-/// before returning. Inside both windows every plot writes the shape
-/// immediately before its call. And every path out of either window reaches
-/// game_draw_playfield, which writes $15 unconditionally before it draws
-/// anything, before the play loop can run -- game_bonus_screen returns into
-/// round_cleared and game_setup_screen into new_game, and both fall through
-/// start_round.
-///
-/// The gate could not have caught this being wrong until 2026-08-23: the cold
-/// build ran $664A zero times under it. It now runs it 205 times per run, and
-/// samples state at $760F while it does.
-
 /* --- The snake, the key ring, and the click counter ----------------------- */
 /*
- * $6232-$6255 in the original, one contiguous run holding everything a life
- * consists of. The two delta tables are read-only image data and stay where
+ * One contiguous run in the original, holding everything a life consists of. The two delta tables are read-only image data and stay where
  * they are, as const arrays; everything after them is state and is C
  * variables. The initialisers are the shipped image's bytes, which for this
  * block are the leftovers of whoever last ran the game before it was
@@ -1976,7 +1822,7 @@ void bouncer_step(Bouncer *b) {
   rom_plot(b->row, b->col);
 }
 
-/* --- The scoreboard: $7252-$7266 ------------------------------------------ */
+/* --- The scoreboard ------------------------------------------------------- */
 /*
  * Eleven fields, every one of them BCD, and every multi-byte one least
  * significant first. Six are what game_status_panel prints, and the labels it
@@ -2042,7 +1888,7 @@ static uint8_t s_level = 0x01;
 /// the clamp.
 static uint8_t s_life_time = 0x64;
 
-/* --- The settings block: $0300-$0305 -------------------------------------- */
+/* --- The settings block: s_step_delay-s_head_moved -------------------------------------- */
 /*
  * Six bytes that outlive a life, set once at $376E and then kept up to date as
  * the game goes on. Everything else about a life is torn down and rebuilt.
@@ -2125,7 +1971,7 @@ static uint8_t s_lives_at_level_start = 0x02;
 /* ========================================================================== */
 /* the high score                                                    */
 /*                                                                            */
-/* Four BCD bytes at $7252 against four at $7256, most significant first.      */
+/* Four BCD bytes in s_score against four in s_hi_score, most significant first.      */
 /* Below at any byte and it stops; above and it copies; equal and it moves on. */
 /*                                                                            */
 /* The four compares are a loop here, over the byte indices. In game.c that    */
@@ -2175,7 +2021,7 @@ void game_promote_high_score(void) {
 /* own column leftwards, then from it again rightwards. First hit wins, so the */
 /* result leans left. Nothing found parks the answer at row 0, column $14.     */
 /*                                                                            */
-/* $6B39/$6B3A were the cursor and $6B3B/$6B3C the answer. The cursor is a    */
+/* $6B39/$6B3A were the cursor and the apple Cell the answer. The cursor is a    */
 /* pair of locals here: nothing ever read the two bytes back, so once the      */
 /* storage left RAM the stores that mirrored them were dead code.              */
 /* ========================================================================== */
@@ -2800,7 +2646,7 @@ static uint8_t input_code(int i) {
 enum { kCodeJoystickOn = 0x80, kCodeJoystickOff = 0x8b };
 
 /// The code every input collapses to in attract mode. Its caller stores $FF
-/// at $6253, which ends the game in progress.
+/// in s_life_outcome, which ends the game in progress.
 enum { kCodeStop = 0x92 };
 
 /// attract mode: nobody answered the difficulty prompt before it
@@ -3066,7 +2912,7 @@ void game_tick_sound_native(void) {
           const uint8_t port = s_click_port;
           speaker_access(port);
 
-          // Two INC $6C46: every click lengthens the period, so the pitch
+          // Two INC s_tone_period: every click lengthens the period, so the pitch
           // falls for as long as the head keeps moving.
           s_tone_period = (uint8_t)(s_tone_period + 2);
           s_tone_countdown = s_tone_period;
@@ -3173,8 +3019,8 @@ void game_add_score_native(void) {
   // both use, so it cannot disagree with them about the undefined corners of
   // BCD ADC. It returns the sum in the low byte and the flags in the high one.
 
-  // Four bytes at $7252, least significant first, plus a two-byte value at
-  // $71CB. The original adds the value into the low half and then propagates
+  // Four bytes in s_score, least significant first, plus a two-byte value at
+  // s_apple_value. The original adds the value into the low half and then propagates
   // the carry through the top half with `ADC #$00`, which flips the operand
   // order halfway -- kept, because adc_dec16 need not be symmetric over BCD
   // that is not valid BCD.
@@ -3297,7 +3143,7 @@ Cell game_place_apple_native(void) {
 }
 
 /// what one apple is worth: the difficulty's entry in the $71C8 table
-/// added to itself once per level, in BCD, into $71CB. X is never touched in
+/// added to itself once per level, in BCD, into s_apple_value. X is never touched in
 /// the original's loop, which is what makes it the same entry every time.
 void game_set_apple_value_native(void) {
   s_apple_value[0] = 0x00;
@@ -3325,7 +3171,7 @@ void game_set_apple_value_native(void) {
 
 /// mark the head on the lo-res occupancy map, at the row and column
 /// the caller has already loaded, and raise the two flags that say it is
-/// there: $0305 for the next draw and $6C46 to start the tone.
+/// there: s_head_moved for the next draw and s_tone_period to start the tone.
 void game_mark_head_native(uint8_t row, uint8_t col) {
   rom_plot(row, col);
 
@@ -3335,9 +3181,9 @@ void game_mark_head_native(uint8_t row, uint8_t col) {
   // A and its flags are live out of $6BEF, unlike almost everything else here.
 }
 
-/// draw the cell the caller set up, and if $0305 says the head is on
+/// draw the cell the caller set up, and if s_head_moved says the head is on
 /// it, merge shape 1 over the top so the head reads as a head rather than
-/// replacing the body cell underneath. $0305 is consumed here.
+/// replacing the body cell underneath. s_head_moved is consumed here.
 void game_draw_head_native(uint8_t ink, Cell c) {
   game_plot_shape_native(ink, c);
 
@@ -3444,7 +3290,7 @@ void game_show_key_native(uint8_t slot, uint8_t key) {
 }
 
 /// both side walls, each in two segments of different ink, with the
-/// seam at a row derived from $6255. The seam is what the player aims for.
+/// seam at a row derived from s_life_timer. The seam is what the player aims for.
 uint8_t game_draw_side_walls_native(void) {
   // The snake's tempo, and the reason this is an advance rather than nothing.
   //
@@ -3470,7 +3316,7 @@ uint8_t game_draw_side_walls_native(void) {
 
   uint8_t seed = s_life_timer;
   if (seed & 0x80) {
-    // A negative seed is clamped, and $6255 reset so the next call starts from
+    // A negative seed is clamped, and s_life_timer reset so the next call starts from
     // a known place.
     s_life_timer = 0xff;
     seed = 0x70;
@@ -3670,12 +3516,12 @@ static uint8_t scrn_cell(Cell c) {
   return rom_scrn(c.row, c.col);
 }
 
-/// one click of the speaker. $6C49 holds the port offset, $30 for
+/// one click of the speaker. s_click_port holds the port offset, $30 for
 /// the speaker and $20 for the cassette output that nobody can hear, which is
 /// how muting works; game_sound_sweep does the same thing at $64B0.
 ///
 /// Not a keyboard read, which is what this was called until the scoreboard
-/// pass went looking: the address is $C000 + $6C49, and the built-in symbol
+/// pass went looking: the address is $C000 + s_click_port, and the built-in symbol
 /// database resolves the $C000 to KBD, so the disassembly reads `LDA KBD,Y`
 /// and the index is what makes it the speaker.
 /// Every access to the speaker soft switch goes through here.
@@ -3962,10 +3808,10 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       rom_plot(0x27, 0x14);
     }
 
-    // $6450 -- the delay that sets the speed. $0300 iterations, each one
+    // $6450 -- the delay that sets the speed. s_step_delay iterations, each one
     // ticking the falling tone and taking a key, and counting $6473 down for
     // as long as the last move gave it something to say.
-    // DEX/BNE again: $0300 of zero would mean 256 passes, not none.
+    // DEX/BNE again: s_step_delay of zero would mean 256 passes, not none.
     uint8_t n = s_step_delay;
     do {
       game_tick_sound_native();
@@ -3994,7 +3840,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
 /* ========================================================================== */
 /* the auto-steer                                                    */
 /*                                                                            */
-/* Chase the apple that $69C3 left at $6B3B/$6B3C. Candidate directions are    */
+/* Chase the nearest apple. Candidate directions are                          */
 /* tried in order of how much they help, and the first one game_move_ok        */
 /* accepts wins: the row is closed before the column, and each axis is tried   */
 /* toward the apple before away from it.                                       */
@@ -4168,7 +4014,7 @@ static void clear_leading_zero_flag(void) {
 }
 
 void game_status_panel(void) {
-  // SCORE, row $14 column $00. Four BCD bytes at $7252, little-endian.
+  // SCORE, row $14 column $00. Four BCD bytes in s_score, little-endian.
   s_cv = 0x14;
   s_ch = 0x00;
   game_print_inline_str(0x72d8);
@@ -4179,7 +4025,7 @@ void game_status_panel(void) {
   game_print_bcd_native(s_score[0]);
   game_print_zero_if_blank_native();
 
-  // HI SCORE, same row, column $14. Four bytes at $7256.
+  // HI SCORE, same row, column $14. Four bytes in s_hi_score.
   s_ch = 0x14;
   game_print_inline_str(0x7307);
   clear_leading_zero_flag();
@@ -4203,7 +4049,7 @@ void game_status_panel(void) {
   // longer count earlier in the game.
   rom_cout(0xa0);
 
-  // VALUE, same row, column $14. Two bytes at $71CB -- the current worth of an
+  // VALUE, same row, column $14. Two bytes in s_apple_value -- the current worth of an
   // apple, which game_set_apple_value computes per level.
   s_ch = 0x14;
   game_print_inline_str(0x736b);
@@ -4243,7 +4089,7 @@ void game_status_panel(void) {
 /* Awarded when a level is finished. The bonus is twice whatever an apple was  */
 /* worth on that level, which the original says twice over: once as BCD        */
 /* arithmetic into $78B0/$78B1 so the number can be printed, and once as two   */
-/* consecutive calls to game_add_score, which adds $71CB/$71CC each time.      */
+/* consecutive calls to game_add_score, which adds s_apple_value/s_apple_value[1] each time.      */
 /* Neither reads the other's answer.                                          */
 /*                                                                            */
 /* This routine is *entered with decimal mode set* -- unusual here, and the    */
@@ -4695,7 +4541,7 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* ========================================================================== */
 /* the score.                                   */
 /*                                                                            */
-/* The score is BCD: four bytes at $7252-$7255, little-endian, eight digits.  */
+/* The score is BCD: four little-endian bytes in s_score, eight digits.        */
 /* $7267 adds to it with the 6502's decimal mode, and $71F3 prints one byte   */
 /* of it as two digits by nibble, since in BCD a nibble is already a digit.   */
 /*                                                                            */
@@ -4714,10 +4560,6 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* $B0 is '0' in Apple II ASCII (high bit set). Digits above 9 would print as */
 /* punctuation, which is another way of saying the arithmetic must be BCD.    */
 /* ========================================================================== */
-
-/// $7209 and $7220: CLC / ADC #$B0 / JSR COUT. The two are byte-identical
-/// apart from the return address the JSR pushes, so they share one body here.
-/// No CYCLES of its own -- both call sites are already inside a counted block.
 
 /* ========================================================================== */
 /* the merging cell plotter.                                         */
@@ -4797,8 +4639,8 @@ void game_print_inline_str(uint16_t ret_addr) {
 /*                                                                            */
 /* $0301 is the difficulty, 0-2, and $71CD is what gives it away: it indexes  */
 /* the three-byte table at $71C8 -- $10, $15, $20 -- with $0301 and adds that */
-/* entry to $71CB/$71CC once per level, in BCD. So an apple is worth          */
-/* base[difficulty] * level, which is why $71CB read $15 throughout the       */
+/* entry to s_apple_value/s_apple_value[1] once per level, in BCD. So an apple is worth          */
+/* base[difficulty] * level, which is why s_apple_value read $15 throughout the       */
 /* recordings: difficulty 1, level 1. It is also what decides the two         */
 /* optional wall gaps in game_draw_playfield.                                 */
 /* ========================================================================== */
@@ -4806,8 +4648,8 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* ========================================================================== */
 /* apples, and the sound trick.                        */
 /*                                                                            */
-/* $6C49 is the game's mute switch, and it is a nice piece of work: every     */
-/* sound routine reads `LDA $C000,Y` with Y = $6C49, and $6C2C picks either   */
+/* s_click_port is the game's mute switch, and it is a nice piece of work: every     */
+/* sound routine reads `LDA $C000,Y` with Y = s_click_port, and $6C2C picks either   */
 /* $30 or $20 for it. $C030 is the speaker; $C020 is the cassette output. So  */
 /* turning the sound off routes the identical click to a port nobody is       */
 /* listening to, and the timing loops do not change at all -- no branch in    */
@@ -4900,7 +4742,7 @@ void game_move_bouncer(Bouncer *b) {
 /* one life. See game_native.c for what it does.                     */
 /* ========================================================================== */
 
-/// play one life and record how it ended at $6253, which is where
+/// play one life and record how it ended in s_life_outcome, which is where
 /// $7739 reads it. What used to be an adapter is just this write-back now: no
 /// return address, and A is not left holding the reason because nothing reads
 /// it there any more.
@@ -5069,7 +4911,7 @@ life: /* $7719 */
   }
   game_play_one_life();
 
-verdict: /* $6253 says how the life ended */
+verdict: /* s_life_outcome says how the life ended */
   if (s_life_outcome == 0x0f)
     goto ate_apple;
   if (s_life_outcome != 0x00)
