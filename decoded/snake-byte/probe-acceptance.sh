@@ -879,6 +879,59 @@ for sc in play:toggle-play.txt hires:toggle-hires.txt; do
   echo "[toggle/$name] PASS: $(wc -l < "$here/$want" | tr -d " ") speaker accesses match"
 done
 
+# --- can every waiting loop still be interrupted? --------------------------
+#
+# The one class of defect this gate is structurally blind to, and it shipped:
+# on 2026-08-26 the virtual-clock collapse deleted the cycle charge inside the
+# ESC pause loop and the ROM's Ctrl-S screen hold. Both then spun on $C000
+# with nothing to suspend them, so the host never got a turn, so the key that
+# would end the wait could never be delivered. The game hung. All 28 checks
+# below stayed green, because the probe scenarios stamp their keys on a counter
+# that a spinning loop keeps incrementing -- the replay is happy to deliver
+# keys to a program that has stopped drawing frames.
+#
+# Two checks, and the static one is the real guarantee.
+awk -f "$here/yield-lint.awk" "$here/snake-byte-cold.c" || exit 1
+echo "[yield] PASS: every loop that reads input can suspend"
+
+# And a live one, because a lint can only see what it knows to look for.
+# esc-pause.keys presses ESC 78 times across a run, so one of them lands while
+# the game is playing whatever the timing happens to be. An unyielding pause
+# makes --frames never terminate, hence the watchdog -- written with sleep and
+# kill rather than timeout(1), which macOS does not ship.
+#
+# Honest about its limit: if a future timing change stops any ESC from landing
+# in the play loop, this check quietly stops testing anything. The lint above
+# is what does not degrade. Mutation-tested when written -- with the two
+# advance(7) calls removed it exits 124, and with them it exits 0.
+# Watched by polling rather than by a second background job: a `sleep N; kill`
+# subshell outlives a check that finishes in a second, and then fires into a
+# recycled pid. That killed this script during its own first run.
+"$bin/decoded/snake-byte/snake-byte-cold-run" --frames=2400 --no-sound \
+  --key-file="$here/esc-pause.keys" > /dev/null 2>&1 &
+hang_pid=$!
+hang_waited=0
+while kill -0 "$hang_pid" 2> /dev/null && [ "$hang_waited" -lt 90 ]; do
+  sleep 1
+  hang_waited=$((hang_waited + 1))
+done
+if kill -0 "$hang_pid" 2> /dev/null; then
+  kill -9 "$hang_pid" 2> /dev/null
+  wait "$hang_pid" 2> /dev/null
+  echo "FAIL [yield/esc]: still running after ${hang_waited}s -- the game hung on ESC" >&2
+  echo "  A pause loop lost its charge: it spins, the host never runs, and the" >&2
+  echo "  keypress that would resume can never arrive. See yield-lint.awk." >&2
+  exit 1
+fi
+wait "$hang_pid"; hang_rc=$?
+if [ "$hang_rc" -ne 0 ]; then
+  echo "FAIL [yield/esc]: the run exited $hang_rc after ESC" >&2
+  echo "  A pause loop lost its charge: it spins, the host never runs, and the" >&2
+  echo "  keypress that would resume can never arrive. See yield-lint.awk." >&2
+  exit 1
+fi
+echo "[yield/esc] PASS: the game resumes from ESC"
+
 echo "--- coverage over all scenarios ---"
 coverage_report trace "$here/blocks.txt" 0
 # Baseline 20, and the number is a statement about the recordings rather than

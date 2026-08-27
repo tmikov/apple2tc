@@ -1432,6 +1432,11 @@ static void rom_coutz(uint8_t ch) {
   /*$FB85*/
 
   for (;;) { /* $FB88 -- spin until a key is pressed */
+    // Ctrl-S holds the display until the next keypress, and this charge is
+    // what makes the hold end: it is the only suspend point in the loop, so
+    // without it the host never runs and the key can never be delivered.
+    // Seven cycles is one pass of the original.
+    advance(7);
     key = io_peek(0xc000);
     if (!(key & 0x80)) {
       /*$FB8B*/ continue;
@@ -4038,6 +4043,15 @@ static void click_speaker(void) {
 void game_pause_or_toggle_sound_native(uint8_t key) {
   if (key == KEY_ESC) {
     for (;;) {
+      // ESC pauses the game here until any key is pressed, and this charge is
+      // the pause: it is the only suspend point in the loop, so it is also
+      // the only thing that lets the host draw a frame and deliver the key
+      // that ends the wait. Seven cycles is one pass of the original.
+      //
+      // Deleting it is what shipped on 2026-08-26: the game hung on ESC and a
+      // second ESC could not reach it. No recording presses ESC, so all 28
+      // checks passed. yield-lint.awk exists because of this loop.
+      advance(7);
       key = io_peek(0xc000);
       if (key & 0x80)
         break;
