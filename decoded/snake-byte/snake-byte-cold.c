@@ -810,16 +810,20 @@ void rom_plot(uint8_t row, uint8_t col) {
 
 /// $F819 HLINE, and $F826 VLINEZ, which share this body.
 ///
-/// HLINE plots along row A from column Y to H2. Its loop ends by falling out
-/// of the bottom into VLINEZ's, which walks rows from A down to V2 in column
-/// Y -- so one entry point draws a horizontal run and the other a vertical
-/// one, out of the same six instructions.
+/// HLINE plots along row A from column Y to H2. $F826 sits immediately below
+/// its loop and walks rows from A down to V2 in column Y instead -- so one
+/// entry point draws a horizontal run and the other a vertical one, out of one
+/// stretch of code. Adjacent in the layout, not in the flow: the $F824 BCC
+/// that closes HLINE's loop is taken every time (see below).
 ///
-/// The labels keep their addresses rather than becoming nested loops: the two
-/// have separate entries ($F819 and $F826) and the first leaves through the
-/// second, which is not a nest at all. game_cold_start had the same look and
-/// did turn out to be one -- see the note above its own loops for the single
-/// edge there that is not a loop edge, and why it needed no flag either.
+/// `down:` is present and unreached, and it stays. In the ROM $F826 is an entry
+/// point in its own right, so the code has to be here; in this file it has no
+/// caller, because rom_hline() is the only way in and the `across` loop cannot
+/// fall out of the bottom into it -- `carry` is 0 at the `if (!carry)` re-test
+/// (that is why the `if (carry)` above it did not branch away) and rom_plot1
+/// cannot change it, so `across` always leaves through `done`. The labels keep
+/// their addresses because that is the shape the ROM's own layout has, not
+/// because this file's flow needs them.
 void rom_hline(uint8_t row, uint8_t from_col) {
   uint8_t col = from_col;
   // The CMPs below leave it and the ADC at $F826 reads it back.

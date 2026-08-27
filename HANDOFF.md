@@ -369,8 +369,8 @@ at the *bottom* of their bodies, where the old `goto new_game`/`goto
 new_level` already fell out to, so entering from the top skips it exactly
 once with no flag. The cost is $76B7's two lines appearing twice, because
 $7691 falls into $76B7. A `RoundEnd` enum carries the three ways out of the
-life loop, since C cannot break three levels. See
-`.superpowers/sdd/2026-08-27-readable-c/task-10-report.md` for the full map.
+life loop, since C cannot break three levels. Commit 1fb69a8's message carries
+the full map — every label, every goto that reaches it, and its depth.
 
 **What is decoded and never run is now recorded per routine.** Measured by
 probing entry addresses across both cold scenarios, not assumed:
