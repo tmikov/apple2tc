@@ -74,7 +74,7 @@ here=$(dirname "$0")
 # Cheap to rule out: every program is newer than every source that can change
 # what it does.
 stale=0
-for prog_src in     "snake-byte-cold-run:snake-byte-cold.c game-image.inc rom-image.inc"     "snake-bytec1-ext-run:reference/snake-bytec1-ext.c reference/snake-byte-ext.c reference/a2rom.c reference/game.c reference/game_native.c"     "snake-byte-easyc1-ext-run:reference/snake-byte-easyc1-ext.c reference/snake-byte-easy-ext.c reference/a2rom.c reference/game.c reference/game_native.c"     "snake-bytec1-run:reference/snake-bytec1.c"; do
+for prog_src in     "snake-byte-run:snake-byte.c game-image.inc rom-image.inc"     "snake-bytec1-ext-run:reference/snake-bytec1-ext.c reference/snake-byte-ext.c reference/a2rom.c reference/game.c reference/game_native.c"     "snake-byte-easyc1-ext-run:reference/snake-byte-easyc1-ext.c reference/snake-byte-easy-ext.c reference/a2rom.c reference/game.c reference/game_native.c"     "snake-bytec1-run:reference/snake-bytec1.c"; do
   prog="$bin/decoded/snake-byte/${prog_src%%:*}"
   [ -x "$prog" ] || continue
   for src in ${prog_src#*:}; do
@@ -678,7 +678,7 @@ cat "/tmp/pkeys-cover-trace-easy.txt" >> "/tmp/pkeys-cover-trace-ext.txt"
 # Every other check in this file compares a generated build against the
 # interpreter, because the interpreter runs the original binary and is ground
 # truth. That is not available here: a2run boots an Apple II, and the whole
-# point of snake-byte-cold is that it does not. There is no interpreter that
+# point of snake-byte is that it does not. There is no interpreter that
 # starts at $3750.
 #
 # So the control is snake-bytec1-ext -- itself checked against the interpreter
@@ -708,7 +708,7 @@ cat "/tmp/pkeys-cover-trace-easy.txt" >> "/tmp/pkeys-cover-trace-ext.txt"
 # working out which ones do.
 echo "--- cold-start build vs the booting build ---"
 
-cold_prog="$bin/decoded/snake-byte/snake-byte-cold-run"
+cold_prog="$bin/decoded/snake-byte/snake-byte-run"
 ext_prog="$bin/decoded/snake-byte/snake-bytec1-ext-run"
 [ -x "$cold_prog" ] || { echo "Error: not found: $cold_prog" >&2; exit 1; }
 
@@ -724,9 +724,9 @@ ext_prog="$bin/decoded/snake-byte/snake-bytec1-ext-run"
 # off the block-head list. Checked on 2026-08-24 after exactly that happened:
 # an adapter went away, its plain CYCLES went with it, and the native's SHARED
 # spelling was suddenly the only mention of $6216.
-site_addrs "$here/snake-byte-cold.c" > "$here/testdata/blocks-cold.txt"
+site_addrs "$here/snake-byte.c" > "$here/testdata/blocks-cold.txt"
 
-for a in $(grep -ohE 'GAME_CYCLES_SHARED\(0x[0-9a-f]+' "$here/snake-byte-cold.c" \
+for a in $(grep -ohE 'GAME_CYCLES_SHARED\(0x[0-9a-f]+' "$here/snake-byte.c" \
              | sed 's/.*0x//' | sort -u); do
   if ! grep -qx "$a" "$here/testdata/blocks-cold.txt"; then
     echo "FAIL [cold]: GAME_CYCLES_SHARED(\$$a) but no other source emits it" >&2
@@ -892,7 +892,7 @@ for sc in play:testdata/toggle-play.txt hires:testdata/toggle-hires.txt; do
     hires) keys=testdata/play-hires-cold.pkeys ;;
   esac
   A2_TOGGLE_DUMP="$regen/toggle-$name.txt" \
-    "$bin/decoded/snake-byte/snake-byte-cold-run" --frames=1300 --no-sound \
+    "$bin/decoded/snake-byte/snake-byte-run" --frames=1300 --no-sound \
     --key-file="$here/$keys" --probe="$here/testdata/trace-cold.probe" \
     --probe-out=/dev/null > /dev/null 2>&1
   if ! diff -q "$here/$want" "$regen/toggle-$name.txt" > /dev/null; then
@@ -930,15 +930,15 @@ for c in "$(sed -n 's/^CMAKE_C_COMPILER:[^=]*=//p' "$bin/CMakeCache.txt" | head 
   warn_cc="$warn_cc $r"
 done
 if [ -z "$warn_cc" ]; then
-  echo "FAIL [warn]: found no C compiler to check snake-byte-cold.c with" >&2
+  echo "FAIL [warn]: found no C compiler to check snake-byte.c with" >&2
   exit 1
 fi
 warn_names=""
 for c in $warn_cc; do
   out=$("$c" -I "$here/../../include" -std=gnu11 -fsyntax-only \
-          "$here/snake-byte-cold.c" 2>&1 | grep 'snake-byte-cold\.c.*warning' || true)
+          "$here/snake-byte.c" 2>&1 | grep 'snake-byte\.c.*warning' || true)
   if [ -n "$out" ]; then
-    echo "FAIL [warn]: $(basename "$c") warns about snake-byte-cold.c" >&2
+    echo "FAIL [warn]: $(basename "$c") warns about snake-byte.c" >&2
     echo "$out" >&2
     exit 1
   fi
@@ -958,7 +958,7 @@ echo "[warn] PASS: clean under$warn_names"
 # keys to a program that has stopped drawing frames.
 #
 # Two checks, and the static one is the real guarantee.
-awk -f "$here/yield-lint.awk" "$here/snake-byte-cold.c" || exit 1
+awk -f "$here/yield-lint.awk" "$here/snake-byte.c" || exit 1
 echo "[yield] PASS: every loop that reads input can suspend"
 
 # And a live one, because a lint can only see what it knows to look for.
@@ -974,7 +974,7 @@ echo "[yield] PASS: every loop that reads input can suspend"
 # Watched by polling rather than by a second background job: a `sleep N; kill`
 # subshell outlives a check that finishes in a second, and then fires into a
 # recycled pid. That killed this script during its own first run.
-"$bin/decoded/snake-byte/snake-byte-cold-run" --frames=2400 --no-sound \
+"$bin/decoded/snake-byte/snake-byte-run" --frames=2400 --no-sound \
   --key-file="$here/testdata/esc-pause.keys" > /dev/null 2>&1 &
 hang_pid=$!
 hang_waited=0
