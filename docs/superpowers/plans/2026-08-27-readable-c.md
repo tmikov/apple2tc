@@ -574,10 +574,17 @@ static uint8_t hgr_peek(uint16_t addr) {
 }
 ```
 
-- [ ] **Step 2: Use them** in `game_draw_cell`, `game_merge_cell` and
-      `game_clear_hgr` — the three routines that write hi-res. Leave the text
-      screen writes (`poke(s_mon.bas + s_mon.ch, ch)`) alone: `bas` already
-      says what it is.
+- [ ] **Step 2: Use them** in `game_draw_cell`, `game_merge_cell`,
+      `game_clear_hgr` and `game_cout_hook` — the four routines that write
+      hi-res. (The plan first said three and was wrong; the glyph blitter in
+      `game_cout_hook` writes the same page.) In that fourth one wrap only the
+      *destination*: the `peek` beside it reads the font out of the game image,
+      which is not the screen.
+
+      Leave the text screen writes (`poke(s_mon.bas + s_mon.ch, ch)`) alone —
+      `bas` already says what it is — and leave `game_cold_start`'s
+      $3800→$1800 copy alone, which reads the hi-res range as level data and
+      writes outside the page.
 
 - [ ] **Step 3: Gate.** At `-O2` these inline away, so the fingerprint will
       very likely be unchanged; if it is not, the gate is what matters.

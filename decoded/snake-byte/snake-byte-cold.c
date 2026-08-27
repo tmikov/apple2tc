@@ -3460,7 +3460,7 @@ void game_cout_hook(uint8_t ch) {
     uint16_t dest = hires_cursor();
 
     for (unsigned row = 0; row < 8; ++row) {
-      poke(dest, peek((uint16_t)(src + row)));
+      hgr_poke(dest, peek((uint16_t)(src + row)));
 
       // One hi-res scanline down within the character cell, which is +$400.
       dest = (uint16_t)(dest + 0x0400);
