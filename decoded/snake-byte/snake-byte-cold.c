@@ -291,14 +291,12 @@ static void emulated_entry_point(void) {
 /// \p carry_out, the bit shifted out of the second ASL -- which VTABZ adds
 /// straight back in.
 uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
-  /*$FBC1*/
   // LSR: the carry is the line's low bit, and it is what decides the ADC below.
   const uint8_t odd = line & 0x01;
   const uint8_t page = (uint8_t)(((line >> 1) & 0x03) | 0x04);
   uint8_t band = line & 0x18;
 
   if (odd) {
-    /*$FBCE*/
     // ADC #$7F with the carry the LSR just set, i.e. +$80: the second half of
     // the band.
     band = (uint8_t)((uint16_t)(band + 0x007f) + odd);
@@ -324,7 +322,7 @@ uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
 /// the +1 that steps to the next line -- the same trick HOME plays with
 /// CLREOLZ's. The carry going *in* is BASCALC's, from its second ASL.
 bool rom_vtabz(uint8_t line) {
-  /*$FC24*/ bool carry;
+  bool carry;
   const uint8_t base = rom_bascalc(line, &carry);
 
   const uint16_t r = ((uint16_t)base + s_wndlft) + carry;
@@ -332,7 +330,7 @@ bool rom_vtabz(uint8_t line) {
   // this really is a write of one half.
   s_bas = (uint16_t)((s_bas & 0xff00) | (uint8_t)r);
 
-  /*$FC2B*/ return ((r >> 8) & 0x01) != 0;
+  return ((r >> 8) & 0x01) != 0;
 }
 
 /// $FC9C CLREOL. Blank from the cursor to the right edge of the window.
@@ -343,7 +341,7 @@ bool rom_vtabz(uint8_t line) {
 /// scrolls. The body is three instructions and its tail call is the routine
 /// below, which *is* exercised, so what is unchecked is the LDY and the jump.
 void rom_clreol(void) {
-  /*$FC9C*/ rom_clreolz(s_ch); // JMP -- a tail call; nobody reads its carry.
+  rom_clreolz(s_ch); // JMP -- a tail call; nobody reads its carry.
 }
 
 /// $FC9E CLREOLZ. The same, from column Y rather than from the cursor. Writes
@@ -357,20 +355,18 @@ void rom_clreol(void) {
 /// HOME's CLRSC2 loop reaches its `ADC #$00` with no CLC of its own and uses
 /// this as the +1 that steps to the next line, and $FC9A branches on it.
 bool rom_clreolz(uint8_t col) {
-  /*$FC9E*/ const uint8_t space = 0xa0; // a space, high bit set
+  const uint8_t space = 0xa0; // a space, high bit set
 
   for (;;) {
-    /*$FCA0*/ poke((uint16_t)(s_bas + col), space);
+    poke((uint16_t)(s_bas + col), space);
 
     const uint8_t next = (uint8_t)(col + 1);
     col = next;
 
     const uint8_t width = s_wndwdth;
     if (next >= width) {
-      /*$FCA7*/ return true;
+      return true;
     }
-
-    /*$FCA5*/
   }
 }
 
@@ -396,12 +392,10 @@ void rom_wait(uint8_t n) {
      either test below passes all six cold checks. */
   uint8_t not_zero = 0;
 
-  /*$FCA8*/
   // SEC: the borrow chain both loops run on.
   uint8_t carry = 0x01;
 
   for (;;) {
-    /*$FCA9*/
 
     // The inner loop: A down to zero, one SBC per pass.
     uint8_t inner = n;
@@ -410,27 +404,23 @@ void rom_wait(uint8_t n) {
       // bell's clicks -- so this charge is the tone. Neither scenario emits
       // Ctrl-G, so nothing in the gate covers it; it survives on the argument
       // rather than on a measurement, which is worth saying plainly.
-      /*$FCAA*/ advance(5);
+      advance(5);
       const uint16_t r = (uint16_t)(inner - 0x0001) - (uint8_t)(0x01 - carry);
       carry = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
       inner = (uint8_t)r;
       not_zero = inner;
       if (!not_zero)
         break;
-      /*$FCAC*/
     }
 
     // The outer one: the copy off the stack, down by one.
-    /*$FCAE*/ const uint16_t r = (uint16_t)(n - 0x0001) - (uint8_t)(0x01 - carry);
+    const uint16_t r = (uint16_t)(n - 0x0001) - (uint8_t)(0x01 - carry);
     carry = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
     n = (uint8_t)r;
     not_zero = n;
     if (!not_zero)
       break;
-    /*$FCB1*/
   }
-
-  /*$FCB3*/
 }
 
 /* ========================================================================== *
@@ -1057,17 +1047,15 @@ static void rom_cout1(uint8_t ch);
 /// build a text address, and this one shifts by two and ORs, which lands on
 /// the lo-res page instead.
 static void rom_gbascalc(uint8_t row) {
-  /*$F847*/ const uint8_t odd = (uint8_t)(row & 0x01);
-  /*$F84D*/ const uint8_t page = (uint8_t)(((row >> 0x01) & 0x03) | 0x04);
-  /*$F850*/ uint8_t band = (uint8_t)(row & 0x18);
+  const uint8_t odd = (uint8_t)(row & 0x01);
+  const uint8_t page = (uint8_t)(((row >> 0x01) & 0x03) | 0x04);
+  uint8_t band = (uint8_t)(row & 0x18);
 
   if (odd) {
-    /*$F854*/ band = (uint8_t)((band + 0x7f) + odd);
+    band = (uint8_t)((band + 0x7f) + odd);
   }
 
-  /*$F85C*/ s_gbas = (uint16_t)((uint8_t)((uint8_t)(band << 0x02) | band) | (page << 8));
-
-  /*$F85E*/
+  s_gbas = (uint16_t)((uint8_t)((uint8_t)(band << 0x02) | band) | (page << 8));
 }
 
 /// $F80E PLOT1. Store the color mask ($30) into the lo-res half-byte selected
@@ -1076,11 +1064,9 @@ static void rom_plot1(uint8_t col) {
   // One lo-res cell: replace the half of the byte MASK selects with the
   // matching half of COLOR, leaving the other half alone. `(old ^ colour) &
   // mask ^ old` is the ROM's way of saying that in three instructions.
-  /*$F80E*/ const uint16_t at = (uint16_t)(s_gbas + col);
+  const uint16_t at = (uint16_t)(s_gbas + col);
   const uint8_t old = peek(at);
-  /*$F816*/ poke(at, (uint8_t)(((old ^ s_color) & s_mask) ^ old));
-
-  /*$F818*/
+  poke(at, (uint8_t)(((old ^ s_color) & s_mask) ^ old));
 }
 
 /* ========================================================================== */
@@ -1095,18 +1081,18 @@ static void rom_plot1(uint8_t col) {
 /// which is $F0 with the carry set and $EF without; only the low bit of the
 /// row can make the difference, so the sum is one of the two masks.
 void rom_plot(uint8_t row, uint8_t col) {
-  /*$F800*/ const uint8_t half = (uint8_t)(row >> 0x01);
+  const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
   // PHP/PLP across GBASCALC, to carry the LSR's bit past a call that clobbers
   // the flags. The bit is `row & 0x01`, and nothing else survived the round
   // trip, so it is simply the value.
-  /*$F802*/ rom_gbascalc(half);
+  rom_gbascalc(half);
 
   const uint8_t carry = (uint8_t)(row & 0x01);
-  /*$F806*/ uint8_t mask = 0x0f;
+  uint8_t mask = 0x0f;
 
   if (upper) {
-    /*$F80A*/ mask = (uint8_t)(((uint16_t)mask + 0x00e0) + carry);
+    mask = (uint8_t)(((uint16_t)mask + 0x00e0) + carry);
   }
 
   s_mask = mask;
@@ -1133,36 +1119,34 @@ void rom_hline(uint8_t row, uint8_t from_col) {
   // The CMPs below leave it and the ADC at $F826 reads it back.
   uint8_t carry;
 
-  /*$F819*/ rom_plot(row, col);
+  rom_plot(row, col);
 
-across: /* $F81C -- one column at a time, up to H2 */
+across: /* one column at a time, up to H2 */
   carry = (uint8_t)(col >= s_h2);
   if (carry) {
     // $F81E BCS -- the branch itself, taken here.
-    /*$F81E*/ goto done;
+    goto done;
   }
 
-  /*$F820*/ col = (uint8_t)(col + 0x01);
-  /*$F821*/ rom_plot1(col);
-  /*$F824*/ if (!carry) {
+  col = (uint8_t)(col + 0x01);
+  rom_plot1(col);
+  if (!carry) {
     // $F824 BCC -- the branch itself, taken here.
-    /*$F824*/ goto across;
+    goto across;
   }
 
-down: /* $F826 -- one row at a time, up to V2 */
+down: /* one row at a time, up to V2 */
   row = (uint8_t)(((uint16_t)row + 0x0001) + carry);
 
-  /*$F828*/
-  /*$F829*/ rom_plot(row, col);
-  /*$F82C*/
-  /*$F82D*/ carry = (uint8_t)(row >= s_v2);
+  rom_plot(row, col);
+  carry = (uint8_t)(row >= s_v2);
   if (!carry) {
     // $F82F BCC -- the branch itself, taken here.
-    /*$F82F*/ goto down;
+    goto down;
   }
 
 done:
-  /*$F831*/ return;
+  return;
 }
 
 /* ========================================================================== */
@@ -1173,10 +1157,8 @@ void rom_setcol(uint8_t ink) {
   // The lo-res colour is stored in both nibbles, so a PLOT can take whichever
   // half MASK selects without shifting. Four ASLs and an ORA get there in the
   // original; the carry they leave is read by nothing.
-  /*$F864*/ const uint8_t low = (uint8_t)(ink & 0x0f);
+  const uint8_t low = (uint8_t)(ink & 0x0f);
   s_color = (uint8_t)((low << 0x04) | low);
-
-  /*$F870*/
 }
 
 /* ========================================================================== */
@@ -1187,10 +1169,10 @@ uint8_t rom_scrn(uint8_t row, uint8_t col) {
   // The row's low bit says which half of the byte holds this cell, and the
   // ROM keeps it across GBASCALC on the stack -- as the whole status
   // register, because LSR put it in the carry and PHP is one byte.
-  /*$F871*/ const uint8_t half = (uint8_t)(row >> 0x01);
+  const uint8_t half = (uint8_t)(row >> 0x01);
   const bool upper = (row & 0x01) != 0;
 
-  /*$F873*/ rom_gbascalc(half);
+  rom_gbascalc(half);
 
   uint8_t cell = peek((uint16_t)(s_gbas + col));
 
@@ -1198,10 +1180,10 @@ uint8_t rom_scrn(uint8_t row, uint8_t col) {
   // read by nothing here.
 
   if (upper) {
-    /*$F87B*/ cell = (uint8_t)(cell >> 0x04);
+    cell = (uint8_t)(cell >> 0x04);
   }
 
-  /*$F881*/ return cell & 0x0f;
+  return cell & 0x0f;
 }
 
 /* ========================================================================== */
@@ -1218,43 +1200,41 @@ void rom_home(void) {
 
 home: /* $FC58 */
   line = s_wndtop;
-  /*$FC5A*/ s_cv = s_wndtop;
-  /*$FC5E*/ s_ch = 0x00;
+  s_cv = s_wndtop;
+  s_ch = 0x00;
   // $FC60 BEQ -- provably always taken (Y was just loaded 0), but the branch
   // instruction still executes and still pays its own cost every time. The
   // decompiler doesn't do cross-instruction flag proofs either, so it keeps
   // charging this the same way.
-  /*$FC60*/
 
-  for (;;) { /* $FC46 -- CLRSC2, one line per pass */
-    /*$FC47*/ rom_vtabz(line);
-    /*$FC4A*/
+  for (;;) { /* CLRSC2, one line per pass */
+    rom_vtabz(line);
     // $FC5C loaded Y with 0 and CLREOLZ is the only thing that moves it, so
     // every pass starts the blank at column 0. Its carry comes back out as the
     // +1 below: $FC4D's `ADC #$00` has no CLC in front of it, and this is why.
     const bool step = rom_clreolz(0x00);
 
-    /*$FC4D*/ line = (uint8_t)(line + step);
+    line = (uint8_t)(line + step);
 
-    /*$FC52*/ const bool past_bottom = line >= s_wndbtm;
+    const bool past_bottom = line >= s_wndbtm;
     if (!past_bottom) {
       // $FC54 BCC -- the branch itself, taken here.
-      /*$FC54*/ continue;
+      continue;
     }
 
-    /*$FC56*/ if (!past_bottom)
+    if (!past_bottom)
       goto home; // the BCS's not-taken arm, which cannot be reached
     // $FC56 BCS -- the branch itself, same address as the block above because
     // this is a singleton one-instruction block.
-    /*$FC56*/ break;
+    break;
   }
 
-  /*$FC22*/ // TABV
+  // TABV
   rom_vtabz(s_cv); // JMP -- a tail call.
 }
 
 /* ========================================================================== */
-/* $FC68 -- the tail of LF: VTAB, or scroll if CV has run off the window.      */
+/* the tail of LF: VTAB, or scroll if CV has run off the window.      */
 /*                                                                            */
 /*   FC68: LDA CV / CMP WNDBTM / BCC VTABZ    ; usual case: just recompute BAS */
 /*   FC6E: DEC CV / LDA WNDTOP / PHA / ...    ; otherwise scroll up one line   */
@@ -1297,60 +1277,58 @@ void rom_fc68(void) {
      and a label may not be followed by a declaration in C11. */
   bool filled;
 
-  /*$FC68*/ if (!(s_cv >= s_wndbtm)) {
+  if (!(s_cv >= s_wndbtm)) {
     // $FC6C BCC -- the branch itself, taken here. Nothing to scroll.
-    /*$FC6C*/ rom_vtabz(s_cv); // JMP -- a tail call.
+    rom_vtabz(s_cv); // JMP -- a tail call.
     return;
   }
 
-  /*$FC6E*/ s_cv = (uint8_t)(s_cv - 0x01);
-  /*$FC70*/ line = s_wndtop;
-  /*$FC73*/ step = rom_vtabz(line);
+  s_cv = (uint8_t)(s_cv - 0x01);
+  line = s_wndtop;
+  step = rom_vtabz(line);
 
-scroll: /* $FC76 -- one line up per pass */
-  /*$FC78*/ s_bas2 = s_bas;
-  /*$FC80*/ col = (uint8_t)(s_wndwdth - 0x01);
+scroll: /* one line up per pass */
+  s_bas2 = s_bas;
+  col = (uint8_t)(s_wndwdth - 0x01);
   // $FC82's ADC has no CLC either; the carry is whatever VTABZ last returned.
   line = (uint8_t)(((uint16_t)line + 0x0001) + step);
 
   if (line >= s_wndbtm) {
     // $FC86 BCS -- the branch itself, taken here. That was the last line.
-    /*$FC86*/ goto last_line;
+    goto last_line;
   }
 
-  /*$FC88*/
-  /*$FC89*/ step = rom_vtabz(line);
+  step = rom_vtabz(line);
 
-copy: /* $FC8C -- one character, right to left */
+copy: /* one character, right to left */
 {
   const uint8_t at = col;
-  /*$FC8E*/ poke((uint16_t)(s_bas2 + at), peek((uint16_t)(s_bas + at)));
-  /*$FC90*/ const uint8_t next = (uint8_t)(at - 0x01);
+  poke((uint16_t)(s_bas2 + at), peek((uint16_t)(s_bas + at)));
+  const uint8_t next = (uint8_t)(at - 0x01);
   negative = (uint8_t)(next & 0x80);
   col = next;
   if (!negative) {
     // $FC91 BPL -- the branch itself, taken here (loop back).
-    /*$FC91*/ goto copy;
+    goto copy;
   }
 }
 
-  /*$FC93*/ if (negative) {
+  if (negative) {
     // $FC93 BMI -- the branch itself, taken here (outer loop back).
-    /*$FC93*/ goto scroll;
+    goto scroll;
   }
 
-last_line: /* $FC95 -- blank what the scroll left at the bottom */
-  /*$FC97*/ filled = rom_clreolz(0x00);
+last_line: /* blank what the scroll left at the bottom */
+  filled = rom_clreolz(0x00);
 
-  /*$FC9A*/ if (!filled) {
+  if (!filled) {
     rom_clreol(); // JMP -- a tail call.
     return;
   }
   // $FC9A BCS -- taken here, and it falls into the trampoline charge below
   // before continuing; the not-taken arm above jumps straight out without it.
-  /*$FC9A*/
 
-  /*$FC22*/ // TABV
+  // TABV
   rom_vtabz(s_cv);
 }
 
@@ -1406,27 +1384,25 @@ last_line: /* $FC95 -- blank what the scroll left at the bottom */
 /// feed -- and writing it as nested ifs would need each of those spelled out
 /// twice.
 static void rom_coutz(uint8_t ch) {
-  /*$FB78*/ if (ch != 0x8d) {
-    /*$FB7A*/ goto emit;
+  if (ch != 0x8d) {
+    goto emit;
   }
 
-  /* $FB7C -- the Ctrl-S handshake, on a carriage return only. If a key is
+  /* the Ctrl-S handshake, on a carriage return only. If a key is
      already waiting and it is Ctrl-S, stop here until another key arrives.
      Ctrl-C is left in the keyboard latch on the way out so that whatever is
      running next still sees it; anything else is consumed. */
-  /*$FB7C*/ GAME_CYCLES_COORD(0xfb7c, 6);
+  GAME_CYCLES_COORD(0xfb7c, 6);
   uint8_t key = io_peek(0xc000);
   if (!(key & 0x80)) {
-    /*$FB7F*/ goto emit;
+    goto emit;
   }
 
-  /*$FB81*/ if (key != 0x93) {
-    /*$FB83*/ goto emit;
+  if (key != 0x93) {
+    goto emit;
   }
 
-  /*$FB85*/
-
-  for (;;) { /* $FB88 -- spin until a key is pressed */
+  for (;;) { /* spin until a key is pressed */
     // Ctrl-S holds the display until the next keypress, and this charge is
     // what makes the hold end: it is the only suspend point in the loop, so
     // without it the host never runs and the key can never be delivered.
@@ -1434,120 +1410,113 @@ static void rom_coutz(uint8_t ch) {
     advance(7);
     key = io_peek(0xc000);
     if (!(key & 0x80)) {
-      /*$FB8B*/ continue;
+      continue;
     }
 
-    /*$FB8D*/ if (key == 0x83) {
+    if (key == 0x83) {
       // Ctrl-C: leave it latched.
-      /*$FB8F*/ break;
+      break;
     }
-    /*$FB91*/ break;
+    break;
   }
 
 emit: /* $FB94 JMP $FBFD */
-  /*$FBFD*/ if (!(ch >= 0xa0)) {
+  if (!(ch >= 0xa0)) {
     // The not-taken arm jumps straight to the dispatch without the edge charge.
     goto dispatch;
   }
   // $FBFF BCS -- taken here, and it falls into the trampoline charge before
   // continuing.
-  /*$FBFF*/
 
-store: /* $FBF0 -- put the character at the cursor */
-  /*$FBF2*/ poke((uint16_t)(s_bas + s_ch), ch);
+store: /* put the character at the cursor */
+  poke((uint16_t)(s_bas + s_ch), ch);
 
-  /*$FBF4*/ s_ch = (uint8_t)(s_ch + 0x01);
+  s_ch = (uint8_t)(s_ch + 0x01);
   {
     const uint8_t width = s_wndwdth;
     const bool past_right_edge = s_ch >= width;
     if (past_right_edge) {
       // Off the right edge, so wrap: the same thing a carriage return does.
-      /*$FBFA*/ goto carriage_return;
+      goto carriage_return;
     }
   }
-  /*$FBFC*/ goto out;
+  goto out;
 
-dispatch: /* $FC01 -- not printable; which control code is it? */
+dispatch: /* not printable; which control code is it? */
   if (!(ch & 0x80)) {
     // Below $80 the monitor stores it anyway, high bit and all.
-    /*$FC02*/ goto store;
+    goto store;
   }
 
-  /*$FC04*/ if (ch == 0x8d) {
-    /*$FC06*/ goto carriage_return;
+  if (ch == 0x8d) {
+    goto carriage_return;
   }
 
-  /*$FC08*/ if (ch == 0x8a) {
-    /*$FC0A*/ goto line_feed;
+  if (ch == 0x8a) {
+    goto line_feed;
   }
 
-  /*$FC0C*/ if (ch != 0x88) {
-    /*$FC0E*/ goto bell;
+  if (ch != 0x88) {
+    goto bell;
   }
 
-  /* $FC10 -- backspace. Off the left edge wraps to the end of the line above,
+  /* backspace. Off the left edge wraps to the end of the line above,
      which is why it falls into the cursor-up path rather than returning. */
-  /*$FC10*/ {
+  {
     const uint8_t back = (uint8_t)(s_ch - 0x01);
     s_ch = back;
     if (!(back & 0x80)) {
-      /*$FC12*/
-      /*$FBFC*/ goto out;
+      goto out;
     }
   }
 
-  /*$FC14*/
-  /*$FC16*/ s_ch = s_wndwdth;
-  /*$FC18*/ s_ch = (uint8_t)(s_ch - 0x01);
+  s_ch = s_wndwdth;
+  s_ch = (uint8_t)(s_ch - 0x01);
 
-  /*$FC1A*/ {
+  {
     const uint8_t top = s_wndtop;
     const uint8_t cv = s_cv;
     const bool at_window_top = top >= cv;
     if (at_window_top) {
       // Already on the window's top line; there is nowhere to go up to.
-      /*$FC1E*/
-      /*$FC2B*/ goto out;
+      goto out;
     }
   }
 
-  /*$FC20*/ s_cv = (uint8_t)(s_cv - 0x01);
-  /*$FC22*/ // TABV
+  s_cv = (uint8_t)(s_cv - 0x01);
+  // TABV
   rom_vtabz(s_cv);
   goto out;
 
-bell: /* $FBD9 -- Ctrl-G, or a control code the monitor does not know */
+bell: /* Ctrl-G, or a control code the monitor does not know */
 {
   const uint8_t differs = (uint8_t)(ch != 0x87);
   if (differs) {
     // Not the bell either. Drop it.
-    /*$FBDB*/
-    /*$FBEF*/ goto out;
+    goto out;
   }
 }
 
   // A tenth of a second of silence, then 192 clicks of the speaker.
-  /*$FBDD*/
-  /*$FBDF*/ rom_wait(0x40);
-  /*$FBE2*/ uint8_t clicks = 0xc0;
+  rom_wait(0x40);
+  uint8_t clicks = 0xc0;
 
   for (;;) { /* $FBE4 */
-    /*$FBE6*/ rom_wait(0x0c);
-    /*$FBE9*/ io_peek(0xc030); // the click; the read is the write
-    /*$FBEC*/ clicks = (uint8_t)(clicks - 0x01);
+    rom_wait(0x0c);
+    io_peek(0xc030); // the click; the read is the write
+    clicks = (uint8_t)(clicks - 0x01);
     if (!clicks)
       break;
-    /*$FBED*/
   }
 
-  /*$FBEF*/ goto out;
+  goto out;
 
-carriage_return: /* $FC62 -- to the left edge, then down */
-  /*$FC64*/ s_ch = 0x00;
+carriage_return: /* to the left edge, then down */
+  s_ch = 0x00;
 
 line_feed: /* $FC66 */
   s_cv = (uint8_t)(s_cv + 0x01);
-  /*$FC68*/ rom_fc68(); // JMP -- a tail call, and where a scroll happens.
+  rom_fc68(); // JMP -- a tail call, and where a scroll happens.
 
 out:
   return;
@@ -1593,7 +1562,7 @@ out:
 void rom_cout(uint8_t ch) {
   uint16_t vector;
 
-  /*$FDED*/ vector = s_csw; // JMP ($36)
+  vector = s_csw; // JMP ($36)
   switch (vector) {
   case 0xfdf0:
     rom_cout1(ch);
@@ -1624,24 +1593,19 @@ void rom_cout(uint8_t ch) {
 /// monitor does inverse and flashing -- $FF leaves them alone. Control codes
 /// are let through unmasked, since mangling them would change what they mean.
 static void rom_cout1(uint8_t ch) {
-  /*$FDF0*/ const bool printable = ch >= 0xa0;
+  const bool printable = ch >= 0xa0;
 
   if (printable) {
-    /*$FDF4*/ ch = (uint8_t)(ch & s_invflg);
+    ch = (uint8_t)(ch & s_invflg);
   } else {
     // $FDF2 BCC -- the branch itself, taken here.
-    /*$FDF2*/
   }
 
   // The original saves Y in YSAV1 across the call and puts it back, because
   // COUT promises its callers it preserves Y. Nothing in this file ever reads
   // Y for a value, so the promise has nobody to keep it to: saving and
   // restoring were the only two things that touched it.
-  /*$FDF6*/ rom_coutz(ch); // JSR $FB78
-
-  /*$FDFC*/
-
-  /*$FDFF*/
+  rom_coutz(ch); // JSR $FB78
 }
 
 /* ========================================================================== */
@@ -1657,7 +1621,7 @@ static void rom_cout1(uint8_t ch) {
 /// nothing dispatches input through it -- but the routine runs at startup and
 /// its cycles count, so it is here in full.
 void rom_setkbd(void) {
-  /*$FE89*/ s_a2l = 0x00;
+  s_a2l = 0x00;
   // X and Y are the built-in device's vector, $FD1B (KEYIN). SETIO below keeps
   // the low half and replaces the page.
   const uint8_t entry_low = 0x1b;
@@ -1665,30 +1629,24 @@ void rom_setkbd(void) {
   // same reasoning as $FC60 in rom_home: the decompiler doesn't do
   // cross-instruction flag proofs, so the branch still executes and still
   // pays its own cost every time.
-  /*$FE91*/
 
   // $FE9B SETIO. A2L is the slot; slot 0 means the built-in device and the ROM
   // answers page $FD, where its own KEYIN and COUT1 live. A real slot would
   // give $Cn00 instead -- decoded, never taken, because the game never sets
   // one.
-  /*$FE9B*/
-  /*$FE9D*/ const uint8_t slot = (uint8_t)(s_a2l & 0x0f);
+  const uint8_t slot = (uint8_t)(s_a2l & 0x0f);
   uint8_t page, low;
   if (slot) {
-    /*$FEA1*/ page = (uint8_t)(slot | 0xc0);
+    page = (uint8_t)(slot | 0xc0);
     low = 0x00;
     // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
-    /*$FEA5*/
   } else {
     // $FE9F BEQ -- the branch itself, taken here.
-    /*$FE9F*/
-    /*$FEA7*/ page = 0xfd;
+    page = 0xfd;
     low = entry_low;
   }
 
-  /*$FEA9*/ s_ksw = (uint16_t)(low | (page << 8));
-
-  /*$FEAD*/
+  s_ksw = (uint16_t)(low | (page << 8));
 }
 
 /// $FE93 SETVID. Point COUT's vector back at the ROM's own COUT1.
@@ -1701,7 +1659,7 @@ void rom_setkbd(void) {
 /// startup, before it has repointed anything. Had it ever called it after
 /// installing the hook, COUT would have stayed hooked.
 void rom_setvid(void) {
-  /*$FE93*/ s_a2l = 0x00;
+  s_a2l = 0x00;
   // The same, for $FDF0 (COUT1).
   const uint8_t entry_low = 0xf0;
 
@@ -1709,24 +1667,19 @@ void rom_setvid(void) {
   // answers page $FD, where its own KEYIN and COUT1 live. A real slot would
   // give $Cn00 instead -- decoded, never taken, because the game never sets
   // one.
-  /*$FE9B*/
-  /*$FE9D*/ const uint8_t slot = (uint8_t)(s_a2l & 0x0f);
+  const uint8_t slot = (uint8_t)(s_a2l & 0x0f);
   uint8_t page, low;
   if (slot) {
-    /*$FEA1*/ page = (uint8_t)(slot | 0xc0);
+    page = (uint8_t)(slot | 0xc0);
     low = 0x00;
     // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
-    /*$FEA5*/
   } else {
     // $FE9F BEQ -- the branch itself, taken here.
-    /*$FE9F*/
-    /*$FEA7*/ page = 0xfd;
+    page = 0xfd;
     low = entry_low;
   }
 
-  /*$FEA9*/ s_csw = (uint16_t)(low | (page << 8));
-
-  /*$FEAD*/
+  s_csw = (uint16_t)(low | (page << 8));
 }
 
 /* ========================================================================== *
@@ -2128,7 +2081,7 @@ static uint8_t s_click_count;
 /* ========================================================================== */
 
 uint8_t game_start_life(uint8_t head_col) {
-  /*$660F*/ s_head.col = head_col;
+  s_head.col = head_col;
 
   // Opposite corners, converging. The original's nine stores are these two.
   const Bouncer a = {.col = 0x01, .row = 0x01, .dx = +1, .dy = +1};
@@ -2142,7 +2095,6 @@ uint8_t game_start_life(uint8_t head_col) {
 }
 
 void game_load_shape_masks(uint8_t shape) {
-  /*$6127*/
   // Four masks per shape at $6174, into the four the plotter reads.
   uint8_t last = 0;
   for (unsigned line = 0; line < 4; ++line) {
@@ -2152,13 +2104,12 @@ void game_load_shape_masks(uint8_t shape) {
 }
 
 void game_install_cout_vector(void) {
-  /*$6641*/
   // CSWL/CSWH at $36/$37, pointed at $664A.
   s_csw = 0x664a;
 }
 
 /* ========================================================================== */
-/* $64C8 -- the bouncer                                                       */
+/* the bouncer                                                       */
 /*                                                                            */
 /* What the original spends bytes on and this does not: $6633-$6636 are a      */
 /* parameter block the caller copies in and out, $6637/$6638 are the candidate */
@@ -2410,7 +2361,7 @@ static uint8_t s_bonus_amount[2] = {0x00, 0x00};
 static uint8_t s_lives_at_level_start = 0x02;
 
 /* ========================================================================== */
-/* $728D -- the high score                                                    */
+/* the high score                                                    */
 /*                                                                            */
 /* Four BCD bytes at $7252 against four at $7256, most significant first.      */
 /* Below at any byte and it stops; above and it copies; equal and it moves on. */
@@ -2456,7 +2407,7 @@ void game_promote_high_score(void) {
 }
 
 /* ========================================================================== */
-/* $69C3 -- find an apple                                                     */
+/* find an apple                                                     */
 /*                                                                            */
 /* Sweep whole columns looking for $0F on the occupancy map: from the snake's  */
 /* own column leftwards, then from it again rightwards. First hit wins, so the */
@@ -2517,7 +2468,7 @@ void game_find_nearest_apple(void) {
 }
 
 /* ========================================================================== */
-/* $6AB8 -- is a move safe?                                                   */
+/* is a move safe?                                                   */
 /*                                                                            */
 /* The four neighbour probes are the same shape four times over, so they are  */
 /* a table here. In the original they are 60 bytes of straight-line code with */
@@ -2589,7 +2540,7 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
 }
 
 /* ========================================================================== */
-/* $7045 -- draw the playfield                                                */
+/* draw the playfield                                                */
 /*                                                                            */
 /* 62 blocks in one routine, and six things: set the video mode, spin, wipe    */
 /* the occupancy map, open the wall gaps the difficulty calls for, draw the    */
@@ -2644,7 +2595,6 @@ static void plot_vline_at(uint8_t ink, uint8_t col, uint8_t row, uint8_t to_row)
 }
 
 static void lores_vline_at(uint8_t col, uint8_t row, uint8_t to_row) {
-  /*$7000*/
   // The row it restores was this routine's result in A. Nothing reads it; the
   // adapter that did has gone.
   game_lores_vline_native((Cell){.col = col, .row = row}, to_row);
@@ -2879,7 +2829,7 @@ static uint8_t dot_index(uint8_t ink, uint8_t scanline, uint8_t col) {
 
 /// $60E7 -- draw the loaded shape into one cell, replacing what was there.
 void game_draw_cell_native(uint8_t ink, Cell c) {
-  /*$60E7*/ uint16_t dest = cell_row_base(c.row);
+  uint16_t dest = cell_row_base(c.row);
 
   for (unsigned line = 0; line < 4; ++line) {
     // Built in $06 in two steps, and written out between them because it is
@@ -2949,7 +2899,6 @@ void game_clear_hgr_native(void) {
 /// \p to_col. The original walked $02/$03 and left $02 on the endpoint, which
 /// its adapter returned in A; that is the return value here.
 void game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
-  /*$6148*/
   // Loads the four scanline masks the cell drawers read. The mask it
   // returns was the original\'s result in A and nothing reads it.
   game_load_shape_masks(s_shape);
@@ -2965,7 +2914,6 @@ void game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
 
 /// $615A -- the same down a column: rows $03 through $08 in column $02.
 void game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
-  /*$615A*/
   // Loads the four scanline masks the cell drawers read. The mask it
   // returns was the original\'s result in A and nothing reads it.
   game_load_shape_masks(s_shape);
@@ -2998,7 +2946,7 @@ void game_lores_vline_native(Cell c, uint8_t to_row) {
 }
 
 /* ========================================================================== */
-/* $6594 -- step the bouncers, then take a key                                */
+/* step the bouncers, then take a key                                */
 /* ========================================================================== */
 
 /// Move one bouncer. The original copies it into the parameter block at
@@ -3063,7 +3011,7 @@ uint8_t game_step_bouncers_native(void) {
 }
 
 /* ========================================================================== */
-/* $6C72 -- turn the next input into a direction                              */
+/* turn the next input into a direction                              */
 /* ========================================================================== */
 
 /// The six inputs the game understands. $6C63 holds the key that produces
@@ -3205,7 +3153,7 @@ uint8_t game_read_direction_native(uint8_t key) {
 }
 
 /* ========================================================================== */
-/* $75D1 -- read a replacement key for one slot                               */
+/* read a replacement key for one slot                               */
 /* ========================================================================== */
 
 /// Where slot \p slot sits on the redefinition screen, and what blinks there.
@@ -3324,7 +3272,7 @@ uint8_t game_edit_key_native(uint8_t slot) {
 }
 
 /* ========================================================================== */
-/* $6BFB -- the falling tone                                                  */
+/* the falling tone                                                  */
 /* ========================================================================== */
 
 /* The whole tone is four bytes, declared up with the rest of the state.       */
@@ -3399,7 +3347,7 @@ void game_tick_sound_native(void) {
 }
 
 /* ========================================================================== */
-/* $71F3 -- a BCD byte, with leading zeros suppressed                         */
+/* a BCD byte, with leading zeros suppressed                         */
 /* ========================================================================== */
 
 /// $002C -- the significance flag, holding the last significant digit rather
@@ -3461,7 +3409,7 @@ void game_print_zero_if_blank_native(void) {
 }
 
 /* ========================================================================== */
-/* $7267 -- add to the score                                                  */
+/* add to the score                                                  */
 /* ========================================================================== */
 
 void game_add_score_native(void) {
@@ -3499,7 +3447,7 @@ void game_add_score_native(void) {
 }
 
 /* ========================================================================== */
-/* $7024, $7019 -- two small ones                                             */
+/* two small ones                                             */
 /* ========================================================================== */
 
 /// $7024 -- tell the ROM's lo-res plotter which colour to draw the occupancy
@@ -3644,7 +3592,7 @@ void game_draw_head_native(uint8_t ink, Cell c) {
     s_shape = 0x01;
     { // was game_plot_shape_merge()
 
-      /*$6B93*/ game_load_shape_masks(s_shape);
+      game_load_shape_masks(s_shape);
 
       // The high byte it returns was the original's result in A; nothing
       // reads it now.
@@ -3794,7 +3742,7 @@ uint8_t game_draw_side_walls_native(void) {
 }
 
 /* ========================================================================== */
-/* $6217 -- the keyboard, into the ring                                       */
+/* the keyboard, into the ring                                       */
 /* ========================================================================== */
 
 /// A 16-entry ring at $623C, with $624D the write index and $624C the read
@@ -3832,7 +3780,7 @@ void game_read_key_native(void) {
 }
 
 /* ========================================================================== */
-/* $664A -- the hi-res COUT hook                                              */
+/* the hi-res COUT hook                                              */
 /*                                                                            */
 /* Installed by $6641 over the ROM's character-output vector, so that every    */
 /* COUT in the game and in the ROM draws through the game's own 8x8 font at    */
@@ -3898,7 +3846,7 @@ void game_cout_hook_native(uint8_t ch) {
 }
 
 /* ========================================================================== */
-/* $6288 -- one life                                                          */
+/* one life                                                          */
 /*                                                                            */
 /* The game's main loop: steer the snake, move it one cell, redraw the head    */
 /* and the tail, and pace the whole thing with a delay loop that also ticks    */
@@ -4005,7 +3953,7 @@ static void click_speaker(void) {
 }
 
 /* ========================================================================== */
-/* $69A9 -- pause and mute                                                    */
+/* pause and mute                                                    */
 /*                                                                            */
 /* The dispatch chain above ends in a JSR here, so this is not only the pause */
 /* key: it is where every key the game does not recognise comes to be         */
@@ -4072,7 +4020,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       // The JSR stays here rather than moving into the native routine, because
       // game_step_bouncers's own adapter is what keeps $6216 -- the RTS it shares
       // with the unconverted game_read_key -- a probe site.
-      /*$6C72*/ const uint8_t key = game_step_bouncers_native();
+      const uint8_t key = game_step_bouncers_native();
       // $6216 is an RTS shared with game_read_key, so it stays a probe site even
       // though the routine that used to hold it is gone. Spelled with plain CYCLES
       // rather than GAME_CYCLES_SHARED because site_addrs() does not grep for that
@@ -4093,7 +4041,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       goto autopilot;
     }
 
-  steer: /* $6293 -- a key with the high bit on, so the player is steering */
+  steer: /* a key with the high bit on, so the player is steering */
     s_click_count = 0x10;
     if (code == KEY_TURN_CW) {
       shape = (uint8_t)(dir + 0x10);
@@ -4142,7 +4090,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     game_pause_or_toggle_sound_native(code);
     goto pace;
 
-  autopilot: /* $6308 -- no steering this step */
+  autopilot: /* no steering this step */
     if (s_demo_mode) {
       uint8_t proposal = 0;
       const SteerChoice choice = game_auto_steer(&proposal);
@@ -4163,7 +4111,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
   straight: /* $6315 */
     shape = (uint8_t)(dir + 0x08);
 
-  draw: /* $62A5 -- draw the head, then step it one cell */
+  draw: /* draw the head, then step it one cell */
   {
     const Cell head = s_head;
     s_shape = shape;
@@ -4236,7 +4184,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     return LIFE_CRASH;
   }
 
-  tail: /* $63A1 -- trim the tail, unless the snake is still growing */
+  tail: /* trim the tail, unless the snake is still growing */
     if (s_growth) {
       s_growth = (uint8_t)(s_growth - 1);
       s_click_count = 0x07;
@@ -4265,7 +4213,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
       plot_shape_at((uint8_t)(ahead + 0x0c), 0x0c, tail_next);
     }
 
-  pace: /* $640F -- the timer, the walls, and the delay that sets the speed */
+  pace: /* the timer, the walls, and the delay that sets the speed */
     click_speaker();
     {
       const uint8_t left = (uint8_t)(s_life_timer - 1);
@@ -4316,7 +4264,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
 }
 
 /* ========================================================================== */
-/* $6A32 -- the auto-steer                                                    */
+/* the auto-steer                                                    */
 /*                                                                            */
 /* Chase the apple that $69C3 left at $6B3B/$6B3C. Candidate directions are    */
 /* tried in order of how much they help, and the first one game_move_ok        */
@@ -4368,8 +4316,6 @@ static bool steer_try(
   GAME_CYCLES(before_addr, before_cycles);
   s_steer_dir = dir;
   { // was game_move_ok()
-
-    /*$6AB8*/
 
     uint8_t cell = 0;
     const MoveVerdict v = snake_move_verdict(s_steer_dir, &cell);
@@ -4464,7 +4410,7 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
 }
 
 /* ========================================================================== */
-/* $72CE -- the status panel                                                  */
+/* the status panel                                                  */
 /*                                                                            */
 /* Six labelled numbers in a 2x3 grid on text rows $14-$16:                   */
 /*                                                                            */
@@ -4571,7 +4517,7 @@ void game_status_panel(void) {
 }
 
 /* ========================================================================== */
-/* $78B3 -- the bonus screen                                                  */
+/* the bonus screen                                                  */
 /*                                                                            */
 /* Awarded when a level is finished. The bonus is twice whatever an apple was  */
 /* worth on that level, which the original says twice over: once as BCD        */
@@ -4659,7 +4605,7 @@ void game_bonus_screen(void) {
 }
 
 /* ========================================================================== */
-/* $6256 -- start a life                                                      */
+/* start a life                                                      */
 /*                                                                            */
 /* Head and tail both at row $27 column $14 -- the snake begins as one cell,   */
 /* in the gate at the bottom centre, facing up. $6254 owes it ten segments of  */
@@ -4700,7 +4646,7 @@ void game_begin_life(void) {
 }
 
 /* ========================================================================== */
-/* $7980 -- the setup screen                                                  */
+/* the setup screen                                                  */
 /*                                                                            */
 /* Three jobs, in the order the original does them: clamp the pointer          */
 /* game_rand_byte reads its numbers through, offer the difficulty prompt, and  */
@@ -4889,7 +4835,7 @@ wait: /* $741C */
 /// case here, so these routines are decoded from the binary directly.
 
 /* ========================================================================== */
-/* $664A -- the game's own COUT handler.                                      */
+/* the game's own COUT handler.                                      */
 /*                                                                            */
 /* $6641 installs it:                                                         */
 /*     LDA #$4A / STA $36 / LDA #$66 / STA $37 / RTS                          */
@@ -4948,24 +4894,21 @@ wait: /* $741C */
 /// ram.probe compares only the live stack.
 ///
 void game_print_inline_str(uint16_t ret_addr) {
-  /*$7230*/ s_str_ptr = ret_addr;
+  s_str_ptr = ret_addr;
   rom_fc68(); // VTAB to the current CV
 
   for (;;) {
     // The pointer is stepped before the read, which is why the caller passes
     // the address of the JSR's last byte rather than of the string.
-    /*$7239*/ ++s_str_ptr;
+    ++s_str_ptr;
 
-    /*$723F*/ const uint8_t ch = peek(s_str_ptr);
+    const uint8_t ch = peek(s_str_ptr);
     if (!ch) {
-      /*$7243*/ break;
+      break;
     }
 
-    /*$7245*/ rom_cout(ch);
-    /*$7248*/
+    rom_cout(ch);
   }
-
-  /*$724B*/
 }
 
 /* ========================================================================== */
@@ -5008,7 +4951,7 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* ========================================================================== */
 
 /* ========================================================================== */
-/* $6148, $615A -- runs of cells.                                             */
+/* runs of cells.                                             */
 /*                                                                            */
 /* Both load the shape once and then repeat game_draw_cell along one axis:    */
 /* $6148 walks the column ($02), $615A walks the row ($03). The run ends when */
@@ -5022,7 +4965,7 @@ void game_print_inline_str(uint16_t ret_addr) {
 /*                                                                            */
 /* $70D4 shows what they are for: with $08 = $27 it draws the four borders of */
 /* the 40x40 cell playfield -- top and bottom with $6148, left and right with */
-/* $615A -- which is where the grid's dimensions come from.                   */
+/* which is where the grid's dimensions come from.                   */
 /*                                                                            */
 /* The register and flag assignments are not decoration. Callers are still    */
 /* generated code that reads this machine state, so a hand-written routine    */
@@ -5081,7 +5024,7 @@ void game_print_inline_str(uint16_t ret_addr) {
 /// No CYCLES of its own -- both call sites are already inside a counted block.
 
 /* ========================================================================== */
-/* $6B93 -- the merging cell plotter.                                         */
+/* the merging cell plotter.                                         */
 /*                                                                            */
 /* Same shape as $60E4: load the shape's masks, then walk the cell's four     */
 /* scanlines. Two things differ.                                              */
@@ -5109,7 +5052,7 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* ========================================================================== */
 
 /* ========================================================================== */
-/* $7045 -- draw the playfield, and run the level's display list.             */
+/* draw the playfield, and run the level's display list.             */
 /*                                                                            */
 /* One routine, but two halves. The first draws what every level has: the     */
 /* border, in both representations (see the $7019 header for why everything   */
@@ -5180,7 +5123,7 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* ========================================================================== */
 
 /* ========================================================================== */
-/* $6AB8 -- is the next cell in direction $6B38 worth moving into?            */
+/* is the next cell in direction $6B38 worth moving into?            */
 /*                                                                            */
 /* The move validator behind the direction-choosing chain at $6A40, which     */
 /* calls it once per candidate direction and branches on the answer. Two      */
@@ -5203,7 +5146,7 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* ========================================================================== */
 
 /* ========================================================================== */
-/* $64C8 -- move the bouncer one step.                                        */
+/* move the bouncer one step.                                        */
 /*                                                                            */
 /* $6633/$6634 are its column and row, $6635/$6636 its per-axis deltas, and   */
 /* $6637/$6638 the candidate cell it is trying to move to. A row of 0 means   */
@@ -5233,8 +5176,6 @@ void game_move_bouncer(Bouncer *b) {
   // unaffected.
   //
 
-  /*$64C8*/
-
   // The state the original leaves behind: A holds the row it loaded first, and
   // the flags come from that load.
 
@@ -5260,7 +5201,7 @@ void game_move_bouncer(Bouncer *b) {
 /* ========================================================================== */
 
 /* ========================================================================== */
-/* $6288 -- one life. See game_native.c for what it does.                     */
+/* one life. See game_native.c for what it does.                     */
 /* ========================================================================== */
 
 /// $6288 -- play one life and record how it ended at $6253, which is where
@@ -5289,19 +5230,19 @@ static void game_play_one_life(void) {
 }
 
 /* ========================================================================== */
-/* $72CE -- the status panel. See game_native.c.                              */
+/* the status panel. See game_native.c.                              */
 /* ========================================================================== */
 
 /* ========================================================================== */
-/* $78B3 -- the bonus screen. See game_native.c.                              */
+/* the bonus screen. See game_native.c.                              */
 /* ========================================================================== */
 
 /* ========================================================================== */
-/* $6256 -- start a life. See game_native.c.                                  */
+/* start a life. See game_native.c.                                  */
 /* ========================================================================== */
 
 /* ========================================================================== */
-/* $7980 -- the setup screen. See game_native.c.                              */
+/* the setup screen. See game_native.c.                              */
 /* ========================================================================== */
 
 /* ========================================================================== *
@@ -5374,7 +5315,7 @@ static void bcd_sub16(uint8_t at[2], uint8_t by) {
 }
 
 void game_cold_start(void) {
-  /* $3750 -- copy eight pages of level data from $3800 down to $1800. The
+  /* copy eight pages of level data from $3800 down to $1800. The
      original walks them by incrementing the operands of its own LDA and STA
      ($3754 and $3757), which is why it re-enters $3750 eight times rather
      than looping inside. The page counter is this loop's own, so the two
@@ -5452,7 +5393,7 @@ life: /* $7719 */
   }
   game_play_one_life();
 
-verdict: /* $7739 -- $6253 says how the life ended */
+verdict: /* $6253 says how the life ended */
   if (s_life_outcome == 0x0f)
     goto ate_apple;
   if (s_life_outcome != 0x00)
@@ -5482,7 +5423,7 @@ ate_apple: /* $773E */
     goto next_apple;
   }
 
-  /* $779A -- that was the last one. Draw the bar across the bottom, put the
+  /* that was the last one. Draw the bar across the bottom, put the
      marker on it, and stop the clock for the run to the gate -- see
      s_life_time for why $FF stops it rather than lengthening it. */
   s_shape = 0x15;
@@ -5493,7 +5434,7 @@ ate_apple: /* $773E */
   rom_plot(0x00, 0x14);
   goto life;
 
-next_apple: /* $77D0 -- place one only when both countdown bytes are zero */
+next_apple: /* place one only when both countdown bytes are zero */
   if (s_apples_afield[0]) {
     goto life;
   }
@@ -5527,7 +5468,7 @@ not_apple: /* $77E8 */
     goto ended;
   }
 
-harder: /* $7817 -- three more apples in the round, and three more to come */
+harder: /* three more apples in the round, and three more to come */
   bcd_add16(s_apples_quota, 0x03);
   bcd_add16(s_apples_left, 0x03);
   game_place_apple_native();
@@ -5550,7 +5491,7 @@ ended: /* $7847 */
     goto lose_life; // the demo does not wait to be told to carry on
   }
 
-  /* $785D -- "PRESS SPACE BAR TO CONTINUE", then wait for space or the
+  /* "PRESS SPACE BAR TO CONTINUE", then wait for space or the
      paddle button, whichever the setup screen selected. */
   s_cv = 0x17;
   s_ch = 0x00;
