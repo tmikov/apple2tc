@@ -823,14 +823,12 @@ void rom_hline(uint8_t row, uint8_t from_col) {
 across: /* one column at a time, up to H2 */
   carry = (uint8_t)(col >= s_mon.h2);
   if (carry) {
-    // $F81E BCS -- the branch itself, taken here.
     goto done;
   }
 
   col = (uint8_t)(col + 0x01);
   rom_plot1(col);
   if (!carry) {
-    // $F824 BCC -- the branch itself, taken here.
     goto across;
   }
 
@@ -840,7 +838,6 @@ down: /* one row at a time, up to V2 */
   rom_plot(row, col);
   carry = (uint8_t)(row >= s_mon.v2);
   if (!carry) {
-    // $F82F BCC -- the branch itself, taken here.
     goto down;
   }
 
@@ -917,14 +914,11 @@ home: /* $FC58 */
 
     const bool past_bottom = line >= s_mon.wndbtm;
     if (!past_bottom) {
-      // $FC54 BCC -- the branch itself, taken here.
       continue;
     }
 
     if (!past_bottom)
       goto home; // the BCS's not-taken arm, which cannot be reached
-    // $FC56 BCS -- the branch itself, same address as the block above because
-    // this is a singleton one-instruction block.
     break;
   }
 
@@ -976,7 +970,7 @@ void rom_fc68(void) {
   bool filled;
 
   if (!(s_mon.cv >= s_mon.wndbtm)) {
-    // $FC6C BCC -- the branch itself, taken here. Nothing to scroll.
+    // Nothing to scroll.
     rom_vtabz(s_mon.cv); // JMP -- a tail call.
     return;
   }
@@ -992,7 +986,7 @@ scroll: /* one line up per pass */
   line = (uint8_t)(((uint16_t)line + 0x0001) + step);
 
   if (line >= s_mon.wndbtm) {
-    // $FC86 BCS -- the branch itself, taken here. That was the last line.
+    // That was the last line.
     goto last_line;
   }
 
@@ -1006,13 +1000,11 @@ copy: /* one character, right to left */
   negative = (uint8_t)(next & 0x80);
   col = next;
   if (!negative) {
-    // $FC91 BPL -- the branch itself, taken here (loop back).
     goto copy;
   }
 }
 
   if (negative) {
-    // $FC93 BMI -- the branch itself, taken here (outer loop back).
     goto scroll;
   }
 
@@ -1023,8 +1015,8 @@ last_line: /* blank what the scroll left at the bottom */
     rom_clreol(); // JMP -- a tail call.
     return;
   }
-  // $FC9A BCS -- taken here, and it falls into the trampoline charge below
-  // before continuing; the not-taken arm above jumps straight out without it.
+  // Falls into the trampoline charge below before continuing; the not-taken
+  // arm above jumps straight out without it.
 
   // TABV
   rom_vtabz(s_mon.cv);
@@ -1118,8 +1110,7 @@ emit: /* $FB94 JMP $FBFD */
     // The not-taken arm jumps straight to the dispatch without the edge charge.
     goto dispatch;
   }
-  // $FBFF BCS -- taken here, and it falls into the trampoline charge before
-  // continuing.
+  // Falls into the trampoline charge before continuing.
 
 store: /* put the character at the cursor */
   poke((uint16_t)(s_mon.bas + s_mon.ch), ch);
@@ -1236,13 +1227,6 @@ out:
 /// difference between the right answer and a wrong one here -- both render --
 /// so a wrong guess would diverge invisibly, while an abort fires at the
 /// moment the question first matters.
-/// $FDED COUT -- `JMP ($36)`. Dispatches through the output vector CSWL/CSWH
-/// rather than reimplementing COUT1, because Snake Byte repoints it: $6641
-/// installs the game's own hi-res text renderer at $664A.
-///
-/// Any target other than the two implemented is a hard failure rather than a
-/// fallback: a silent fallback would render with the wrong font onto the wrong
-/// page, and nothing here would notice.
 void rom_cout(uint8_t ch) {
   uint16_t vector;
 
@@ -1269,8 +1253,6 @@ void rom_cout(uint8_t ch) {
   return;
 }
 
-/// $FDF0 COUT1 -- the ROM's own character output: mask to the current text
-/// mode, then COUTZ for the actual placement and cursor bookkeeping.
 /// $FDF0 COUT1. Put a character on the text screen, then restore Y.
 ///
 /// Printable characters ($A0 and up) are masked with INVFLG, which is how the
@@ -1281,8 +1263,6 @@ static void rom_cout1(uint8_t ch) {
 
   if (printable) {
     ch = (uint8_t)(ch & s_mon.invflg);
-  } else {
-    // $FDF2 BCC -- the branch itself, taken here.
   }
 
   // The original saves Y in YSAV1 across the call and puts it back, because
@@ -1325,7 +1305,6 @@ void rom_setkbd(void) {
     low = 0x00;
     // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
   } else {
-    // $FE9F BEQ -- the branch itself, taken here.
     page = 0xfd;
     low = entry_low;
   }
@@ -1358,7 +1337,6 @@ void rom_setvid(void) {
     low = 0x00;
     // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
   } else {
-    // $FE9F BEQ -- the branch itself, taken here.
     page = 0xfd;
     low = entry_low;
   }
@@ -1571,9 +1549,10 @@ static const uint8_t kArrowGlyph[6] = {
 
 /* --- The auto-steer's answer ---------------------------------------------- */
 /*
- * $6B38-the apple Cell. $6B39/$6B3A were the apple sweep's cursor, left wherever the
- * search stopped, and went the same way as the three above: written at the end
- * of the sweep, read by nothing. the apple Cell are the answer and are real.
+ * $6B38/$6B39 is s_apple. $6B39/$6B3A were the apple sweep's cursor, left
+ * wherever the search stopped, and went the same way as the three above:
+ * written at the end of the sweep, read by nothing. s_apple is the answer
+ * and is real.
  */
 
 /// The cell the sweep decided to steer towards.
@@ -1596,18 +1575,6 @@ static struct {
 } s_sound = {.port = 0x20, .passes = 0x0f};
 
 /* --- The plotter's arguments ---------------------------------------------- */
-/*
- * Nine bytes that lived at $0000-$0008 because the 6502 had nowhere else to
- * pass arguments. Every plot goes through them: set the shape, the ink and the
- * cell, then call.
- *
- * They are C variables now, and no longer aliased with anything -- the glyph
- * blitter, which used to borrow all nine for a font pointer and the caller's
- * registers, has its own locals. Making them actual parameters is the step
- * after this one, and each needs its own argument first: s_snake.shape turned out to
- * be a genuine global, because bouncer_step erases with whatever was last left
- * in it.
- */
 /*
  * Nine bytes of zero page that the drawing routines pass arguments in, because
  * the 6502 has nowhere else to put them. Every plot goes through here: set the
@@ -1942,12 +1909,13 @@ static struct {
 /// the clamp.
 static uint8_t s_life_time = 0x64;
 
-/* --- The settings block: s_step_delay-s_snake.head_moved -------------------------------------- */
+/* --- The settings block: s_step_delay-s_level_time, plus s_snake.head_moved */
 /*
  * Six bytes that outlive a life, set once at $376E and then kept up to date as
  * the game goes on. Everything else about a life is torn down and rebuilt.
  * game_cold_start writes all six before anything reads them, so unlike the
- * scoreboard these need no initialisers.
+ * scoreboard these need no initialisers. Five of the six are the static
+ * variables below; the sixth, head_moved, was grouped into s_snake instead.
  */
 
 /// How long the pace loop dawdles between steps, i.e. the snake's speed.
@@ -2055,7 +2023,7 @@ void game_promote_high_score(void) {
 /* own column leftwards, then from it again rightwards. First hit wins, so the */
 /* result leans left. Nothing found parks the answer at row 0, column $14.     */
 /*                                                                            */
-/* $6B39/$6B3A were the cursor and the apple Cell the answer. The cursor is a    */
+/* $6B39/$6B3A were the cursor and s_apple the answer. The cursor is a         */
 /* pair of locals here: nothing ever read the two bytes back, so once the      */
 /* storage left RAM the stores that mirrored them were dead code.              */
 /* ========================================================================== */
@@ -3647,9 +3615,7 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
     s_sound.click_count = 0x10;
     if (code == KEY_TURN_CW) {
       shape = kSnakeShape[TURN_CW][dir];
-      // $624E is left one below range here and normalised at $62B8, which is
-      // the order the samples see; computing the wrap early would be tidier
-      // and would not match.
+      // Computing the wrap early would be tidier and would not match.
       s_snake.direction = (uint8_t)(dir - 1);
       goto draw;
     }
@@ -4103,7 +4069,7 @@ void game_status_panel(void) {
 /* Awarded when a level is finished. The bonus is twice whatever an apple was  */
 /* worth on that level, which the original says twice over: once as BCD        */
 /* arithmetic into $78B0/$78B1 so the number can be printed, and once as two   */
-/* consecutive calls to game_add_score, which adds s_progress.apple_value/s_progress.apple_value[1] each time.      */
+/* consecutive calls to game_add_score, each adding the full s_progress.apple_value. */
 /* Neither reads the other's answer.                                          */
 /*                                                                            */
 /* This routine is *entered with decimal mode set* -- unusual here, and the    */
