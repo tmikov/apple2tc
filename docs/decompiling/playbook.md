@@ -7,11 +7,13 @@ transfers.
 Written in skill shape (when to use → procedure → red flags) so it can be
 promoted to a `.claude/skills/` skill once it has survived a second game.
 
-**Maturity (Snake Byte, 2026-08-02 to 08-25).** Every step has now been
+**Maturity (Snake Byte, 2026-08-02 to 08-26).** Every step has now been
 executed once, including step 6, which was the last to go and took the longest.
-The findings below are measured rather than predicted — but *once*, on one
-binary, so they are a strong prior and not a law. The per-step status is on each
-step in the Procedure section, which is the copy to keep current.
+Step 6 then turned out to have a sixth disguise nobody had counted — the clock
+itself — and removing it is the newest material here. The findings below are
+measured rather than predicted, but *once*, on one binary, so they are a strong
+prior and not a law. The per-step status is on each step in the Procedure
+section, which is the copy to keep current.
 
 The one thing a second game should expect to differ on is **cost**. The order
 of the work turned out to be game-independent; how much oracle each step spends
@@ -807,13 +809,99 @@ Separate them before touching either:
   names no address. The clock needs the *counts*; nothing needs the address once
   the trace is gone. Timing comes out bit-identical, which is exactly what makes
   the change checkable against the build you are comparing with.
-- **Removing the clock** — needs the artifact to pace itself some other way, and
-  it ends the comparison method, because comparison means running the same
-  emulated program twice.
+- **Removing the clock** — mostly possible, and it does *not* end the comparison
+  method. That was the prediction here and it was wrong; see "Most of the clock
+  is not the clock" below.
 
 The middle one is where the maintenance burden actually lives, and it is safe.
 It was nearly skipped here on the belief that the charges could not go — which
 was true of the *counts* and false of the *addresses*.
+
+### Most of the clock is not the clock
+
+Generated code charges cycles at every block because the 6502 spent them there.
+Almost none of those charges is *doing* anything. Sort them into two piles:
+
+- **Incidental** — pays for arithmetic nobody can hear or see. It exists because
+  the hardware took time, not because the time means anything.
+- **Load-bearing** — it sets a pitch, it is a pause someone can see, or it is the
+  only point at which a waiting loop can hand control back.
+
+Snake Byte's split was 838 to 23. Deleting the first pile is most of what makes
+the file readable, and it is the difference between a routine that draws a line
+and a routine that draws a line while narrating its own instruction timings.
+
+**Check what your oracles are stamped on before you believe any of this is
+safe.** If probes sample on cycles or frames, deleting the clock desynchronises
+every comparison immediately. If they sample at *code addresses*, and replay
+stamps its input on a counter incremented at those same addresses, the entire
+gate is already time-independent and survives untouched. That was true here and
+it is what made the step possible — the probe language had been built that way
+years earlier for unrelated reasons, and nothing in the design said so. Read the
+probe scripts; do not reason about it.
+
+**Calibrate each survivor to the region it stands for**: the measured cost from
+that charge to the next one, not what the original charge was. Deleting the
+incidental pile shortens every interval, so a naive collapse makes the tone go
+sharp. Three ways the measurement lies:
+
+- **A routine's total is not its own cost.** It includes everything it calls,
+  and those callees still charge. Measure the routine's *own* charges with an
+  accumulator that is saved and zeroed on entry and restored on exit — and use
+  `__attribute__((cleanup))` on it, or every early return goes unreported. One
+  routine here would have been charged 73,939 instead of 148.
+- **A region can contain charges that survive for other reasons.** Probe-carrying
+  sites charge for themselves. Counting them in the calibrated value too
+  double-charges the loop; here that made a wait loop 50% slow and only the
+  block-head trace noticed, with a 5% margin.
+- **Constant across your recordings is not constant.** Check whether a loop's
+  trip count depends on an argument the scenarios never vary. Two routines
+  measured identical at every call and were left alone for exactly this reason;
+  three others carry a formula in a comment rather than the number.
+
+**Drawing time and pacing time are different questions.** Making a fill instant
+gives up the *sight* of it, which is usually a fine trade. But if the main loop's
+tempo is set by how long a redraw takes — and it often is on hardware this slow —
+then that redraw's duration is gameplay. Snake Byte's walls cost 28,848 cycles
+once per step; deleting them silently made the game a quarter faster.
+
+### The failure a gate of this kind cannot see
+
+**A loop that waits for input and cannot yield hangs the program, and every
+check stays green.**
+
+Emulated code usually runs as a coroutine: the cycle charge is the suspend
+point, and the host draws a frame and polls the keyboard in the window it opens.
+Delete the last charge inside a loop that spins on the keyboard and the host is
+never given a turn, so the key that would end the loop can never be delivered.
+
+Under probe-stamped replay this is invisible in the worst possible way. The
+replay coordinate advances at the keyboard *read*, so a spinning loop keeps
+incrementing it and keeps being handed keys — without a frame ever happening.
+Every oracle passes while the real program is frozen. Two loops shipped like
+this here and were found by a person playing the game.
+
+So **playing it is a verification step, not a courtesy**, and it is the only one
+that covers this. Where it can be automated, automate the *property* rather than
+the instance: a static check that every loop reading an input port contains a
+charge finds the whole class, takes twenty lines of `awk`, and does not decay
+when timing changes.
+
+### Derive the set; a list written before the work is a starting point
+
+A design that enumerates the things to keep is telling you what the author could
+think of in advance. Treat it as a prior and then derive the real set from the
+code — ideally as a check that re-derives it on every run.
+
+This cost two defects in one session on one file. The design's table of
+perceptible sites omitted the redraw that paces the main loop, and omitted both
+loops whose only charge was their yield. Each omission was found separately and
+expensively; the twenty-line lint that replaces the table finds all of them and
+would have found them on day one.
+
+The same applies to a *plan* built from that design. A plan's task list bounds
+what the author scheduled, not what the idea requires. If the tasks stop short
+of the design's own statement of intent, finish the intent.
 
 ### Deriving a scenario instead of recording one
 
@@ -916,6 +1004,11 @@ rather than here because their order turned out to be game-independent but their
       them at every use. Merge it, and where a routine really does write one
       half, say so with a mask or a shift: the split was hiding that
       distinction, not expressing it.
+   6. **The clock** — the cycle charges themselves, which outlive every other
+      disguise because they look like infrastructure rather than machine. Most
+      of them are not doing anything; see "Most of the clock is not the clock".
+      Last, because it is the one whose oracle you have to reason about before
+      you can start.
 
    Expect roughly half of what you find in steps 2 and 3 to be dead: stores that
    existed only because an oracle hashed the address, or because the original
@@ -954,6 +1047,22 @@ The rule that costs nothing: whatever the generated C called at that site, call
 that, with the same return address. It is also what keeps the callee's probe
 sites firing, and the return address is what keeps the emulated stack the same
 if a probe fires inside.
+
+**A warning you cannot see is still a warning.** gcc and clang disagree about
+which C constructs deserve a diagnostic — labels with nothing after them, a
+label before a declaration — and a cleanup that deletes statements produces
+exactly those. Build under every compiler you can find, not the one your build
+directory happens to be configured with, or the person on the other platform
+finds them for you. Cheap to gate: compile the hand-owned file `-fsyntax-only`
+under each and fail on any diagnostic naming it.
+
+**An empty diagnostic list is not a clean one.** Check that the comparison you
+are relying on actually ran. A "before and after" here reported zero warnings
+for the old file because it had been copied out of its directory, a relative
+`#include` failed, and the compiler aborted before producing any diagnostic at
+all. Silence from a tool that never started looks exactly like success. Assert
+on something the run must have produced — a line count, an exit code, a marker —
+rather than on the absence of complaints.
 
 **`[6502]` `DEY`/`BNE` counts a zero as 256.** The loop tests after
 decrementing, so `LDY #0` is the longest loop in the instruction set, not the
