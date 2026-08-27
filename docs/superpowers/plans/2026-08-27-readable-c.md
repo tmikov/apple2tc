@@ -236,12 +236,13 @@ typedef enum {
 | bouncer erase | `rom_setcol(0x00)` / `plot_at(0x00, ...)` | `INK_ERASE` |
 | bouncer draw | `rom_setcol(0x03)` / `plot_shape_at(0x1a, 0x03, ...)` | `SHAPE_BOUNCER, INK_GATE` |
 | `wipe_occupancy_map` | `set_ink(0x00)` / `lores_hline(at, 0x00)` | `INK_ERASE` |
-| `draw_border` | the six `0x00` line ends | `INK_ERASE` |
+| `game_bonus_screen` | the box's four ink arguments | read each; they are inks |
 | the gate | `plot_hline_at(0x03, 0x12, 0x27, 0x16)` | `INK_GATE` |
 | `game_set_ink` | `rom_setcol(ink ? 0x05 : 0x00)` | `INK_OCCUPIED : INK_ERASE` |
 | apple | `rom_setcol(0x0f)` / `plot_shape_at(0x01, 0x09, at)` | `INK_WHITE`, `SHAPE_APPLE, INK_APPLE` |
 | side walls | `plot_vline_at(0x02, ...)` / `plot_vline_at(0x0d, ...)` | `INK_WALL_TOP` / `INK_WALL_BOTTOM` |
 | the head | `game_draw_head(0x0c, head)` | `INK_SNAKE` |
+| — | — | **not** `draw_border`: its `0x00`s are coordinates, and it already takes ink as a parameter |
 | the body | `plot_shape_at(dir, 0x0c, next)` | `INK_SNAKE` |
 | head mark | `rom_setcol(0x07)` (two sites) | `INK_HEAD_MARK` |
 | tail erase | `rom_setcol(0x00)` / `plot_at(0x00, tail)` | `INK_ERASE` |
