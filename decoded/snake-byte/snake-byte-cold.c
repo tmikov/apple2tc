@@ -1693,6 +1693,13 @@ static Cell s_tail = {.col = 0x14, .row = 0x27};
 /// $00 the gate, $0F an apple, $FF the quit key, $FE the timer, anything
 /// else the occupancy byte the head ran into. See LifeEnd, which is this
 /// byte with names on.
+///
+/// The gate and apple cases deliberately reuse CellContent's encoding
+/// (CELL_EMPTY/CELL_APPLE) rather than inventing their own: the gate is
+/// reached by moving onto an empty cell, and eating is moving onto the apple
+/// cell, so the sentinel *is* what a scan would have returned. 0xFF and 0xFE
+/// are picked for quit/timeout precisely because no real occupancy byte
+/// (0x00-0x0F) can ever collide with them.
 static uint8_t s_life_outcome;
 
 /// Segments still owed. While it is nonzero the tail is not trimmed, so the
@@ -3773,6 +3780,10 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
       s_tail = tail_next;
       const uint8_t ahead = scrn_cell(tail_next);
 
+      // ahead + 0x0c is a computed shape-table offset (ahead is the
+      // direction 1-4 stored under the next body segment), not one of
+      // Shape's four named entries -- a one-off outside the closed set,
+      // left bare on purpose.
       plot_shape_at((uint8_t)(ahead + 0x0c), INK_SNAKE, tail_next);
     }
 
@@ -4339,12 +4350,15 @@ wait: /* $741C */
     game_show_key(i, s_key_table[i]);
   }
 
+  // 0x02: the arrowhead's own shape-table entry, a one-off outside Shape's
+  // four named values -- left bare on purpose.
   plot_shape_at(0x02, INK_SNAKE, (Cell){.col = 0x1e, .row = 0x12});
   // The stem below it, down the same column -- which the original inherited
   // from the plot above rather than restating.
   s_shape = SHAPE_STEM;
   plot_vline_at(INK_SNAKE, 0x1e, 0x13, 0x1d);
-  // At the stem's far end -- the vline above left $03 on $1D.
+  // At the stem's far end -- the vline above left $03 on $1D. 0x0e is
+  // another one-off shape-table entry, same reasoning as the 0x02 above.
   plot_shape_at(0x0e, INK_SNAKE, (Cell){.col = 0x1e, .row = 0x1d});
 
   for (uint8_t i = 0; i != 6; ++i) {
@@ -4730,6 +4744,9 @@ void game_move_bouncer(Bouncer *b) {
 /// it there any more.
 static void game_play_one_life(void) {
   uint8_t cell = 0;
+  // CELL_EMPTY/CELL_APPLE here are not the occupancy map -- they are
+  // s_life_outcome borrowing that enum's encoding on purpose. See
+  // s_life_outcome's own comment for why 0xff/0xfe are safe alongside it.
   switch (game_play_loop(&cell)) {
   case LIFE_GATE:
     s_life_outcome = CELL_EMPTY;
@@ -4911,6 +4928,9 @@ ate_apple: /* $773E */
      marker on it, and stop the clock for the run to the gate -- see
      s_life_time for why $FF stops it rather than lengthening it. */
   s_shape = SHAPE_SOLID;
+  // 0x06 is not one of the nine named Ink values (0x00,0x02,0x03,0x05,0x07,
+  // 0x09,0x0c,0x0d,0x0f) -- a one-off bar colour used only here, left bare
+  // on purpose rather than inventing a tenth Ink member for it.
   plot_hline_at(0x06, 0x12, 0x00, 0x16);
   plot_shape_at(SHAPE_SOLID, INK_ERASE, (Cell){.col = 0x14, .row = 0x00});
   s_life_time = 0xff;
