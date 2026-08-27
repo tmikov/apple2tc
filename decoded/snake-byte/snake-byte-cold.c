@@ -815,10 +815,11 @@ void rom_plot(uint8_t row, uint8_t col) {
 /// Y -- so one entry point draws a horizontal run and the other a vertical
 /// one, out of the same six instructions.
 ///
-/// The labels keep their addresses rather than becoming nested loops, for the
-/// same reason game_cold_start's do: the two loops are entered at different
-/// depths and leave through each other, which C's loop forms cannot say
-/// without a flag that the original does not have.
+/// The labels keep their addresses rather than becoming nested loops: the two
+/// have separate entries ($F819 and $F826) and the first leaves through the
+/// second, which is not a nest at all. game_cold_start had the same look and
+/// did turn out to be one -- see the note above its own loops for the single
+/// edge there that is not a loop edge, and why it needed no flag either.
 void rom_hline(uint8_t row, uint8_t from_col) {
   uint8_t col = from_col;
   // The CMPs below leave it and the ADC at $F826 reads it back.
@@ -4836,6 +4837,18 @@ static void bcd_sub16(uint8_t at[2], uint8_t by) {
   at[1] = (uint8_t)r;
 }
 
+/// How a round ended, and so how far game_cold_start's loop nest unwinds. The
+/// life loop sets it on the way out; the round and level loops around it read
+/// it. It replaces the three jumps the original made out of $7847/$789A.
+typedef enum {
+  /// $789A took a life off the count. Another attempt at the same round.
+  ROUND_RETRY,
+  /// $77EA -- every apple eaten. The level advances.
+  ROUND_CLEARED,
+  /// The quit key, or no lives left. Back to $7691.
+  ROUND_GAME_OVER,
+} RoundEnd;
+
 void game_cold_start(void) {
   /* copy eight pages of level data from $3800 down to $1800. The
      original walks them by incrementing the operands of its own LDA and STA
@@ -4859,203 +4872,219 @@ void game_cold_start(void) {
   s_demo_mode = true; // so the first pass plays itself
   s_script_index = 0x01;
   s_level_time = 0x64;
-  goto round; // $3783: JMP $76C2
 
-new_game: /* $7691 */
-  game_setup_screen();
-  game_promote_high_score();
-  s_script_index = 0x01;
-  s_progress.level = 0x01;
-  s_progress.score[0] = 0x00;
-  s_progress.score[1] = 0x00;
-  s_progress.score[2] = 0x00;
-  s_progress.score[3] = 0x00;
-  s_progress.lives = 0x02;
-  s_progress.afield[0] = 0x00;
+  /* $3783: JMP $76C2, which is three levels into the nest below rather than at
+     the top of it. That is the one edge here that is not a loop edge, and it
+     is deliberate: the demo pass skips $7691's and $76B7's initialisation, so
+     it plays whatever level, score and lives the loaded image carries.
 
-new_level: /* $76B7 */
-  s_progress.lives_at_level_start = s_progress.lives;
-  s_progress.quota[0] = 0x10;
+     Both outer loops are therefore written with their initialisation at the
+     *bottom*, which is where the jumps that used to reach $7691 and $76B7 fall
+     out to. Entering from the top then skips it exactly once, on this pass,
+     with no flag to say so. The price is that $76B7's two lines appear twice:
+     $7691 falls into $76B7, so restarting the game must do both. */
 
-round: /* $76C2 */
-  s_progress.quota[1] = 0x00;
+  for (;;) { // a new game
+    for (;;) { // a new level
+      s_progress.quota[1] = 0x00; // $76C2
 
-start_round: /* $76C7 */
-  s_progress.afield[0] = 0x00;
-  s_progress.afield[1] = 0x00;
-  s_progress.eaten[0] = 0x00;
-  s_progress.eaten[1] = 0x00;
-  s_progress.left[0] = s_progress.quota[0];
-  s_progress.left[1] = s_progress.quota[1];
-  game_draw_playfield();
-  s_life_time = s_level_time;
-  game_set_apple_value();
-  io_peek(0xc054); // page 1
-  io_peek(0xc053); // mixed text/graphics
-  const Cell apple = game_place_apple();
-  // $76F6 redraws it, at the cell game_place_apple just chose.
-  game_plot_shape(INK_APPLE, apple);
-  s_step_delay = 0x52;
-  s_snake.head_moved = false;
-  s_life_timer = s_life_time;
-  s_mon.wndtop = 0x14; // window top, so HOME clears only the status panel
-  rom_home();
-  game_status_panel();
-  game_begin_life();
-  goto verdict; // $7716: JMP $7739 -- a fresh round asks the same question
+      // How the round below ended. Every way out of the life loop sets it.
+      RoundEnd ending = ROUND_RETRY;
 
-life: /* $7719 */
-  s_life_timer = s_life_time;
-  s_mon.wndtop = 0x14;
-  rom_home();
-  game_status_panel();
-  if (s_step_delay >= 0x03) {
-    // $7730 -- two steps faster each life, but never past 3.
-    s_step_delay = (uint8_t)(s_step_delay - 2);
-  }
-  game_play_one_life();
+      for (;;) { // one attempt at the round -- $76C7
+        s_progress.afield[0] = 0x00;
+        s_progress.afield[1] = 0x00;
+        s_progress.eaten[0] = 0x00;
+        s_progress.eaten[1] = 0x00;
+        s_progress.left[0] = s_progress.quota[0];
+        s_progress.left[1] = s_progress.quota[1];
+        game_draw_playfield();
+        s_life_time = s_level_time;
+        game_set_apple_value();
+        io_peek(0xc054); // page 1
+        io_peek(0xc053); // mixed text/graphics
+        const Cell apple = game_place_apple();
+        // $76F6 redraws it, at the cell game_place_apple just chose.
+        game_plot_shape(INK_APPLE, apple);
+        s_step_delay = 0x52;
+        s_snake.head_moved = false;
+        s_life_timer = s_life_time;
+        s_mon.wndtop = 0x14; // window top, so HOME clears only the status panel
+        rom_home();
+        game_status_panel();
+        game_begin_life();
 
-verdict: /* s_life_outcome says how the life ended */
-  if (s_life_outcome == CELL_APPLE)
-    goto ate_apple;
-  if (s_life_outcome != CELL_EMPTY)
-    goto not_apple;
-  goto round_cleared;
+        /* $7716: JMP $7739 -- a fresh round asks the same question a finished
+           life does, so the first life of the round enters this loop at the
+           top and every later one arrives from the bottom. */
+        for (;;) { // one life
+          /* $7739: s_life_outcome says how the life ended. */
+          if (s_life_outcome == CELL_APPLE) {
+            /* $773E */
+            bcd_sub16(s_progress.afield, 0x01);
+            bcd_sub16(s_progress.left, 0x01);
+            bcd_add16(s_progress.eaten, 0x01);
 
-ate_apple: /* $773E */
-  bcd_sub16(s_progress.afield, 0x01);
-  bcd_sub16(s_progress.left, 0x01);
-  bcd_add16(s_progress.eaten, 0x01);
+            // $777B -- points only for the first $11 apples of the round. The
+            // high byte must be zero and the low one below $11, both BCD.
+            if (!(s_progress.eaten[1])) {
+              if (!(s_progress.eaten[0] >= 0x11)) {
+                game_add_score();
+              }
+            }
 
-  // $777B -- points only for the first $11 apples of the round. The high
-  // byte must be zero and the low one below $11, both BCD.
-  if (!(s_progress.eaten[1])) {
-    if (!(s_progress.eaten[0] >= 0x11)) {
-      game_add_score();
-    }
-  }
+            s_snake.growth = (uint8_t)(s_snake.growth + 0x0a); // ten more cells
 
-  s_snake.growth = (uint8_t)(s_snake.growth + 0x0a); // ten more cells of snake
+            // $7793 -- anything left in the round?
+            if (s_progress.left[0] || s_progress.left[1]) {
+              // place one only when both countdown bytes are zero
+              if (!s_progress.afield[0] && !s_progress.afield[1]) {
+                game_place_apple();
+              }
+            } else {
+              /* that was the last one. Draw the bar across the bottom, put the
+                 marker on it, and stop the clock for the run to the gate -- see
+                 s_life_time for why $FF stops it rather than lengthening it. */
+              s_snake.shape = SHAPE_SOLID;
+              // 0x06 is not one of the nine named Ink values (0x00,0x02,0x03,
+              // 0x05,0x07,0x09,0x0c,0x0d,0x0f) -- a one-off bar colour used
+              // only here, left bare on purpose rather than inventing a tenth
+              // Ink member for it.
+              plot_hline_at(0x06, 0x12, 0x00, 0x16);
+              plot_shape_at(SHAPE_SOLID, INK_ERASE, (Cell){.col = 0x14, .row = 0x00});
+              s_life_time = 0xff;
+              rom_setcol(INK_ERASE);
+              rom_plot(0x00, 0x14);
+            }
+            // both arms fall into $7719
+          } else if (s_life_outcome != CELL_EMPTY) {
+            /* $77E8 -- $FE is the snake running out of room rather than dying.
+               With apples still owed that only makes the round harder; with
+               none left, and for every other outcome, the life is over. */
+            if (s_life_outcome == 0xfe && (s_progress.left[1] || s_progress.left[0])) {
+              // three more apples in the round, and three more to come
+              bcd_add16(s_progress.quota, 0x03);
+              bcd_add16(s_progress.left, 0x03);
+              game_place_apple();
+              game_place_apple();
+              game_place_apple();
+              // falls into $7719
+            } else if (s_life_outcome == 0xff) {
+              /* $7847 */
+              ending = ROUND_GAME_OVER; // the player pressed the quit key
+              break;
+            } else if (s_life_outcome == 0xfe) {
+              // Out of room with the round already emptied: another life, no
+              // pause and no life lost. Note the sense: the original *branches
+              // away* when it is not $FE, so equality is the fall-through.
+              // falls into $7719
+            } else {
+              if (!s_demo_mode) { // the demo does not wait to be told to carry on
+                /* "PRESS SPACE BAR TO CONTINUE", then wait for space or the
+                   paddle button, whichever the setup screen selected. */
+                s_mon.cv = 0x17;
+                s_mon.ch = 0x00;
+                game_print_inline_str(0x7867);
+                for (;;) {
+                  // "PRESS SPACE BAR TO CONTINUE", and this is the only yield
+                  // in the loop that waits for it. Nothing bounds this one --
+                  // the game sits here until the player presses something -- so
+                  // losing it hangs the program outright rather than merely
+                  // making it stutter.
+                  // Eight, not sixteen: a pass of this loop costs 16 cycles,
+                  // but half of that is $7890's own charge below, which
+                  // survives because the address carries the replay coordinate.
+                  // Charging the measured region here as well would count it
+                  // twice -- and did, until the block-head trace ran 22% short
+                  // and said so.
+                  advance(8);
+                  if (s_input.joystick) {
+                    // The button reads with bit 7 *clear* when pressed here.
+                    if (!(io_peek(0xc061) & 0x80)) {
+                      break;
+                    }
+                  }
+                  // $7890 is on the replay coordinate -- see GAME_CYCLES_COORD.
+                  GAME_CYCLES_COORD(0x7890, 8);
+                  const uint8_t key = io_peek(0xc000);
+                  if (key == 0xa0) {
+                    io_poke(0xc010, key);
+                    break;
+                  }
+                }
+              }
 
-  // $7793 -- anything left in the round?
-  if (s_progress.left[0]) {
-    goto next_apple;
-  }
-  if (s_progress.left[1]) {
-    goto next_apple;
-  }
+              /* $789A */
+              if (!s_progress.lives) {
+                ending = ROUND_GAME_OVER;
+                break;
+              }
+              {
+                const uint16_t r = sbc_dec16(s_progress.lives, 0x01, 0x01);
+                s_progress.lives = (uint8_t)r;
+              }
+              ending = ROUND_RETRY; // $789A: JMP $76C7
+              break;
+            }
+          } else {
+            /* $77EA -- the round is empty, so the level is cleared. */
+            {
+              const uint16_t r = adc_dec16(s_progress.level, 0x01, 0x00);
+              s_progress.level = (uint8_t)r;
+            }
+            s_script_index = (uint8_t)(s_script_index + 1);
+            // $77F8 -- no life was lost this round, so it earns a bonus.
+            if (s_progress.lives == s_progress.lives_at_level_start) {
+              game_bonus_screen();
+            }
+            game_award_extra_life();
+            ending = ROUND_CLEARED;
+            break;
+          }
 
-  /* that was the last one. Draw the bar across the bottom, put the
-     marker on it, and stop the clock for the run to the gate -- see
-     s_life_time for why $FF stops it rather than lengthening it. */
-  s_snake.shape = SHAPE_SOLID;
-  // 0x06 is not one of the nine named Ink values (0x00,0x02,0x03,0x05,0x07,
-  // 0x09,0x0c,0x0d,0x0f) -- a one-off bar colour used only here, left bare
-  // on purpose rather than inventing a tenth Ink member for it.
-  plot_hline_at(0x06, 0x12, 0x00, 0x16);
-  plot_shape_at(SHAPE_SOLID, INK_ERASE, (Cell){.col = 0x14, .row = 0x00});
-  s_life_time = 0xff;
-  rom_setcol(INK_ERASE);
-  rom_plot(0x00, 0x14);
-  goto life;
+          /* $7719 -- another life on the same round */
+          s_life_timer = s_life_time;
+          s_mon.wndtop = 0x14;
+          rom_home();
+          game_status_panel();
+          if (s_step_delay >= 0x03) {
+            // $7730 -- two steps faster each life, but never past 3.
+            s_step_delay = (uint8_t)(s_step_delay - 2);
+          }
+          game_play_one_life();
+        }
 
-next_apple: /* place one only when both countdown bytes are zero */
-  if (s_progress.afield[0]) {
-    goto life;
-  }
-  if (s_progress.afield[1]) {
-    goto life;
-  }
-  game_place_apple();
-  goto life;
+        if (ending != ROUND_RETRY) {
+          break;
+        }
+      }
 
-round_cleared: /* $77EA */
-{
-  const uint16_t r = adc_dec16(s_progress.level, 0x01, 0x00);
-  s_progress.level = (uint8_t)r;
-}
-  s_script_index = (uint8_t)(s_script_index + 1);
-  // $77F8 -- no life was lost this round, so it earns a bonus.
-  if (s_progress.lives == s_progress.lives_at_level_start) {
-    game_bonus_screen();
-  }
-  game_award_extra_life();
-  goto new_level;
-
-not_apple: /* $77E8 */
-  if (s_life_outcome != 0xfe) {
-    goto ended;
-  }
-  if (s_progress.left[1]) {
-    goto harder;
-  }
-  if (!s_progress.left[0]) {
-    goto ended;
-  }
-
-harder: /* three more apples in the round, and three more to come */
-  bcd_add16(s_progress.quota, 0x03);
-  bcd_add16(s_progress.left, 0x03);
-  game_place_apple();
-  game_place_apple();
-  game_place_apple();
-  goto life;
-
-ended: /* $7847 */
-  if (s_life_outcome == 0xff) {
-    goto new_game; // the player pressed the quit key
-  }
-  // $FE means the snake ran out of room rather than died, and that just starts
-  // another life. Anything else falls through to the pause. Note the sense:
-  // the original *branches away* when it is not $FE, so equality is the
-  // fall-through, not the exception.
-  if (s_life_outcome == 0xfe) {
-    goto life;
-  }
-  if (s_demo_mode) {
-    goto lose_life; // the demo does not wait to be told to carry on
-  }
-
-  /* "PRESS SPACE BAR TO CONTINUE", then wait for space or the
-     paddle button, whichever the setup screen selected. */
-  s_mon.cv = 0x17;
-  s_mon.ch = 0x00;
-  game_print_inline_str(0x7867);
-  for (;;) {
-    // "PRESS SPACE BAR TO CONTINUE", and this is the only yield in the loop
-    // that waits for it. Nothing bounds this one -- the game sits here until
-    // the player presses something -- so losing it hangs the program outright
-    // rather than merely making it stutter.
-    // Eight, not sixteen: a pass of this loop costs 16 cycles, but half of
-    // that is $7890's own charge below, which survives because the address
-    // carries the replay coordinate. Charging the measured region here as
-    // well would count it twice -- and did, until the block-head trace ran
-    // 22% short and said so.
-    advance(8);
-    if (s_input.joystick) {
-      // The button reads with bit 7 *clear* when pressed on this path.
-      if (!(io_peek(0xc061) & 0x80)) {
+      if (ending == ROUND_GAME_OVER) {
         break;
       }
-    }
-    // $7890 is on the replay coordinate -- see GAME_CYCLES_COORD.
-    GAME_CYCLES_COORD(0x7890, 8);
-    const uint8_t key = io_peek(0xc000);
-    if (key == 0xa0) {
-      io_poke(0xc010, key);
-      break;
-    }
-  }
 
-lose_life: /* $789A */
-  if (!s_progress.lives) {
-    goto new_game;
+      /* $76B7 -- $77EA fell into this */
+      s_progress.lives_at_level_start = s_progress.lives;
+      s_progress.quota[0] = 0x10;
+    }
+
+    /* $7691 */
+    game_setup_screen();
+    game_promote_high_score();
+    s_script_index = 0x01;
+    s_progress.level = 0x01;
+    s_progress.score[0] = 0x00;
+    s_progress.score[1] = 0x00;
+    s_progress.score[2] = 0x00;
+    s_progress.score[3] = 0x00;
+    s_progress.lives = 0x02;
+    s_progress.afield[0] = 0x00;
+
+    /* $76B7 again -- $7691 falls into it, and the level loop's own copy above
+       is out of reach from here. */
+    s_progress.lives_at_level_start = s_progress.lives;
+    s_progress.quota[0] = 0x10;
   }
-  {
-    const uint16_t r = sbc_dec16(s_progress.lives, 0x01, 0x01);
-    s_progress.lives = (uint8_t)r;
-  }
-  goto start_round;
 }
 
 /* ========================================================================== *

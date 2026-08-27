@@ -355,9 +355,22 @@ reach BASCALC and VTABZ in decimal mode. Keep both arms.
 
 Where a routine's control flow genuinely rejoins at several depths — COUTZ's
 dispatch, HLINE falling into VLINEZ, HOME's provably-always-taken BCS — the
-labels keep their addresses and get names. That is the same call
-`game_cold_start` made about its state machine, and it is not a failure to
-structure them further; it is what the code is.
+labels keep their addresses and get names. It is not a failure to structure
+them further; it is what the code is.
+
+`game_cold_start` looked like one of those and was not (2026-08-27). Its 21
+gotos and 13 labels are now four nested `for (;;)` loops — new game, new
+level, round, life — with zero labels. Twelve of the thirteen labels were
+reached from a single nesting depth; the thirteenth, `$3783: JMP $76C2`, is
+the cold entry three levels down, which deliberately skips $7691's and
+$76B7's initialisation so the demo pass runs on the image's own level, score
+and lives. That is expressed by putting the two outer loops' initialisation
+at the *bottom* of their bodies, where the old `goto new_game`/`goto
+new_level` already fell out to, so entering from the top skips it exactly
+once with no flag. The cost is $76B7's two lines appearing twice, because
+$7691 falls into $76B7. A `RoundEnd` enum carries the three ways out of the
+life loop, since C cannot break three levels. See
+`.superpowers/sdd/2026-08-27-readable-c/task-10-report.md` for the full map.
 
 **What is decoded and never run is now recorded per routine.** Measured by
 probing entry addresses across both cold scenarios, not assumed:
