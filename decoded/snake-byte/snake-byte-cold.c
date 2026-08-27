@@ -213,7 +213,7 @@ typedef enum {
 /// four scanline masks apiece; see game_load_shape_masks.
 typedef enum {
   SHAPE_APPLE = 0x01,   ///< also merged over the head so it reads as a head
-  SHAPE_STEM = 0x0a,    ///< the arrow's stem on the redefinition screen
+  SHAPE_VBAR = 0x0a,    ///< a full-height vertical bar, one cell wide
   SHAPE_SOLID = 0x15,   ///< the default: a full cell, used for walls and text
   SHAPE_BOUNCER = 0x1a,
 } Shape;
@@ -740,7 +740,7 @@ static void rom_cout1(uint8_t ch);
 /* `FUNC_PLOT1`. Their only callers were $F800/$F819/$F871, so once those      */
 /* became external the two helpers became unreachable and the decompiler       */
 /* dropped them. They are reproduced here verbatim from the pre-externs        */
-/* output.                                                                    */
+/* output.                                                                     */
 /* ========================================================================== */
 
 /// $F847 GBASCALC. The lo-res twin of BASCALC: a row 0-47 in A becomes that
@@ -944,7 +944,7 @@ home: /* $FC58 */
 /*   FC6E: DEC CV / LDA WNDTOP / PHA / ...    ; otherwise scroll up one line   */
 /*                                                                            */
 /* Transcribed from the pre-externs mega-switch blocks $FC68..$FC95 plus the   */
-/* three exit blocks ($FC6C -> VTABZ, $FC22, $FC9A -> CLREOL).                */
+/* three exit blocks ($FC6C -> VTABZ, $FC22, $FC9A -> CLREOL).                 */
 /*                                                                            */
 /* Besides COUT1 falling through $FC66, the game calls this directly as a      */
 /* VTAB: $7590 and $75D1 store CH/CV and JSR here. Their CV values are 5..13,  */
@@ -1585,17 +1585,6 @@ static struct {
   bool muted;    ///< toggled by Ctrl-S
 } s_sound = {.port = 0x20, .passes = 0x0f};
 
-/* --- The plotter's arguments ---------------------------------------------- */
-/*
- * Nine bytes of zero page that the drawing routines pass arguments in, because
- * the 6502 has nowhere else to put them. Every plot goes through here: set the
- * shape, the ink and the cell, then call.
- *
- * game_cout_hook is the exception and reuses all nine for something
- * unrelated -- see the second enum. That is not a naming problem to be tidied
- * away; it is a union the original wrote by hand, and the names say so.
- */
-
 /// SCRN one cell. Defined further down, next to the plot helpers.
 static uint8_t scrn_cell(Cell c);
 
@@ -1630,6 +1619,8 @@ static const uint8_t kRowDelta[5] = {0x00, 0x00, 0xff, 0x00, 0x01};
 /// the direction, which is the same table with the rows implied.
 typedef enum { TURN_CW, TURN_CCW, TURN_STRAIGHT } Turn;
 
+/// Entry 0 of each row is unused padding, same as kColDelta/kRowDelta above:
+/// directions are 1-based, and a direction of 0 never reaches this table.
 static const uint8_t kSnakeShape[3][5] = {
     [TURN_CW] = {0, 0x11, 0x12, 0x13, 0x14},
     [TURN_CCW] = {0, 0x05, 0x06, 0x07, 0x08},
@@ -1689,7 +1680,7 @@ static struct {
     .direction = DIR_UP,
     .growth = 0x07,
     .shape_mask = {0xff, 0xff, 0xff, 0xff},
-    .steer_dir = 0x02,
+    .steer_dir = DIR_UP,
 };
 
 /// How the life ended, which $7739 reads the moment the play loop returns:
@@ -1704,6 +1695,10 @@ static struct {
 /// are picked for quit/timeout precisely because no real occupancy byte
 /// (0x00-0x0F) can ever collide with them.
 static uint8_t s_life_outcome;
+
+/// The two life outcomes above that are not real occupancy bytes and so
+/// cannot borrow CellContent's encoding the way the gate and apple cases do.
+enum { OUTCOME_TIMEOUT = 0xfe, OUTCOME_QUIT = 0xff };
 
 /// The life timer -- see s_life_time for what seeds it and why $FF stops it.
 static uint8_t s_life_timer = 0x61;
@@ -1748,12 +1743,13 @@ void game_install_cout_vector(void) {
 /* cell, and $6C4A counts how many axes were blocked. All five are locals in   */
 /* any language with a stack, and all five are locals here -- the parameter    */
 /* block is the argument, and the other three were mirrored back only for as   */
-/* long as the memory oracle hashed the bytes.                                */
+/* long as the memory oracle hashed the bytes.                                 */
 /*                                                                            */
 /* The plots go through plot_at and plot_shape_at. Which one a call uses is    */
 /* the point: the erase at $654C deliberately does *not* name a shape. It      */
-/* reuses whatever s_snake.shape holds, and the mask that shape selects decides      */
-/* which pixels get cleared. Tidying that away would change the screen.        */
+/* reuses whatever s_snake.shape holds, and the mask that shape selects        */
+/* decides which pixels get cleared. Tidying that away would change the        */
+/* screen.                                                                     */
 /* ========================================================================== */
 
 /// Reflect a delta.
@@ -1991,8 +1987,9 @@ static bool s_setup_seen = true;
 /* ========================================================================== */
 /* the high score                                                    */
 /*                                                                            */
-/* Four BCD bytes in s_progress.score against four in s_progress.best, most significant first.      */
-/* Below at any byte and it stops; above and it copies; equal and it moves on. */
+/* Four BCD bytes in s_progress.score against four in s_progress.best, most    */
+/* significant first. Below at any byte and it stops; above and it copies;     */
+/* equal and it moves on.                                                      */
 /*                                                                            */
 /* The four compares are a loop here, over the byte indices. In game.c that    */
 /* would be a bug -- the site list is built by grepping for literal CYCLES     */
@@ -2045,7 +2042,6 @@ static uint8_t cell_at(Cell c) {
 }
 
 void game_find_nearest_apple(void) {
-  static const uint8_t kApple = CELL_APPLE;
   static const uint8_t kLastRow = 0x27;
 
   Cell c = {.col = s_snake.head.col, .row = 1};
@@ -2053,7 +2049,7 @@ void game_find_nearest_apple(void) {
 
   for (;;) { // leftwards
     const uint8_t v = cell_at(c);
-    if (v == kApple) {
+    if (v == CELL_APPLE) {
       found = true;
       break;
     }
@@ -2070,7 +2066,7 @@ void game_find_nearest_apple(void) {
 
     for (;;) { // rightwards
       const uint8_t v = cell_at(c);
-      if (v == kApple) {
+      if (v == CELL_APPLE) {
         break;
       }
       if (++c.row != kLastRow) {
@@ -3600,25 +3596,25 @@ void game_pause_or_toggle_sound(uint8_t key) {
   }
 }
 
-/// draw the head in \p shape, then step it one cell in \p dir and see what
-/// it landed on. \p cell_out receives the occupancy byte the head landed on,
-/// which is only meaningful for LIFE_CRASH; the buzz in that branch runs to
+/// draw the head in \p shape, then step it one cell and see what it landed
+/// on. \p cell_out receives the occupancy byte the head landed on, which is
+/// only meaningful for LIFE_CRASH; the buzz in that branch runs to
 /// completion before this returns.
 ///
-/// \p dir is the direction going in; game_play_loop's callers pass whatever
-/// they had before the normalisation below, because it is that
-/// normalisation -- reading s_snake.direction fresh -- that actually decides
-/// which way the head moves, the same way $62B8 does.
+/// No \p dir parameter: $62B8 reads s_snake.direction fresh rather than
+/// trusting whatever direction its caller had before the normalisation
+/// below, so a direction passed in would always be overwritten before use --
+/// game_play_loop's own `dir` local plays no part here.
 ///
 /// Returns LIFE_CONTINUE for the one case that is not an ending: an empty,
 /// non-gate cell, where the original falls through to `tail:`.
-static LifeEnd snake_step(uint8_t dir, uint8_t shape, uint8_t *cell_out) {
+static LifeEnd snake_step(uint8_t shape, uint8_t *cell_out) {
   const Cell head = s_snake.head;
   s_snake.shape = shape;
   game_draw_head(INK_SNAKE, head);
 
   // $62B8 -- the direction back into 1..4, and the ink is the direction.
-  dir = (uint8_t)((((uint8_t)(s_snake.direction - 1)) & 3) + 1);
+  const uint8_t dir = (uint8_t)((((uint8_t)(s_snake.direction - 1)) & 3) + 1);
   s_snake.direction = dir;
   rom_setcol(dir);
 
@@ -3766,7 +3762,7 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
   draw: /* draw the head, then step it one cell */
   {
     uint8_t cell = 0;
-    const LifeEnd outcome = snake_step(dir, shape, &cell);
+    const LifeEnd outcome = snake_step(shape, &cell);
     if (outcome != LIFE_CONTINUE) {
       *cell_out = cell;
       return outcome;
@@ -4102,8 +4098,8 @@ void game_status_panel(void) {
 /* Awarded when a level is finished. The bonus is twice whatever an apple was  */
 /* worth on that level, which the original says twice over: once as BCD        */
 /* arithmetic into $78B0/$78B1 so the number can be printed, and once as two   */
-/* consecutive calls to game_add_score, each adding the full s_progress.apple_value. */
-/* Neither reads the other's answer.                                          */
+/* consecutive calls to game_add_score, each adding the full                   */
+/* s_progress.apple_value. Neither reads the other's answer.                   */
 /*                                                                            */
 /* This routine is *entered with decimal mode set* -- unusual here, and the    */
 /* reason the adapter cannot assert against it the way the others do. The      */
@@ -4119,7 +4115,8 @@ void game_bonus_screen(void) {
   // $78B3 -- double the apple's value into $78B0/$78B1, in BCD.
   const uint16_t lo = adc_dec16(s_progress.apple_value[0], s_progress.apple_value[0], 0x00);
   s_progress.bonus[0] = (uint8_t)lo;
-  const uint16_t hi = adc_dec16(s_progress.apple_value[1], s_progress.apple_value[1], (uint8_t)(lo >> 8) & 0x01);
+  const uint16_t hi =
+      adc_dec16(s_progress.apple_value[1], s_progress.apple_value[1], (uint8_t)(lo >> 8) & 0x01);
   s_progress.bonus[1] = (uint8_t)hi;
 
   // Twice, because the bonus is twice the apple value and game_add_score adds
@@ -4373,9 +4370,11 @@ wait: /* $741C */
   // 0x02: the arrowhead's own shape-table entry, a one-off outside Shape's
   // four named values -- left bare on purpose.
   plot_shape_at(0x02, INK_SNAKE, (Cell){.col = 0x1e, .row = 0x12});
-  // The stem below it, down the same column -- which the original inherited
-  // from the plot above rather than restating.
-  s_snake.shape = SHAPE_STEM;
+  // The shaft below it, down the same column -- which the original inherited
+  // from the plot above rather than restating. SHAPE_VBAR is the same mask
+  // kSnakeShape[TURN_STRAIGHT] gives the snake's own straight vertical body
+  // segment; drawn as a run of cells here, it reads as the arrow's shaft.
+  s_snake.shape = SHAPE_VBAR;
   plot_vline_at(INK_SNAKE, 0x1e, 0x13, 0x1d);
   // At the stem's far end -- the vline above left $03 on $1D. 0x0e is
   // another one-off shape-table entry, same reasoning as the 0x02 above.
@@ -4478,12 +4477,12 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* $3080, ... -- and successive scanlines within a cell are $400 apart, which */
 /* is why walking down a cell is just +4 on the high byte.                    */
 /*                                                                            */
-/* Arguments. The original passed all three in zero page; the cell is a        */
+/* Arguments. The original passed all three in zero page; the cell is a       */
 /* parameter here and only the shape is still a variable:                     */
-/*   s_snake.shape  picks four AND masks from the table at $6174 ($00)              */
-/*   c.col    the byte offset within the cell row ($02)                       */
-/*   c.row    cell row, 0-47 ($03)                                            */
-/* Scratch, which was $04-$07 and is now four locals:                          */
+/*    s_snake.shape  -- picks four AND masks from the table at $6174 ($00)    */
+/*    c.col  -- the byte offset within the cell row ($02)                     */
+/*    c.row  -- cell row, 0-47 ($03)                                          */
+/* Scratch, which was $04-$07 and is now four locals:                         */
 /*   the destination pointer, advanced one scanline per iteration             */
 /*   the index into the dot-pattern table at $6064                            */
 /*   the scanline counter, 0-3                                                */
@@ -4523,7 +4522,7 @@ void game_print_inline_str(uint16_t ret_addr) {
 /*                                                                            */
 /* $70D4 shows what they are for: with $08 = $27 it draws the four borders of */
 /* the 40x40 cell playfield -- top and bottom with $6148, left and right with */
-/* which is where the grid's dimensions come from.                   */
+/* $615A -- which is where the grid's dimensions come from.                   */
 /*                                                                            */
 /* The register and flag assignments are not decoration. Callers are still    */
 /* generated code that reads this machine state, so a hand-written routine    */
@@ -4557,9 +4556,10 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* ========================================================================== */
 /* the score.                                   */
 /*                                                                            */
-/* The score is BCD: four little-endian bytes in s_progress.score, eight digits.        */
-/* $7267 adds to it with the 6502's decimal mode, and $71F3 prints one byte   */
-/* of it as two digits by nibble, since in BCD a nibble is already a digit.   */
+/* The score is BCD: four little-endian bytes in s_progress.score, eight      */
+/* digits. $7267 adds to it with the 6502's decimal mode, and $71F3 prints    */
+/* one byte of it as two digits by nibble, since in BCD a nibble is already a */
+/* digit.                                                                     */
 /*                                                                            */
 /* $002C is the leading-zero flag, and it is the reason these two are a pair. */
 /* $71F3 prints a digit only once $2C is non-zero, and sets $2C from the      */
@@ -4655,18 +4655,20 @@ void game_print_inline_str(uint16_t ret_addr) {
 /*                                                                            */
 /* $0301 is the difficulty, 0-2, and $71CD is what gives it away: it indexes  */
 /* the three-byte table at $71C8 -- $10, $15, $20 -- with $0301 and adds that */
-/* entry to s_progress.apple_value/s_progress.apple_value[1] once per level, in BCD. So an apple is worth          */
-/* base[difficulty] * level, which is why s_progress.apple_value read $15 throughout the       */
-/* recordings: difficulty 1, level 1. It is also what decides the two         */
+/* entry to s_progress.apple_value/s_progress.apple_value[1] once per level,  */
+/* in BCD. So an apple is worth base[difficulty] * level, which is why        */
+/* s_progress.apple_value read $15 throughout the recordings: difficulty 1,   */
+/* level 1. It is also what decides the two                                   */
 /* optional wall gaps in game_draw_playfield.                                 */
 /* ========================================================================== */
 
 /* ========================================================================== */
 /* apples, and the sound trick.                        */
 /*                                                                            */
-/* s_sound.port is the game's mute switch, and it is a nice piece of work: every     */
-/* sound routine reads `LDA $C000,Y` with Y = s_sound.port, and $6C2C picks either   */
-/* $30 or $20 for it. $C030 is the speaker; $C020 is the cassette output. So  */
+/* s_sound.port is the game's mute switch, and it is a nice piece of work:    */
+/* every sound routine reads `LDA $C000,Y` with Y = s_sound.port, and $6C2C   */
+/* picks either $30 or $20 for it. $C030 is the speaker; $C020 is the         */
+/* cassette output. So                                                        */
 /* turning the sound off routes the identical click to a port nobody is       */
 /* listening to, and the timing loops do not change at all -- no branch in    */
 /* the hot path, and muting cannot alter the game's speed.                    */
@@ -4775,10 +4777,10 @@ static void game_play_one_life(void) {
     s_life_outcome = CELL_APPLE;
     break;
   case LIFE_QUIT:
-    s_life_outcome = 0xff;
+    s_life_outcome = OUTCOME_QUIT;
     break;
   case LIFE_TIMEOUT:
-    s_life_outcome = 0xfe;
+    s_life_outcome = OUTCOME_TIMEOUT;
     break;
   case LIFE_CRASH:
     s_life_outcome = cell;
@@ -4803,10 +4805,14 @@ static void game_play_one_life(void) {
 /* new game -> new level -> new round -> one life -> what happened -> repeat.  */
 /* Everything it calls was converted long before it was.                      */
 /*                                                                            */
-/* The labels keep their addresses because this is a state machine, not a     */
-/* nest of loops: a life ends by clearing the round, by dying, or by the      */
-/* player quitting, and each re-enters at a different depth. As while-loops   */
-/* it would need flags to say which level to break out to.                    */
+/* Four nested for(;;) loops now, zero labels: game, level, round, life. A    */
+/* life's ending sets `ending` and breaks its own loop; the round and level   */
+/* loops above re-test it and break again in turn, so a life ending unwinds   */
+/* as many as three loops in a row of breaks -- exactly the flag the old      */
+/* labels never needed. The two outer loops carry their setup at the bottom   */
+/* rather than the top because the cold entry below jumps in three levels     */
+/* down, past both: an ordinary iteration falls back to that same spot, so    */
+/* putting the setup there serves both paths at once.                         */
 /*                                                                            */
 /* Decimal mode is explicit. The generated code emitted both a binary and a   */
 /* decimal arm for every add and subtract because it could not prove which    */
@@ -4965,7 +4971,7 @@ void game_cold_start(void) {
             /* $77E8 -- $FE is the snake running out of room rather than dying.
                With apples still owed that only makes the round harder; with
                none left, and for every other outcome, the life is over. */
-            if (s_life_outcome == 0xfe && (s_progress.left[1] || s_progress.left[0])) {
+            if (s_life_outcome == OUTCOME_TIMEOUT && (s_progress.left[1] || s_progress.left[0])) {
               // three more apples in the round, and three more to come
               bcd_add16(s_progress.quota, 0x03);
               bcd_add16(s_progress.left, 0x03);
@@ -4973,13 +4979,14 @@ void game_cold_start(void) {
               game_place_apple();
               game_place_apple();
               // falls into $7719
-            } else if (s_life_outcome == 0xff) {
+            } else if (s_life_outcome == OUTCOME_QUIT) {
               /* $7847 */
               ending = ROUND_GAME_OVER; // the player pressed the quit key
               break;
-            } else if (s_life_outcome == 0xfe) {
-              // Out of room with the round already emptied: another life, no
-              // pause and no life lost. Note the sense: the original *branches
+            } else if (s_life_outcome == OUTCOME_TIMEOUT) {
+              // **Never executed by any test in either scenario.** Out of
+              // room with the round already emptied: another life, no pause
+              // and no life lost. Note the sense: the original *branches
               // away* when it is not $FE, so equality is the fall-through.
               // falls into $7719
             } else {
