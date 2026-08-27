@@ -1583,19 +1583,21 @@ static const uint8_t kArrowGlyph[6] = {
 /// The cell the sweep decided to steer towards.
 static Cell s_apple = {.col = 0x13, .row = 0x1d};
 
-/* --- Sound: s_tone_period-s_click_port and $69C2 ----------------------------------------- */
+/* --- Sound: s_sound and $69C2 ----------------------------------------------- */
 
-/// The tone's period, and its on/off switch: 0 is silent.
-static uint8_t s_tone_period;
-/// Passes left before the next click.
-static uint8_t s_tone_countdown;
-/// How many passes one tick of the tone runs.
-static uint8_t s_tone_passes = 0x0f;
-/// Where the click goes, as the low byte of the soft switch: $30 the speaker,
-/// $20 the cassette, which is to say muted.
-static uint8_t s_click_port = 0x20;
-/// Toggled by Ctrl-S.
-static bool s_sound_muted;
+/// The one-bit speaker. `port` is $30 for the speaker and $20 for the cassette
+/// output, which is where a muted click goes.
+static struct {
+  uint8_t period;    ///< the tone's period, and its on/off switch: 0 is silent
+  uint8_t countdown; ///< passes left before the next click
+  uint8_t passes;    ///< how many passes one tick of the tone runs
+  /// How many more clicks the current sound effect owes. The pace loop
+  /// spends one per pass while it is nonzero, so the value is a duration:
+  /// $20 for eating an apple, $10 for a steering input, $07 for growing.
+  uint8_t click_count;
+  uint8_t port;  ///< the low byte of the soft switch: $30 the speaker, $20 the cassette
+  bool muted;    ///< toggled by Ctrl-S
+} s_sound = {.port = 0x20, .passes = 0x0f};
 
 /// the player chose the joystick at the setup prompt.
 static bool s_joystick_selected;
@@ -1726,11 +1728,6 @@ static uint8_t s_life_outcome;
 
 /// The life timer -- see s_life_time for what seeds it and why $FF stops it.
 static uint8_t s_life_timer = 0x61;
-
-/// How many more clicks the current sound effect owes. The pace loop spends
-/// one per pass while it is nonzero, so the value is a duration: $20 for
-/// eating an apple, $10 for a steering input, $07 for growing.
-static uint8_t s_click_count;
 
 /* ========================================================================== */
 /* Converted routines                                                         */
@@ -2249,7 +2246,7 @@ static uint8_t script_byte(void) {
 
 /// Graphics, hi-res, page 2, full screen. The reads are the writes.
 static void select_hires_page2(void) {
-  s_tone_period = 0x00;
+  s_sound.period = 0x00;
   io_peek(0xc050);
   io_peek(0xc057);
   io_peek(0xc055);
@@ -2898,71 +2895,71 @@ uint8_t game_edit_key(uint8_t slot) {
 /* ========================================================================== */
 
 /* The whole tone is four bytes, declared up with the rest of the state.       */
-/* s_tone_period doubles as the on/off switch: game_mark_head raises it to 1   */
+/* s_sound.period doubles as the on/off switch: game_mark_head raises it to 1   */
 /* when the head moves and game_draw_playfield clears it, so the sound follows */
-/* the snake and stops with it. s_click_port is where the click goes, as the   */
+/* the snake and stops with it. s_sound.port is where the click goes, as the   */
 /* low byte of the soft switch: $C030 is the speaker and $C020 the cassette    */
 /* output, which nobody can hear -- so muting is a store rather than a branch, */
 /* and the click itself is one indexed read. See the $7642 header for why that */
 /* shape was chosen.                                                          */
 
 void game_tick_sound(void) {
-  s_tone_passes = 0x14; // twenty
+  s_sound.passes = 0x14; // twenty
 
   for (;;) {
     // One pass of the tone loop. The pitch is the number of passes between
-    // clicks -- s_tone_countdown of them -- so a pass's duration *is* the
+    // clicks -- s_sound.countdown of them -- so a pass's duration *is* the
     // note, and this is the charge that sets it.
     //
     // Three numbers rather than one, because the three kinds of pass really
     // do take different times on a 6502 and the difference is audible. This
     // is the bare pass, with nothing to count and nothing to say.
     advance(38);
-    const uint8_t period = s_tone_period;
+    const uint8_t period = s_sound.period;
     if (period) {
       if (period < 0x80) {
         // Twelve more when there is a countdown to advance, which is every
         // pass of an actual note: 50 against 38 is most of a semitone.
         advance(12);
-        const uint8_t left = (uint8_t)(s_tone_countdown - 1);
-        s_tone_countdown = left;
+        const uint8_t left = (uint8_t)(s_sound.countdown - 1);
+        s_sound.countdown = left;
         if (!left) {
           // The click, and the cycles between it and the previous one are
           // the half-period of the note.
           advance(59);
-          const uint8_t port = s_click_port;
+          const uint8_t port = s_sound.port;
           speaker_access(port);
 
-          // Two INC s_tone_period: every click lengthens the period, so the pitch
+          // Two INC s_sound.period: every click lengthens the period, so the pitch
           // falls for as long as the head keeps moving.
-          s_tone_period = (uint8_t)(s_tone_period + 2);
-          s_tone_countdown = s_tone_period;
+          s_sound.period = (uint8_t)(s_sound.period + 2);
+          s_sound.countdown = s_sound.period;
         }
       }
     }
 
-    if (s_tone_period >= 0x80) {
+    if (s_sound.period >= 0x80) {
       // Fallen off the bottom of the range: silence until something restarts
       // it. $80 is reached from below in steps of two, so this is the end of
       // one slide rather than a wrap.
-      s_tone_period = 0x00;
+      s_sound.period = 0x00;
     }
 
     // Chosen afresh every pass, and defaulting to inaudible. Picking a real
     // port costs more than falling through to silence, and while the game is
     // audible that difference is in every pass -- so it is part of the pitch
     // too, and the note is flatter when you can hear it than when you cannot.
-    s_click_port = 0x20;
+    s_sound.port = 0x20;
     if (!attract_mode()) {
       advance(6);
-      if (!s_sound_muted) {
+      if (!s_sound.muted) {
         advance(5);
-        s_click_port = 0x30;
+        s_sound.port = 0x30;
       }
     }
 
-    const uint8_t left = (uint8_t)(s_tone_passes - 1);
-    s_tone_passes = left;
+    const uint8_t left = (uint8_t)(s_sound.passes - 1);
+    s_sound.passes = left;
     if (!left)
       break;
   }
@@ -3192,12 +3189,12 @@ void game_set_apple_value(void) {
 
 /// mark the head on the lo-res occupancy map, at the row and column
 /// the caller has already loaded, and raise the two flags that say it is
-/// there: s_snake.head_moved for the next draw and s_tone_period to start the tone.
+/// there: s_snake.head_moved for the next draw and s_sound.period to start the tone.
 void game_mark_head(uint8_t row, uint8_t col) {
   rom_plot(row, col);
 
   s_snake.head_moved = true;
-  s_tone_period = 0x01;
+  s_sound.period = 0x01;
 
   // A and its flags are live out of $6BEF, unlike almost everything else here.
 }
@@ -3269,7 +3266,7 @@ void game_sound_sweep(void) {
     // $30 here would pass too, and that would be a real bug: the mute would
     // stop working and no oracle in this repo looks at sound.
     advance(13);
-    speaker_access(s_click_port);
+    speaker_access(s_sound.port);
   } while (x);
 
   do {
@@ -3281,7 +3278,7 @@ void game_sound_sweep(void) {
 
     advance(13);
     // The click itself. The read *is* the write -- see the note above.
-    speaker_access(s_click_port);
+    speaker_access(s_sound.port);
   } while (x);
 }
 
@@ -3537,12 +3534,12 @@ static uint8_t scrn_cell(Cell c) {
   return rom_scrn(c.row, c.col);
 }
 
-/// one click of the speaker. s_click_port holds the port offset, $30 for
+/// one click of the speaker. s_sound.port holds the port offset, $30 for
 /// the speaker and $20 for the cassette output that nobody can hear, which is
 /// how muting works; game_sound_sweep does the same thing at $64B0.
 ///
 /// Not a keyboard read, which is what this was called until the scoreboard
-/// pass went looking: the address is $C000 + s_click_port, and the built-in symbol
+/// pass went looking: the address is $C000 + s_sound.port, and the built-in symbol
 /// database resolves the $C000 to KBD, so the disassembly reads `LDA KBD,Y`
 /// and the index is what makes it the speaker.
 /// Every access to the speaker soft switch goes through here.
@@ -3569,7 +3566,7 @@ static void speaker_access(uint8_t port) {
 }
 
 static void click_speaker(void) {
-  speaker_access(s_click_port);
+  speaker_access(s_sound.port);
 }
 
 /* ========================================================================== */
@@ -3610,7 +3607,7 @@ void game_pause_or_toggle_sound(uint8_t key) {
   }
 
   if (key == KEY_CTRL_S) {
-    s_sound_muted = !s_sound_muted;
+    s_sound.muted = !s_sound.muted;
   }
 }
 
@@ -3637,7 +3634,7 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
     }
 
   steer: /* a key with the high bit on, so the player is steering */
-    s_click_count = 0x10;
+    s_sound.click_count = 0x10;
     if (code == KEY_TURN_CW) {
       shape = kSnakeShape[TURN_CW][dir];
       // $624E is left one below range here and normalised at $62B8, which is
@@ -3735,7 +3732,7 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
 
     if (cell == CELL_APPLE) {
       // $6480 -- an apple. Marked here; the caller does the scoring.
-      s_click_count = 0x20;
+      s_sound.click_count = 0x20;
       rom_setcol(INK_HEAD_MARK);
       game_mark_head(next.row, next.col);
       *cell_out = cell;
@@ -3771,7 +3768,7 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
   tail: /* trim the tail, unless the snake is still growing */
     if (s_snake.growth) {
       s_snake.growth = (uint8_t)(s_snake.growth - 1);
-      s_click_count = 0x07;
+      s_sound.click_count = 0x07;
     } else {
       const Cell tail = s_snake.tail;
       const uint8_t under = scrn_cell(tail);
@@ -3839,12 +3836,12 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
       // sampling probes live.
       advance(48);
       game_read_key();
-      if (s_click_count) {
+      if (s_sound.click_count) {
         // The steering click. Its spacing is what makes the waveform
         // irregular the way the original is.
         advance(41);
         click_speaker();
-        s_click_count = (uint8_t)(s_click_count - 1);
+        s_sound.click_count = (uint8_t)(s_sound.click_count - 1);
       }
       --n;
     } while (n != 0);
@@ -4658,8 +4655,8 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* ========================================================================== */
 /* apples, and the sound trick.                        */
 /*                                                                            */
-/* s_click_port is the game's mute switch, and it is a nice piece of work: every     */
-/* sound routine reads `LDA $C000,Y` with Y = s_click_port, and $6C2C picks either   */
+/* s_sound.port is the game's mute switch, and it is a nice piece of work: every     */
+/* sound routine reads `LDA $C000,Y` with Y = s_sound.port, and $6C2C picks either   */
 /* $30 or $20 for it. $C030 is the speaker; $C020 is the cassette output. So  */
 /* turning the sound off routes the identical click to a port nobody is       */
 /* listening to, and the timing loops do not change at all -- no branch in    */
