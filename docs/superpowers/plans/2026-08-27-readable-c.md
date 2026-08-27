@@ -133,12 +133,28 @@ grep -n 'game_native' snake-byte-cold.c
 
 - [ ] **Step 4: Verify nothing was emitted differently.**
 
+The fingerprint hashes assembly *text*, which contains symbol names — so a
+rename necessarily changes it. (The plan originally claimed otherwise; it was
+wrong.) For a rename the check is: identical after normalising the old names to
+the new ones.
+
 ```bash
-cd decoded/snake-byte && ./codegen-fingerprint.sh
+cd decoded/snake-byte
+gen() { cc -I ../../include -std=gnu11 -O2 -g0 -DNDEBUG -S -o - "$1" |
+        grep -v '\.file\|\.ident\|^\s*#' | sed 's/\.L[A-Z]*[0-9][0-9]*/.L#/g'; }
+git show HEAD:decoded/snake-byte/snake-byte-cold.c > zz-pre.c   # in-directory:
+gen zz-pre.c > /tmp/pre.s                                        # the relative
+gen snake-byte-cold.c > /tmp/post.s                              # #includes must
+rm -f zz-pre.c                                                   # resolve
+sed -E 's/\b([A-Za-z_][A-Za-z0-9_]*)_native\b/\1/g' /tmp/pre.s > /tmp/pre-renamed.s
+diff /tmp/pre-renamed.s /tmp/post.s | grep -c '^[<>]'
 ```
 
-Expected: identical to `/tmp/fp-before.txt`. A rename cannot change codegen; if
-this differs, something other than a name was edited.
+Expected: `0`. Anything else is an edit that was not a rename.
+
+Note the `zz-pre.c` dance: the old file must be compiled **in its own
+directory** or its relative `#include "game-image.inc"` fails and the compiler
+aborts before emitting anything — which looks exactly like "no differences".
 
 - [ ] **Step 5: Build and gate.**
 
@@ -745,7 +761,7 @@ git add -A && git commit -m "snake-byte: the top level is four nested loops, not
 | task | proof |
 | --- | --- |
 | 1 tool | deterministic, and detects a one-digit mutation |
-| 2 `_native` | fingerprint identical |
+| 2 `_native` | assembly identical after normalising the renamed symbols |
 | 3 constants | fingerprint identical |
 | 4 shape table | gate 31 PASS |
 | 5 monitor struct | gate 31 PASS |
