@@ -2461,6 +2461,16 @@ static uint8_t dot_index(uint8_t ink, uint8_t scanline, uint8_t col) {
   return (uint8_t)((uint8_t)(((ink << 1) | (scanline & 1)) << 2) | (col & 3));
 }
 
+/// A byte of hi-res page 1. The page is $2000-$3FFF, and successive scanlines
+/// of a row are $400 apart, which is why walking down a cell is +4 on the high
+/// byte and nothing else.
+static void hgr_poke(uint16_t addr, uint8_t v) {
+  poke(addr, v);
+}
+static uint8_t hgr_peek(uint16_t addr) {
+  return peek(addr);
+}
+
 /// draw the loaded shape into one cell, replacing what was there.
 void game_draw_cell(uint8_t ink, Cell c) {
   uint16_t dest = cell_row_base(c.row);
@@ -2470,7 +2480,7 @@ void game_draw_cell(uint8_t ink, Cell c) {
     // zero page and a probe may sample there.
     const uint8_t idx = dot_index(ink, (uint8_t)line, c.col);
 
-    poke(dest + c.col, (uint8_t)(kHgrPattern[idx] & s_snake.shape_mask[line]));
+    hgr_poke(dest + c.col, (uint8_t)(kHgrPattern[idx] & s_snake.shape_mask[line]));
     dest += 0x0400; // one scanline down, i.e. +4 on the high byte
   }
   // The carry is what the loop's CPX #4 leaves.
@@ -2494,7 +2504,7 @@ void game_merge_cell(uint8_t ink, Cell c) {
         (uint8_t)((uint8_t)(((uint8_t)((parity << 7) | (ink >> 1))) << 2) | (c.col & 3));
 
     const uint16_t at = dest + c.col;
-    poke(at, (uint8_t)(((kHgrPattern[idx] ^ 0x7f) & s_snake.shape_mask[line]) | peek(at)));
+    hgr_poke(at, (uint8_t)(((kHgrPattern[idx] ^ 0x7f) & s_snake.shape_mask[line]) | hgr_peek(at)));
     dest += 0x0400;
   }
 }
@@ -2510,7 +2520,7 @@ void game_clear_hgr(void) {
   for (uint8_t page = 0x20;;) {
     uint8_t y = 0;
     do {
-      poke((uint16_t)(page << 8) + y, 0x00);
+      hgr_poke((uint16_t)(page << 8) + y, 0x00);
       ++y;
     } while (y);
 
