@@ -6,63 +6,52 @@
  */
 
 /// \file
-/// Snake Byte, decompiled: the whole program, in one translation unit,
-/// sharing nothing.
+/// Snake Byte: the whole game in one translation unit, sharing nothing.
 ///
-/// This is the artifact the exercise is for. It enters at the game's own entry
-/// point, $3750, with the machine state the Apple II boot would have produced;
-/// it contains no Applesoft ROM code and no decompiler-generated code.
+/// It starts at the game's own entry point with the machine state an Apple II
+/// boot would have left, and runs the game as C. There is no Applesoft, and
+/// nothing here is generated.
 ///
 /// Why one file
 /// ------------
-/// Two reasons, and the second is the important one.
+/// `apple2tc/system2-inc.h` does not merely declare the emulated machine, it
+/// *defines* it, and nearly all of it has internal linkage: `s_ram`, the cycle
+/// counters, the access helpers. Anything built on those has to share its
+/// translation unit.
 ///
-/// The mechanical reason is that `apple2tc/system2-inc.h` does not merely
-/// declare the emulated machine, it *defines* it, and nearly all of it has
-/// internal linkage -- the registers, the flags, `s_ram`, the cycle counters,
-/// the access helpers. Anything implementing a 6502 routine has to be in the
-/// same translation unit as that.
+/// The better reason is ownership. The other targets in this directory are
+/// scaffolding -- controls this one is checked against, and one fixture -- and
+/// while this file shared sources with them, every change here had to stay
+/// safe for builds running a dispatch over the same addresses. It shares
+/// nothing now. Change it freely; the gate says whether the game still
+/// behaves.
 ///
-/// The real reason is ownership. The other four targets in this directory are
-/// scaffolding: `snake-bytec1-ext` boots the machine and is the control this
-/// one is checked against, `snake-bytec1` is the control for *that*,
-/// `snake-byte-easyc1-ext` is a fixture, and `snake-byte` is history. While
-/// this file shared game.c and game_native.c with them, every change here had
-/// to be safe for builds that still run a generated dispatch over the same
-/// addresses -- which is a real constraint and cost a file split already. It
-/// does not share anything now. Change it freely; the gate says whether the
-/// game still behaves.
+/// What is in here that is not the game
+/// ------------------------------------
+///   - `s_mem_3750`, the game's own binary image, for its data: the level
+///     scripts, the font, the tables.
+///   - `s_mem_d000`, the Apple II ROM image -- not for its code, but because
+///     the death pause reads its delay lengths out of ROM *as data*.
+///   - the ROM entry points the game calls, as C. They are the machine's code
+///     rather than the game's, but there is no category of code here that
+///     belongs to someone else.
+///   - the entry state: zero page, the stack, the registers and one soft
+///     switch, captured with --snapshot-at. See make-entry-state.sh.
 ///
-/// What is still in here that is not the game
-/// ------------------------------------------
-///   - `s_mem_3750`, the game's own binary image. Its data -- level scripts,
-///     the font, the tables -- and it stays.
-///   - `s_mem_d000`, the Apple II ROM image. Not for its code: the death pause
-///     reads delay lengths out of ROM *as data* at $E000.
-///   - the Apple II ROM's own entry points, as C. They are the machine's, not
-///     the game's, but they are decompiled on the same terms as everything
-///     else here: there is no category of code in this file that belongs to
-///     someone else. The last five still shaped like the decompiler left them
-///     -- BASCALC, VTABZ, CLREOL, CLREOLZ and WAIT -- were converted on
-///     2026-08-24; what is still `bb_N:` and `goto` is the remaining entry
-///     points, which is the same job unfinished.
-///   - the entry state, $0000-$0802 plus registers and one soft switch,
-///     captured with --snapshot-at. See make-entry-state.sh.
-///
-/// The first two are 2,020 lines of hex between them, so they live in
-/// game-image.inc and rom-image.inc and are `#include`d below. That is a
-/// concession to reading the file, not a retreat from owning it: nothing else
-/// includes them, they define statics and so can be included only once, and
-/// the split was verified by compiling before and after -- every non-debug
-/// section identical, and the emitted code differing in exactly the two
-/// `__LINE__` immediates the shift moved.
+/// The two images are 2,020 lines of hex, so they live in `game-image.inc` and
+/// `rom-image.inc`. That is a concession to reading the file, not a retreat
+/// from owning it.
 ///
 /// How it is checked
 /// -----------------
-/// probe-acceptance.sh runs this against snake-bytec1-ext and requires the two
-/// to agree from $3750 onward: every block head that is still probed, and the
-/// screen at every in-game sample. The screen check is the one that survives
-/// as more of this file turns into ordinary C.
+/// `probe-acceptance.sh` runs this against a build that boots the real machine
+/// and requires the two to agree: the screen and memory at every in-game
+/// sample, and the speaker's toggle timeline. The screen check is the one that
+/// survives as more of this file turns into ordinary C.
+///
+/// One hazard when editing. `assert()` bakes `__LINE__` into the text section,
+/// so deleting a comment changes the emitted code. To prove an edit is
+/// comment-only, compile `-O2 -g0 -DNDEBUG -S` before and after and diff.
 
 #include <stdint.h>
 #include <stdio.h>
@@ -74,13 +63,6 @@
 /* ========================================================================== *
  * The machine, the images, and what is left of the ROM                     *
  * ========================================================================== */
-
-// Loaded binary at [$3750..$854E]
-// --code-at: 3 asserted edges applied
-// Loaded segment [$00B1..$00C8]
-// 293 new runtime blocks added
-// code labels: 1673
-// data labels: 284
 
 #include "apple2tc/system2-inc.h"
 
@@ -147,17 +129,13 @@ static const uint8_t s_mem_00b1[0x0018] = {0xE6, 0xB8, 0xD0, 0x02, 0xE6, 0xB9, 0
 #include "rom-image.inc"
 
 /// Put the three images into RAM: the zero-page fragment the run data carried,
-/// the game itself, and the Apple II ROM. Named for what it does -- it used to
-/// be the whole of init_emulated(), which now has state to install as well.
+/// the game itself, and the Apple II ROM.
 static void load_images(void) {
   memcpy(s_ram + 0x00b1, s_mem_00b1, 0x0018);
   memcpy(s_ram + 0x3750, s_mem_3750, 0x4dff);
   memcpy(s_ram + 0xd000, s_mem_d000, 0x3000);
 }
 
-static inline uint8_t ovf8(uint8_t res, uint8_t a, uint8_t b) {
-  return (~(a ^ b) & (a ^ res)) >> 7;
-}
 static uint16_t adc_dec16(uint8_t a, uint8_t b, uint8_t cf) {
   struct ResAndStatus res = adc_decimal(a, b, cf);
   return res.result | (res.status << 8);
@@ -169,26 +147,19 @@ static uint16_t sbc_dec16(uint8_t a, uint8_t b, uint8_t cf) {
 
 /* --- The monitor's zero page ---------------------------------------------- */
 /*
- * $0020-$003E, with the Apple II's own names. These are not the game's
- * variables: they belong to the ROM routines it calls, and the game writes
- * them only to pass arguments -- a cursor position before COUT, a colour
- * before PLOT, a right-hand end before HLINE. Keeping the monitor's spelling
- * is deliberate; every Apple II reference uses it, and a2rom.h's prose
- * already does.
+ * These are not the game's variables: they belong to the ROM routines it
+ * calls, and the game writes them only to pass arguments -- a cursor position
+ * before COUT, a colour before PLOT, a right-hand end before HLINE. The names
+ * are the Apple II's own, because every reference to this hardware uses them.
  */
-/* The monitor's own state, out of emulated RAM on the same terms as the game's.
-   Names are the Apple II's, because every reference uses them and a2rom.h's
-   prose already did. */
 static uint8_t s_wndlft; ///< text window: left, width, top, bottom
 static uint8_t s_wndwdth;
 static uint8_t s_wndtop;
 static uint8_t s_wndbtm;
-/* Addresses, not byte pairs. The 6502 splits a pointer into two zero-page
-   bytes because that is all it can address; nothing here has two halves that
-   mean different things. Where a routine really does write one half -- VTABZ
-   rewrites only the low byte, and the glyph blitter does 8-bit arithmetic on
-   each -- the code says so with a mask or a shift, which is what the split
-   used to be hiding. */
+/* Addresses, not byte pairs. The 6502 splits a pointer into two bytes because
+   that is all it can address; nothing here has two halves meaning different
+   things. Where a routine really does write one half -- VTABZ rewrites only
+   the low byte -- the code says so with a mask or a shift. */
 static uint16_t s_gbas; ///< lo-res line base, from GBASCALC and V2
 static uint16_t s_bas; ///< text line base, from BASCALC and CV
 static uint16_t s_bas2; ///< the scroll's destination line
@@ -214,7 +185,7 @@ static uint8_t s_h2;
 
 /// The three pointer pairs, low byte first, as ram_peek16al read them.
 
-/// $0024/$0025 -- CH and CV, the text cursor, out of emulated RAM.
+/// CH and CV, the text cursor, out of emulated RAM.
 ///
 /// The last two addresses in this block that anything still *computes* with.
 /// The ROM's BASCALC turns CV into BASL/BASH, CLREOL and COUT1 step CH along a
@@ -428,33 +399,11 @@ void rom_wait(uint8_t n) {
  * ========================================================================== */
 
 /*
- * Copyright (c) Tzvetan Mikov.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * The Apple II ROM entry points the game calls, as ordinary C functions:
+ * parameters and return values, not A/X/Y and the status flags. Each keeps its
+ * canonical address and monitor name, because that is how every Apple II
+ * reference identifies them.
  */
-
-/// \file
-/// Hand-written replacements for the Apple II ROM entry points that Snake Byte
-/// calls. The addresses listed here are also listed in `rom.externs`, which is
-/// passed to the decompiler via `--extern-routines=`. That makes the decompiler
-/// emit a declaration but no body for each of them, so the definitions in
-/// `a2rom.c` take over.
-///
-/// They followed the generated code's calling convention until 2026-08-24,
-/// taking a `ret_addr` they pushed on entry to mimic a JSR. That is gone --
-/// nothing in this build reads the emulated call stack, so `push16` and
-/// `pop16` are unused here and the routines are ordinary C functions.
-///
-/// The CPU state that used to be passed in those globals is gone: the ROM
-/// entry points take parameters and return values, `rom_plot` wants a row and
-/// a column rather than A and Y, and nothing in this file names A, X or Y.
-///
-/// `push8`/`pop8` are still here and are not the same thing: PHA/PHP inside a
-/// routine, which the routine pops itself before it returns.
-///
-/// IMPORTANT: `a2rom.c` is *not* a standalone translation unit. See the comment
-/// at the top of that file.
 
 /// $F800 PLOT. Plot a lo-res block at column Y, row A. Trashes A, preserves Y.
 void rom_plot(uint8_t row, uint8_t col);
@@ -502,30 +451,7 @@ void rom_setvid(void);
  * ========================================================================== */
 
 /*
- * Copyright (c) Tzvetan Mikov.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
-/* ========================================================================== *
- * The game, as ordinary C                                                    *
- * ========================================================================== *
- *
- * This section arrived as game_native.c, which was one half of a split: game.c
- * held each routine in the shape the 6502 left it -- arguments in fixed
- * zero-page addresses, results in A and the flags, an emulated stack, CYCLES
- * at every block head -- because generated code called it and read that state,
- * while game_native.c held the same routines as C behind an adapter that
- * marshalled between the two.
- *
- * None of that is true here. There is no generated code left to keep an ABI
- * for, the 42 adapters are gone, the arguments are arguments, and the storage
- * is C variables rather than addresses reached through accessors. The two
- * files are one, and the frontier the split described has been crossed.
- *
- * What survives from that arrangement is the cycle accounting below, and the
- * reason it is spelled three different ways.
+ * The cycle accounting, and why it is spelled two different ways.
  */
 
 /* --- Cycle accounting ----------------------------------------------------- */
@@ -624,20 +550,20 @@ void rom_setvid(void);
 
 /* --- Converted routines --------------------------------------------------- */
 
-/// $660F -- start a life: put the snake's head in \p head_col and set both
+/// start a life: put the snake's head in \p head_col and set both
 /// bouncers going from opposite corners. Returns the value the original left
 /// in A, which its one caller stores as the tail column.
 uint8_t game_start_life(uint8_t head_col);
 
-/// $6127 -- copy shape \p shape's four scanline masks into $6060, and return
+/// copy shape \p shape's four scanline masks into $6060, and return
 /// the last one.
 void game_load_shape_masks(uint8_t shape);
 
-/// $6641 -- point the ROM's character-output vector at the game's own hi-res
+/// point the ROM's character-output vector at the game's own hi-res
 /// handler, so every later COUT reaches game_cout_hook.
 void game_install_cout_vector(void);
 
-/// $64C8 -- step \p b one cell along its deltas and redraw it, reflecting off
+/// step \p b one cell along its deltas and redraw it, reflecting off
 /// whatever it hits.
 void bouncer_step(Bouncer *b);
 
@@ -655,11 +581,11 @@ typedef enum {
   MOVE_DEAD_END,
 } MoveVerdict;
 
-/// $6AB8 -- judge a step in direction \p dir. \p cell_out receives what the
+/// judge a step in direction \p dir. \p cell_out receives what the
 /// occupancy map held at the target, which the original leaves in A.
 MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out);
 
-/// $728D -- copy the score at $7252 over the high score at $7256 if it beats
+/// copy the score at $7252 over the high score at $7256 if it beats
 /// it, comparing BCD bytes most significant first.
 void game_promote_high_score(void);
 
@@ -667,105 +593,105 @@ void game_promote_high_score(void);
 void game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col);
 void game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row);
 
-/// $7000 -- the lo-res half of a vertical run, restoring $03.
+/// the lo-res half of a vertical run, restoring $03.
 void game_lores_vline_native(Cell c, uint8_t to_row);
 
-/// $6594 -- step the bouncers the difficulty calls for, then return the next
+/// step the bouncers the difficulty calls for, then return the next
 /// queued key.
 uint8_t game_step_bouncers_native(void);
 
-/// $60E7 -- draw the loaded shape into cell \p c in ink \p ink, replacing.
+/// draw the loaded shape into cell \p c in ink \p ink, replacing.
 void game_draw_cell_native(uint8_t ink, Cell c);
 
-/// $6B93 -- the same, merged into what is already there.
+/// the same, merged into what is already there.
 void game_merge_cell_native(uint8_t ink, Cell c);
 
-/// $702B -- zero hi-res page 1.
+/// zero hi-res page 1.
 void game_clear_hgr_native(void);
 
-/// $7045 -- clear the screen, draw the border, and run the current level's
+/// clear the screen, draw the border, and run the current level's
 /// display list from $8000.
 void game_draw_playfield_native(void);
 
-/// $69C3 -- sweep columns outward from the snake for an apple, leaving the
+/// sweep columns outward from the snake for an apple, leaving the
 /// answer at $6B3B/$6B3C.
 void game_find_nearest_apple(void);
 
-/// $6C75 -- turn \p key, the byte just taken off the ring, into the code the
+/// turn \p key, the byte just taken off the ring, into the code the
 /// game acts on: a direction, a joystick setting applied on the spot, or $00
 /// for nothing. Reads the joystick itself when one is selected and the key
 /// was not a direction.
 uint8_t game_read_direction_native(uint8_t key);
 
-/// $75D1 -- blink slot \p slot on the key-redefinition screen until the player
+/// blink slot \p slot on the key-redefinition screen until the player
 /// presses something it will accept, and return that key.
 uint8_t game_edit_key_native(uint8_t slot);
 
-/// $3750 -- the program's entry, and the outermost loop: relocate the level
+/// the program's entry, and the outermost loop: relocate the level
 /// data, initialise $0300-$0304, then new game -> level -> round -> life
 /// forever. Never returns; the game has no way out.
 void game_cold_start(void);
 
-/// $69A9 -- ESC pauses until any key is pressed; Ctrl-S toggles the sound.
+/// ESC pauses until any key is pressed; Ctrl-S toggles the sound.
 /// Every key the dispatch chain did not recognise arrives here and is ignored.
 ///
 /// Returns the key the Ctrl-S test actually saw, which is \p key unless ESC
 /// paused: the keypress that ends the pause replaces it and is tested in turn.
 void game_pause_or_toggle_sound_native(uint8_t key);
 
-/// $6BFB -- twenty passes of the falling tone that plays while the head moves.
+/// twenty passes of the falling tone that plays while the head moves.
 void game_tick_sound_native(void);
 
-/// $71F3 -- print \p byte as two decimal digits, dropping leading zeros.
+/// print \p byte as two decimal digits, dropping leading zeros.
 void game_print_bcd_native(uint8_t byte);
 
-/// $7226 -- print a single "0" if the number just printed was all zeros.
+/// print a single "0" if the number just printed was all zeros.
 void game_print_zero_if_blank_native(void);
 
-/// $7267 -- add the two-byte BCD value at $71CB to the four-byte score.
+/// add the two-byte BCD value at $71CB to the four-byte score.
 void game_add_score_native(void);
 
-/// $7024 -- set the lo-res plot colour from an ink byte: 0 erases, anything
+/// set the lo-res plot colour from an ink byte: 0 erases, anything
 /// else draws.
 void game_set_ink_native(uint8_t ink);
 
-/// $7019 -- read the byte at the $000A pointer into A and advance it.
+/// read the byte at the $000A pointer into A and advance it.
 uint8_t game_next_byte_native(void);
 
-/// $6C4B -- the game's pseudo-random byte, always $00-$7F.
+/// the game's pseudo-random byte, always $00-$7F.
 uint8_t game_rand_byte_native(void);
 
-/// $7642 -- put an apple on a free cell, by rejection sampling.
+/// put an apple on a free cell, by rejection sampling.
 Cell game_place_apple_native(void);
 
-/// $71CD -- recompute what one apple is worth for the current level.
+/// recompute what one apple is worth for the current level.
 void game_set_apple_value_native(void);
 
-/// $6BEF -- plot the head on the occupancy map and flag it as newly there.
+/// plot the head on the occupancy map and flag it as newly there.
 void game_mark_head_native(uint8_t row, uint8_t col);
 
-/// $6BDA -- draw a cell, merging the head shape over it if the head is on it.
+/// draw a cell, merging the head shape over it if the head is on it.
 void game_draw_head_native(uint8_t ink, Cell c);
 
-/// $7633 -- count one apple eaten, and make the noise for it.
+/// count one apple eaten, and make the noise for it.
 void game_award_extra_life_native(void);
 
-/// $60E4 -- load a shape and draw it into the current cell.
+/// load a shape and draw it into the current cell.
 void game_plot_shape_native(uint8_t ink, Cell c);
 
-/// $64A9 -- the rising-then-falling sweep an eaten apple makes.
+/// the rising-then-falling sweep an eaten apple makes.
 void game_sound_sweep_native(void);
 
-/// $7590 -- show \p key as slot \p slot's binding on the redefinition screen.
+/// show \p key as slot \p slot's binding on the redefinition screen.
 void game_show_key_native(uint8_t slot, uint8_t key);
 
-/// $6B3D -- draw both side walls, and leave SCRN of the bottom-centre cell.
+/// draw both side walls, and leave SCRN of the bottom-centre cell.
 uint8_t game_draw_side_walls_native(void);
 
-/// $6217 -- poll the keyboard and push what it finds into the ring at $623C.
+/// poll the keyboard and push what it finds into the ring at $623C.
 void game_read_key_native(void);
 
-/// $664A -- draw \p ch through the game's own hi-res font, then hand it on to
+/// draw \p ch through the game's own hi-res font, then hand it on to
 /// the ROM's COUT1 so the cursor still moves.
 void game_cout_hook_native(uint8_t ch);
 
@@ -786,7 +712,7 @@ typedef enum {
   LIFE_CRASH,
 } LifeEnd;
 
-/// $6288 -- play one life: steer, move, draw and pace the snake until
+/// play one life: steer, move, draw and pace the snake until
 /// something ends it. \p cell_out receives the occupancy byte the head landed
 /// on, which is only meaningful for LIFE_CRASH.
 LifeEnd game_play_loop_native(uint8_t *cell_out);
@@ -806,153 +732,139 @@ typedef enum {
   STEER_BOXED_IN,
 } SteerChoice;
 
-/// $6A32 -- steer toward the apple at $6B3B/$6B3C, trying candidate directions
+/// steer toward the apple at $6B3B/$6B3C, trying candidate directions
 /// in order of usefulness and taking the first that snake_move_verdict()
 /// allows. Leaves the direction it settled on in $6B38, as the original does.
 SteerChoice game_auto_steer(uint8_t *key_out);
 
-/// $72CE -- draw the status panel: six labelled BCD fields in a 2x3 grid
+/// draw the status panel: six labelled BCD fields in a 2x3 grid
 /// across the bottom three text rows, then home the cursor.
 void game_status_panel(void);
 
-/// $78B3 -- the bonus screen: award twice the apple's value, draw a box over
+/// the bonus screen: award twice the apple's value, draw a box over
 /// the playfield, print BONUS and the amount, and hold it there.
 void game_bonus_screen(void);
 
-/// $6256 -- set up a life and hand over to the main loop: the snake as a
+/// set up a life and hand over to the main loop: the snake as a
 /// single cell at the bottom centre facing up, ten segments of growth owed,
 /// the timer full, and the key ring empty.
 void game_begin_life(void);
 
-/// $7980 -- the setup screen: seed the random pointer, then either ask for a
+/// the setup screen: seed the random pointer, then either ask for a
 /// difficulty (falling back to the demo if nobody answers) or run the key
 /// redefinition screen.
 void game_setup_screen(void);
 
 /* ========================================================================== *
- * The 6502-shaped adapters -- declarations                                 *
+ * Routines decompiled by hand -- declarations                              *
  * ========================================================================== */
 
-/*
- * Copyright (c) Tzvetan Mikov.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
-/// \file
-/// Snake Byte routines decompiled by hand, because apple2tc could not reach
-/// them. See game.c for why each one is here.
-///
-/// Like a2rom.c, game.c is textually included into the generated translation
-/// unit and is never compiled on its own.
-
-/// $664A -- the game's own COUT handler, a hi-res text renderer.
-/// $7230 -- print the NUL-terminated string that follows the call.
+/// the game's own COUT handler, a hi-res text renderer.
+/// print the NUL-terminated string that follows the call.
 void game_print_inline_str(uint16_t ret_addr);
 
 /* --- $60E4/$60E7/$6127: the hi-res cell plotter -------------------------- */
 
-/// $6127 -- load the four scanline masks for shape $00 into $6060.
+/// load the four scanline masks for shape $00 into $6060.
 
-/// $60E7 -- draw the currently-loaded shape into the cell at row $03,
+/// draw the currently-loaded shape into the cell at row $03,
 /// column $02, in ink $01.
 
-/// $60E4 -- load the shape for $00, then draw it. The form nearly every
+/// load the shape for $00, then draw it. The form nearly every
 /// caller uses.
 
-/// $6148 -- plot a horizontal run of cells, from column $02 through column
+/// plot a horizontal run of cells, from column $02 through column
 /// $08 inclusive, along row $03.
 
-/// $615A -- plot a vertical run of cells, from row $03 through row $08
+/// plot a vertical run of cells, from row $03 through row $08
 /// inclusive, down column $02.
 
 /* --- $7000/$7019/$7024: the screen-script primitives ---------------------- */
 
-/// $7019 -- fetch the next byte of the display list into A and advance the
+/// fetch the next byte of the display list into A and advance the
 /// $0A/$0B pointer.
 
-/// $7024 -- set the lo-res colour from the ink flag in Z: black if zero,
+/// set the lo-res colour from the ink flag in Z: black if zero,
 /// grey otherwise. Tail-calls the ROM's SETCOL.
 
-/// $7000 -- plot a vertical run on the lo-res occupancy map, from row $03
+/// plot a vertical run on the lo-res occupancy map, from row $03
 /// through row $08 inclusive at column $02, leaving $03 unchanged.
 
 /* --- $702B/$71F3/$7226/$7267: the score ---------------------------------- */
 
-/// $71F3 -- print one BCD byte as two digits, suppressing leading zeros via
+/// print one BCD byte as two digits, suppressing leading zeros via
 /// the $002C flag.
 
-/// $7226 -- print '0' if $002C shows no digit was printed. Called once at the
+/// print '0' if $002C shows no digit was printed. Called once at the
 /// end of a multi-byte number.
 
-/// $7267 -- add $71CC:$71CB to the four-byte BCD score at $7252.
+/// add $71CC:$71CB to the four-byte BCD score at $7252.
 
-/// $702B -- zero hi-res page 1, $2000 through $3FFF.
+/// zero hi-res page 1, $2000 through $3FFF.
 
 /* --- $6B93 --------------------------------------------------------------- */
 
-/// $6B93 -- load the shape for $00 and merge it into the cell at row $03,
+/// load the shape for $00 and merge it into the cell at row $03,
 /// column $02, setting bits rather than replacing the byte.
 
-/// $7045 -- clear the screen, draw the border, then interpret the current
+/// clear the screen, draw the border, then interpret the current
 /// level's display list at $8000. See game.c for the opcodes.
 
 /* --- snake state and scoring setup --------------------------------------- */
 
-/// $6641 -- point CSWL/CSWH at $664A so COUT reaches game_cout_hook.
+/// point CSWL/CSWH at $664A so COUT reaches game_cout_hook.
 
-/// $660F -- adapter for game_start_life(): head column in A, both bouncers
+/// adapter for game_start_life(): head column in A, both bouncers
 /// placed at opposite corners.
 
-/// $6BEF -- PLOT the head onto the lo-res map and raise $0305 and $6C46.
+/// PLOT the head onto the lo-res map and raise $0305 and $6C46.
 
-/// $6BDA -- draw the caller's cell, merging shape 1 over it when $0305 is set.
+/// draw the caller's cell, merging shape 1 over it when $0305 is set.
 
-/// $71CD -- set the per-apple score at $71CB/$71CC to $71C8[difficulty] times
+/// set the per-apple score at $71CB/$71CC to $71C8[difficulty] times
 /// the level, in BCD.
 
 /* --- apples and sound ---------------------------------------------------- */
 
-/// $7642 -- place a new apple on a free cell, found by rejection sampling.
+/// place a new apple on a free cell, found by rejection sampling.
 
-/// $64A9 -- a rising then falling pitch sweep, clicked through $6C49.
+/// a rising then falling pitch sweep, clicked through $6C49.
 
-/// $7633 -- count one apple eaten and play the sweep.
+/// count one apple eaten and play the sweep.
 
-/// $6217 -- poll the keyboard into the 16-entry ring buffer at $623C.
+/// poll the keyboard into the 16-entry ring buffer at $623C.
 
-/// $7590 -- show the character in A at slot X of the key-redefinition screen.
+/// show the character in A at slot X of the key-redefinition screen.
 
-/// $6B3D -- draw both side walls in two inks, with a randomly placed seam.
+/// draw both side walls in two inks, with a randomly placed seam.
 
-/// $6AB8 -- can the snake step in direction $6B38? Returns A = 0 / Z set for
+/// can the snake step in direction $6B38? Returns A = 0 / Z set for
 /// yes, and refuses dead ends one move early.
 
-/// $64C8 -- step the bouncer at $6633/$6634 by its deltas, reflecting off
+/// step the bouncer at $6633/$6634 by its deltas, reflecting off
 /// whatever it hits.
 void game_move_bouncer(Bouncer *b);
 
-/// $728D -- copy the score at $7252 over the high score at $7256 if it beats
+/// copy the score at $7252 over the high score at $7256 if it beats
 /// it, comparing BCD bytes most significant first.
 
-/// $6BFB -- twenty passes of a falling tone, driven by the period at $6C46.
+/// twenty passes of a falling tone, driven by the period at $6C46.
 
-/// $6594 -- step the bouncers the difficulty calls for, then return the next
+/// step the bouncers the difficulty calls for, then return the next
 /// queued key in A.
 
-/// $69C3 -- find an apple by sweeping columns outward from the snake, leaving
+/// find an apple by sweeping columns outward from the snake, leaving
 /// the result at $6B3B/$6B3C.
 
-/// $69A9 -- adapter for game_pause_or_toggle_sound_native(): ESC pauses until
+/// adapter for game_pause_or_toggle_sound_native(): ESC pauses until
 /// a key, Ctrl-S toggles the sound flag at $69C2.
 
-/// $75D1 -- blink slot X of the key-redefinition screen and wait for a
+/// blink slot X of the key-redefinition screen and wait for a
 /// replacement key.
 
-/// $6C72 -- turn the next key, or the joystick, into a direction.
+/// turn the next key, or the joystick, into a direction.
 
-/// $6288 -- play one life, and leave the reason it ended in $6253, which is
+/// play one life, and leave the reason it ended in $6253, which is
 /// what the caller at $7739 reads.
 static void game_play_one_life(void);
 
@@ -960,70 +872,8 @@ static void game_play_one_life(void);
  * Apple II ROM entry points, hand-written                                  *
  * ========================================================================== */
 
-/*
- * Copyright (c) Tzvetan Mikov.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
-/// \file
-/// Hand-written replacements for the Apple II ROM entry points listed in
-/// `rom.externs`. See `a2rom.h` for the per-routine documentation.
-///
-/// ============================================================================
-/// THIS FILE IS NOT A STANDALONE TRANSLATION UNIT. IT MUST BE #include-d.
-/// ============================================================================
-///
-/// The emulated machine state lives in `apple2tc/system2-inc.h`, and almost all
-/// of it has *internal linkage*:
-///
-///   - `s_a`, `s_x`, `s_y`, `s_sp`, `s_status_*`, `s_ram`, `s_pc`, `s_cycles`,
-///     `s_remaining_cycles` are all `static`. This file no longer uses the
-///     registers at all, but the header still defines them.
-///   - `peek`, `poke`, `peek16`, `ram_peek16al`, `push8`, `pop8`, `push16`,
-///     `pop16`, `adc_decimal`, `sbc_decimal` are all `static`.
-///   - The `CYCLES()` macro expands to references to `s_pc`, `s_cycles`,
-///     `s_remaining_cycles` and a *local* variable `branchTarget`, which is
-///     why the only use of `CYCLES` here goes through GAME_CYCLES_COORD --
-///     that macro declares one inside its own block.
-///
-/// Only `ram_peek`, `ram_poke`, `ram_peek16`, `io_peek`, `io_poke` and
-/// `error_handler` have external linkage (declared in `apple2tc/system.h`).
-///
-/// A separate `.c` file therefore cannot see the CPU state at all. In addition,
-/// this file calls the still-generated helpers `rom_vtabz`, `rom_clreolz`,
-/// `rom_clreol` and `rom_wait` and uses `ovf8()` / `adc_dec16()`, which
-/// the decompiler emits as `static` in the generated file.
-///
-/// Consequently this file must be textually included into the same translation
-/// unit as the generated C, *after* it. That is what `snake-byte-ext.c` does,
-/// and `snake-byte-ext.c` is the file CMake compiles for the `snake-bytec1-ext`
-/// target:
-///
-///     #include "snake-bytec1-ext.c"
-///     #include "a2rom.c"
-///
-/// DO NOT add `a2rom.c` to CMake as a source file of its own. Compiling it
-/// alone yields a wall of undefined identifiers, because everything listed
-/// above is invisible outside the generated file's translation unit. Worse, if
-/// it ever did compile separately it would get its *own* copy of `s_ram` and
-/// the registers -- `system2-inc.h` declares them `static` -- and link cleanly
-/// while reading and writing a machine state nothing else can see.
-///
-/// This file is used only by the `snake-bytec1-ext` build. The plain
-/// `snake-bytec1` target is the self-contained reference build, which
-/// decompiles the ROM instead of calling into here.
-
-/* Helpers that remain in the generated code. Redeclared here so that this file
-   reads standalone; C permits identical redeclarations. */
-bool rom_vtabz(uint8_t line);
-bool rom_clreolz(uint8_t col);
-void rom_clreol(void);
-void rom_wait(uint8_t n);
-
-/* $FDF0 COUT1, defined below. `rom_cout` dispatches to it, and so does the
-   game's own $664A handler in game.c once it has drawn its glyph. */
+/* COUT1, defined below. rom_cout dispatches to it, and so does the game's own
+   hi-res text handler once it has drawn its glyph. */
 static void rom_cout1(uint8_t ch);
 
 /* ========================================================================== */
@@ -1686,21 +1536,6 @@ void rom_setvid(void) {
  * The game, as ordinary C                                                  *
  * ========================================================================== */
 
-/*
- * Copyright (c) Tzvetan Mikov.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
-/// \file
-/// Snake Byte as ordinary C. See game_native.h for what this file is for and
-/// what it costs to move a routine into it.
-///
-/// Like a2rom.c and game.c this is textually included into the generated
-/// translation unit, and it must come *before* game.c, whose adapters call
-/// into it.
-
 /* ========================================================================== */
 /* Storage                                                                    */
 /* ========================================================================== */
@@ -1718,11 +1553,11 @@ static Bouncer s_bouncers[2] = {
     {.col = 0x26, .row = 0x01, .dx = -1, .dy = +1},
 };
 
-/// $6C63 -- the six bound keys, in slot order. The key-redefinition screen
+/// the six bound keys, in slot order. The key-redefinition screen
 /// writes them; kKeyDefaults is the same six as shipped and is never written.
 static uint8_t s_key_table[6] = {0xc9, 0xca, 0xcb, 0xcd, 0x88, 0x95};
 
-/// $6060 -- the loaded shape's four scanline masks, which game_load_shape
+/// the loaded shape's four scanline masks, which game_load_shape
 /// copies out of kShapeMaskTable and the two hi-res cell drawers read.
 /// $FF FF FF FF in the shipped image, which is what a shape of all dots
 /// would leave there.
@@ -1743,7 +1578,7 @@ static uint8_t s_shape_mask[4] = {0xff, 0xff, 0xff, 0xff};
  * oracle compares 6,808 and 9,524 samples.
  */
 
-/// $6000/$6030 -- each hi-res cell row's base address. The original splits the
+/// each hi-res cell row's base address. The original splits the
 /// 48 addresses into parallel low and high tables because a 6502 indexes bytes;
 /// one table of addresses is the same data said once. kHgrLineHi ended at
 /// $605F, where the shape masks began.
@@ -1754,7 +1589,7 @@ static const uint16_t kHgrLineBase[48] = {
     0x2150, 0x3150, 0x21d0, 0x31d0, 0x2250, 0x3250, 0x22d0, 0x32d0, 0x2350, 0x3350, 0x23d0, 0x33d0,
 };
 
-/// $6064 -- dot patterns, indexed by dot_index(): ink 0-15, scanline parity,
+/// dot patterns, indexed by dot_index(): ink 0-15, scanline parity,
 /// column mod 4, so ((15*2+1)<<2)|3 == 127 is the largest index and the table
 /// is exactly 128. known-data.txt says the same: "ends exactly at hgr_draw".
 static const uint8_t kHgrPattern[128] = {
@@ -1768,7 +1603,7 @@ static const uint8_t kHgrPattern[128] = {
     0x3b, 0x77, 0x6e, 0x5d, 0x6e, 0x5d, 0x3b, 0x77, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f,
 };
 
-/// $6174 -- four AND masks per shape, indexed (shape << 2) + line.
+/// four AND masks per shape, indexed (shape << 2) + line.
 ///
 /// The extent is the one that had to be worked out rather than looked up. The
 /// data ends at $61DF -- 27 shapes, the last of them $1A, which is the largest
@@ -1790,7 +1625,7 @@ static const uint8_t kShapeMaskTable[140] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
-/// $6387/$638C/$6391/$6396 -- one five-entry table per absolute-direction key,
+/// one five-entry table per absolute-direction key,
 /// giving the relative turn that achieves it from the current direction, or
 /// $00 for "nothing to do". Five bytes each because they are indexed by
 /// direction 1-4 with entry 0 unused; $639B is code, which is where the fourth
@@ -1826,7 +1661,7 @@ static const uint8_t kTurnForKey[4][5] = {
     },
 };
 
-/// $6A55 -- direction to the key that turns to it. known-data.txt derives the
+/// direction to the key that turns to it. known-data.txt derives the
 /// five bytes from the LDA $6A55,X that reads them.
 static const uint8_t kSteerKey[5] = {
     0x00,
@@ -1836,7 +1671,7 @@ static const uint8_t kSteerKey[5] = {
     0xcd,
 };
 
-/// $6C6A -- the six keys as shipped. The live six at $6C63 are s_key_table,
+/// the six keys as shipped. The live six at $6C63 are s_key_table,
 /// which the redefinition screen writes; these are never written.
 static const uint8_t kKeyDefaults[6] = {
     0xc9,
@@ -1847,7 +1682,7 @@ static const uint8_t kKeyDefaults[6] = {
     0x95,
 };
 
-/// $71C8 -- what one apple is worth, indexed by difficulty 0-2. Three bytes:
+/// what one apple is worth, indexed by difficulty 0-2. Three bytes:
 /// $71CB is s_apple_value, which is where the table stops.
 static const uint8_t kAppleValueTable[3] = {
     0x10,
@@ -1938,7 +1773,7 @@ static uint8_t s_click_port = 0x20;
 /// Toggled by Ctrl-S.
 static bool s_sound_muted;
 
-/// $6C71 -- the player chose the joystick at the setup prompt.
+/// the player chose the joystick at the setup prompt.
 static bool s_joystick_selected;
 
 /* --- The plotter's arguments ---------------------------------------------- */
@@ -1963,7 +1798,7 @@ static bool s_joystick_selected;
  * unrelated -- see the second enum. That is not a naming problem to be tidied
  * away; it is a union the original wrote by hand, and the names say so.
  */
-/// $0000 -- which shape to draw. game_load_shape turns it into the four
+/// which shape to draw. game_load_shape turns it into the four
 /// scanline masks at $6060.
 ///
 /// A variable and not a parameter, which is what the original makes it:
@@ -2345,7 +2180,7 @@ static uint16_t s_str_ptr = 0xffe1;
 /// is what keeps it inside that window.
 static uint16_t s_rand_ptr = 0x6b00;
 
-/// $73D7 -- the setup screen has run once. The first time through it asks
+/// the setup screen has run once. The first time through it asks
 /// nothing, takes difficulty 1 and demo mode, and only sets this. The shipped
 /// image already has it set, so that first pass is skipped on a cold start and
 /// the prompt appears immediately.
@@ -2563,7 +2398,7 @@ typedef enum {
   OP_END = 0x2a, ///< '*' -- end of this level's script
 } ScriptOp;
 
-/// $7024 -- the lo-res plot colour. Zero erases, anything else draws.
+/// the lo-res plot colour. Zero erases, anything else draws.
 static void set_ink(uint8_t ink) {
   game_set_ink_native(ink);
 }
@@ -2805,7 +2640,7 @@ restart:
 }
 
 /* ========================================================================== */
-/* $60E7, $6B93, $702B -- the hi-res plotter                                  */
+/* the hi-res plotter                                  */
 /*                                                                            */
 /* Hi-res page 1 is a grid of 48 rows, four scanlines tall and one byte wide.  */
 /* $6000/$6030 hold each row's base address split into low and high halves,    */
@@ -2827,7 +2662,7 @@ static uint8_t dot_index(uint8_t ink, uint8_t scanline, uint8_t col) {
   return (uint8_t)((uint8_t)(((ink << 1) | (scanline & 1)) << 2) | (col & 3));
 }
 
-/// $60E7 -- draw the loaded shape into one cell, replacing what was there.
+/// draw the loaded shape into one cell, replacing what was there.
 void game_draw_cell_native(uint8_t ink, Cell c) {
   uint16_t dest = cell_row_base(c.row);
 
@@ -2842,7 +2677,7 @@ void game_draw_cell_native(uint8_t ink, Cell c) {
   // The carry is what the loop's CPX #4 leaves.
 }
 
-/// $6B93 -- the same cell, merged instead of replaced: only bits are set, and
+/// the same cell, merged instead of replaced: only bits are set, and
 /// the pattern is inverted first. $7F and not $FF because bit 7 is the byte's
 /// hi-res palette bit and flipping it would shift the whole byte's colour.
 ///
@@ -2865,7 +2700,7 @@ void game_merge_cell_native(uint8_t ink, Cell c) {
   }
 }
 
-/// $702B -- zero hi-res page 1, $2000 through $3FFF. The inner loop runs a
+/// zero hi-res page 1, $2000 through $3FFF. The inner loop runs a
 /// full 256 bytes because Y wraps, so the terminating test is on the page.
 ///
 /// It costs no time at all now. On a 6502 this was 106,897 cycles -- 105 ms of
@@ -2887,7 +2722,7 @@ void game_clear_hgr_native(void) {
 }
 
 /* ========================================================================== */
-/* $6148, $615A, $7000 -- runs of cells                                       */
+/* runs of cells                                       */
 /*                                                                            */
 /* Each loads the shape once and repeats a draw along one axis until the       */
 /* moving coordinate reaches $08. The end is tested after drawing, so it is    */
@@ -2895,7 +2730,7 @@ void game_clear_hgr_native(void) {
 /* wraps through 255; nothing guards against it and nothing needs to.          */
 /* ========================================================================== */
 
-/// $6148 -- a horizontal run of hi-res cells, from \p c along row c.row to
+/// a horizontal run of hi-res cells, from \p c along row c.row to
 /// \p to_col. The original walked $02/$03 and left $02 on the endpoint, which
 /// its adapter returned in A; that is the return value here.
 void game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
@@ -2912,7 +2747,7 @@ void game_plot_hline_native(uint8_t ink, Cell c, uint8_t to_col) {
   }
 }
 
-/// $615A -- the same down a column: rows $03 through $08 in column $02.
+/// the same down a column: rows $03 through $08 in column $02.
 void game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
   // Loads the four scanline masks the cell drawers read. The mask it
   // returns was the original\'s result in A and nothing reads it.
@@ -2927,7 +2762,7 @@ void game_plot_vline_native(uint8_t ink, Cell c, uint8_t to_row) {
   }
 }
 
-/// $7000 -- the lo-res half of a vertical run. Unlike the hi-res one it puts
+/// the lo-res half of a vertical run. Unlike the hi-res one it puts
 /// $03 back where it found it, because the caller draws the hi-res run over
 /// the same coordinates next.
 void game_lores_vline_native(Cell c, uint8_t to_row) {
@@ -2967,7 +2802,7 @@ static void step_bouncer_slot(
   s_bouncers[slot] = b;
 }
 
-/// $6200 -- take the next key out of the ring buffer game_read_key fills.
+/// take the next key out of the ring buffer game_read_key fills.
 /// Only a byte with bit 7 set counts; the slot is cleared and the read index
 /// advances. Returns what the original leaves in A.
 ///
@@ -2991,7 +2826,7 @@ static uint8_t dequeue_key(void) {
   return key;
 }
 
-/// $6594 -- step as many bouncers as the difficulty calls for, then fall into
+/// step as many bouncers as the difficulty calls for, then fall into
 /// the key dequeue whose byte is the return value.
 uint8_t game_step_bouncers_native(void) {
   const uint8_t difficulty = s_difficulty;
@@ -3048,7 +2883,7 @@ enum { kCodeJoystickOn = 0x80, kCodeJoystickOff = 0x8b };
 /// at $6253, which ends the game in progress.
 enum { kCodeStop = 0x92 };
 
-/// $0302 -- attract mode: nobody answered the difficulty prompt before it
+/// attract mode: nobody answered the difficulty prompt before it
 /// timed out, so the game is playing itself. Any input at all ends it, which
 /// is why the whole key table is skipped below.
 static bool attract_mode(void) {
@@ -3176,7 +3011,7 @@ static uint8_t slot_glyph(int slot) {
   return kArrowGlyph[slot];
 }
 
-/// $75D1 -- the dark half: erase the glyph and wait, polling nothing.
+/// the dark half: erase the glyph and wait, polling nothing.
 static void edit_key_blank(uint8_t slot) {
   // The original parks the slot at $0002 for the whole routine, because COUT
   // clobbers X and every step below needs it again. Here it is the parameter,
@@ -3211,7 +3046,7 @@ static void edit_key_blank(uint8_t slot) {
   }
 }
 
-/// $75F3 -- the lit half: draw the glyph and wait, reading the keyboard each
+/// the lit half: draw the glyph and wait, reading the keyboard each
 /// time the inner counter wraps. Returns the accepted key, or 0 if the wait
 /// ran out or the key was rejected -- either way the blink starts again, and
 /// no acceptable key is 0.
@@ -3350,7 +3185,7 @@ void game_tick_sound_native(void) {
 /* a BCD byte, with leading zeros suppressed                         */
 /* ========================================================================== */
 
-/// $002C -- the significance flag, holding the last significant digit rather
+/// the significance flag, holding the last significant digit rather
 /// than a plain 1. Its caller clears it before the first byte of a number, so
 /// leading zeros print nothing and interior ones print; $7226 consults it
 /// after the last byte, and prints a single "0" if the whole number was.
@@ -3398,7 +3233,7 @@ void game_print_bcd_native(uint8_t byte) {
   }
 }
 
-/// $7226 -- called after the last byte of a number: if nothing significant was
+/// called after the last byte of a number: if nothing significant was
 /// printed, the number was zero, and one "0" is printed for the whole of it.
 void game_print_zero_if_blank_native(void) {
   if (digit_seen()) {
@@ -3450,7 +3285,7 @@ void game_add_score_native(void) {
 /* two small ones                                             */
 /* ========================================================================== */
 
-/// $7024 -- tell the ROM's lo-res plotter which colour to draw the occupancy
+/// tell the ROM's lo-res plotter which colour to draw the occupancy
 /// map in. Zero erases, anything else draws, so the map only ever holds colour
 /// 0 or colour 5: it is a two-state map, not a picture.
 ///
@@ -3462,7 +3297,7 @@ void game_set_ink_native(uint8_t ink) {
   rom_setcol(ink ? 0x05 : 0x00); // JMP $F864 -- a tail call.
 }
 
-/// $7019 -- read the byte the $000A pointer addresses and advance it. The
+/// read the byte the $000A pointer addresses and advance it. The
 /// display-list interpreter's only way of reading its script.
 uint8_t game_next_byte_native(void) {
   const uint8_t b = peek(s_script_ptr);
@@ -3475,10 +3310,10 @@ uint8_t game_next_byte_native(void) {
 }
 
 /* ========================================================================== */
-/* $6C4B, $7642, $71CD -- apples                                              */
+/* apples                                              */
 /* ========================================================================== */
 
-/// $6C4B -- the game's random number. A pointer at $000E walks memory from
+/// the game's random number. A pointer at $000E walks memory from
 /// $1800 upward and the first byte with bit 7 clear is the answer; the pointer
 /// is reset to $1800 whenever it finds one that is not. Not random, but
 /// unpredictable enough to place an apple and it costs nothing to keep.
@@ -3543,7 +3378,7 @@ Cell game_place_apple_native(void) {
   return at;
 }
 
-/// $71CD -- what one apple is worth: the difficulty's entry in the $71C8 table
+/// what one apple is worth: the difficulty's entry in the $71C8 table
 /// added to itself once per level, in BCD, into $71CB. X is never touched in
 /// the original's loop, which is what makes it the same entry every time.
 void game_set_apple_value_native(void) {
@@ -3567,10 +3402,10 @@ void game_set_apple_value_native(void) {
 }
 
 /* ========================================================================== */
-/* $6BEF, $6BDA, $7633, $60E4 -- the head and the apple it eats               */
+/* the head and the apple it eats               */
 /* ========================================================================== */
 
-/// $6BEF -- mark the head on the lo-res occupancy map, at the row and column
+/// mark the head on the lo-res occupancy map, at the row and column
 /// the caller has already loaded, and raise the two flags that say it is
 /// there: $0305 for the next draw and $6C46 to start the tone.
 void game_mark_head_native(uint8_t row, uint8_t col) {
@@ -3582,7 +3417,7 @@ void game_mark_head_native(uint8_t row, uint8_t col) {
   // A and its flags are live out of $6BEF, unlike almost everything else here.
 }
 
-/// $6BDA -- draw the cell the caller set up, and if $0305 says the head is on
+/// draw the cell the caller set up, and if $0305 says the head is on
 /// it, merge shape 1 over the top so the head reads as a head rather than
 /// replacing the body cell underneath. $0305 is consumed here.
 void game_draw_head_native(uint8_t ink, Cell c) {
@@ -3604,7 +3439,7 @@ void game_draw_head_native(uint8_t ink, Cell c) {
   // Only V and D are live out, and neither is touched here.
 }
 
-/// $7633 -- an extra snake for clearing the round, and the noise that says so.
+/// an extra snake for clearing the round, and the noise that says so.
 ///
 /// Not "eat an apple", which is what this was called: it BCD-increments $725E,
 /// which the status panel prints as SNAKES LEFT, and its one caller is $7803 --
@@ -3616,7 +3451,7 @@ void game_award_extra_life_native(void) {
   game_sound_sweep_native();
 }
 
-/// $60E4 -- load a shape and draw it, which is the pair every caller wants.
+/// load a shape and draw it, which is the pair every caller wants.
 void game_plot_shape_native(uint8_t ink, Cell c) {
   game_load_shape_masks(s_shape);
   game_draw_cell_native(ink, c); // JMP -- a tail call.
@@ -3626,7 +3461,7 @@ void game_plot_shape_native(uint8_t ink, Cell c) {
 /* $64A9, $7590, $6B3D                                                        */
 /* ========================================================================== */
 
-/// $64A9 -- the noise an apple makes. Two sweeps: X starts at 0, so the first
+/// the noise an apple makes. Two sweeps: X starts at 0, so the first
 /// DEX wraps to 255 and the delay between clicks runs 256, 255, ... 1 and the
 /// pitch rises; the second counts X up from 0, so the delay runs 256, 1, 2,
 /// ... 255 and it falls again.
@@ -3665,7 +3500,7 @@ void game_sound_sweep_native(void) {
   } while (x);
 }
 
-/// $7590 -- show \p key as the binding of slot \p slot on the redefinition
+/// show \p key as the binding of slot \p slot on the redefinition
 /// screen. The two arrow keys have no printable glyph, so they are shown as
 /// 'f' and 'g', which is where the arrow shapes live in the game's own font at
 /// $66A9.
@@ -3690,7 +3525,7 @@ void game_show_key_native(uint8_t slot, uint8_t key) {
   rom_cout(glyph);
 }
 
-/// $6B3D -- both side walls, each in two segments of different ink, with the
+/// both side walls, each in two segments of different ink, with the
 /// seam at a row derived from $6255. The seam is what the player aims for.
 uint8_t game_draw_side_walls_native(void) {
   // The snake's tempo, and the reason this is an advance rather than nothing.
@@ -3887,7 +3722,7 @@ enum {
   KEY_ESC = 0x9b,
 };
 
-/// $6387/$638C/$6391/$6396 -- turn an absolute-direction key into the relative
+/// turn an absolute-direction key into the relative
 /// turn that achieves it from \p dir, or $00 for "nothing to do", which covers
 /// both "already going that way" and "that would be a reversal".
 static uint8_t turn_for_key(uint8_t key, uint8_t dir) {
@@ -3917,7 +3752,7 @@ static uint8_t scrn_cell(Cell c) {
   return rom_scrn(c.row, c.col);
 }
 
-/// $649F -- one click of the speaker. $6C49 holds the port offset, $30 for
+/// one click of the speaker. $6C49 holds the port offset, $30 for
 /// the speaker and $20 for the cassette output that nobody can hear, which is
 /// how muting works; game_sound_sweep does the same thing at $64B0.
 ///
@@ -4286,7 +4121,7 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
 /* unverified.                                                                 */
 /* ========================================================================== */
 
-/// $6A55 -- the absolute-direction key that turns the snake to face \p dir.
+/// the absolute-direction key that turns the snake to face \p dir.
 /// Index 0 is unused; the four that matter are the I/J/K/M diamond.
 static uint8_t key_for_direction(uint8_t dir) {
   return kSteerKey[dir];
@@ -4440,7 +4275,7 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
 /* through a parameter is invisible to it, and nine of these were.            */
 /* ========================================================================== */
 
-/// $002C -- the flag game_print_bcd raises when it prints a digit, so that
+/// the flag game_print_bcd raises when it prints a digit, so that
 /// game_print_zero_if_blank knows whether the field came out empty.
 static void clear_leading_zero_flag(void) {
   s_h2 = 0x00;
@@ -4809,30 +4644,15 @@ wait: /* $741C */
 }
 
 /* ========================================================================== *
- * Adapters: 6502 machine state in, real C out                              *
- * ========================================================================== */
-
-/*
- * Copyright (c) Tzvetan Mikov.
+ * Routines decompiled by hand                                              *
+ * ========================================================================== *
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * apple2tc drives disassembly from a recorded run, so a routine reached only
+ * through an indirect jump the recording never took is invisible to it: the
+ * bytes are classified as data and nothing is emitted. These were decoded from
+ * the binary instead, which is why each carries more of the original than the
+ * rest of the file does.
  */
-
-/// \file
-/// Snake Byte routines decompiled by hand.
-///
-/// Like a2rom.c, this file is textually included into the generated translation
-/// unit -- it uses the machine state that `apple2tc/system2-inc.h` defines with
-/// internal linkage, plus generated helpers. It must come *after* a2rom.c,
-/// since it calls the static `rom_cout1`. See snake-byte-ext.c.
-///
-/// Why hand-decompiled
-/// -------------------
-/// apple2tc drives disassembly from a recorded run. A routine only reached
-/// through an indirect jump that the recording never took is invisible to it:
-/// the bytes get classified as data and never appear in the output. That is the
-/// case here, so these routines are decoded from the binary directly.
 
 /* ========================================================================== */
 /* the game's own COUT handler.                                      */
@@ -4878,7 +4698,7 @@ wait: /* $741C */
 /* scroll -- the game draws the glyph and lets the ROM keep the bookkeeping.   */
 /* ========================================================================== */
 
-/// $7230 -- print the NUL-terminated string that follows the call.
+/// print the NUL-terminated string that follows the call.
 ///
 /// The original takes its argument by popping its own return address, walking
 /// the bytes after the JSR, and then pushing the address of the terminator so
@@ -4912,7 +4732,7 @@ void game_print_inline_str(uint16_t ret_addr) {
 }
 
 /* ========================================================================== */
-/* $6127, $60E7, $60E4 -- the hi-res cell plotter.                            */
+/* the hi-res cell plotter.                            */
 /*                                                                            */
 /* The game treats hi-res page 1 as a grid of 48 cell rows, each four         */
 /* scanlines tall and one byte (seven pixels) wide. $6000 and $6030 hold the  */
@@ -4976,7 +4796,7 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* ========================================================================== */
 
 /* ========================================================================== */
-/* $7019, $7024, $7000 -- the screen-script primitives.                       */
+/* the screen-script primitives.                       */
 /*                                                                            */
 /* $7113 runs a little byte-coded display list: it fetches an opcode, then    */
 /* that opcode's operands, then draws. 'H' ($48) is a horizontal run, 'V'     */
@@ -4997,7 +4817,7 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* ========================================================================== */
 
 /* ========================================================================== */
-/* $71F3, $7226, $7267, $702B -- the score.                                   */
+/* the score.                                   */
 /*                                                                            */
 /* The score is BCD: four bytes at $7252-$7255, little-endian, eight digits.  */
 /* $7267 adds to it with the 6502's decimal mode, and $71F3 prints one byte   */
@@ -5093,7 +4913,7 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* ========================================================================== */
 
 /* ========================================================================== */
-/* $6641, $660F, $6BEF, $6BDA, $71CD -- snake state and scoring setup.        */
+/* snake state and scoring setup.        */
 /*                                                                            */
 /* $624F/$6250 are the snake's head column and row; $6251/$6252 are the tail. */
 /* $62D7 walks the head forward by adding the current direction's deltas from */
@@ -5108,7 +4928,7 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* ========================================================================== */
 
 /* ========================================================================== */
-/* $7642, $64A9, $7633 -- apples, and the sound trick.                        */
+/* apples, and the sound trick.                        */
 /*                                                                            */
 /* $6C49 is the game's mute switch, and it is a nice piece of work: every     */
 /* sound routine reads `LDA $C000,Y` with Y = $6C49, and $6C2C picks either   */
@@ -5191,7 +5011,7 @@ void game_move_bouncer(Bouncer *b) {
 /* ========================================================================== */
 
 /* ========================================================================== */
-/* $69A9, $75D1, $6C72 -- the rest of the input path.                         */
+/* the rest of the input path.                         */
 /*                                                                            */
 /* All three are adapters now; the decodes live in game_native.c. They carry  */
 /* most of what no recording exercises -- ESC and Ctrl-S, the arrow keys on   */
@@ -5204,7 +5024,7 @@ void game_move_bouncer(Bouncer *b) {
 /* one life. See game_native.c for what it does.                     */
 /* ========================================================================== */
 
-/// $6288 -- play one life and record how it ended at $6253, which is where
+/// play one life and record how it ended at $6253, which is where
 /// $7739 reads it. What used to be an adapter is just this write-back now: no
 /// return address, and A is not left holding the reason because nothing reads
 /// it there any more.
@@ -5248,26 +5068,6 @@ static void game_play_one_life(void) {
 /* ========================================================================== *
  * The top level                                                            *
  * ========================================================================== */
-
-/*
- * Copyright (c) Tzvetan Mikov.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
-/// \file
-/// Snake Byte's top level, as C. Included only by snake-byte-cold.c.
-///
-/// Why this is not in game_native.c, where the rest of the converted game
-/// lives: game_native.c is shared with snake-bytec1-ext, and that build still
-/// has the generated func_t001 emitting every address in here. Two sources
-/// claiming the same block head is exactly what probe-acceptance.sh's lint
-/// rejects, and rightly -- in the ext build these addresses must keep their
-/// probes, and they do, in the generated dispatch. Only the cold build has
-/// replaced that dispatch, so only the cold build compiles this.
-///
-/// It goes away when snake-bytec1-ext does.
 
 /* ========================================================================== */
 /* $3750 and $7691 -- the top level                                           */
