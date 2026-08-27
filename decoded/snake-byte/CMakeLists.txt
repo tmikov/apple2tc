@@ -4,44 +4,44 @@
 # LICENSE file in the root directory of this source tree.
 
 add_a2_program(snake-byte
-  snake-byte.c ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
+  as-generated/snake-byte.c ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   )
 
-# The reference build. snake-bytec1.c is generated with the Apple II ROM
+# The reference build. reference/snake-bytec1.c is generated with the Apple II ROM
 # decompiled alongside the game, so it is self-contained and links on its own.
-# play.frames was recorded from this, and it is the control that snake-bytec1-ext
+# testdata/play.frames was recorded from this, and it is the control that snake-bytec1-ext
 # is checked against. Do not make this one depend on hand-written code.
 add_a2_program(snake-bytec1
-  snake-bytec1.c ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
+  reference/snake-bytec1.c ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   )
 
-# The extern build: the ROM entry points listed in rom.externs are supplied by
-# the hand-written a2rom.c instead of being decompiled. snake-byte-ext.c is the
-# only file compiled here -- it #includes both snake-bytec1-ext.c (generated) and
-# a2rom.c (hand-written), which must share a translation unit because
+# The extern build: the ROM entry points listed in testdata/rom.externs are supplied by
+# the hand-written reference/a2rom.c instead of being decompiled. reference/snake-byte-ext.c is the
+# only file compiled here -- it #includes both reference/snake-bytec1-ext.c (generated) and
+# reference/a2rom.c (hand-written), which must share a translation unit because
 # system2-inc.h defines the machine state with internal linkage. See the comment
 # in snake-byte-ext.c. The other sources are listed so they show up in IDEs; they
 # must never be compiled separately, hence HEADER_FILE_ONLY -- doing so would
 # give each object file its own private copy of s_ram and still link cleanly.
 add_a2_program(snake-bytec1-ext
-  snake-byte-ext.c
-  snake-bytec1-ext.c a2rom.c a2rom.h game_native.c game_native.h game.c game.h
+  reference/snake-byte-ext.c
+  reference/snake-bytec1-ext.c reference/a2rom.c reference/a2rom.h reference/game_native.c reference/game_native.h reference/game.c reference/game.h
   ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   )
-set_source_files_properties(snake-bytec1-ext.c a2rom.c game_native.c game.c
+set_source_files_properties(reference/snake-bytec1-ext.c reference/a2rom.c reference/game_native.c reference/game.c
   PROPERTIES HEADER_FILE_ONLY TRUE)
 
 # The `easy` test fixture: the same extern build, but decompiled from
-# snake-byte-easy.b33 (apple quota 16 -> 2, see make-easy.sh). It exists only so
+# testdata/snake-byte-easy.b33 (apple quota 16 -> 2, see make-easy.sh). It exists only so
 # probe-acceptance.sh's `easy` scenario can reach level 2 and compare the
 # display-list interpreter against the interpreter engine. It is not a variant
 # of the game and nothing ships from it.
 add_a2_program(snake-byte-easyc1-ext
-  snake-byte-easy-ext.c
-  snake-byte-easyc1-ext.c a2rom.c a2rom.h game_native.c game_native.h game.c game.h
+  reference/snake-byte-easy-ext.c
+  reference/snake-byte-easyc1-ext.c reference/a2rom.c reference/a2rom.h reference/game_native.c reference/game_native.h reference/game.c reference/game.h
   ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   )
-set_source_files_properties(snake-byte-easyc1-ext.c game_native.c
+set_source_files_properties(reference/snake-byte-easyc1-ext.c reference/game_native.c
   PROPERTIES HEADER_FILE_ONLY TRUE)
 
 # The cold-start build: the same game, entered at $3750 instead of by booting

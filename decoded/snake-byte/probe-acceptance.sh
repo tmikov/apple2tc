@@ -74,7 +74,7 @@ here=$(dirname "$0")
 # Cheap to rule out: every program is newer than every source that can change
 # what it does.
 stale=0
-for prog_src in     "snake-byte-cold-run:snake-byte-cold.c game-image.inc rom-image.inc"     "snake-bytec1-ext-run:snake-bytec1-ext.c snake-byte-ext.c a2rom.c game.c game_native.c"     "snake-byte-easyc1-ext-run:snake-byte-easyc1-ext.c snake-byte-easy-ext.c a2rom.c game.c game_native.c"     "snake-bytec1-run:snake-bytec1.c"; do
+for prog_src in     "snake-byte-cold-run:snake-byte-cold.c game-image.inc rom-image.inc"     "snake-bytec1-ext-run:reference/snake-bytec1-ext.c reference/snake-byte-ext.c reference/a2rom.c reference/game.c reference/game_native.c"     "snake-byte-easyc1-ext-run:reference/snake-byte-easyc1-ext.c reference/snake-byte-easy-ext.c reference/a2rom.c reference/game.c reference/game_native.c"     "snake-bytec1-run:reference/snake-bytec1.c"; do
   prog="$bin/decoded/snake-byte/${prog_src%%:*}"
   [ -x "$prog" ] || continue
   for src in ${prog_src#*:}; do
@@ -112,13 +112,17 @@ trap 'rm -rf "$regen"' EXIT
   echo "FAIL [regen]: decompile.sh failed against $bin" >&2
   exit 1
 }
-for f in snake-bytec1.c snake-bytec1-ext.c snake-byte-easyc1-ext.c coverage.txt; do
-  if ! cmp -s "$regen/$f" "$here/$f"; then
-    echo "FAIL [regen]: $f is not what decompile.sh produces" >&2
+# decompile.sh writes flat into its output directory; the committed copies live
+# under reference/ and testdata/, so the pairs are spelled out rather than
+# derived from one name.
+for pair in reference/snake-bytec1.c reference/snake-bytec1-ext.c \
+            reference/snake-byte-easyc1-ext.c testdata/coverage.txt; do
+  if ! cmp -s "$regen/$pair" "$here/$pair"; then
+    echo "FAIL [regen]: $pair is not what decompile.sh produces" >&2
     echo "  Regenerate and commit it with whatever input changed." >&2
     # Layout drift and a real change in the decompiler's output look the same
     # in `git diff` and are not the same thing, so say which this is.
-    if [ "$(tr -d " \t\n" < "$regen/$f" | cksum)" = "$(tr -d " \t\n" < "$here/$f" | cksum)" ]; then
+    if [ "$(tr -d " \t\n" < "$regen/$pair" | cksum)" = "$(tr -d " \t\n" < "$here/$pair" | cksum)" ]; then
       echo "  Whitespace-stripped the two are identical: layout only, no change in output." >&2
     else
       echo "  The tokens differ: the decompiler's output really has changed. Read the diff." >&2
@@ -129,8 +133,8 @@ done
 echo "[regen] the committed generated C is what decompile.sh produces"
 
 frames=${FRAMES:-1300}
-b33="$here/snake-byte.b33"
-keys="${KEYS:-$here/play.pkeys}"
+b33="$here/testdata/snake-byte.b33"
+keys="${KEYS:-$here/testdata/play.pkeys}"
 
 # $b33 and $frames are per-scenario: the `easy` scenario at the bottom replays
 # a patched image for longer. check_backend and check_memory read both.
@@ -142,8 +146,10 @@ keys="${KEYS:-$here/play.pkeys}"
 # each script stays individually valid while the set quietly disagrees. That is
 # the same drift hazard the trace.probe/trace-ext.probe check covers, so it is
 # checked the same way: asserted, not trusted.
-coord=$(grep -h '^install kb at ' "$here/rec.probe")
-for p in play.probe trace.probe trace-ext.probe trace-easy.probe trace-cold.probe ram.probe ram-cold.probe screen.probe; do
+coord=$(grep -h '^install kb at ' "$here/testdata/rec.probe")
+for p in testdata/play.probe testdata/trace.probe testdata/trace-ext.probe \
+         testdata/trace-easy.probe testdata/trace-cold.probe testdata/ram.probe \
+         testdata/ram-cold.probe testdata/screen.probe; do
   if [ "$(grep -h '^install kb at ' "$here/$p")" != "$coord" ]; then
     echo "FAIL: $p installs the coordinate differently from rec.probe" >&2
     echo "  rec.probe: $coord" >&2
@@ -342,7 +348,7 @@ check_literal_sites() {
     exit 1
   fi
 }
-check_literal_sites "$here/a2rom.c" "$here/game.c"
+check_literal_sites "$here/reference/a2rom.c" "$here/reference/game.c"
 
 # game_native.c must contain no CYCLES at all.
 #
@@ -357,9 +363,9 @@ check_literal_sites "$here/a2rom.c" "$here/game.c"
 # it would charge cycles and never be probed, since this file is deliberately
 # absent from the grep above -- the same silent hole as a non-literal address,
 # arriving from the other side.
-if strip_comments "$here/game_native.c" | grep -qE '(^|[^_A-Za-z])CYCLES\([^)]'; then
+if strip_comments "$here/reference/game_native.c" | grep -qE '(^|[^_A-Za-z])CYCLES\([^)]'; then
   echo "FAIL: game_native.c uses CYCLES; converted code must use GAME_CYCLES" >&2
-  strip_comments "$here/game_native.c" | grep -nE '(^|[^_A-Za-z])CYCLES\([^)]' >&2
+  strip_comments "$here/reference/game_native.c" | grep -nE '(^|[^_A-Za-z])CYCLES\([^)]' >&2
   exit 1
 fi
 
@@ -390,7 +396,7 @@ fi
 native_addrs() {
   # $1: the macro name, exactly. Its own name is anchored so that GAME_CYCLES
   # does not also match GAME_CYCLES_SHARED.
-  strip_comments "$here/game_native.c" \
+  strip_comments "$here/reference/game_native.c" \
     | grep -ohE "$1\\(0x[0-9a-f]+" | sed 's/.*0x//' | sort -u || true
 }
 
@@ -402,7 +408,7 @@ native_addrs() {
 # the zero, and only in game.c -- the generated C has zero-cycle sites of its
 # own, at addresses of its own.
 adapter_entry_sites() {
-  grep -ohE 'CYCLES\(0x[0-9a-f]+, 0\)' "$here/game.c" | sed 's/.*0x//;s/,.*//' | sort -u || true
+  grep -ohE 'CYCLES\(0x[0-9a-f]+, 0\)' "$here/reference/game.c" | sed 's/.*0x//;s/,.*//' | sort -u || true
 }
 
 check_native_spellings() {
@@ -455,8 +461,8 @@ check_native_spellings() {
 
 coord_addrs=$(echo "${coord#install kb at }" | tr -d ' ' | tr ',' '\n' | tr -d '$' \
   | tr 'A-F' 'a-f' | sort -u)
-check_native_spellings ext "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c"
-check_native_spellings easy "$here/snake-byte-easyc1-ext.c" "$here/a2rom.c" "$here/game.c"
+check_native_spellings ext "$here/reference/snake-bytec1-ext.c" "$here/reference/a2rom.c" "$here/reference/game.c"
+check_native_spellings easy "$here/reference/snake-byte-easyc1-ext.c" "$here/reference/a2rom.c" "$here/reference/game.c"
 
 # The built program must start on its own, with no key file at all.
 #
@@ -500,10 +506,10 @@ strip_probe() {
   grep -vE '^\s*(#|install\b|$)' "$1"
 }
 for other in trace-ext trace-easy trace-cold; do
-  if ! diff -q <(strip_probe "$here/trace.probe") <(strip_probe "$here/$other.probe") \
+  if ! diff -q <(strip_probe "$here/testdata/trace.probe") <(strip_probe "$here/testdata/$other.probe") \
        > /dev/null; then
     echo "FAIL: trace.probe and $other.probe are not the same program" >&2
-    diff <(strip_probe "$here/trace.probe") <(strip_probe "$here/$other.probe") >&2
+    diff <(strip_probe "$here/testdata/trace.probe") <(strip_probe "$here/testdata/$other.probe") >&2
     exit 1
   fi
 done
@@ -539,22 +545,22 @@ done
 #
 # KEYS= overrides the list for a one-off run; entries still need their `:frames`.
 rm -f /tmp/pkeys-cover-*.txt
-for scenario in ${KEYS:-"$here/play.pkeys:1300" "$here/play-hires.pkeys:1300" \
-                        "$here/play-rebind.pkeys:3300"}; do
+for scenario in ${KEYS:-"$here/testdata/play.pkeys:1300" "$here/testdata/play-hires.pkeys:1300" \
+                        "$here/testdata/play-rebind.pkeys:3300"}; do
   IFS=: read -r keyfile frames <<<"$scenario"
   set_scenario "$keyfile"
 
-check_backend trace "$bin/decoded/snake-byte/snake-bytec1-run" "$here/trace.probe" \
-  "$here/blocks.txt" 1694 "$here/snake-bytec1.c"
-check_backend trace-ext "$bin/decoded/snake-byte/snake-bytec1-ext-run" "$here/trace-ext.probe" \
-  "$here/blocks-ext.txt" 1171 "$here/snake-bytec1-ext.c" "$here/a2rom.c" "$here/game.c" \
-  "$here/game_native.c"
+check_backend trace "$bin/decoded/snake-byte/snake-bytec1-run" "$here/testdata/trace.probe" \
+  "$here/testdata/blocks.txt" 1694 "$here/reference/snake-bytec1.c"
+check_backend trace-ext "$bin/decoded/snake-byte/snake-bytec1-ext-run" "$here/testdata/trace-ext.probe" \
+  "$here/testdata/blocks-ext.txt" 1171 "$here/reference/snake-bytec1-ext.c" "$here/reference/a2rom.c" "$here/reference/game.c" \
+  "$here/reference/game_native.c"
 
-if diff -q "$here/blocks.txt" "$here/blocks-ext.txt" > /dev/null; then
+if diff -q "$here/testdata/blocks.txt" "$here/testdata/blocks-ext.txt" > /dev/null; then
   echo "the two back ends agree on the block-head set"
 else
-  echo "note: the back ends emit different block-head sets ($(wc -l < "$here/blocks.txt")" \
-       "vs $(wc -l < "$here/blocks-ext.txt")); each was checked against its own"
+  echo "note: the back ends emit different block-head sets ($(wc -l < "$here/testdata/blocks.txt")" \
+       "vs $(wc -l < "$here/testdata/blocks-ext.txt")); each was checked against its own"
 fi
 
 # Memory equivalence. The checks above prove the engines take the same path;
@@ -574,10 +580,10 @@ check_memory() {
 
   [ -x "$prog" ] || { echo "Error: not found: $prog" >&2; exit 1; }
 
-  "$a2run" --preload "$b33" --key-file="$keys" --probe="$here/ram.probe" \
+  "$a2run" --preload "$b33" --key-file="$keys" --probe="$here/testdata/ram.probe" \
     --probe-out="$interp" --frames="$frames" \
     > /dev/null 2>"/tmp/pkeys-ram-interp-$tag.err"
-  "$prog" --key-file="$keys" --probe="$here/ram.probe" \
+  "$prog" --key-file="$keys" --probe="$here/testdata/ram.probe" \
     --probe-out="$gen" --frames="$frames" \
     > /dev/null 2>"/tmp/pkeys-ram-$tag.err"
 
@@ -610,9 +616,9 @@ check_screen() {
   local tag="$label-$(basename "$keys" .pkeys)"
   local interp="/tmp/pkeys-screen-interp-$tag.txt" gen="/tmp/pkeys-screen-$tag.txt"
 
-  "$a2run" --preload "$b33" --key-file="$keys" --probe="$here/screen.probe" \
+  "$a2run" --preload "$b33" --key-file="$keys" --probe="$here/testdata/screen.probe" \
     --probe-out="$interp" --frames="$frames" > /dev/null 2>&1
-  "$prog" --key-file="$keys" --probe="$here/screen.probe" \
+  "$prog" --key-file="$keys" --probe="$here/testdata/screen.probe" \
     --probe-out="$gen" --frames="$frames" > /dev/null 2>&1
 
   if [ ! -s "$interp" ]; then
@@ -650,13 +656,13 @@ done
 # something weaker. There is no memory check: ram.probe's hashes cover $6000-
 # $BFFF, which includes the two patched bytes, so it would compare the fixture
 # against itself and add nothing the trace does not already give.
-b33="$here/snake-byte-easy.b33"
+b33="$here/testdata/snake-byte-easy.b33"
 frames=${EASY_FRAMES:-3000}
-set_scenario "$here/play-hires.pkeys"
+set_scenario "$here/testdata/play-hires.pkeys"
 echo "    (against snake-byte-easy.b33, $frames frames)"
 check_backend trace-easy "$bin/decoded/snake-byte/snake-byte-easyc1-ext-run" \
-  "$here/trace-easy.probe" "$here/blocks-easy.txt" 1171 \
-  "$here/snake-byte-easyc1-ext.c" "$here/a2rom.c" "$here/game.c" "$here/game_native.c"
+  "$here/testdata/trace-easy.probe" "$here/testdata/blocks-easy.txt" 1171 \
+  "$here/reference/snake-byte-easyc1-ext.c" "$here/reference/a2rom.c" "$here/reference/game.c" "$here/reference/game_native.c"
 
 # The fixture's block heads are the same set as the stock extern build's, and
 # the hand-written sources are literally the same files, so what this scenario
@@ -718,18 +724,18 @@ ext_prog="$bin/decoded/snake-byte/snake-bytec1-ext-run"
 # off the block-head list. Checked on 2026-08-24 after exactly that happened:
 # an adapter went away, its plain CYCLES went with it, and the native's SHARED
 # spelling was suddenly the only mention of $6216.
-site_addrs "$here/snake-byte-cold.c" > "$here/blocks-cold.txt"
+site_addrs "$here/snake-byte-cold.c" > "$here/testdata/blocks-cold.txt"
 
 for a in $(grep -ohE 'GAME_CYCLES_SHARED\(0x[0-9a-f]+' "$here/snake-byte-cold.c" \
              | sed 's/.*0x//' | sort -u); do
-  if ! grep -qx "$a" "$here/blocks-cold.txt"; then
+  if ! grep -qx "$a" "$here/testdata/blocks-cold.txt"; then
     echo "FAIL [cold]: GAME_CYCLES_SHARED(\$$a) but no other source emits it" >&2
     echo "  site_addrs() does not see that spelling, so the site keeps probing" >&2
     echo "  and leaves the block-head list. Use plain CYCLES." >&2
     exit 1
   fi
 done
-cold_sites=$(wc -l < "$here/blocks-cold.txt")
+cold_sites=$(wc -l < "$here/testdata/blocks-cold.txt")
 if [ "$cold_sites" -ne 6 ]; then
   echo "FAIL [cold]: site list has $cold_sites block heads, expected exactly 6" >&2
   echo "  Converting a routine lowers this deliberately; anything else is a regression." >&2
@@ -746,10 +752,10 @@ echo "[cold] site list: $cold_sites block heads"
 # Installing the cold list into the ext build is only sound because the cold
 # heads are a subset of the ext ones; a probe at an address that is not a block
 # head in the binary under test does not fire and does not say so.
-if ! comm -23 <(sort "$here/blocks-cold.txt") <(sort "$here/blocks-ext.txt") \
+if ! comm -23 <(sort "$here/testdata/blocks-cold.txt") <(sort "$here/testdata/blocks-ext.txt") \
      | grep -q .; then :; else
   echo "FAIL [cold]: cold block heads are not a subset of the ext build's" >&2
-  comm -23 <(sort "$here/blocks-cold.txt") <(sort "$here/blocks-ext.txt") >&2
+  comm -23 <(sort "$here/testdata/blocks-cold.txt") <(sort "$here/testdata/blocks-ext.txt") >&2
   exit 1
 fi
 
@@ -784,9 +790,9 @@ fi
 cold_compare() {
   local label=$1 ext_keys=$2 cold_keys=$3
 
-  "$ext_prog"  --key-file="$here/$ext_keys"  --probe="$here/trace-cold.probe" \
+  "$ext_prog"  --key-file="$here/$ext_keys"  --probe="$here/testdata/trace-cold.probe" \
     --probe-out=/tmp/pkeys-cold-ext.txt  --frames=40000 > /dev/null 2>&1
-  "$cold_prog" --key-file="$here/$cold_keys" --probe="$here/trace-cold.probe" \
+  "$cold_prog" --key-file="$here/$cold_keys" --probe="$here/testdata/trace-cold.probe" \
     --probe-out=/tmp/pkeys-cold-cold.txt --frames=40000 > /dev/null 2>&1
 
   # Align at the *first* $3750: it is re-entered eight times by the relocation
@@ -830,7 +836,7 @@ cold_compare() {
   # cleanup ahead moves values around without moving pixels.
   local what probe n
   for what in screen ram-cold; do
-    probe="$here/$what.probe"
+    probe="$here/testdata/$what.probe"
     "$ext_prog"  --key-file="$here/$ext_keys"  --probe="$probe" \
       --probe-out=/tmp/pkeys-cold-x-ext.txt  --frames=40000 > /dev/null 2>&1
     "$cold_prog" --key-file="$here/$cold_keys" --probe="$probe" \
@@ -861,8 +867,8 @@ cold_compare() {
   done
 }
 
-cold_compare play  play.pkeys       play-cold.pkeys
-cold_compare hires play-hires.pkeys play-hires-cold.pkeys
+cold_compare play  testdata/play.pkeys       testdata/play-cold.pkeys
+cold_compare hires testdata/play-hires.pkeys testdata/play-hires-cold.pkeys
 
 # The speaker's toggle timeline: every $C0xx access and the cycle it happened
 # on. The Apple II speaker is one bit and reading $C030 flips it, so this
@@ -879,15 +885,15 @@ cold_compare hires play-hires.pkeys play-hires-cold.pkeys
 # which is where they go while the game demos itself). hires is all $20,
 # because it presses C at the attract screen and edits keys rather than
 # playing.
-for sc in play:toggle-play.txt hires:toggle-hires.txt; do
+for sc in play:testdata/toggle-play.txt hires:testdata/toggle-hires.txt; do
   name=${sc%%:*}; want=${sc#*:}
   case $name in
-    play) keys=play-cold.pkeys ;;
-    hires) keys=play-hires-cold.pkeys ;;
+    play) keys=testdata/play-cold.pkeys ;;
+    hires) keys=testdata/play-hires-cold.pkeys ;;
   esac
   A2_TOGGLE_DUMP="$regen/toggle-$name.txt" \
     "$bin/decoded/snake-byte/snake-byte-cold-run" --frames=1300 --no-sound \
-    --key-file="$here/$keys" --probe="$here/trace-cold.probe" \
+    --key-file="$here/$keys" --probe="$here/testdata/trace-cold.probe" \
     --probe-out=/dev/null > /dev/null 2>&1
   if ! diff -q "$here/$want" "$regen/toggle-$name.txt" > /dev/null; then
     echo "FAIL [toggle/$name]: the speaker timeline changed" >&2
@@ -969,7 +975,7 @@ echo "[yield] PASS: every loop that reads input can suspend"
 # subshell outlives a check that finishes in a second, and then fires into a
 # recycled pid. That killed this script during its own first run.
 "$bin/decoded/snake-byte/snake-byte-cold-run" --frames=2400 --no-sound \
-  --key-file="$here/esc-pause.keys" > /dev/null 2>&1 &
+  --key-file="$here/testdata/esc-pause.keys" > /dev/null 2>&1 &
 hang_pid=$!
 hang_waited=0
 while kill -0 "$hang_pid" 2> /dev/null && [ "$hang_waited" -lt 90 ]; do
@@ -994,7 +1000,7 @@ fi
 echo "[yield/esc] PASS: the game resumes from ESC"
 
 echo "--- coverage over all scenarios ---"
-coverage_report trace "$here/blocks.txt" 0
+coverage_report trace "$here/testdata/blocks.txt" 0
 # Baseline 20, and the number is a statement about the recordings rather than
 # about the decode. Every entry is a hand-written block that no scenario
 # executes, so its decode rests on the binary alone with no cross-engine check
@@ -1052,5 +1058,5 @@ coverage_report trace "$here/blocks.txt" 0
 # ratcheted down whenever a scenario reaches one of them -- as happened at
 # 22 -> 21 when the `easy` fixture covered $6C4F. It is not a target to be
 # satisfied.
-coverage_report trace-ext "$here/blocks-ext.txt" 20 "$here/a2rom.c" "$here/game.c" \
-  "$here/game_native.c"
+coverage_report trace-ext "$here/testdata/blocks-ext.txt" 20 "$here/reference/a2rom.c" "$here/reference/game.c" \
+  "$here/reference/game_native.c"

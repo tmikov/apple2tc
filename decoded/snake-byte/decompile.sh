@@ -39,6 +39,9 @@ fi
 
 bin=${1:-$here/../../cmake-build-debug}
 out=${2:-$here}
+# Outputs mirror the committed layout, so that running this with no second
+# argument regenerates in place and leaves `git status` empty.
+mkdir -p "$out/reference" "$out/testdata"
 
 apple2tc=$bin/tools/apple2tc/apple2tc
 if [ ! -x "$apple2tc" ]; then
@@ -82,8 +85,8 @@ fi
 # maintenance at all, since native C does not need it. That is a separate
 # setting from this one, and this comment exists so the distinction is not lost
 # the next time someone regenerates.
-$apple2tc "$here/snake-byte.b33" --run-data="$here/snake-byte.json" --code-at="$here/code-at.txt" \
-  --known-data="$here/known-data.txt" -O3 --irc1 --ret-addr --coverage="$out/coverage.txt" > /dev/null
+$apple2tc "$here/testdata/snake-byte.b33" --run-data="$here/testdata/snake-byte.json" --code-at="$here/testdata/code-at.txt" \
+  --known-data="$here/testdata/known-data.txt" -O3 --irc1 --ret-addr --coverage="$out/testdata/coverage.txt" > /dev/null
 
 # Two variants are generated, and both are built.
 #
@@ -91,8 +94,8 @@ $apple2tc "$here/snake-byte.b33" --run-data="$here/snake-byte.json" --code-at="$
 # the game, so it compiles and links on its own. It is the reference build --
 # play.frames was recorded from it, and it is the control that the extern
 # variant is checked against.
-$apple2tc "$here/snake-byte.b33" --run-data="$here/snake-byte.json" --code-at="$here/code-at.txt" \
-  -O3 --irc1 --ret-addr -v1 > "$out/snake-bytec1.c"
+$apple2tc "$here/testdata/snake-byte.b33" --run-data="$here/testdata/snake-byte.json" --code-at="$here/testdata/code-at.txt" \
+  -O3 --irc1 --ret-addr -v1 > "$out/reference/snake-bytec1.c"
 
 # snake-bytec1-ext.c emits the ROM entry points listed in rom.externs as
 # declarations only; the bodies are hand-written in a2rom.c. It does NOT link on
@@ -104,9 +107,9 @@ $apple2tc "$here/snake-byte.b33" --run-data="$here/snake-byte.json" --code-at="$
 # exit they took. The reference build stays without it so that the two variants
 # differ by more than one flag in only one direction, and so the control this
 # is checked against is not itself carrying the new transform.
-$apple2tc "$here/snake-byte.b33" --run-data="$here/snake-byte.json" --code-at="$here/code-at.txt" \
-  -O3 --irc1 --ret-addr -v1 --extern-routines="$here/rom.externs" --inline-str="$here/inline-str.txt" \
-  --alt-exit --prune-returns > "$out/snake-bytec1-ext.c"
+$apple2tc "$here/testdata/snake-byte.b33" --run-data="$here/testdata/snake-byte.json" --code-at="$here/testdata/code-at.txt" \
+  -O3 --irc1 --ret-addr -v1 --extern-routines="$here/testdata/rom.externs" --inline-str="$here/testdata/inline-str.txt" \
+  --alt-exit --prune-returns > "$out/reference/snake-bytec1-ext.c"
 
 # The `easy` fixture. snake-byte-easy.b33 is snake-byte.b33 with the per-level
 # apple quota lowered from 16 to 2 (see make-easy.sh for the two bytes and why
@@ -124,6 +127,6 @@ $apple2tc "$here/snake-byte.b33" --run-data="$here/snake-byte.json" --code-at="$
 # operand and one data byte, so every code address is where the recording says
 # it is. The generated C differs from the stock build in exactly the three
 # places those two bytes appear.
-$apple2tc "$here/snake-byte-easy.b33" --run-data="$here/snake-byte.json" --code-at="$here/code-at.txt" \
-  -O3 --irc1 --ret-addr -v1 --extern-routines="$here/rom.externs" --inline-str="$here/inline-str.txt" \
-  --alt-exit --prune-returns > "$out/snake-byte-easyc1-ext.c"
+$apple2tc "$here/testdata/snake-byte-easy.b33" --run-data="$here/testdata/snake-byte.json" --code-at="$here/testdata/code-at.txt" \
+  -O3 --irc1 --ret-addr -v1 --extern-routines="$here/testdata/rom.externs" --inline-str="$here/testdata/inline-str.txt" \
+  --alt-exit --prune-returns > "$out/reference/snake-byte-easyc1-ext.c"

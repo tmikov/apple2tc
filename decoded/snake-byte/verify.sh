@@ -72,8 +72,8 @@ ext="$bin/decoded/snake-byte/snake-bytec1-ext-run"
 
 # name:keys:frames:trace
 scenarios=(
-  "play:play.keys:1300:play.frames"
-  "hires:play-hires.keys:1300:play-hires.frames"
+  "play:testdata/play.keys:1300:testdata/play.frames"
+  "hires:testdata/play-hires.keys:1300:testdata/play-hires.frames"
 )
 
 run() {

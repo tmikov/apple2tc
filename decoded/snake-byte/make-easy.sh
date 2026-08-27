@@ -26,7 +26,7 @@
 set -e
 cd "$(dirname "$0")"
 python3 - <<'PY'
-src, dst = 'snake-byte.b33', 'snake-byte-easy.b33'
+src, dst = 'testdata/snake-byte.b33', 'testdata/snake-byte-easy.b33'
 d = bytearray(open(src, 'rb').read())
 load = d[0] | (d[1] << 8)
 off = lambda a: 4 + (a - load)
