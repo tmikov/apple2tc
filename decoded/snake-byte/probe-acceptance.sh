@@ -763,13 +763,31 @@ fi
 # play-hires-cold.pkeys is derived, not recorded: make-cold-keys.sh shifts
 # play-hires.pkeys down by the coordinate of the first $3750 arrival. That
 # offset is 181207, re-measured rather than trusted.
+#
+# Both runs get the same --frames, on purpose, rather than a smaller number
+# for the cold side. The check below is cold_n >= ext_n, then truncates cold
+# to ext_n before comparing -- so the cold side only ever needs to be *at
+# least* as long, and over-provisioning it is free. A smaller cold budget
+# would have to encode how many frames the booting build spends reaching
+# $3750 before it can even start comparing, and that boot length is a fact
+# about the ROM and the scenario, not a constant -- it would go stale the
+# next time either changed. Equal frames sidesteps that: at equal frame
+# counts the cold build necessarily produces *more* block heads than the
+# booting one, since none of its frames are spent booting, so cold_n >= ext_n
+# holds without anyone having to compute the offset.
+#
+# The budget itself is 40000, not something smaller: two of four structural
+# mutations of game_cold_start's loop nest survived a 20,000-frame run of
+# this comparison undetected and were only caught by the screen/RAM check
+# further down, at 40,000. Measured cost at 40,000, both builds, both
+# scenarios: the whole gate takes about 2m30s.
 cold_compare() {
   local label=$1 ext_keys=$2 cold_keys=$3
 
   "$ext_prog"  --key-file="$here/$ext_keys"  --probe="$here/trace-cold.probe" \
-    --probe-out=/tmp/pkeys-cold-ext.txt  --frames=1300 > /dev/null 2>&1
+    --probe-out=/tmp/pkeys-cold-ext.txt  --frames=40000 > /dev/null 2>&1
   "$cold_prog" --key-file="$here/$cold_keys" --probe="$here/trace-cold.probe" \
-    --probe-out=/tmp/pkeys-cold-cold.txt --frames=1150 > /dev/null 2>&1
+    --probe-out=/tmp/pkeys-cold-cold.txt --frames=40000 > /dev/null 2>&1
 
   # Align at the *first* $3750: it is re-entered eight times by the relocation
   # loop that copies the level data down to $1800.
@@ -814,9 +832,9 @@ cold_compare() {
   for what in screen ram-cold; do
     probe="$here/$what.probe"
     "$ext_prog"  --key-file="$here/$ext_keys"  --probe="$probe" \
-      --probe-out=/tmp/pkeys-cold-x-ext.txt  --frames=1300 > /dev/null 2>&1
+      --probe-out=/tmp/pkeys-cold-x-ext.txt  --frames=40000 > /dev/null 2>&1
     "$cold_prog" --key-file="$here/$cold_keys" --probe="$probe" \
-      --probe-out=/tmp/pkeys-cold-x-cold.txt --frames=1150 > /dev/null 2>&1
+      --probe-out=/tmp/pkeys-cold-x-cold.txt --frames=40000 > /dev/null 2>&1
     # Compare the common prefix. Neither side is reliably the shorter one:
     # cold skips the boot, so the same frame budget carries it further, and in
     # the hires scenario it produces 8,731 samples against the booting build's
