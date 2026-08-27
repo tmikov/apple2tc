@@ -817,6 +817,16 @@ The middle one is where the maintenance burden actually lives, and it is safe.
 It was nearly skipped here on the belief that the charges could not go — which
 was true of the *counts* and false of the *addresses*.
 
+**And the addresses cost more than the charges do.** A charge is one line. An
+address it needs is a *table*, a struct field, or a parameter — and those
+propagate to every call site. Snake Byte's last fifteen charging sites were
+holding up four tables, six of one struct's eight fields, and eight function
+parameters across ten call sites; removing the charges collapsed a routine that
+compares two numbers from three parallel address tables down to a loop, and
+turned a struct of five address fields wrapped around one key into an array of
+four keys. Count the *consequences* of a charge, not the charges, when deciding
+whether this is worth doing.
+
 ### Most of the clock is not the clock
 
 Generated code charges cycles at every block because the 6502 spent them there.
@@ -839,6 +849,14 @@ gate is already time-independent and survives untouched. That was true here and
 it is what made the step possible — the probe language had been built that way
 years earlier for unrelated reasons, and nothing in the design said so. Read the
 probe scripts; do not reason about it.
+
+**Sweep for every spelling before believing you are done.** A cycle charge
+usually has more than one name — one that probes and one that does not, one for
+edges, one for the sites carrying replay coordinates. Snake Byte's collapse
+went from 838 charges to 23 and left fifteen behind, purely because they were
+spelled `GAME_CYCLES` rather than `TICK`, and they turned out to be the ones
+holding all the address tables. `grep` for the macro that *expands* to the
+charge, not for the name you have been typing.
 
 **Calibrate each survivor to the region it stands for**: the measured cost from
 that charge to the next one, not what the original charge was. Deleting the

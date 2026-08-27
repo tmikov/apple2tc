@@ -647,9 +647,9 @@ tmpN_U8 temporaries                   0
 dead `ret` / `ret_addr` parameters    0    121   one real `ret_addr` remains, and it
                                                 is an argument: the inline string's
                                                 address, which the original popped
-TICK                            (gone)          838 charging sites before the
-                                                virtual clock; the macro itself
-                                                was folded into advance
+TICK, GAME_CYCLES               (gone)          838 charging sites before the
+                                                virtual clock; both macros are
+                                                gone, folded away or deleted
 advance statements                  23          the whole of the clock: every site
                                                 where a duration is perceptible,
                                                 plus two that only yield
@@ -783,10 +783,25 @@ What remains, in order of how well-defined it is:
    that this buys the design and that bought 49 statements.
 
    **The collapse is done: 838 charging sites, and now 23** (commits
-   `7451af0`, `3d8c85c`). There is no `TICK` in the file at all -- not the
-   macro either, which was only ever `advance` under an older name and is
-   folded into it. The routines underneath are what they always were, and the
-   file lost 962 lines.
+   `7451af0`, `3d8c85c`, `a886caf`). There is no `TICK` in the file at all --
+   not the macro either, which was only ever `advance` under an older name --
+   and no `GAME_CYCLES`.
+
+   **The last fifteen were found late, and only because they were spelled
+   differently.** `GAME_CYCLES` survived the collapse untouched because every
+   grep was for `TICK`, and they turned out to be the expensive ones: not for
+   their cycles, which nothing perceives, but for the *addresses* they needed.
+   Fifteen charges were holding up four tables, six of `kNeighbour`'s eight
+   fields, and eight parameters across ten call sites. Removing them turned
+   `game_promote_high_score` from three parallel address tables into a loop
+   that compares two numbers, and the absolute-key dispatch from a struct of
+   five address fields wrapped around one key into an array of four keys.
+   Address literals in code went 82 to 18, and the 18 left are load-bearing.
+
+   Nothing perceptible moved: the snake step is 113,974 cycles either way and
+   the audible pitch is identical to four decimal places, because every charge
+   removed sits outside the pace loop and so shifts the silence between notes
+   rather than the notes.
 
    The plan's tasks 2-4 only fold the drawing routines, which is 48 sites, and
    for a while this file said the plan therefore could not reach its goal.
@@ -906,9 +921,9 @@ What remains, in order of how well-defined it is:
 
 4. **Step 6's old entry below is superseded** by item 3. Its `CYCLES` table
    of 130 probing / 721 charge-only sites predates the conversions and is
-   stale. As of 2026-08-26 the file has **no** `TICK` -- the name is gone
-   entirely -- and **23** `advance` (an addressless charge; 838 `TICK` before
-   the virtual-clock work), 16
+   stale. As of 2026-08-27 the file has **no** `TICK` and no `GAME_CYCLES` --
+   both names are gone -- **23** `advance` (an addressless charge; 838 `TICK`
+   before the virtual-clock work), 8
    `GAME_CYCLES` (a charge on an edge, deliberately not probing) and 11
    probing sites, of which the cold trace installs 6.
 4. **Loose ends:** **350** unknown nonzero bytes in `coverage.txt` (was 451;
