@@ -30,6 +30,21 @@ ends, and stage 4 of the design -- restructuring the sound routine with
 understanding rather than mechanically -- which was always out of scope. The
 game's own C is done.
 
+**The gate compares 40,000 frames now, not 1,300** (2026-08-27, `0287e48`).
+It was raised because a review measured what the old budget could see: two of
+four structural mutations of `game_cold_start`'s loop nest survived a
+20,000-frame comparison undetected, and only the screen and RAM checks at
+40,000 caught them. Both sides get the same frame count — the cold build only
+has to be at least as long as the booting one, and at equal frames it always
+is, so nothing has to encode how long the boot takes. Coverage went from
+371,352 block heads to 41.6M on `play`, and from 9,524 screen samples to
+467,127 on `hires`. The gate now takes about two and a half minutes.
+
+**A block-head count is not evidence about control flow.** Task 10's commit
+cites 20,298,539 of them; 252,364 of the `hires` run's 260,128 hits are a
+single address and `$7890` never fires at all. The screen and memory
+comparisons are what actually constrain a rewrite of the game's structure.
+
 **Before trusting a green run.** Two defects reached the user through a fully
 green gate on 2026-08-26 -- the game hung on ESC, and three compiler warnings
 -- so start from what the checks do not cover. The block-head trace compares
