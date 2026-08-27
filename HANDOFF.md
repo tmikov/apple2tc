@@ -4,6 +4,15 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
+**The directory was reorganised on 2026-08-27** (`023c28f`, `e6c9e9e`). The
+artifact is `decoded/snake-byte/snake-byte.c` — it used to be
+`snake-byte-cold.c`, and the name it now has was held by a 2022 fossil that is
+`as-generated/snake-byte-simple-c.c`. Scaffolding moved into `reference/`
+(the builds the gate compares against), `testdata/` (binary, recording, keys,
+probes, baselines) and `as-generated/`. The scripts stayed at top level because
+each computes its own directory. The `-cold` fixtures kept their names: they
+describe the scenario, not the build.
+
 **Start here (2026-08-25).** **The machine is out of the game's code.** That
 was the whole of step 6 and it is done — not the six cleanup steps, which
 finished on 2026-08-24, but the thing those steps turned out to be a prologue
@@ -275,7 +284,7 @@ short version.
 
 | Target | Source | Role |
 | --- | --- | --- |
-| `snake-byte-cold` | `snake-byte-cold.c` | **The artifact this work is aimed at.** One translation unit, 7,219 lines plus two memory-image includes, sharing nothing. Entered at `$3750`; no boot, no ROM code, no generated code. |
+| `snake-byte` | `snake-byte.c` | **The artifact this work is aimed at.** One translation unit, 7,219 lines plus two memory-image includes, sharing nothing. Entered at `$3750`; no boot, no ROM code, no generated code. |
 | `snake-bytec1-ext` | `snake-byte-ext.c` | The verified reference. Boots, types `CALL 14160`. ROM entry points from hand-written `a2rom.c` + `game.c`. |
 | `snake-bytec1` | `snake-bytec1.c` | Self-contained control. ROM decompiled alongside the game; links alone. `play.frames` was recorded from it. |
 | `snake-byte-easyc1-ext` | `snake-byte-easy-ext.c` | Test fixture, not a variant: apple quota 16 -> 2. |
@@ -356,7 +365,7 @@ rather than the caller's cwd, and defaults to regenerating in place.
 **There is no such thing as decompiler-generated code here** (2026-08-24). It
 was treated as a category once, as a reason to defer moving `$0024/$0025` until
 the ROM helpers were "owned"; that was wrong and the plan reads better without
-it. Everything in `snake-byte-cold.c` is a decompilation of one binary, and a
+it. Everything in `snake-byte.c` is a decompilation of one binary, and a
 routine still emitted as a switch over block ids is a less finished one, not a
 different kind. All of them are C now, and **the `bb_N:` count is 0.** There is no
 decompiler-shaped code left in the file at all — not in the game, not in the
@@ -415,7 +424,7 @@ everything and link cleanly while being silently wrong. Both are marked
 
 ```bash
 ninja -C cmake-build-release
-cmake-build-release/decoded/snake-byte/snake-byte-cold
+cmake-build-release/decoded/snake-byte/snake-byte
 ```
 
 It opens on `APPLE ][` and `]CALL 14160` for about an eighth of a second. That
@@ -449,7 +458,7 @@ cd decoded/snake-byte && ./verify.sh ../../cmake-build-debug   # expect: 4x PASS
 `decompile.sh` reproduces the committed generated C exactly: run it at a clean
 HEAD and `git status` comes back empty. `probe-acceptance.sh` checks that before
 it checks anything else, because everything else it does runs the committed
-`.c` files. Note `snake-byte-cold.c` is *not* regenerated and never will be —
+`.c` files. Note `snake-byte.c` is *not* regenerated and never will be —
 it is the decompilation, owned by hand.
 
 `run-tests.sh` is no longer only decompiler regression. It also asserts that
@@ -542,7 +551,7 @@ writes it back, and finally restores CSWL/CSWH to `$FDF0` at `$7587`.
 
 Items 1-4 below are all struck through now. What actually remains, in order:
 
-**a. ~~Put `snake-byte-cold` in `probe-acceptance.sh`.~~** Done 2026-08-23.
+**a. ~~Put `snake-byte` in `probe-acceptance.sh`.~~** Done 2026-08-23.
 
 **b. ~~Convert the last 89 blocks.~~** Done 2026-08-23 — 377 lines of C in
 place of 968 lines of dispatch. **The cold build contains no
@@ -551,7 +560,7 @@ and runtime: `s_mem_3750` (the game's own image), `s_mem_d000` (ROM bytes the
 death pause reads at `$E000` as delay lengths), five ROM helpers `a2rom.c`
 calls, and the machine definition.
 
-**And then the sharing went away.** `snake-byte-cold.c` is a single
+**And then the sharing went away.** `snake-byte.c` is a single
 self-contained translation unit: the pruned body, `a2rom.c`, `game_native.c`,
 `game.c` and the top level, each as this target's own copy, with the entry
 state inlined. The other four targets keep the shared originals and are
@@ -598,7 +607,7 @@ been dead in the shared `game.c` since its call sites moved into a converted
 routine. The check is a manual compile, and it must be a real one:
 
 ```bash
-gcc -c -o /dev/null -Wall -I../../include -I. snake-byte-cold.c
+gcc -c -o /dev/null -Wall -I../../include -I. snake-byte.c
 ```
 
 **Count `-Wunused-but-set-variable` too.** It is a different warning from
@@ -638,7 +647,7 @@ it. The column below is every form, which is why it started at 314 rather than
 at the 0 that was being celebrated. Pick the measure that cannot be satisfied
 by a rename.
 
-Measured 2026-08-25 over `snake-byte-cold.c` with comments stripped, so a
+Measured 2026-08-25 over `snake-byte.c` with comments stripped, so a
 mention inside an explanation cannot inflate a row.
 
 **The memory row was wrong for a day and the way it was wrong is instructive.**
@@ -1226,7 +1235,7 @@ readability win at the lowest risk, and it is where the remaining "what *is*
 **Done, 2026-08-23.** All 115 addresses are named, in six slices — the
 scoreboard, the snake, the plotter's argument block, the monitor's zero page,
 the settings block and pointers, and the tables. `ram_peek(0x...)` no longer
-appears in `snake-byte-cold.c`. The names are in `labels.txt` too, so `id`
+appears in `snake-byte.c`. The names are in `labels.txt` too, so `id`
 shows them.
 
 Three things to carry forward:
@@ -1240,8 +1249,8 @@ Three things to carry forward:
   survive step 3** — moving storage changes the code by design, and that is
   where `ram-cold.probe` takes over.
   ```bash
-  git show HEAD:decoded/snake-byte/snake-byte-cold.c > /tmp/head-cold.c
-  for f in /tmp/head-cold.c decoded/snake-byte/snake-byte-cold.c; do
+  git show HEAD:decoded/snake-byte/snake-byte.c > /tmp/head-cold.c
+  for f in /tmp/head-cold.c decoded/snake-byte/snake-byte.c; do
     cc -I include -I decoded/snake-byte -O2 -std=gnu11 -c $f -o /tmp/$(basename $f).o
     objdump -d --no-show-raw-insn /tmp/$(basename $f).o | sed 's/^ *[0-9a-f]*:\t//' | tail -n +3
   done  # diff the two outputs
@@ -1490,9 +1499,9 @@ any of this.
    nothing jumps into it. See the log entry for the command grammar, which
    parses the region exactly.
 4. ~~**Phase 1b: retarget the entry to `$3750`.**~~ — **done 2026-08-23**, as
-   the `snake-byte-cold` target. See `decoded/snake-byte/snake-byte-cold.c`.
+   the `snake-byte` target. See `decoded/snake-byte/snake-byte.c`.
 
-   `snake-byte-cold-body.c` is a hand-owned fork of the generated
+   `snake-byte-body.c` is a hand-owned fork of the generated
    `snake-bytec1-ext.c`: the dispatch is rooted at `$3750` instead of the reset
    vector, and everything unreachable from there is deleted. **16,195 lines ->
    3,046.** `func_t001` went from 1,775 cases to 89 — every one of them game

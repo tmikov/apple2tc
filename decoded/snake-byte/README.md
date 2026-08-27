@@ -1,27 +1,58 @@
 # Snake Byte
 
-## Which one is the game
+An Apple II game from 1982, decompiled into C that builds and plays.
 
-There are five build targets and they are not five copies of the same thing.
+## Start here
+
+**`snake-byte.c` is the result.** One translation unit, 5,322 lines, no
+generated code, no Applesoft ROM code. It starts at the game's own entry point
+with the machine state a boot would have left, and it plays the game. It is the
+only source file at the top level, and everything else in this directory exists
+to build it, check it, or record where it came from.
+
+```
+snake-byte.c          the game
+game-image.inc        its binary image, as hex -- the level scripts, font, tables
+rom-image.inc         the Apple II ROM image, kept for its data only
+entry-state-inc.h     the machine state at entry, captured once
+
+reference/            the builds the gate compares against -- see below
+testdata/             the original binary, the recording, keys, probes, baselines
+as-generated/         what the decompiler emitted in 2022, kept as the record
+
+probe-acceptance.sh   the gate. 31 checks, about two and a half minutes
+verify.sh             the older frame-hash comparison, for the booting builds
+decompile.sh          regenerates everything under reference/
+```
+
+Build and play:
+
+```
+ninja -C ../../cmake-build-release snake-byte
+../../cmake-build-release/decoded/snake-byte/snake-byte
+```
+
+## Why there are other builds
+
+`reference/` holds four more programs, and they are not four copies of the same
+thing. They are the oracle: `snake-byte.c` is correct because it agrees with
+them, run for run.
 
 | Target | What it is |
 | --- | --- |
-| `snake-byte-cold` | **The decompilation as it is meant to end up.** Starts at the game's own entry, `$3750`. No boot, and no Applesoft ROM *code* at all. |
-| `snake-bytec1-ext` | The verified reference. Boots the Apple II, types `CALL 14160`, then runs the game. Every gate in `verify.sh` and `probe-acceptance.sh` checks this one. |
-| `snake-bytec1` | The control for the above: self-contained, ROM decompiled alongside the game, links on its own. `play.frames` was recorded from it. |
-| `snake-byte-easyc1-ext` | A test fixture, not a variant of the game -- apple quota 16 -> 2 so levels change and the display-list interpreter becomes reachable. |
-| `snake-byte` | Historical. Built from `--simple-c` output that is no longer regenerated. |
+| `snake-bytec1-ext` | The verified reference. Boots the Apple II, types `CALL 14160`, then runs the game. Every gate checks this one. |
+| `snake-bytec1` | The control for *that*: self-contained, ROM decompiled alongside the game. `play.frames` was recorded from it. |
+| `snake-byte-easyc1-ext` | A fixture, not a variant -- apple quota 16 -> 2, so levels change and the display-list interpreter becomes reachable. |
+| `snake-byte-as-generated` | Historical, in `as-generated/`. Built from `--simple-c` output that is no longer regenerated. Nothing runs it. |
 
-`snake-byte-cold` is the newer and better artifact; `snake-bytec1-ext` is the
-better *checked* one. Cold is verified against ext on every run of
-`probe-acceptance.sh` -- block-head trace identical over 421,789 blocks, screen
-and memory identical at 6,808 samples each. That pair checks only what is
-cold-specific: entry state, pruning, key offset. Both builds share the game's
-own C, so a bug in that changes both identically and is caught upstream.
+`snake-byte` is checked against `snake-bytec1-ext` on every run of
+`probe-acceptance.sh`: block-head trace identical over 41.6M blocks, screen and
+memory identical at 467,127 samples. That pair checks what is specific to
+starting cold -- entry state, pruning, key offset.
 
-To run any build except `snake-byte-cold`, type `CALL 14160` at the BASIC
-prompt. The built programs type it for themselves; a replay contains it already.
-`snake-byte-cold` is past that point before it starts.
+To run any build except `snake-byte`, type `CALL 14160` at the BASIC prompt.
+The built programs type it for themselves; a replay contains it already.
+`snake-byte` is past that point before it starts.
 
 ## What each file is
 
@@ -29,28 +60,30 @@ prompt. The built programs type it for themselves; a replay contains it already.
 
 | File | |
 | --- | --- |
-| `game_native.c` / `.h` | The game in ordinary C -- parameters, return values, structs, locals. 3,450 lines, and almost all of the game. |
-| `game.c` / `.h` | 41 adapters, marshalling 6502 machine state in and out of the above. Only 14 still have a generated caller; the rest survive for the probe sites and the emulated stack. |
-| `a2rom.c` / `.h` | The 9 Apple II ROM entry points the game calls, hand-written. |
-| `snake-byte-cold.c` | **The decompiled game, whole, in one translation unit that shares nothing.** 7,219 lines. Everything above is *also* in here, as its own copy, because this target owns its code -- see the file header. |
-| `game-image.inc` | The game's binary image, `$3750-$854E`, as 1,248 lines of hex. `#include`d by `snake-byte-cold.c` and by nothing else. |
+| `snake-byte.c` | **The decompiled game, whole, in one translation unit that shares nothing.** 5,322 lines. This is the file to read. |
+| `game-image.inc` | The game's binary image, `$3750-$854E`, as 1,248 lines of hex. `#include`d by `snake-byte.c` and by nothing else. |
 | `rom-image.inc` | The Apple II ROM image, `$D000-$FFFF`. Kept for its *data*: the death pause reads delay lengths out of `$E000`. Same single includer. |
-| `entry-state-inc.h` | The machine state at `$3750`: `$0000-$0802`, registers, video switch. Generated by `make-entry-state.sh`, and inlined into `snake-byte-cold.c`. |
+| `entry-state-inc.h` | The machine state at entry: `$0000-$0802`, registers, video switch. Generated by `make-entry-state.sh`, and inlined into `snake-byte.c`. |
+| `reference/game_native.c` / `.h` | The same game in ordinary C, as the reference builds carry it. |
+| `reference/game.c` / `.h` | Adapters marshalling 6502 machine state in and out of the above, for the generated callers. |
+| `reference/a2rom.c` / `.h` | The 9 Apple II ROM entry points the game calls, hand-written. |
 
 **Decompiler output, regenerated by `decompile.sh`.** Do not hand-edit; the
 regeneration gate in `probe-acceptance.sh` will catch it:
 
-`snake-bytec1.c`, `snake-bytec1-ext.c`, `snake-byte-easyc1-ext.c`,
-`coverage.txt`, and the `snake-byte-ext.c` / `snake-byte-easy-ext.c` wrappers
-(those two are hand-written, small, and stitch a TU the way `snake-byte-cold.c`
+`reference/snake-bytec1.c`, `reference/snake-bytec1-ext.c`,
+`reference/snake-byte-easyc1-ext.c`, `testdata/coverage.txt`, and the
+`reference/snake-byte-ext.c` / `reference/snake-byte-easy-ext.c` wrappers
+(those two are hand-written, small, and stitch a TU the way `snake-byte.c`
 does).
 
-**No longer regenerated:** `snake-byte.c` (`--simple-c`) and `snake-byte.lst`
+**No longer regenerated,** and kept in `as-generated/` as the record of what the
+decompiler emitted: `snake-byte-simple-c.c` (`--simple-c`) and `snake-byte.lst`
 (`--asm`). Both `decompile.sh` lines are commented out. The listing is still
 useful for reading, with the caveat that anything on a `--code-at` path shows as
-`DFB` data.
+`DFB` data -- several comments in `snake-byte.c` cite it.
 
-**Decompiler inputs:**
+**Decompiler inputs,** all in `testdata/`:
 
 | File | |
 | --- | --- |
@@ -62,7 +95,7 @@ useful for reading, with the caveat that anything on a `--code-at` path shows as
 | `inline-str.txt` | Routines taking a NUL-terminated string after the `JSR`. |
 | `labels.txt` | Established names, each with its evidence. |
 
-**Recordings and oracles:**
+**Recordings and oracles,** all in `testdata/`:
 
 | File | |
 | --- | --- |

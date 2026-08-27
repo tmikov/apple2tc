@@ -2377,7 +2377,7 @@ which is where storage starts moving — and that is the point at which the memo
 probe added in step 0 becomes the oracle instead.
 
 The same check was what made the earlier `.inc` split defensible: moving 2,020
-lines of hex out of `snake-byte-cold.c` should be provably inert, and it was.
+lines of hex out of `snake-byte.c` should be provably inert, and it was.
 
 ### Naming forced two comments to be checked, and both were wrong
 
@@ -2431,7 +2431,7 @@ comment on `kLifeTime` says which half is which.
 
 All 115 are named, in six slices: the scoreboard, the snake, the plotter's
 argument block, the monitor's zero page, the settings block and pointers, and
-the tables. `ram_peek(0x...)` does not appear in `snake-byte-cold.c` any more.
+the tables. `ram_peek(0x...)` does not appear in `snake-byte.c` any more.
 
 ### The check held for every slice
 
@@ -2756,7 +2756,7 @@ source of the value and see whether the store can stand alone.
 
 ## 2026-08-24 (very last) — No decompiler-shaped code left, anywhere
 
-`bb_N:` appears zero times in `snake-byte-cold.c`. The twelve ROM entry points
+`bb_N:` appears zero times in `snake-byte.c`. The twelve ROM entry points
 that were still switches over block ids are C: PLOT1, SETCOL, SCRN, GBASCALC,
 PLOT, COUT1, HLINE/VLINEZ, HOME, the `$FC68` line-feed tail, SETKBD, SETVID and
 COUTZ.
@@ -3112,7 +3112,7 @@ cover" -- they were each doing their job. The blind spot was in the union.
 
 ### Two smaller things
 
-**A plausible screen is not a working screen.** `snake-byte-cold` legitimately
+**A plausible screen is not a working screen.** `snake-byte` legitimately
 opens on `APPLE ][ / ]CALL 14160`, because its entry snapshot was taken at
 `$3750` with BASIC's text page still on screen. Someone reporting that as the
 symptom is describing something real *and* something expected, and the two had
