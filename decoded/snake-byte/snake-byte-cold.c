@@ -306,11 +306,10 @@ bool rom_vtabz(uint8_t line) {
 
 /// $FC9C CLREOL. Blank from the cursor to the right edge of the window.
 ///
-/// **Decoded from the binary and not verified.** Neither cold scenario reaches
-/// it: probed at $FC9C, it fires 0 times in play and 0 in hires, because its
-/// only caller is $FC9A on the scroll path and nothing in the recordings
-/// scrolls. The body is three instructions and its tail call is the routine
-/// below, which *is* exercised, so what is unchecked is the LDY and the jump.
+/// **Transcribed from the binary and never executed by any test.** Its only
+/// caller is on the scroll path, and nothing the game does scrolls. The body
+/// is three instructions and its tail call *is* exercised, so what is
+/// unverified is the starting column and the jump.
 void rom_clreol(void) {
   rom_clreolz(s_ch); // JMP -- a tail call; nobody reads its carry.
 }
@@ -344,11 +343,9 @@ bool rom_clreolz(uint8_t col) {
 /// $FCA8 WAIT. The monitor's delay: two nested `SBC #$01 / BNE` loops around
 /// the value in A, which BELL uses to time its tone.
 ///
-/// **Decoded from the binary and not verified.** Probed at $FCA8, it fires 0
-/// times in both cold scenarios. Its only callers are $FBDF and $FBE6 inside
-/// BELL1, and nothing in the recordings outputs a Ctrl-G. That was already
-/// true of the version the decompiler emitted, so no coverage was lost here --
-/// but an error in the transcription would not be caught either.
+/// **Transcribed from the binary and never executed by any test.** Its only
+/// callers are inside BELL1, and nothing the game does emits a Ctrl-G. An
+/// error in the transcription would not be caught.
 ///
 /// A comes back as 0 and the carry set. The inner loop counts A down to zero
 /// from a copy on the stack, and the outer one counts the original down, so
@@ -358,9 +355,9 @@ void rom_wait(uint8_t n) {
      scroll's N is one: nothing outside this routine ever read the flag, and
      each read here follows the SBC that sets it.
 
-     Also not checked by running it -- rom_wait's only caller is BELL1 and
-     nothing emits Ctrl-G, so it fires zero times in both scenarios. Inverting
-     either test below passes all six cold checks. */
+     Never executed by any test -- WAIT's only caller is BELL1 and nothing
+     emits a Ctrl-G -- so inverting either test below goes unnoticed. This
+     rests on the dominance argument above and not on a passing run. */
   uint8_t not_zero = 0;
 
   // SEC: the borrow chain both loops run on.
@@ -372,9 +369,8 @@ void rom_wait(uint8_t n) {
     uint8_t inner = n;
     for (;;) {
       // WAIT is called only by BELL1, where it is the silence between the
-      // bell's clicks -- so this charge is the tone. Neither scenario emits
-      // Ctrl-G, so nothing in the gate covers it; it survives on the argument
-      // rather than on a measurement, which is worth saying plainly.
+      // bell's clicks, so this charge is the tone. Nothing exercises it, so
+      // the number rests on the 6502's timings rather than on a measurement.
       advance(5);
       const uint16_t r = (uint16_t)(inner - 0x0001) - (uint8_t)(0x01 - carry);
       carry = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
@@ -456,56 +452,28 @@ void rom_setvid(void);
 
 /* --- Cycle accounting ----------------------------------------------------- */
 
-/// Charge the cycles the original spent in a block, without registering a
-/// probe site.
+/// Charge cycles at an address, without registering a probe site.
 ///
-/// Timing cannot be dropped along with the block structure. A frame is a cycle
-/// budget, so a converted routine that runs at a different speed moves every
-/// later frame boundary and therefore every later frame hash -- the one oracle
-/// meant to survive to the end. What is given up is only the *observability*
-/// of the address: `CYCLES_EDGE` does not dispatch a probe, so the site leaves
-/// the block-head trace. That is the middle rung of the ladder in this file's
-/// header, and it is deliberate.
-///
-/// Spelled differently from `CYCLES` so the two cannot be confused, and so
-/// probe-acceptance.sh can reject a plain `CYCLES` in this file -- one written
-/// here would charge cycles and never be probed, which is a silent hole rather
-/// than a declared trade.
+/// The clock itself is `advance` above; these are what is left of the older
+/// scheme, where every basic block charged the cycles the 6502 spent in it and
+/// named the address it was at. Nothing observes the addresses any more.
 #define GAME_CYCLES(addr, n) CYCLES_EDGE((addr), (n))
 
-/// Charge the cycles and *keep* the probe, for the handful of addresses that
-/// carry the input coordinate.
+/// Charge cycles and *keep* the probe, for the addresses carrying the input
+/// coordinate.
 ///
-/// Replay does not stamp keystrokes on cycles -- it stamps them on a counter
-/// the probe language increments at seven named addresses (see rec.probe).
-/// Two of those, $6217 and $760F, sit inside routines this file is converting.
-/// A converted site charges its cycles and drops its probe, so spelling one of
-/// those GAME_CYCLES would stop the counter advancing there, and every key
-/// stamped after that point would arrive at a different instant.
+/// Replay does not stamp keystrokes on cycles. It stamps them on a counter the
+/// probe language increments at named addresses, two of which sit inside
+/// routines here -- the game's keyboard poll, and the redefinition screen's.
+/// Drop the probe at one of those and the counter stops advancing there, so
+/// every key stamped after it arrives at a different moment. The same two
+/// addresses are where the screen and memory comparisons take their samples,
+/// which is why the whole gate is independent of the clock.
 ///
-/// That is caught, but badly. The interpreter side of the comparison always
-/// runs the original binary, so its counter never drifts; only the generated
-/// side does, and the block-head trace then diverges. Measured: converting
-/// $760F fails trace-ext on the play-hires scenario at line 640,983 of the
-/// diff, with four addresses in the redefinition screen appearing on one side
-/// and not the other. Nothing about that output says "the input coordinate
-/// moved". verify.sh does not notice at all -- it replays the cycle-stamped
-/// .keys files, which do not use the counter.
-///
-/// So the site keeps its probe, and the spelling says why at the call site.
-/// probe-acceptance.sh asserts that every address written this way is one of
-/// the coordinate's, which turns a 640,983-line diff into one line naming the
-/// address.
-///
-/// The local inside the macro is the emulator's assembly-trace plumbing:
-/// `CYCLES` consults a `branchTarget` flag the generated dispatch keeps, to
-/// print one line per block rather than one per instruction. Converted code
-/// has no block structure for that question to be about, and a site spelled
-/// this way is a block head by construction, so it answers yes and moves on.
-///
-/// That local is the only `branchTarget` left in this file. The generated code
-/// declared one per function and assigned it at every block head; nothing here
-/// ever read one, so all 121 went.
+/// The local is emulator plumbing: `CYCLES` consults a `branchTarget` flag the
+/// generated dispatch used to keep, so that its trace printed one line per
+/// block rather than one per instruction. A site spelled this way is a block
+/// head by construction, so it answers yes and moves on.
 #define GAME_CYCLES_COORD(addr, n) \
   do {                             \
     bool branchTarget = true;      \
@@ -513,39 +481,13 @@ void rom_setvid(void);
     (void)branchTarget;            \
   } while (0)
 
-/// Charge the cycles and keep the probe, because some *other* source still
-/// names this address.
+/// Charge cycles and keep the probe, because this address is where the
+/// cross-build comparison lines its two traces up.
 ///
-/// A converted routine normally takes its block heads out of the comparison
-/// altogether: nothing probes them, on either engine, and the two agree by
-/// saying nothing. That argument fails the moment another file still emits a
-/// `CYCLES` for the same address, because then the interpreter reports it and
-/// the generated build does not.
-///
-/// It has happened twice, for two different reasons. $6216 is an RTS shared by
-/// two routines, one converted and one not. $720E is stranger: the low half of
-/// $71F3 survives in the generated C as an orphan -- its only predecessors were
-/// in the extern-replaced region, so nothing can reach it -- but it is still
-/// text in the file, so it is still on the site list. Neither is visible in the
-/// pinned count, which was right both times.
-///
-/// probe-acceptance.sh checks all three spellings against the site list built
-/// from the other sources: an address here must be in it, an address on plain
-/// GAME_CYCLES must not be, and GAME_CYCLES_COORD must be on the coordinate.
-#define GAME_CYCLES_SHARED(addr, n) GAME_CYCLES_COORD((addr), (n))
-
-/// Charge the cycles and keep the probe, because the address is where a
-/// cross-build comparison lines the two traces up.
-///
-/// Exactly one address uses this, and it is $3750. probe-acceptance.sh checks
-/// the cold-start build against the booting one, and the booting one's trace
-/// has to have its boot prefix removed before the two are comparable. The only
-/// way to find where that prefix ends is to look for the entry address, so the
-/// entry address has to still be in the trace. Converting it to a plain
-/// GAME_CYCLES takes it out and the alignment silently finds nothing.
-///
-/// Spelled apart from GAME_CYCLES_COORD, which it expands to, because the
-/// reason is different and the two lints check different things.
+/// Exactly one address uses this: the game's entry point. The build being
+/// compared against boots the real machine first, and the only way to find
+/// where its boot prefix ends is to look for that address in the trace. Spell
+/// it as a plain GAME_CYCLES and the alignment silently finds nothing.
 #define GAME_CYCLES_ANCHOR(addr, n) GAME_CYCLES_COORD((addr), (n))
 
 /* --- Converted routines --------------------------------------------------- */
@@ -1114,10 +1056,9 @@ void rom_fc68(void) {
      other thirty-nine writes of s_status_n in this file were dead stores and
      are gone.
 
-     Not checked by running it: nothing in either scenario scrolls, and $FC8C
-     and $FC93 are on probe-acceptance.sh's unverified list to say so.
-     Inverting the test below passes all six cold checks. This rests on the
-     dominance argument above, not on a green gate. */
+     Never executed by any test: nothing the game does scrolls, so inverting
+     the test below goes unnoticed. This rests on the dominance argument
+     above, not on a passing run. */
   uint8_t negative = 0;
 
   uint8_t line;
@@ -1219,14 +1160,9 @@ last_line: /* blank what the scroll left at the bottom */
 ///
 /// Entered from COUT1, which has already masked the character with INVFLG.
 ///
-/// **Three of its arms are decoded and never run.** Probed at their entry
-/// addresses across both cold scenarios: the character store fires 204 and 651
-/// times and the carriage return and line feed 0 and 17, but the Ctrl-S
-/// handshake ($FB85), its spin ($FB88), the backspace ($FC10) and the bell
-/// ($FBD9 and $FBDD) fire **zero** times in either. Everything this game
-/// prints is printable, a return, or a line feed; it never emits a Ctrl-G or a
-/// backspace, and no recording holds a key down across a return. Those arms
-/// rest on the binary alone.
+/// **Several of its arms never run.** Everything this game prints is
+/// printable, a carriage return, or a line feed. The Ctrl-S screen hold, the
+/// backspace and the bell rest on the binary alone.
 ///
 /// The labels keep their addresses. This is a dispatcher whose arms rejoin at
 /// several depths -- backspace falls into the cursor-up path, a wrapped line
@@ -1388,27 +1324,18 @@ out:
 /// 8-byte glyph from the font at $66A9; control characters below $20 fall
 /// through to ROM COUT1 at $FDF0.
 ///
-/// In the entire recorded session, however, the vector always points at ROM:
-/// the run data records $FDED -> $FDF0 only, and $6641 was never executed
-/// (neither it nor its callers $7485/$793F appear in BranchTargets). $664A is
-/// therefore classified as data and is not present in the generated C at all.
-///
-/// Because the recorded session never dispatches anywhere but $FDF0, the
-/// verification oracle structurally *cannot* detect a wrong choice here. So a
-/// non-ROM vector target is a hard, loud failure rather than a silent fallback
-/// to COUT1: a wrong-but-quiet answer would diverge invisibly, whereas an abort
-/// fires at exactly the moment the question first matters.
-///
-/// KNOWN GAP for a later phase: implement $664A (the hi-res text renderer) and
-/// dispatch to it here.
+/// Only those two targets are implemented, and any other is a hard failure
+/// rather than a quiet fallback to COUT1. Nothing in this program can tell the
+/// difference between the right answer and a wrong one here -- both render --
+/// so a wrong guess would diverge invisibly, while an abort fires at the
+/// moment the question first matters.
 /// $FDED COUT -- `JMP ($36)`. Dispatches through the output vector CSWL/CSWH
 /// rather than reimplementing COUT1, because Snake Byte repoints it: $6641
 /// installs the game's own hi-res text renderer at $664A.
 ///
-/// Any target other than the two we implement is a hard failure rather than a
-/// fallback. The recorded session never leaves $FDF0, so `verify.sh` cannot
-/// catch a wrong guess here -- a silent fallback would render with the wrong
-/// font onto the wrong page, undetectably.
+/// Any target other than the two implemented is a hard failure rather than a
+/// fallback: a silent fallback would render with the wrong font onto the wrong
+/// page, and nothing here would notice.
 void rom_cout(uint8_t ch) {
   uint16_t vector;
 
@@ -2855,17 +2782,10 @@ uint8_t game_step_bouncers_native(void) {
 /// from the title screen. Both tables are part of the loaded image, and the
 /// first is written at $757C, from the redefinition screen.
 ///
-/// The substitution went unchecked for a while, and coverage could not say so.
-/// Both blocks that perform it run constantly -- play.pkeys presses I, J, K
-/// and M all through the round -- but those are the *default* bindings, where
-/// the two tables hold identical bytes and reading the wrong one is invisible.
-/// play-hires.pkeys does rebind, and then the recording ends without playing.
-/// Swapping input_code for input_key passed verify.sh 4/4, all three traces,
-/// memory and screen.
-///
-/// play-rebind.pkeys closes it: bound to W A S Z Q E and then played with
-/// them, so the tables differ across all 8 substitutions it performs. The same
-/// swap now fails trace-ext.
+/// Confusing the two is invisible until the player rebinds a key: with the
+/// default bindings both tables hold identical bytes, so reading the wrong one
+/// looks exactly right. It stayed wrong for a while for that reason, and only
+/// a test that rebinds and *then* plays can tell them apart.
 enum { kInputCount = 6 };
 
 static uint8_t input_key(int i) {
@@ -3269,11 +3189,9 @@ void game_add_score_native(void) {
     carry = flags & 0x01;
   }
 
-  // Only the `easy` fixture checks the carry. Breaking the propagation between
-  // bytes -- so the score never carries past $99 -- passes verify.sh 4/4, both
-  // 1300-frame traces, memory and screen, and fails only the 3000-frame run
-  // against snake-byte-easy.b33. Neither committed recording ever scores
-  // enough to cross a byte boundary.
+  // The carry between bytes is barely covered: only the long fixture run ever
+  // scores enough to cross a byte boundary, so breaking the propagation here
+  // looks correct to almost everything.
   //
   // D is the only flag live out of $7267 that survives here, and the
   // original's CLD is what makes it false. `apple2tc --ir` also called C and V
@@ -3800,23 +3718,9 @@ static void click_speaker(void) {
 /* strobe is cleared after the wait rather than before it, so a key already   */
 /* pending when ESC arrives ends the pause immediately.                       */
 /*                                                                            */
-/* Three of the six blocks are decoded from the binary rather than checked by */
-/* a recording: $69AD and $69B2, the spin and the strobe clear, and $69B9,    */
-/* the toggle. No committed recording presses either key. Converting takes    */
-/* those addresses off the site list, so this comment is now the only record  */
-/* that they are unverified.                                                  */
-/*                                                                            */
-/* What the other three do get is thinner than it looks, and it was measured  */
-/* rather than assumed. Only play-rebind reaches this routine at all, and it  */
-/* reaches it once. Inverting the Ctrl-S test is caught, by trace-ext on that */
-/* scenario. Mis-charging the entry block is not: 4 cycles written as 5       */
-/* passes verify.sh 4/4 and every probe scenario, because the one oracle that */
-/* compares cycles (verify.sh) never executes this code, and the oracle that  */
-/* does (probe-acceptance.sh) stamps its input on a probe counter precisely   */
-/* so that it does not depend on cycles. 4 written as 4000 is caught, by      */
-/* frame-boundary drift. So the cycle charges here are checked only to a      */
-/* resolution of roughly a frame, and the numbers below rest on the opcode    */
-/* timings, not on a passing test.                                            */
+/* Barely covered, and worth knowing before editing: no test presses either   */
+/* key, so the pause spin, the strobe clear and the mute toggle rest on the   */
+/* binary alone. This comment is the only record that they are unverified.    */
 /* ========================================================================== */
 
 void game_pause_or_toggle_sound_native(uint8_t key) {
@@ -3850,21 +3754,10 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     /* --- $628B: a key, and what the game makes of it -------------------- */
     game_read_key_native();
     uint8_t code;
-    { // was game_read_direction()
-
-      // The JSR stays here rather than moving into the native routine, because
-      // game_step_bouncers's own adapter is what keeps $6216 -- the RTS it shares
-      // with the unconverted game_read_key -- a probe site.
+    {
       const uint8_t key = game_step_bouncers_native();
-      // $6216 is an RTS shared with game_read_key, so it stays a probe site even
-      // though the routine that used to hold it is gone. Spelled with plain CYCLES
-      // rather than GAME_CYCLES_SHARED because site_addrs() does not grep for that
-      // form -- it would have kept probing and left the list, which is the silent
-      // half of a hole rather than the loud one.
-
-      // The original saves the key on the stack across the $0302 test; here it is
-      // an argument. The pushed byte is never observed: nothing between the PHA
-      // and the PLA samples memory, and ram.probe compares only the live stack.
+      // The original saves the key on the stack across the direction test;
+      // here it is an argument.
       code = game_read_direction_native(key);
     }
 
@@ -4261,13 +4154,6 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
 /*                                                                            */
 /* $24 and $25 are the ROM's CH and CV. Only the last write to CV is followed  */
 /* by VTAB, because COUT recomputes the line base itself on the way past.      */
-/* Twenty-nine of the thirty block heads here keep their probes, spelled            */
-/* GAME_CYCLES_SHARED. game_print_inline_str returns to an address it computes */
-/* at run time, so every one of its return points is a dynamic block -- and    */
-/* the generated C therefore still carries this routine's tail as cases        */
-/* nothing can reach but that are still text in the file, and still on the     */
-/* site list. The interpreter reports those addresses; so must this. Only      */
-/* $72CE itself leaves, because that is the one the call now replaces.         */
 /*                                                                            */
 /* Every charge below is written out with a literal address rather than passed */
 /* to a helper. A helper reads better and is wrong: the site-list lint finds   */
@@ -4655,24 +4541,14 @@ wait: /* $741C */
  */
 
 /* ========================================================================== */
-/* the game's own COUT handler.                                      */
+/* The game's own COUT handler, a hi-res text renderer.                       */
 /*                                                                            */
-/* $6641 installs it:                                                         */
-/*     LDA #$4A / STA $36 / LDA #$66 / STA $37 / RTS                          */
-/* pointing CSWL/CSWH at $664A, so every subsequent COUT ($FDED = JMP ($36))   */
-/* lands here. $6641 is called from $7485 and $793F.                          */
+/* game_install_cout_vector points the ROM's output vector at this, so every   */
+/* later COUT lands here instead of the monitor's COUT1. Control characters    */
+/* are handed straight on to COUT1; anything printable is drawn as an 8-byte   */
+/* glyph from the game's own font.                                            */
 /*                                                                            */
-/* The recorded session never runs $6641 -- neither it nor its callers appear  */
-/* in snake-byte.json's BranchTargets, and the run-data records $FDED -> $FDF0 */
-/* only. So the tracer saw $664A as data and apple2tc emitted nothing for it.  */
-/*                                                                            */
-/* Decoded from snake-byte.b33 by hand. The decode was cross-checked against   */
-/* apple2tc using a scratch run-data file with $664A added as a branch target; */
-/* the committed snake-byte.json is deliberately unmodified, because it is a   */
-/* recording of what actually happened and not a place to assert reachability. */
-/* The CYCLES() constants below come from that cross-check.                    */
-/*                                                                            */
-/* Original:                                                                  */
+/* Decoded from the binary by hand, so the original is kept for reference:     */
 /*                                                                            */
 /*   664A: PHA / AND #$7F / CMP #$20 / BCS $6655                              */
 /*   6651: PLA / JMP $FDF0                 ; control chars -> ROM COUT1        */
