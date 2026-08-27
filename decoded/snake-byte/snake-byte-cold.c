@@ -535,7 +535,7 @@ typedef enum {
 /// occupancy map held at the target, which the original leaves in A.
 MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out);
 
-/// copy s_score over s_hi_score if it beats
+/// copy s_progress.score over s_progress.best if it beats
 /// it, comparing BCD bytes most significant first.
 void game_promote_high_score(void);
 
@@ -598,7 +598,7 @@ void game_print_bcd(uint8_t byte);
 /// print a single "0" if the number just printed was all zeros.
 void game_print_zero_if_blank(void);
 
-/// add the two-byte BCD value in s_apple_value to the four-byte score.
+/// add the two-byte BCD value in s_progress.apple_value to the four-byte score.
 void game_add_score(void);
 
 /// set the lo-res plot colour from an ink byte: 0 erases, anything
@@ -1507,7 +1507,7 @@ static const uint8_t kKeyDefaults[6] = {
 };
 
 /// what one apple is worth, indexed by difficulty 0-2. Three bytes:
-/// s_apple_value is s_apple_value, which is where the table stops.
+/// s_progress.apple_value is s_progress.apple_value, which is where the table stops.
 static const uint8_t kAppleValueTable[3] = {
     0x10,
     0x15,
@@ -1882,45 +1882,53 @@ void bouncer_step(Bouncer *b) {
  * meaning for the whole that the game never uses.
  *
  * Every initialiser is the byte the shipped image holds at that address, and
- * none of them is decoration: a new game seeds itself from s_apples_quota and
- * the status panel is drawn before anything writes s_lives or s_level, so
+ * none of them is decoration: a new game seeds itself from s_progress.quota and
+ * the status panel is drawn before anything writes s_progress.lives or s_progress.level, so
  * several of these are read before they are written.
  */
 
-/// SCORE, four bytes. game_add_score adds an apple's worth into it;
-/// game_promote_high_score copies it over the high score at the end of a game.
-static uint8_t s_score[4] = {0x00, 0x00, 0x00, 0x00};
-
-/// HI SCORE, four bytes, the same shape.
-static uint8_t s_hi_score[4] = {0x00, 0x00, 0x00, 0x00};
-
-/// APPLES LEFT -- what remains of this round's quota. start_round loads it
-/// from s_apples_quota and each apple eaten takes one off; both bytes zero is
-/// what ends the round.
-static uint8_t s_apples_left[2] = {0x10, 0x00};
-
-/// SNAKES LEFT -- lives. $7691 sets it to 2 for a new game.
-static uint8_t s_lives = 0x02;
-
-/// Apples on the playfield *right now* -- not, as this pair was commented
-/// before it was named, a countdown to the next one. game_place_apple ends
-/// by BCD-incrementing it ($766C) and $7743 decrements it when one is
-/// eaten; $77D0 places a replacement exactly when it reaches zero, which is
-/// why the field normally holds one apple and the timeout path's three
-/// arrive together. Measured on play-hires: it is $01 at every apple eaten,
-/// and $77D0 fires and places one every time.
-static uint8_t s_apples_afield[2] = {0x00, 0x00};
-
-/// Apples eaten this round. Only the first $11 of them score -- $777B tests
-/// the high byte and $7780 compares the low against $11.
-static uint8_t s_apples_eaten[2] = {0x00, 0x00};
-
-/// The round's quota, copied into s_apples_left by start_round. $10 for a
-/// fresh level, and the timeout path at $7817 adds three to both.
-static uint8_t s_apples_quota[2] = {0x10, 0x00};
-
-/// LEVEL, one BCD byte.
-static uint8_t s_level = 0x01;
+/// The score, and how far the player has got. The counters are BCD, because
+/// the status panel prints them a nibble at a time.
+static struct {
+  /// SCORE, four bytes. game_add_score adds an apple's worth into it;
+  /// game_promote_high_score copies it over the high score at the end of a
+  /// game.
+  uint8_t score[4];
+  uint8_t best[4]; ///< HI SCORE, four bytes, the same shape
+  uint8_t level;   ///< LEVEL, one BCD byte
+  uint8_t lives;   ///< SNAKES LEFT. $7691 sets it to 2 for a new game
+  uint8_t lives_at_level_start; ///< restored if the level is failed
+  /// The bonus screen's own two-byte BCD scratch, and the lives count it
+  /// compares against to decide whether the round earned a bonus at all.
+  uint8_t bonus[2];
+  /// VALUE -- what one apple is worth on this level, two BCD bytes.
+  /// game_set_apple_value recomputes it per level.
+  uint8_t apple_value[2];
+  /// Apples on the playfield *right now* -- not, as this pair was commented
+  /// before it was named, a countdown to the next one. game_place_apple ends
+  /// by BCD-incrementing it ($766C) and $7743 decrements it when one is
+  /// eaten; $77D0 places a replacement exactly when it reaches zero, which
+  /// is why the field normally holds one apple and the timeout path's three
+  /// arrive together. Measured on play-hires: it is $01 at every apple
+  /// eaten, and $77D0 fires and places one every time.
+  uint8_t afield[2];
+  /// Apples eaten this round. Only the first $11 of them score -- $777B
+  /// tests the high byte and $7780 compares the low against $11.
+  uint8_t eaten[2];
+  /// APPLES LEFT -- what remains of this round's quota. start_round loads
+  /// it from quota and each apple eaten takes one off; both bytes zero is
+  /// what ends the round.
+  uint8_t left[2];
+  /// The round's quota, copied into left by start_round. $10 for a fresh
+  /// level, and the timeout path at $7817 adds three to both.
+  uint8_t quota[2];
+} s_progress = {
+    .left = {0x10, 0x00},
+    .lives = 0x02,
+    .quota = {0x10, 0x00},
+    .level = 0x01,
+    .lives_at_level_start = 0x02,
+};
 
 /// What s_life_timer is loaded with when a life begins. Comes from s_level_time,
 /// the level's own allowance.
@@ -1963,7 +1971,7 @@ static uint8_t s_script_index;
 
 /// The level's time allowance, which seeds s_life_time at the start of every
 /// life. Set by the display list's 'T' command (see run_script), and $64 until
-/// one says otherwise. It is *not* the apple value, which is s_apple_value and
+/// one says otherwise. It is *not* the apple value, which is s_progress.apple_value and
 /// is computed by game_set_apple_value from the difficulty and the level
 /// number; that routine never reads this byte.
 static uint8_t s_level_time;
@@ -2001,19 +2009,10 @@ static uint16_t s_rand_ptr = 0x6b00;
 /// the prompt appears immediately.
 static bool s_setup_seen = true;
 
-/// VALUE -- what one apple is worth on this level, two BCD bytes.
-/// game_set_apple_value recomputes it per level.
-static uint8_t s_apple_value[2] = {0x00, 0x00};
-
-/// The bonus screen's own two-byte BCD scratch, and the lives count it
-/// compares against to decide whether the round earned a bonus at all.
-static uint8_t s_bonus_amount[2] = {0x00, 0x00};
-static uint8_t s_lives_at_level_start = 0x02;
-
 /* ========================================================================== */
 /* the high score                                                    */
 /*                                                                            */
-/* Four BCD bytes in s_score against four in s_hi_score, most significant first.      */
+/* Four BCD bytes in s_progress.score against four in s_progress.best, most significant first.      */
 /* Below at any byte and it stops; above and it copies; equal and it moves on. */
 /*                                                                            */
 /* The four compares are a loop here, over the byte indices. In game.c that    */
@@ -2030,8 +2029,8 @@ void game_promote_high_score(void) {
   bool beats_it = true;
 
   for (unsigned i = 0; i < 4; ++i) {
-    const uint8_t mine = s_score[kMsbFirst[i]];
-    const uint8_t best = s_hi_score[kMsbFirst[i]];
+    const uint8_t mine = s_progress.score[kMsbFirst[i]];
+    const uint8_t best = s_progress.best[kMsbFirst[i]];
     if (mine < best) {
       beats_it = false;
       break;
@@ -2045,7 +2044,7 @@ void game_promote_high_score(void) {
 
   if (beats_it) {
     for (unsigned i = 0; i < 4; ++i)
-      s_hi_score[i] = s_score[i];
+      s_progress.best[i] = s_progress.score[i];
   }
 }
 
@@ -3038,18 +3037,18 @@ void game_add_score(void) {
   // both use, so it cannot disagree with them about the undefined corners of
   // BCD ADC. It returns the sum in the low byte and the flags in the high one.
 
-  // Four bytes in s_score, least significant first, plus a two-byte value at
-  // s_apple_value. The original adds the value into the low half and then propagates
+  // Four bytes in s_progress.score, least significant first, plus a two-byte value at
+  // s_progress.apple_value. The original adds the value into the low half and then propagates
   // the carry through the top half with `ADC #$00`, which flips the operand
   // order halfway -- kept, because adc_dec16 need not be symmetric over BCD
   // that is not valid BCD.
   unsigned carry = 0;
   uint8_t flags = 0;
   for (int i = 0; i < 4; ++i) {
-    const uint8_t a = i < 2 ? s_apple_value[i] : s_score[i];
-    const uint8_t m = i < 2 ? s_score[i] : 0x00;
+    const uint8_t a = i < 2 ? s_progress.apple_value[i] : s_progress.score[i];
+    const uint8_t m = i < 2 ? s_progress.score[i] : 0x00;
     const uint16_t r = adc_dec16(a, m, carry);
-    s_score[i] = (uint8_t)r;
+    s_progress.score[i] = (uint8_t)r;
     flags = (uint8_t)(r >> 8);
     carry = flags & 0x01;
   }
@@ -3157,25 +3156,25 @@ Cell game_place_apple(void) {
 
   // One more apple on screen. $77D0 watches this pair and calls back here when
   // it reaches zero.
-  bcd_inc16(s_apples_afield);
+  bcd_inc16(s_progress.afield);
   return at;
 }
 
 /// what one apple is worth: the difficulty's entry in the $71C8 table
-/// added to itself once per level, in BCD, into s_apple_value. X is never touched in
+/// added to itself once per level, in BCD, into s_progress.apple_value. X is never touched in
 /// the original's loop, which is what makes it the same entry every time.
 void game_set_apple_value(void) {
-  s_apple_value[0] = 0x00;
-  s_apple_value[1] = 0x00;
+  s_progress.apple_value[0] = 0x00;
+  s_progress.apple_value[1] = 0x00;
   const uint8_t per_apple = kAppleValueTable[s_difficulty];
   uint8_t levels = s_script_index;
 
   for (;;) {
-    uint16_t r = adc_dec16(per_apple, s_apple_value[0], 0x00);
-    s_apple_value[0] = (uint8_t)r;
+    uint16_t r = adc_dec16(per_apple, s_progress.apple_value[0], 0x00);
+    s_progress.apple_value[0] = (uint8_t)r;
 
-    r = adc_dec16(s_apple_value[1], 0x00, (uint8_t)(r >> 8) & 0x01);
-    s_apple_value[1] = (uint8_t)r;
+    r = adc_dec16(s_progress.apple_value[1], 0x00, (uint8_t)(r >> 8) & 0x01);
+    s_progress.apple_value[1] = (uint8_t)r;
 
     if (!--levels)
       break;
@@ -3230,7 +3229,7 @@ void game_draw_head(uint8_t ink, Cell c) {
 /// screen. Nothing about it runs when an apple is eaten; that path is $7743,
 /// and it touches four other counters and not this one.
 void game_award_extra_life(void) {
-  s_lives = (uint8_t)adc_dec16(s_lives, 0x01, 0x00);
+  s_progress.lives = (uint8_t)adc_dec16(s_progress.lives, 0x01, 0x00);
   game_sound_sweep();
 }
 
@@ -4019,25 +4018,25 @@ static void clear_leading_zero_flag(void) {
 }
 
 void game_status_panel(void) {
-  // SCORE, row $14 column $00. Four BCD bytes in s_score, little-endian.
+  // SCORE, row $14 column $00. Four BCD bytes in s_progress.score, little-endian.
   s_mon.cv = 0x14;
   s_mon.ch = 0x00;
   game_print_inline_str(0x72d8);
   clear_leading_zero_flag();
-  game_print_bcd(s_score[3]);
-  game_print_bcd(s_score[2]);
-  game_print_bcd(s_score[1]);
-  game_print_bcd(s_score[0]);
+  game_print_bcd(s_progress.score[3]);
+  game_print_bcd(s_progress.score[2]);
+  game_print_bcd(s_progress.score[1]);
+  game_print_bcd(s_progress.score[0]);
   game_print_zero_if_blank();
 
-  // HI SCORE, same row, column $14. Four bytes in s_hi_score.
+  // HI SCORE, same row, column $14. Four bytes in s_progress.best.
   s_mon.ch = 0x14;
   game_print_inline_str(0x7307);
   clear_leading_zero_flag();
-  game_print_bcd(s_hi_score[3]);
-  game_print_bcd(s_hi_score[2]);
-  game_print_bcd(s_hi_score[1]);
-  game_print_bcd(s_hi_score[0]);
+  game_print_bcd(s_progress.best[3]);
+  game_print_bcd(s_progress.best[2]);
+  game_print_bcd(s_progress.best[1]);
+  game_print_bcd(s_progress.best[0]);
   game_print_zero_if_blank();
 
   // APPLES LEFT, row $15 column $00. Two bytes at $725A.
@@ -4045,8 +4044,8 @@ void game_status_panel(void) {
   s_mon.cv = 0x15;
   game_print_inline_str(0x733d);
   clear_leading_zero_flag();
-  game_print_bcd(s_apples_left[1]);
-  game_print_bcd(s_apples_left[0]);
+  game_print_bcd(s_progress.left[1]);
+  game_print_bcd(s_progress.left[0]);
   game_print_zero_if_blank();
 
   // A space, which the next field's cursor move immediately overrides. It is
@@ -4054,13 +4053,13 @@ void game_status_panel(void) {
   // longer count earlier in the game.
   rom_cout(0xa0);
 
-  // VALUE, same row, column $14. Two bytes in s_apple_value -- the current worth of an
+  // VALUE, same row, column $14. Two bytes in s_progress.apple_value -- the current worth of an
   // apple, which game_set_apple_value computes per level.
   s_mon.ch = 0x14;
   game_print_inline_str(0x736b);
   clear_leading_zero_flag();
-  game_print_bcd(s_apple_value[1]);
-  game_print_bcd(s_apple_value[0]);
+  game_print_bcd(s_progress.apple_value[1]);
+  game_print_bcd(s_progress.apple_value[0]);
   game_print_zero_if_blank();
 
   // SNAKES LEFT, row $16 column $00. One byte at $725E, printed as though it
@@ -4072,14 +4071,14 @@ void game_status_panel(void) {
   game_print_inline_str(0x7392);
   clear_leading_zero_flag();
   game_print_bcd(0x00);
-  game_print_bcd(s_lives);
+  game_print_bcd(s_progress.lives);
   game_print_zero_if_blank();
 
   // LEVEL, same row, column $14. One byte at $7265.
   s_mon.ch = 0x14;
   game_print_inline_str(0x73b8);
   clear_leading_zero_flag();
-  game_print_bcd(s_level);
+  game_print_bcd(s_progress.level);
   game_print_zero_if_blank();
 
   // Home the cursor. This CV write is the one that needs VTAB, because nothing
@@ -4094,7 +4093,7 @@ void game_status_panel(void) {
 /* Awarded when a level is finished. The bonus is twice whatever an apple was  */
 /* worth on that level, which the original says twice over: once as BCD        */
 /* arithmetic into $78B0/$78B1 so the number can be printed, and once as two   */
-/* consecutive calls to game_add_score, which adds s_apple_value/s_apple_value[1] each time.      */
+/* consecutive calls to game_add_score, which adds s_progress.apple_value/s_progress.apple_value[1] each time.      */
 /* Neither reads the other's answer.                                          */
 /*                                                                            */
 /* This routine is *entered with decimal mode set* -- unusual here, and the    */
@@ -4109,10 +4108,10 @@ void game_status_panel(void) {
 
 void game_bonus_screen(void) {
   // $78B3 -- double the apple's value into $78B0/$78B1, in BCD.
-  const uint16_t lo = adc_dec16(s_apple_value[0], s_apple_value[0], 0x00);
-  s_bonus_amount[0] = (uint8_t)lo;
-  const uint16_t hi = adc_dec16(s_apple_value[1], s_apple_value[1], (uint8_t)(lo >> 8) & 0x01);
-  s_bonus_amount[1] = (uint8_t)hi;
+  const uint16_t lo = adc_dec16(s_progress.apple_value[0], s_progress.apple_value[0], 0x00);
+  s_progress.bonus[0] = (uint8_t)lo;
+  const uint16_t hi = adc_dec16(s_progress.apple_value[1], s_progress.apple_value[1], (uint8_t)(lo >> 8) & 0x01);
+  s_progress.bonus[1] = (uint8_t)hi;
 
   // Twice, because the bonus is twice the apple value and game_add_score adds
   // it once.
@@ -4145,8 +4144,8 @@ void game_bonus_screen(void) {
   // The LDA #$4A flags are overwritten by the second load; only these outlive.
   game_print_inline_str(0x7944);
   s_mon.h2 = 0x00;
-  game_print_bcd(s_bonus_amount[1]);
-  game_print_bcd(s_bonus_amount[0]);
+  game_print_bcd(s_progress.bonus[1]);
+  game_print_bcd(s_progress.bonus[0]);
 
   // $795D -- COUT back to the ROM's, and $02 becomes the outermost counter of
   // the pause below.
@@ -4549,7 +4548,7 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* ========================================================================== */
 /* the score.                                   */
 /*                                                                            */
-/* The score is BCD: four little-endian bytes in s_score, eight digits.        */
+/* The score is BCD: four little-endian bytes in s_progress.score, eight digits.        */
 /* $7267 adds to it with the 6502's decimal mode, and $71F3 prints one byte   */
 /* of it as two digits by nibble, since in BCD a nibble is already a digit.   */
 /*                                                                            */
@@ -4647,8 +4646,8 @@ void game_print_inline_str(uint16_t ret_addr) {
 /*                                                                            */
 /* $0301 is the difficulty, 0-2, and $71CD is what gives it away: it indexes  */
 /* the three-byte table at $71C8 -- $10, $15, $20 -- with $0301 and adds that */
-/* entry to s_apple_value/s_apple_value[1] once per level, in BCD. So an apple is worth          */
-/* base[difficulty] * level, which is why s_apple_value read $15 throughout the       */
+/* entry to s_progress.apple_value/s_progress.apple_value[1] once per level, in BCD. So an apple is worth          */
+/* base[difficulty] * level, which is why s_progress.apple_value read $15 throughout the       */
 /* recordings: difficulty 1, level 1. It is also what decides the two         */
 /* optional wall gaps in game_draw_playfield.                                 */
 /* ========================================================================== */
@@ -4856,28 +4855,28 @@ new_game: /* $7691 */
   game_setup_screen();
   game_promote_high_score();
   s_script_index = 0x01;
-  s_level = 0x01;
-  s_score[0] = 0x00;
-  s_score[1] = 0x00;
-  s_score[2] = 0x00;
-  s_score[3] = 0x00;
-  s_lives = 0x02;
-  s_apples_afield[0] = 0x00;
+  s_progress.level = 0x01;
+  s_progress.score[0] = 0x00;
+  s_progress.score[1] = 0x00;
+  s_progress.score[2] = 0x00;
+  s_progress.score[3] = 0x00;
+  s_progress.lives = 0x02;
+  s_progress.afield[0] = 0x00;
 
 new_level: /* $76B7 */
-  s_lives_at_level_start = s_lives;
-  s_apples_quota[0] = 0x10;
+  s_progress.lives_at_level_start = s_progress.lives;
+  s_progress.quota[0] = 0x10;
 
 round: /* $76C2 */
-  s_apples_quota[1] = 0x00;
+  s_progress.quota[1] = 0x00;
 
 start_round: /* $76C7 */
-  s_apples_afield[0] = 0x00;
-  s_apples_afield[1] = 0x00;
-  s_apples_eaten[0] = 0x00;
-  s_apples_eaten[1] = 0x00;
-  s_apples_left[0] = s_apples_quota[0];
-  s_apples_left[1] = s_apples_quota[1];
+  s_progress.afield[0] = 0x00;
+  s_progress.afield[1] = 0x00;
+  s_progress.eaten[0] = 0x00;
+  s_progress.eaten[1] = 0x00;
+  s_progress.left[0] = s_progress.quota[0];
+  s_progress.left[1] = s_progress.quota[1];
   game_draw_playfield();
   s_life_time = s_level_time;
   game_set_apple_value();
@@ -4914,14 +4913,14 @@ verdict: /* s_life_outcome says how the life ended */
   goto round_cleared;
 
 ate_apple: /* $773E */
-  bcd_sub16(s_apples_afield, 0x01);
-  bcd_sub16(s_apples_left, 0x01);
-  bcd_add16(s_apples_eaten, 0x01);
+  bcd_sub16(s_progress.afield, 0x01);
+  bcd_sub16(s_progress.left, 0x01);
+  bcd_add16(s_progress.eaten, 0x01);
 
   // $777B -- points only for the first $11 apples of the round. The high
   // byte must be zero and the low one below $11, both BCD.
-  if (!(s_apples_eaten[1])) {
-    if (!(s_apples_eaten[0] >= 0x11)) {
+  if (!(s_progress.eaten[1])) {
+    if (!(s_progress.eaten[0] >= 0x11)) {
       game_add_score();
     }
   }
@@ -4929,10 +4928,10 @@ ate_apple: /* $773E */
   s_snake.growth = (uint8_t)(s_snake.growth + 0x0a); // ten more cells of snake
 
   // $7793 -- anything left in the round?
-  if (s_apples_left[0]) {
+  if (s_progress.left[0]) {
     goto next_apple;
   }
-  if (s_apples_left[1]) {
+  if (s_progress.left[1]) {
     goto next_apple;
   }
 
@@ -4951,10 +4950,10 @@ ate_apple: /* $773E */
   goto life;
 
 next_apple: /* place one only when both countdown bytes are zero */
-  if (s_apples_afield[0]) {
+  if (s_progress.afield[0]) {
     goto life;
   }
-  if (s_apples_afield[1]) {
+  if (s_progress.afield[1]) {
     goto life;
   }
   game_place_apple();
@@ -4962,12 +4961,12 @@ next_apple: /* place one only when both countdown bytes are zero */
 
 round_cleared: /* $77EA */
 {
-  const uint16_t r = adc_dec16(s_level, 0x01, 0x00);
-  s_level = (uint8_t)r;
+  const uint16_t r = adc_dec16(s_progress.level, 0x01, 0x00);
+  s_progress.level = (uint8_t)r;
 }
   s_script_index = (uint8_t)(s_script_index + 1);
   // $77F8 -- no life was lost this round, so it earns a bonus.
-  if (s_lives == s_lives_at_level_start) {
+  if (s_progress.lives == s_progress.lives_at_level_start) {
     game_bonus_screen();
   }
   game_award_extra_life();
@@ -4977,16 +4976,16 @@ not_apple: /* $77E8 */
   if (s_life_outcome != 0xfe) {
     goto ended;
   }
-  if (s_apples_left[1]) {
+  if (s_progress.left[1]) {
     goto harder;
   }
-  if (!s_apples_left[0]) {
+  if (!s_progress.left[0]) {
     goto ended;
   }
 
 harder: /* three more apples in the round, and three more to come */
-  bcd_add16(s_apples_quota, 0x03);
-  bcd_add16(s_apples_left, 0x03);
+  bcd_add16(s_progress.quota, 0x03);
+  bcd_add16(s_progress.left, 0x03);
   game_place_apple();
   game_place_apple();
   game_place_apple();
@@ -5039,12 +5038,12 @@ ended: /* $7847 */
   }
 
 lose_life: /* $789A */
-  if (!s_lives) {
+  if (!s_progress.lives) {
     goto new_game;
   }
   {
-    const uint16_t r = sbc_dec16(s_lives, 0x01, 0x01);
-    s_lives = (uint8_t)r;
+    const uint16_t r = sbc_dec16(s_progress.lives, 0x01, 0x01);
+    s_progress.lives = (uint8_t)r;
   }
   goto start_round;
 }
