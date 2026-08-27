@@ -879,6 +879,49 @@ for sc in play:toggle-play.txt hires:toggle-hires.txt; do
   echo "[toggle/$name] PASS: $(wc -l < "$here/$want" | tr -d " ") speaker accesses match"
 done
 
+# --- does the hand-owned file still compile without complaint? -------------
+#
+# It is the only source here nothing regenerates, so nothing else notices when
+# an edit leaves a wart. Three C23-extension warnings shipped on 2026-08-26
+# from the virtual-clock collapse: deleting the charge that followed a label
+# left `done:` and `last_line:` with no statement after them, which C11 does
+# not allow.
+#
+# They were invisible to the author and obvious to the user, and *that* is the
+# thing this check has to survive: gcc does not diagnose either of them and
+# clang does. Checking only the configured compiler would have reproduced the
+# original failure exactly -- green on the Linux box, three warnings on the
+# Mac. So it checks every C compiler it can find, and says which.
+#
+# Default warnings rather than -Wall, matching the real build. -Wall adds one
+# finding here, a dead `ovf8` that predates this file, and gating on it would
+# bundle an unrelated cleanup into a bug fix.
+warn_cc=""
+for c in "$(sed -n 's/^CMAKE_C_COMPILER:[^=]*=//p' "$bin/CMakeCache.txt" | head -n 1)" \
+         "$(command -v clang || true)" "$(command -v gcc || true)"; do
+  [ -n "$c" ] && [ -x "$c" ] || continue
+  # the same compiler can arrive twice (cc -> gcc); compare resolved targets
+  r=$(cd "$(dirname "$c")" 2> /dev/null && pwd -P)/$(basename "$c")
+  case " $warn_cc " in *" $r "*) continue ;; esac
+  warn_cc="$warn_cc $r"
+done
+if [ -z "$warn_cc" ]; then
+  echo "FAIL [warn]: found no C compiler to check snake-byte-cold.c with" >&2
+  exit 1
+fi
+warn_names=""
+for c in $warn_cc; do
+  out=$("$c" -I "$here/../../include" -std=gnu11 -fsyntax-only \
+          "$here/snake-byte-cold.c" 2>&1 | grep 'snake-byte-cold\.c.*warning' || true)
+  if [ -n "$out" ]; then
+    echo "FAIL [warn]: $(basename "$c") warns about snake-byte-cold.c" >&2
+    echo "$out" >&2
+    exit 1
+  fi
+  warn_names="$warn_names $(basename "$c")"
+done
+echo "[warn] PASS: clean under$warn_names"
+
 # --- can every waiting loop still be interrupted? --------------------------
 #
 # The one class of defect this gate is structurally blind to, and it shipped:

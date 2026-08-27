@@ -1170,7 +1170,7 @@ down: /* $F826 -- one row at a time, up to V2 */
   }
 
 done:
-  /*$F831*/
+  /*$F831*/ return;
 }
 
 /* ========================================================================== */
@@ -1301,6 +1301,9 @@ void rom_fc68(void) {
   uint8_t line;
   uint8_t col = 0;
   bool step = false;
+  /* Declared here rather than at $FC97 because `last_line` is a goto target,
+     and a label may not be followed by a declaration in C11. */
+  bool filled;
 
   /*$FC68*/ if (!(s_cv >= s_wndbtm)) {
     // $FC6C BCC -- the branch itself, taken here. Nothing to scroll.
@@ -1345,7 +1348,7 @@ copy: /* $FC8C -- one character, right to left */
   }
 
 last_line: /* $FC95 -- blank what the scroll left at the bottom */
-  /*$FC97*/ const bool filled = rom_clreolz(0x00);
+  /*$FC97*/ filled = rom_clreolz(0x00);
 
   /*$FC9A*/ if (!filled) {
     rom_clreol(); // JMP -- a tail call.
@@ -1555,6 +1558,7 @@ line_feed: /* $FC66 */
   /*$FC68*/ rom_fc68(); // JMP -- a tail call, and where a scroll happens.
 
 out:
+  return;
 }
 
 /* ========================================================================== */
