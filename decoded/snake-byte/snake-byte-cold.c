@@ -438,13 +438,6 @@ void rom_setvid(void);
 
 /* --- Cycle accounting ----------------------------------------------------- */
 
-/// Charge cycles at an address, without registering a probe site.
-///
-/// The clock itself is `advance` above; these are what is left of the older
-/// scheme, where every basic block charged the cycles the 6502 spent in it and
-/// named the address it was at. Nothing observes the addresses any more.
-#define GAME_CYCLES(addr, n) CYCLES_EDGE((addr), (n))
-
 /// Charge cycles and *keep* the probe, for the addresses carrying the input
 /// coordinate.
 ///
@@ -1983,25 +1976,18 @@ static uint8_t s_lives_at_level_start = 0x02;
 
 /// Most significant first, which is the order the compare runs in.
 static const uint8_t kMsbFirst[4] = {3, 2, 1, 0};
-static const uint16_t kCmpBlock[4] = {0x728d, 0x7297, 0x72a1, 0x72ab};
-static const uint16_t kBelowEdge[4] = {0x7293, 0x729d, 0x72a7, 0x72b1};
-static const uint16_t kEqualBlock[4] = {0x7295, 0x729f, 0x72a9, 0x72b3};
 
 void game_promote_high_score(void) {
   bool beats_it = true;
 
   for (unsigned i = 0; i < 4; ++i) {
-    GAME_CYCLES(kCmpBlock[i], 10);
     const uint8_t mine = s_score[kMsbFirst[i]];
     const uint8_t best = s_hi_score[kMsbFirst[i]];
     if (mine < best) {
-      GAME_CYCLES(kBelowEdge[i], 1);
       beats_it = false;
       break;
     }
-    GAME_CYCLES(kEqualBlock[i], 2);
     if (mine != best) {
-      GAME_CYCLES(kEqualBlock[i], 1);
       break;
     }
     // Equal: fall through to the next byte. All four equal reaches the copy
@@ -2092,13 +2078,11 @@ void game_find_nearest_apple(void) {
 /// increment.
 static const struct {
   int8_t dcol, drow;
-  uint16_t scrn_block, scrn_cycles, scrn_ret;
-  uint16_t cmp_block, edge, inc_block;
 } kNeighbour[4] = {
-    {+1, 0, 0x6ae8, 12, 0x6aee, 0x6aef, 0x6af1, 0x6af3},
-    {-1, 0, 0x6af6, 16, 0x6aff, 0x6b00, 0x6b02, 0x6b04},
-    {0, +1, 0x6b07, 18, 0x6b12, 0x6b13, 0x6b15, 0x6b17},
-    {0, -1, 0x6b1a, 18, 0x6b25, 0x6b26, 0x6b28, 0x6b2a},
+    {+1, 0},
+    {-1, 0},
+    {0, +1},
+    {0, -1},
 };
 
 MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
@@ -2125,19 +2109,13 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
   // enter, fatal on the move after, so it is refused a step early.
   unsigned free_neighbours = 0;
   for (unsigned i = 0; i < 4; ++i) {
-    GAME_CYCLES(kNeighbour[i].scrn_block, kNeighbour[i].scrn_cycles);
     const Cell n = {
         .col = (uint8_t)(target.col + kNeighbour[i].dcol),
         .row = (uint8_t)(target.row + kNeighbour[i].drow),
     };
 
-    const uint8_t v = cell_at(n);
-    GAME_CYCLES(kNeighbour[i].cmp_block, 4);
-    if (v == 0x00) {
-      GAME_CYCLES(kNeighbour[i].inc_block, 6);
+    if (cell_at(n) == 0x00) {
       ++free_neighbours;
-    } else {
-      GAME_CYCLES(kNeighbour[i].edge, 1);
     }
   }
 
@@ -2561,17 +2539,9 @@ void game_lores_vline_native(Cell c, uint8_t to_row) {
 /// $6633-$6636, calls $64C8, and copies it back out; those eight ram_pokes
 /// were what a struct copy looks like without structs, and the block is the
 /// argument now.
-static void step_bouncer_slot(
-    int slot,
-    uint16_t block,
-    uint16_t cycles,
-    uint16_t back_block,
-    uint16_t back_cycles) {
-  GAME_CYCLES(block, cycles);
+static void step_bouncer_slot(int slot) {
   Bouncer b = s_bouncers[slot];
   game_move_bouncer(&b);
-
-  GAME_CYCLES(back_block, back_cycles);
   s_bouncers[slot] = b;
 }
 
@@ -2608,13 +2578,13 @@ uint8_t game_step_bouncers_native(void) {
     return dequeue_key();
   }
 
-  step_bouncer_slot(0, 0x659c, 38, 0x65b7, 40);
+  step_bouncer_slot(0);
 
   if (s_difficulty == 0x01) {
     return dequeue_key();
   }
 
-  step_bouncer_slot(1, 0x65d9, 38, 0x65f4, 35);
+  step_bouncer_slot(1);
   return dequeue_key();
 }
 
@@ -3640,21 +3610,10 @@ LifeEnd game_play_loop_native(uint8_t *cell_out) {
     // table gives is examined as if the player had pressed it, which is why
     // this goes back to the top rather than falling through.
     {
-      static const struct {
-        uint8_t key;
-        uint16_t cmp_addr, cmp_cycles, hit_addr, hit_cycles, edge_addr;
-      } kAbsolute[] = {
-          {KEY_UP, 0x6353, 4, 0x6357, 11, 0x634b},
-          {KEY_LEFT, 0x6360, 4, 0x6364, 11, 0x6355},
-          {KEY_RIGHT, 0x636d, 4, 0x6371, 11, 0x6362},
-          {KEY_DOWN, 0x637a, 4, 0x637e, 11, 0x636f},
-      };
+      static const uint8_t kAbsolute[] = {KEY_UP, KEY_LEFT, KEY_RIGHT, KEY_DOWN};
       for (unsigned i = 0; i < 4; ++i) {
-        GAME_CYCLES(kAbsolute[i].edge_addr, 1);
-        GAME_CYCLES(kAbsolute[i].cmp_addr, kAbsolute[i].cmp_cycles);
-        if (code == kAbsolute[i].key) {
-          GAME_CYCLES(kAbsolute[i].hit_addr, kAbsolute[i].hit_cycles);
-          code = turn_for_key(kAbsolute[i].key, dir);
+        if (code == kAbsolute[i]) {
+          code = turn_for_key(kAbsolute[i], dir);
           goto dispatch;
         }
       }
@@ -3876,18 +3835,12 @@ static uint8_t key_for_direction(uint8_t dir) {
 /// "Allowed" is whatever leaves Z set in the original, which is the two safe
 /// verdicts -- and also a taken cell that happens to be the apple, since
 /// eating it is the point.
-static bool steer_try(
-    uint8_t dir,
-    uint16_t before_addr,
-    unsigned before_cycles,
-    uint16_t after_addr,
-    unsigned after_cycles) {
+static bool steer_try(uint8_t dir) {
   /* What the original's BEQ tests. It was s_status_not_z; nothing outside this
      routine ever read that flag, so it is a local. This one the gate does
      run: inverting the sense of the return below fails the play screen. */
   uint8_t move_taken = 0;
 
-  GAME_CYCLES(before_addr, before_cycles);
   s_steer_dir = dir;
   { // was game_move_ok()
 
@@ -3911,7 +3864,6 @@ static bool steer_try(
       break;
     }
   }
-  GAME_CYCLES(after_addr, after_cycles);
   // The original branches on Z, which game_move_ok leaves set for exactly the
   // verdicts that permit the move -- including a target holding the apple.
   return move_taken == 0;
@@ -3935,20 +3887,20 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
     } else {
       dir = DIR_UP;
     }
-    settled = steer_try(dir, 0x6a40, 10, 0x6a46, 2);
+    settled = steer_try(dir);
   }
 
   // $6A5A -- the column, toward the apple and then away from it.
   if (!settled) {
     if (apple_col >= head_col) {
-      settled = steer_try(DIR_RIGHT, 0x6a62, 12, 0x6a6a, 2);
+      settled = steer_try(DIR_RIGHT);
       if (!(settled)) {
-        settled = steer_try(DIR_LEFT, 0x6a6c, 12, 0x6a74, 2);
+        settled = steer_try(DIR_LEFT);
       }
     } else {
-      settled = steer_try(DIR_LEFT, 0x6a79, 12, 0x6a81, 2);
+      settled = steer_try(DIR_LEFT);
       if (!(settled)) {
-        settled = steer_try(DIR_RIGHT, 0x6a83, 12, 0x6a8b, 2);
+        settled = steer_try(DIR_RIGHT);
         // Refused: falls straight into $6A8D, where the other branch had to
         // spend a JMP to get.
       }
@@ -3958,12 +3910,12 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
   // $6A8D -- the row again, now as an escape rather than as progress.
   if (!settled) {
     if (apple_row >= head_row) {
-      settled = steer_try(DIR_DOWN, 0x6a95, 12, 0x6a9d, 2);
+      settled = steer_try(DIR_DOWN);
     }
     if (!settled) {
-      settled = steer_try(DIR_UP, 0x6a9f, 12, 0x6aa7, 2);
+      settled = steer_try(DIR_UP);
       if (!(settled)) {
-        settled = steer_try(DIR_DOWN, 0x6aa9, 12, 0x6ab1, 2);
+        settled = steer_try(DIR_DOWN);
         if (!(settled)) {
           // $6AB3 -- nothing is safe.
           return STEER_BOXED_IN;
