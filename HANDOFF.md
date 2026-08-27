@@ -642,8 +642,9 @@ dead `ret` / `ret_addr` parameters    0    121   one real `ret_addr` remains, an
                                                 is an argument: the inline string's
                                                 address, which the original popped
 TICK statements                      0          838 before the virtual clock
-advance statements                  21          the whole of the clock: every site
-                                                where a duration is perceptible
+advance statements                  23          the whole of the clock: every site
+                                                where a duration is perceptible,
+                                                plus two that only yield
 compiler warnings of its own          0          at -Wall
 adapters left                         0     42
 lines                            5,806  16,195   the generated ext build, for scale
@@ -822,8 +823,38 @@ What remains, in order of how well-defined it is:
    by a few percent -- they still catch the next regression, but they no
    longer certify this change, and the ear is what certifies it.
 
-   **Task 5 -- playing it -- is outstanding, and it now matters more than it
-   did.** What has been checked mechanically: the release windowed target
+   **Playing it found a hang, and the hang was the predicted one** (commit
+   `3d8c85c`, 2026-08-26). The collapse deleted the charge inside two loops
+   that spin on `$C000` -- the ESC pause at `$69AD` and the ROM's Ctrl-S
+   screen hold at `$FB88`. A charge is the coroutine's only suspend point, so
+   both waited for a key the host was never given a turn to deliver: ESC froze
+   the game and a second ESC could not reach it. Each got back the seven
+   cycles a pass cost.
+
+   **The cause was trusting the design's survivor table.** It lists the tone
+   loop, the pace loop, `spin`, the setup prompt, the death pause, the blink
+   loops and `rom_wait`, and neither of these -- the same way it does not
+   mention the walls. A list written before the work is a starting point; the
+   set has to be derived from the code.
+
+   It is derived now. **`yield-lint.awk`** brace-matches every loop in the file
+   and fails if one reads the keyboard, its strobe or a button without
+   containing an `advance()` or a `GAME_CYCLES`. From a clean checkout it finds
+   exactly those two and nothing else. Beside it, `esc-pause.keys` presses ESC
+   78 times across a run and the run must terminate; both are mutation-tested.
+   The live one degrades silently if a timing change stops any ESC landing in
+   the play loop -- the lint is the one that does not, which is why it is the
+   guarantee and the other is a smoke test. **The gate is 30 checks.**
+
+   Two things worth keeping from how it was found. The toggle baselines did
+   not move at all, because no scenario presses ESC or Ctrl-S -- the hang was
+   in code the gate has never once entered. And the watchdog for the live
+   check polls with `kill -0` rather than a `sleep N; kill` subshell: that
+   subshell outlives a check finishing in a second and then fires into a
+   recycled pid, which killed `probe-acceptance.sh` during its own first run.
+   macOS has no `timeout(1)`, so neither uses one.
+
+   **The rest of task 5 is still outstanding.** What has been checked mechanically: the release windowed target
    links, and a 6,000-frame free run with no probe and no keys terminates
    normally, so every polling loop still yields -- `--frames` would never end
    otherwise. The longest stretch with the game parked is 2 frames.
