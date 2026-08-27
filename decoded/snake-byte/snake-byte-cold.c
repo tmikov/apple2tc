@@ -146,48 +146,47 @@ static uint16_t sbc_dec16(uint8_t a, uint8_t b, uint8_t cf) {
 }
 
 /* --- The monitor's zero page ---------------------------------------------- */
-/*
- * These are not the game's variables: they belong to the ROM routines it
- * calls, and the game writes them only to pass arguments -- a cursor position
- * before COUT, a colour before PLOT, a right-hand end before HLINE. The names
- * are the Apple II's own, because every reference to this hardware uses them.
- */
-static uint8_t s_wndlft; ///< text window: left, width, top, bottom
-static uint8_t s_wndwdth;
-static uint8_t s_wndtop;
-static uint8_t s_wndbtm;
-/* Addresses, not byte pairs. The 6502 splits a pointer into two bytes because
-   that is all it can address; nothing here has two halves meaning different
-   things. Where a routine really does write one half -- VTABZ rewrites only
-   the low byte -- the code says so with a mask or a shift. */
-static uint16_t s_gbas; ///< lo-res line base, from GBASCALC and V2
-static uint16_t s_bas; ///< text line base, from BASCALC and CV
-static uint16_t s_bas2; ///< the scroll's destination line
-static uint8_t s_v2; ///< VLINE's bottom row
-static uint8_t s_mask; ///< which nibble of a lo-res byte a PLOT touches
-static uint8_t s_color; ///< the lo-res colour, both nibbles
-static uint8_t s_invflg; ///< COUT1 ANDs the character with this: $FF normal
-static uint16_t s_csw; ///< the character output vector the game repoints
-static uint16_t s_ksw; ///< the character input vector; nothing reads it
-static uint8_t s_a2l; ///< SETKBD/SETVID scratch
-
-/// $002C, and still one byte doing two jobs.
+/// The Apple II monitor's own zero page. Not the game's variables: they belong
+/// to the ROM routines it calls, and the game writes them only to pass
+/// arguments -- a cursor position before COUT, a colour before PLOT, a
+/// right-hand end before HLINE. The names are the Apple II's own, because
+/// every reference to this hardware uses them.
 ///
-/// To the ROM it is H2, the right-hand end of a lo-res HLINE. To
-/// game_print_bcd it is the flag saying a digit has been printed, so
-/// game_print_zero_if_blank knows whether the field came out empty. The two
-/// never overlap -- nothing draws while a number is being printed -- and
-/// draw_border actually *relies* on the H2 half persisting from
-/// wipe_occupancy_map ("$2C is still $27 from the wipe"), so the storage stays
-/// shared. Splitting it would need that argument made in both directions; the
-/// accessors below carry the meaning instead.
-static uint8_t s_h2;
+/// Addresses, not byte pairs. The 6502 splits a pointer into two bytes because
+/// that is all it can address; nothing here has two halves meaning different
+/// things. Where a routine really does write one half -- VTABZ rewrites only
+/// the low byte -- the code says so with a mask or a shift.
+static struct {
+  uint8_t wndlft, wndwdth, wndtop, wndbtm; ///< the text window
+  uint16_t gbas;    ///< lo-res line base, from GBASCALC and V2
+  uint16_t bas;     ///< text line base, from BASCALC and CV
+  uint16_t bas2;    ///< the scroll's destination line
+  uint8_t v2;       ///< VLINE's bottom row
+  uint8_t mask;     ///< which nibble of a lo-res byte a PLOT touches
+  uint8_t color;    ///< the lo-res colour, both nibbles
+  uint8_t invflg;   ///< COUT1 ANDs the character with this: $FF normal
+  uint16_t csw;     ///< the character output vector the game repoints
+  uint16_t ksw;     ///< the character input vector; nothing reads it
+  uint8_t a2l;      ///< SETKBD/SETVID scratch
 
-/// CH and CV, the text cursor, and the only two of the monitor's bytes that
-/// anything still computes with: BASCALC turns CV into a line base, CLREOL and
-/// COUT1 step CH along a line, and the game sets both before every field it
-/// prints. Initialised from the entry snapshot.
-static uint8_t s_ch, s_cv;
+  /// $002C, and still one byte doing two jobs.
+  ///
+  /// To the ROM it is H2, the right-hand end of a lo-res HLINE. To
+  /// game_print_bcd it is the flag saying a digit has been printed, so
+  /// game_print_zero_if_blank knows whether the field came out empty. The two
+  /// never overlap -- nothing draws while a number is being printed -- and
+  /// draw_border actually *relies* on the H2 half persisting from
+  /// wipe_occupancy_map ("$2C is still $27 from the wipe"), so the storage
+  /// stays shared. Splitting it would need that argument made in both
+  /// directions; the accessors below carry the meaning instead.
+  uint8_t h2;
+
+  /// CH and CV, the text cursor, and the only two of the monitor's bytes that
+  /// anything still computes with: BASCALC turns CV into a line base, CLREOL
+  /// and COUT1 step CH along a line, and the game sets both before every
+  /// field it prints. Initialised from the entry snapshot.
+  uint8_t ch, cv;
+} s_mon;
 
 /// A cell on the 40x48 playfield grid.
 typedef struct {
@@ -296,7 +295,7 @@ uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
   const uint16_t shifted = (uint16_t)(band << 0x02);
   *carry_out = ((shifted & 0x01ff) >> 8) != 0;
   const uint8_t addr_lo = (uint8_t)shifted | band;
-  s_bas = (uint16_t)(addr_lo | (page << 8));
+  s_mon.bas = (uint16_t)(addr_lo | (page << 8));
   return addr_lo;
 }
 
@@ -312,10 +311,10 @@ bool rom_vtabz(uint8_t line) {
   bool carry;
   const uint8_t base = rom_bascalc(line, &carry);
 
-  const uint16_t r = ((uint16_t)base + s_wndlft) + carry;
+  const uint16_t r = ((uint16_t)base + s_mon.wndlft) + carry;
   // VTABZ adds WNDLFT to BASL and leaves BASH exactly as BASCALC set it, so
   // this really is a write of one half.
-  s_bas = (uint16_t)((s_bas & 0xff00) | (uint8_t)r);
+  s_mon.bas = (uint16_t)((s_mon.bas & 0xff00) | (uint8_t)r);
 
   return ((r >> 8) & 0x01) != 0;
 }
@@ -327,7 +326,7 @@ bool rom_vtabz(uint8_t line) {
 /// is three instructions and its tail call *is* exercised, so what is
 /// unverified is the starting column and the jump.
 void rom_clreol(void) {
-  rom_clreolz(s_ch); // JMP -- a tail call; nobody reads its carry.
+  rom_clreolz(s_mon.ch); // JMP -- a tail call; nobody reads its carry.
 }
 
 /// $FC9E CLREOLZ. The same, from column Y rather than from the cursor. Writes
@@ -344,12 +343,12 @@ bool rom_clreolz(uint8_t col) {
   const uint8_t space = 0xa0; // a space, high bit set
 
   for (;;) {
-    poke((uint16_t)(s_bas + col), space);
+    poke((uint16_t)(s_mon.bas + col), space);
 
     const uint8_t next = (uint8_t)(col + 1);
     col = next;
 
-    const uint8_t width = s_wndwdth;
+    const uint8_t width = s_mon.wndwdth;
     if (next >= width) {
       return true;
     }
@@ -755,7 +754,7 @@ static void rom_gbascalc(uint8_t row) {
     band = (uint8_t)((band + 0x7f) + odd);
   }
 
-  s_gbas = (uint16_t)((uint8_t)((uint8_t)(band << 0x02) | band) | (page << 8));
+  s_mon.gbas = (uint16_t)((uint8_t)((uint8_t)(band << 0x02) | band) | (page << 8));
 }
 
 /// $F80E PLOT1. Store the color mask ($30) into the lo-res half-byte selected
@@ -764,9 +763,9 @@ static void rom_plot1(uint8_t col) {
   // One lo-res cell: replace the half of the byte MASK selects with the
   // matching half of COLOR, leaving the other half alone. `(old ^ colour) &
   // mask ^ old` is the ROM's way of saying that in three instructions.
-  const uint16_t at = (uint16_t)(s_gbas + col);
+  const uint16_t at = (uint16_t)(s_mon.gbas + col);
   const uint8_t old = peek(at);
-  poke(at, (uint8_t)(((old ^ s_color) & s_mask) ^ old));
+  poke(at, (uint8_t)(((old ^ s_mon.color) & s_mon.mask) ^ old));
 }
 
 /* ========================================================================== */
@@ -795,7 +794,7 @@ void rom_plot(uint8_t row, uint8_t col) {
     mask = (uint8_t)(((uint16_t)mask + 0x00e0) + carry);
   }
 
-  s_mask = mask;
+  s_mon.mask = mask;
   rom_plot1(col); // JMP -- a tail call.
 }
 
@@ -822,7 +821,7 @@ void rom_hline(uint8_t row, uint8_t from_col) {
   rom_plot(row, col);
 
 across: /* one column at a time, up to H2 */
-  carry = (uint8_t)(col >= s_h2);
+  carry = (uint8_t)(col >= s_mon.h2);
   if (carry) {
     // $F81E BCS -- the branch itself, taken here.
     goto done;
@@ -839,7 +838,7 @@ down: /* one row at a time, up to V2 */
   row = (uint8_t)(((uint16_t)row + 0x0001) + carry);
 
   rom_plot(row, col);
-  carry = (uint8_t)(row >= s_v2);
+  carry = (uint8_t)(row >= s_mon.v2);
   if (!carry) {
     // $F82F BCC -- the branch itself, taken here.
     goto down;
@@ -858,7 +857,7 @@ void rom_setcol(uint8_t ink) {
   // half MASK selects without shifting. Four ASLs and an ORA get there in the
   // original; the carry they leave is read by nothing.
   const uint8_t low = (uint8_t)(ink & 0x0f);
-  s_color = (uint8_t)((low << 0x04) | low);
+  s_mon.color = (uint8_t)((low << 0x04) | low);
 }
 
 /* ========================================================================== */
@@ -874,7 +873,7 @@ uint8_t rom_scrn(uint8_t row, uint8_t col) {
 
   rom_gbascalc(half);
 
-  uint8_t cell = peek((uint16_t)(s_gbas + col));
+  uint8_t cell = peek((uint16_t)(s_mon.gbas + col));
 
   // The original brackets GBASCALC with PHP/PLP to keep the LSR's carry. It is
   // read by nothing here.
@@ -899,9 +898,9 @@ void rom_home(void) {
   uint8_t line;
 
 home: /* $FC58 */
-  line = s_wndtop;
-  s_cv = s_wndtop;
-  s_ch = 0x00;
+  line = s_mon.wndtop;
+  s_mon.cv = s_mon.wndtop;
+  s_mon.ch = 0x00;
   // $FC60 BEQ -- provably always taken (Y was just loaded 0), but the branch
   // instruction still executes and still pays its own cost every time. The
   // decompiler doesn't do cross-instruction flag proofs either, so it keeps
@@ -916,7 +915,7 @@ home: /* $FC58 */
 
     line = (uint8_t)(line + step);
 
-    const bool past_bottom = line >= s_wndbtm;
+    const bool past_bottom = line >= s_mon.wndbtm;
     if (!past_bottom) {
       // $FC54 BCC -- the branch itself, taken here.
       continue;
@@ -930,7 +929,7 @@ home: /* $FC58 */
   }
 
   // TABV
-  rom_vtabz(s_cv); // JMP -- a tail call.
+  rom_vtabz(s_mon.cv); // JMP -- a tail call.
 }
 
 /* ========================================================================== */
@@ -976,23 +975,23 @@ void rom_fc68(void) {
      and a label may not be followed by a declaration in C11. */
   bool filled;
 
-  if (!(s_cv >= s_wndbtm)) {
+  if (!(s_mon.cv >= s_mon.wndbtm)) {
     // $FC6C BCC -- the branch itself, taken here. Nothing to scroll.
-    rom_vtabz(s_cv); // JMP -- a tail call.
+    rom_vtabz(s_mon.cv); // JMP -- a tail call.
     return;
   }
 
-  s_cv = (uint8_t)(s_cv - 0x01);
-  line = s_wndtop;
+  s_mon.cv = (uint8_t)(s_mon.cv - 0x01);
+  line = s_mon.wndtop;
   step = rom_vtabz(line);
 
 scroll: /* one line up per pass */
-  s_bas2 = s_bas;
-  col = (uint8_t)(s_wndwdth - 0x01);
+  s_mon.bas2 = s_mon.bas;
+  col = (uint8_t)(s_mon.wndwdth - 0x01);
   // $FC82's ADC has no CLC either; the carry is whatever VTABZ last returned.
   line = (uint8_t)(((uint16_t)line + 0x0001) + step);
 
-  if (line >= s_wndbtm) {
+  if (line >= s_mon.wndbtm) {
     // $FC86 BCS -- the branch itself, taken here. That was the last line.
     goto last_line;
   }
@@ -1002,7 +1001,7 @@ scroll: /* one line up per pass */
 copy: /* one character, right to left */
 {
   const uint8_t at = col;
-  poke((uint16_t)(s_bas2 + at), peek((uint16_t)(s_bas + at)));
+  poke((uint16_t)(s_mon.bas2 + at), peek((uint16_t)(s_mon.bas + at)));
   const uint8_t next = (uint8_t)(at - 0x01);
   negative = (uint8_t)(next & 0x80);
   col = next;
@@ -1028,7 +1027,7 @@ last_line: /* blank what the scroll left at the bottom */
   // before continuing; the not-taken arm above jumps straight out without it.
 
   // TABV
-  rom_vtabz(s_cv);
+  rom_vtabz(s_mon.cv);
 }
 
 /* ========================================================================== */
@@ -1123,12 +1122,12 @@ emit: /* $FB94 JMP $FBFD */
   // continuing.
 
 store: /* put the character at the cursor */
-  poke((uint16_t)(s_bas + s_ch), ch);
+  poke((uint16_t)(s_mon.bas + s_mon.ch), ch);
 
-  s_ch = (uint8_t)(s_ch + 0x01);
+  s_mon.ch = (uint8_t)(s_mon.ch + 0x01);
   {
-    const uint8_t width = s_wndwdth;
-    const bool past_right_edge = s_ch >= width;
+    const uint8_t width = s_mon.wndwdth;
+    const bool past_right_edge = s_mon.ch >= width;
     if (past_right_edge) {
       // Off the right edge, so wrap: the same thing a carriage return does.
       goto carriage_return;
@@ -1157,19 +1156,19 @@ dispatch: /* not printable; which control code is it? */
   /* backspace. Off the left edge wraps to the end of the line above,
      which is why it falls into the cursor-up path rather than returning. */
   {
-    const uint8_t back = (uint8_t)(s_ch - 0x01);
-    s_ch = back;
+    const uint8_t back = (uint8_t)(s_mon.ch - 0x01);
+    s_mon.ch = back;
     if (!(back & 0x80)) {
       goto out;
     }
   }
 
-  s_ch = s_wndwdth;
-  s_ch = (uint8_t)(s_ch - 0x01);
+  s_mon.ch = s_mon.wndwdth;
+  s_mon.ch = (uint8_t)(s_mon.ch - 0x01);
 
   {
-    const uint8_t top = s_wndtop;
-    const uint8_t cv = s_cv;
+    const uint8_t top = s_mon.wndtop;
+    const uint8_t cv = s_mon.cv;
     const bool at_window_top = top >= cv;
     if (at_window_top) {
       // Already on the window's top line; there is nowhere to go up to.
@@ -1177,9 +1176,9 @@ dispatch: /* not printable; which control code is it? */
     }
   }
 
-  s_cv = (uint8_t)(s_cv - 0x01);
+  s_mon.cv = (uint8_t)(s_mon.cv - 0x01);
   // TABV
-  rom_vtabz(s_cv);
+  rom_vtabz(s_mon.cv);
   goto out;
 
 bell: /* Ctrl-G, or a control code the monitor does not know */
@@ -1206,10 +1205,10 @@ bell: /* Ctrl-G, or a control code the monitor does not know */
   goto out;
 
 carriage_return: /* to the left edge, then down */
-  s_ch = 0x00;
+  s_mon.ch = 0x00;
 
 line_feed: /* $FC66 */
-  s_cv = (uint8_t)(s_cv + 0x01);
+  s_mon.cv = (uint8_t)(s_mon.cv + 0x01);
   rom_fc68(); // JMP -- a tail call, and where a scroll happens.
 
 out:
@@ -1247,7 +1246,7 @@ out:
 void rom_cout(uint8_t ch) {
   uint16_t vector;
 
-  vector = s_csw; // JMP ($36)
+  vector = s_mon.csw; // JMP ($36)
   switch (vector) {
   case 0xfdf0:
     rom_cout1(ch);
@@ -1281,7 +1280,7 @@ static void rom_cout1(uint8_t ch) {
   const bool printable = ch >= 0xa0;
 
   if (printable) {
-    ch = (uint8_t)(ch & s_invflg);
+    ch = (uint8_t)(ch & s_mon.invflg);
   } else {
     // $FDF2 BCC -- the branch itself, taken here.
   }
@@ -1306,7 +1305,7 @@ static void rom_cout1(uint8_t ch) {
 /// nothing dispatches input through it -- but the routine runs at startup and
 /// its cycles count, so it is here in full.
 void rom_setkbd(void) {
-  s_a2l = 0x00;
+  s_mon.a2l = 0x00;
   // X and Y are the built-in device's vector, $FD1B (KEYIN). SETIO below keeps
   // the low half and replaces the page.
   const uint8_t entry_low = 0x1b;
@@ -1319,7 +1318,7 @@ void rom_setkbd(void) {
   // answers page $FD, where its own KEYIN and COUT1 live. A real slot would
   // give $Cn00 instead -- decoded, never taken, because the game never sets
   // one.
-  const uint8_t slot = (uint8_t)(s_a2l & 0x0f);
+  const uint8_t slot = (uint8_t)(s_mon.a2l & 0x0f);
   uint8_t page, low;
   if (slot) {
     page = (uint8_t)(slot | 0xc0);
@@ -1331,7 +1330,7 @@ void rom_setkbd(void) {
     low = entry_low;
   }
 
-  s_ksw = (uint16_t)(low | (page << 8));
+  s_mon.ksw = (uint16_t)(low | (page << 8));
 }
 
 /// $FE93 SETVID. Point COUT's vector back at the ROM's own COUT1.
@@ -1344,7 +1343,7 @@ void rom_setkbd(void) {
 /// startup, before it has repointed anything. Had it ever called it after
 /// installing the hook, COUT would have stayed hooked.
 void rom_setvid(void) {
-  s_a2l = 0x00;
+  s_mon.a2l = 0x00;
   // The same, for $FDF0 (COUT1).
   const uint8_t entry_low = 0xf0;
 
@@ -1352,7 +1351,7 @@ void rom_setvid(void) {
   // answers page $FD, where its own KEYIN and COUT1 live. A real slot would
   // give $Cn00 instead -- decoded, never taken, because the game never sets
   // one.
-  const uint8_t slot = (uint8_t)(s_a2l & 0x0f);
+  const uint8_t slot = (uint8_t)(s_mon.a2l & 0x0f);
   uint8_t page, low;
   if (slot) {
     page = (uint8_t)(slot | 0xc0);
@@ -1364,7 +1363,7 @@ void rom_setvid(void) {
     low = entry_low;
   }
 
-  s_csw = (uint16_t)(low | (page << 8));
+  s_mon.csw = (uint16_t)(low | (page << 8));
 }
 
 /* ========================================================================== *
@@ -1754,7 +1753,7 @@ void game_load_shape_masks(uint8_t shape) {
 
 void game_install_cout_vector(void) {
   // CSWL/CSWH at $36/$37, pointed at $664A.
-  s_csw = 0x664a;
+  s_mon.csw = 0x664a;
 }
 
 /* ========================================================================== */
@@ -2292,7 +2291,7 @@ static void wipe_occupancy_map(void) {
   set_ink(INK_ERASE);
 
   for (;;) {
-    s_h2 = 0x27;
+    s_mon.h2 = 0x27;
     lores_hline(at, 0x00);
 
     const uint8_t row = (uint8_t)(at - 1);
@@ -2367,7 +2366,7 @@ void game_draw_playfield(void) {
   spin(0x00, 0x00, 0x04); // the counts $7056 used to store into $02/$03
   wipe_occupancy_map();
 
-  s_wndtop = 0x14;
+  s_mon.wndtop = 0x14;
   s_shape = SHAPE_SOLID;
   set_ink(INK_WALL_BOTTOM);
 
@@ -2392,7 +2391,7 @@ restart:
       const uint8_t row = script_byte();
       set_ink(ink);
 
-      s_h2 = last;
+      s_mon.h2 = last;
       lores_hline(row, col);
 
       plot_hline_at(ink, col, row, last);
@@ -2800,8 +2799,8 @@ static void edit_key_blank(uint8_t slot) {
   // The original parks the slot at $0002 for the whole routine, because COUT
   // clobbers X and every step below needs it again. Here it is the parameter,
   // and the glyph blitter no longer has anything to clobber it with.
-  s_ch = slot_col(slot);
-  s_cv = slot_row(slot);
+  s_mon.ch = slot_col(slot);
+  s_mon.cv = slot_row(slot);
   rom_fc68();
 
   rom_cout(0xa0);
@@ -2835,8 +2834,8 @@ static void edit_key_blank(uint8_t slot) {
 /// ran out or the key was rejected -- either way the blink starts again, and
 /// no acceptable key is 0.
 static uint8_t edit_key_prompt(uint8_t slot) {
-  s_ch = slot_col(slot);
-  s_cv = slot_row(slot);
+  s_mon.ch = slot_col(slot);
+  s_mon.cv = slot_row(slot);
   rom_fc68();
 
   const uint8_t glyph = slot_glyph(slot);
@@ -2974,11 +2973,11 @@ void game_tick_sound(void) {
 /// leading zeros print nothing and interior ones print; $7226 consults it
 /// after the last byte, and prints a single "0" if the whole number was.
 static bool digit_seen(void) {
-  return s_h2 != 0;
+  return s_mon.h2 != 0;
 }
 
 static void note_digit(uint8_t digit) {
-  s_h2 = digit;
+  s_mon.h2 = digit;
 }
 
 enum { kCharZero = 0xb0 };
@@ -3300,8 +3299,8 @@ void game_show_key(uint8_t slot, uint8_t key) {
   // last thing to touch it. Nothing reads it: the hi-res hook saves and
   // restores X without looking at it, and every use of the slot below is the
   // parameter.
-  s_ch = kKeyCH[slot];
-  s_cv = kKeyCV[slot];
+  s_mon.ch = kKeyCH[slot];
+  s_mon.cv = kKeyCV[slot];
   rom_fc68();
 
   rom_cout(glyph);
@@ -3424,8 +3423,8 @@ static uint16_t hires_cursor(void) {
   // Each half separately, and that is not an accident of the split: the low
   // byte wraps at 8 bits without carrying into the high one, so a cursor near
   // the end of a line addresses the start of the same hi-res row.
-  const uint8_t hi = (uint8_t)((s_bas >> 8) - 0x04 + 0x20);
-  const uint8_t lo = (uint8_t)((s_bas & 0xff) + s_ch);
+  const uint8_t hi = (uint8_t)((s_mon.bas >> 8) - 0x04 + 0x20);
+  const uint8_t lo = (uint8_t)((s_mon.bas & 0xff) + s_mon.ch);
   return (uint16_t)(lo | (hi << 8));
 }
 
@@ -4014,13 +4013,13 @@ SteerChoice game_auto_steer(uint8_t *key_out) {
 /// the flag game_print_bcd raises when it prints a digit, so that
 /// game_print_zero_if_blank knows whether the field came out empty.
 static void clear_leading_zero_flag(void) {
-  s_h2 = 0x00;
+  s_mon.h2 = 0x00;
 }
 
 void game_status_panel(void) {
   // SCORE, row $14 column $00. Four BCD bytes in s_score, little-endian.
-  s_cv = 0x14;
-  s_ch = 0x00;
+  s_mon.cv = 0x14;
+  s_mon.ch = 0x00;
   game_print_inline_str(0x72d8);
   clear_leading_zero_flag();
   game_print_bcd(s_score[3]);
@@ -4030,7 +4029,7 @@ void game_status_panel(void) {
   game_print_zero_if_blank();
 
   // HI SCORE, same row, column $14. Four bytes in s_hi_score.
-  s_ch = 0x14;
+  s_mon.ch = 0x14;
   game_print_inline_str(0x7307);
   clear_leading_zero_flag();
   game_print_bcd(s_hi_score[3]);
@@ -4040,8 +4039,8 @@ void game_status_panel(void) {
   game_print_zero_if_blank();
 
   // APPLES LEFT, row $15 column $00. Two bytes at $725A.
-  s_ch = 0x00;
-  s_cv = 0x15;
+  s_mon.ch = 0x00;
+  s_mon.cv = 0x15;
   game_print_inline_str(0x733d);
   clear_leading_zero_flag();
   game_print_bcd(s_apples_left[1]);
@@ -4055,7 +4054,7 @@ void game_status_panel(void) {
 
   // VALUE, same row, column $14. Two bytes in s_apple_value -- the current worth of an
   // apple, which game_set_apple_value computes per level.
-  s_ch = 0x14;
+  s_mon.ch = 0x14;
   game_print_inline_str(0x736b);
   clear_leading_zero_flag();
   game_print_bcd(s_apple_value[1]);
@@ -4066,8 +4065,8 @@ void game_status_panel(void) {
   // were the low half of a two-byte field: the high half is the literal 0
   // below, which prints nothing at all once leading zeros are suppressed. It
   // costs a call to keep the shape of every other field.
-  s_cv = 0x16;
-  s_ch = 0x00;
+  s_mon.cv = 0x16;
+  s_mon.ch = 0x00;
   game_print_inline_str(0x7392);
   clear_leading_zero_flag();
   game_print_bcd(0x00);
@@ -4075,7 +4074,7 @@ void game_status_panel(void) {
   game_print_zero_if_blank();
 
   // LEVEL, same row, column $14. One byte at $7265.
-  s_ch = 0x14;
+  s_mon.ch = 0x14;
   game_print_inline_str(0x73b8);
   clear_leading_zero_flag();
   game_print_bcd(s_level);
@@ -4083,7 +4082,7 @@ void game_status_panel(void) {
 
   // Home the cursor. This CV write is the one that needs VTAB, because nothing
   // prints after it to recompute the line base.
-  s_cv = 0x00;
+  s_mon.cv = 0x00;
   rom_fc68();
 }
 
@@ -4138,18 +4137,18 @@ void game_bonus_screen(void) {
   plot_hline_at(INK_ERASE, 0x0e, 0x14, 0x19);
 
   // $7937 -- "BONUS: " and the amount, through the hi-res font.
-  s_ch = 0x0f;
-  s_cv = 0x09;
+  s_mon.ch = 0x0f;
+  s_mon.cv = 0x09;
   game_install_cout_vector();
   // The LDA #$4A flags are overwritten by the second load; only these outlive.
   game_print_inline_str(0x7944);
-  s_h2 = 0x00;
+  s_mon.h2 = 0x00;
   game_print_bcd(s_bonus_amount[1]);
   game_print_bcd(s_bonus_amount[0]);
 
   // $795D -- COUT back to the ROM's, and $02 becomes the outermost counter of
   // the pause below.
-  s_csw = 0xfdf0;
+  s_mon.csw = 0xfdf0;
   uint8_t passes = 0x20; // $02 was the outermost counter
 
   // $7969 -- hold the screen. Everything from $794D on keeps its probe: the
@@ -4262,8 +4261,8 @@ void game_setup_screen(void) {
 
   // $73E9 -- the prompt, and the two counters that time it out. $02 is the
   // outer one and $03 the inner; both count *up* to zero.
-  s_cv = 0x17;
-  s_ch = 0x00;
+  s_mon.cv = 0x17;
+  s_mon.ch = 0x00;
   game_print_inline_str(0x73f3);
   // $02 and $03 time the prompt out: the inner one wraps 256 times per tick of
   // the outer, and when the outer wraps nobody has answered.
@@ -4354,7 +4353,7 @@ wait: /* $741C */
   io_peek(0xc052);
   game_install_cout_vector();
   // The LDA #$4A flags are overwritten by the second load; only these outlive.
-  s_cv = 0x01;
+  s_mon.cv = 0x01;
   game_print_inline_str(0x748e);
 
   for (uint8_t i = 0; i != 6; ++i) {
@@ -4379,7 +4378,7 @@ wait: /* $741C */
   }
 
   // $7587 -- COUT back to the ROM's.
-  s_csw = 0xfdf0;
+  s_mon.csw = 0xfdf0;
 }
 
 /* ========================================================================== *
@@ -4888,7 +4887,7 @@ start_round: /* $76C7 */
   s_step_delay = 0x52;
   s_head_moved = false;
   s_life_timer = s_life_time;
-  s_wndtop = 0x14; // window top, so HOME clears only the status panel
+  s_mon.wndtop = 0x14; // window top, so HOME clears only the status panel
   rom_home();
   game_status_panel();
   game_begin_life();
@@ -4896,7 +4895,7 @@ start_round: /* $76C7 */
 
 life: /* $7719 */
   s_life_timer = s_life_time;
-  s_wndtop = 0x14;
+  s_mon.wndtop = 0x14;
   rom_home();
   game_status_panel();
   if (s_step_delay >= 0x03) {
@@ -5008,8 +5007,8 @@ ended: /* $7847 */
 
   /* "PRESS SPACE BAR TO CONTINUE", then wait for space or the
      paddle button, whichever the setup screen selected. */
-  s_cv = 0x17;
-  s_ch = 0x00;
+  s_mon.cv = 0x17;
+  s_mon.ch = 0x00;
   game_print_inline_str(0x7867);
   for (;;) {
     // "PRESS SPACE BAR TO CONTINUE", and this is the only yield in the loop
@@ -5211,23 +5210,23 @@ void init_emulated(void) {
      the first read before any write would see zero where the booting build
      sees what BASIC left there. */
   s_shape = kSnakeByteEntryRam[0x00];
-  s_ch = kSnakeByteEntryRam[0x24];
-  s_cv = kSnakeByteEntryRam[0x25];
-  s_wndlft = kSnakeByteEntryRam[0x20];
-  s_wndwdth = kSnakeByteEntryRam[0x21];
-  s_wndtop = kSnakeByteEntryRam[0x22];
-  s_wndbtm = kSnakeByteEntryRam[0x23];
-  s_gbas = (uint16_t)(kSnakeByteEntryRam[0x26] | (kSnakeByteEntryRam[0x27] << 8));
-  s_bas = (uint16_t)(kSnakeByteEntryRam[0x28] | (kSnakeByteEntryRam[0x29] << 8));
-  s_bas2 = (uint16_t)(kSnakeByteEntryRam[0x2a] | (kSnakeByteEntryRam[0x2b] << 8));
-  s_h2 = kSnakeByteEntryRam[0x2c];
-  s_v2 = kSnakeByteEntryRam[0x2d];
-  s_mask = kSnakeByteEntryRam[0x2e];
-  s_color = kSnakeByteEntryRam[0x30];
-  s_invflg = kSnakeByteEntryRam[0x32];
-  s_csw = (uint16_t)(kSnakeByteEntryRam[0x36] | (kSnakeByteEntryRam[0x37] << 8));
-  s_ksw = (uint16_t)(kSnakeByteEntryRam[0x38] | (kSnakeByteEntryRam[0x39] << 8));
-  s_a2l = kSnakeByteEntryRam[0x3e];
+  s_mon.ch = kSnakeByteEntryRam[0x24];
+  s_mon.cv = kSnakeByteEntryRam[0x25];
+  s_mon.wndlft = kSnakeByteEntryRam[0x20];
+  s_mon.wndwdth = kSnakeByteEntryRam[0x21];
+  s_mon.wndtop = kSnakeByteEntryRam[0x22];
+  s_mon.wndbtm = kSnakeByteEntryRam[0x23];
+  s_mon.gbas = (uint16_t)(kSnakeByteEntryRam[0x26] | (kSnakeByteEntryRam[0x27] << 8));
+  s_mon.bas = (uint16_t)(kSnakeByteEntryRam[0x28] | (kSnakeByteEntryRam[0x29] << 8));
+  s_mon.bas2 = (uint16_t)(kSnakeByteEntryRam[0x2a] | (kSnakeByteEntryRam[0x2b] << 8));
+  s_mon.h2 = kSnakeByteEntryRam[0x2c];
+  s_mon.v2 = kSnakeByteEntryRam[0x2d];
+  s_mon.mask = kSnakeByteEntryRam[0x2e];
+  s_mon.color = kSnakeByteEntryRam[0x30];
+  s_mon.invflg = kSnakeByteEntryRam[0x32];
+  s_mon.csw = (uint16_t)(kSnakeByteEntryRam[0x36] | (kSnakeByteEntryRam[0x37] << 8));
+  s_mon.ksw = (uint16_t)(kSnakeByteEntryRam[0x38] | (kSnakeByteEntryRam[0x39] << 8));
+  s_mon.a2l = kSnakeByteEntryRam[0x3e];
 
   /* Registers. SP matters most -- the live stack bytes above are meaningless
      without it. The flags are $A0: N set, everything else clear.
