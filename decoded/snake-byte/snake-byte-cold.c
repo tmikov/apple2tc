@@ -88,22 +88,8 @@
 /// above it also toggle the speaker.
 static void speaker_access(uint8_t port);
 
-/// Advance the clock and, if the host's budget is spent, hand control back.
-///
-/// Nothing calls this directly any more -- see `advance` below, which is this
-/// with a name that says why the site exists. It stays a separate macro
-/// because the two things it does are separate: the arithmetic, and the
-/// suspend point that lets the host draw a frame.
-#define TICK(n)                  \
-  do {                           \
-    if (s_remaining_cycles <= 0) \
-      cycles_expired();          \
-    s_cycles += (n);             \
-    s_remaining_cycles -= (n);   \
-  } while (0)
-
-/// Advance the virtual clock, at one of the twenty-one places in this program
-/// where a duration is *perceptible*.
+/// Advance the virtual clock, at one of the twenty-three places in this
+/// program where a duration is *perceptible*.
 ///
 /// This is the only way time passes here, and that is the point. The 6502
 /// spent cycles on every instruction it executed, and the decompiled file
@@ -142,7 +128,13 @@ static void speaker_access(uint8_t port);
 /// A macro rather than a comment convention, so that the count is greppable
 /// and deleting one is a visible act rather than the removal of an
 /// indistinguishable line.
-#define advance(n) TICK(n)
+#define advance(n)               \
+  do {                           \
+    if (s_remaining_cycles <= 0) \
+      cycles_expired();          \
+    s_cycles += (n);             \
+    s_remaining_cycles -= (n);   \
+  } while (0)
 
 /// The zero-page fragment $00B1-$00C8 the run data carried: the six-byte
 /// CHRGET routine Applesoft assembles there at boot. Small enough to read,

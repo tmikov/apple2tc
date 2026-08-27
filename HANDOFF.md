@@ -647,7 +647,9 @@ tmpN_U8 temporaries                   0
 dead `ret` / `ret_addr` parameters    0    121   one real `ret_addr` remains, and it
                                                 is an argument: the inline string's
                                                 address, which the original popped
-TICK statements                      0          838 before the virtual clock
+TICK                            (gone)          838 charging sites before the
+                                                virtual clock; the macro itself
+                                                was folded into advance
 advance statements                  23          the whole of the clock: every site
                                                 where a duration is perceptible,
                                                 plus two that only yield
@@ -780,10 +782,11 @@ What remains, in order of how well-defined it is:
    `TICK`s, which was rejected for a *fraction* of this -- the difference is
    that this buys the design and that bought 49 statements.
 
-   **The collapse is done: 838 charging sites, and now 21** (commit
-   `7451af0`). There is no `TICK` left in the file at all; the 21 are
-   `advance(n)`, and the routines underneath are what they always were.
-   The file lost 962 lines.
+   **The collapse is done: 838 charging sites, and now 23** (commits
+   `7451af0`, `3d8c85c`). There is no `TICK` in the file at all -- not the
+   macro either, which was only ever `advance` under an older name and is
+   folded into it. The routines underneath are what they always were, and the
+   file lost 962 lines.
 
    The plan's tasks 2-4 only fold the drawing routines, which is 48 sites, and
    for a while this file said the plan therefore could not reach its goal.
@@ -903,8 +906,9 @@ What remains, in order of how well-defined it is:
 
 4. **Step 6's old entry below is superseded** by item 3. Its `CYCLES` table
    of 130 probing / 721 charge-only sites predates the conversions and is
-   stale. As of 2026-08-26 the file has **no** `TICK` and **21** `advance`
-   (an addressless charge; 838 `TICK` before the virtual-clock work), 16
+   stale. As of 2026-08-26 the file has **no** `TICK` -- the name is gone
+   entirely -- and **23** `advance` (an addressless charge; 838 `TICK` before
+   the virtual-clock work), 16
    `GAME_CYCLES` (a charge on an edge, deliberately not probing) and 11
    probing sites, of which the cold trace installs 6.
 4. **Loose ends:** **350** unknown nonzero bytes in `coverage.txt` (was 451;
@@ -994,6 +998,10 @@ Nothing about the program changed -- the program-defined probes are byte
 identical at all 16,332 samples -- but 49 fewer statements does not buy a
 permanent difference in a real oracle. Anyone gating the cold build on frame
 hashes later would inherit the drift and have no way to tell it from a bug.
+
+`TICK` no longer exists as a name; the reasoning transfers to `advance`, which
+is the same macro. It matters more now, not less: with 23 charges left, each
+one is a yield some loop may be the only user of.
 
 **The lookup tables are arrays** (2026-08-25). Thirteen of them, and the last
 `ram_peek` of game data went with them -- the three that remain are the
