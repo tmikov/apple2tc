@@ -54,8 +54,8 @@ set_source_files_properties(reference/snake-byte-easyc1-ext.c reference/game_nat
 # snake-byte.c for bulk. They define static arrays, so exactly one
 # translation unit may include them -- which is the one listed here.
 add_a2_program(snake-byte
-  snake-byte.c game-image.inc rom-image.inc
-  ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
+  snake-byte.c system2-impl.c game-image.inc rom-image.inc
+  ${A2TC_INC}/system.h ${A2TC_INC}/system2.h ${A2TC_INC}/system2-impl.inc
   )
 set_source_files_properties(game-image.inc rom-image.inc
   PROPERTIES HEADER_FILE_ONLY TRUE)

@@ -12,12 +12,13 @@
 /// boot would have left, and runs the game as C. There is no Applesoft, and
 /// nothing here is generated.
 ///
-/// Why one file
-/// ------------
-/// `apple2tc/system2-inc.h` does not merely declare the emulated machine, it
-/// *defines* it, and nearly all of it has internal linkage: `s_ram`, the cycle
-/// counters, the access helpers. Anything built on those has to share its
-/// translation unit.
+/// Why one file for the game
+/// -------------------------
+/// It no longer has to be. `apple2tc/system2-inc.h` used to *define* the
+/// emulated machine with internal linkage, so anything built on it shared one
+/// translation unit; the machine is now split into `system2.h` and
+/// `system2-impl.inc`, and this program compiles the second half once in
+/// `system2-impl.c`. This file includes only the declarations.
 ///
 /// The better reason is ownership. The other targets in this directory are
 /// scaffolding -- controls this one is checked against, and one fixture -- and
@@ -64,7 +65,7 @@
  * The machine, the images, and what is left of the ROM                     *
  * ========================================================================== */
 
-#include "apple2tc/system2-inc.h"
+#include "apple2tc/system2.h"
 
 /// Defined next to click_speaker; declared here because the sound routines
 /// above it also toggle the speaker.
