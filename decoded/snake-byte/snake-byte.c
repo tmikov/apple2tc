@@ -777,7 +777,9 @@ void game_load_shape_masks(uint8_t shape) {
   // Four masks per shape at $6174, into the four the plotter reads.
   uint8_t last = 0;
   for (unsigned line = 0; line < 4; ++line) {
-    last = kShapeMaskTable[(uint8_t)((uint8_t)(shape << 2) + line)];
+    // The cast is the index: `shape << 2` overflows a byte at shape $40 and the
+    // original's ASL wraps, so the table is 256 long and this stays inside it.
+    last = kShapeMaskTable[(uint8_t)((shape << 2) + line)];
     s_snake.shape_mask[line] = last;
   }
 }
@@ -819,7 +821,7 @@ void game_install_cout_vector(void) {
 /// proof.
 static int8_t reflect(int8_t d) {
   assert(d == 1 || d == -1);
-  return (int8_t)-d;
+  return -d;
 }
 
 /// True if the cell at (\p col, \p row) is occupied, asked of the lo-res
@@ -840,8 +842,8 @@ void bouncer_step(Bouncer *b) {
     return;
   }
 
-  uint8_t want_col = (uint8_t)(b->col + b->dx);
-  uint8_t want_row = (uint8_t)(b->row + b->dy);
+  uint8_t want_col = b->col + b->dx;
+  uint8_t want_row = b->row + b->dy;
 
   const bool diagonal_taken = cell_taken(want_col, want_row);
   if (diagonal_taken) {
@@ -1163,8 +1165,8 @@ static const struct {
 MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
   // The head plus this direction's deltas.
   const Cell target = {
-      .col = (uint8_t)(kColDelta[dir] + s_snake.head.col),
-      .row = (uint8_t)(kRowDelta[dir] + s_snake.head.row),
+      .col = kColDelta[dir] + s_snake.head.col,
+      .row = kRowDelta[dir] + s_snake.head.row,
   };
 
   const uint8_t cell = cell_at(target);
@@ -1185,8 +1187,8 @@ MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
   unsigned free_neighbours = 0;
   for (unsigned i = 0; i < 4; ++i) {
     const Cell n = {
-        .col = (uint8_t)(target.col + kNeighbour[i].dcol),
-        .row = (uint8_t)(target.row + kNeighbour[i].drow),
+        .col = target.col + kNeighbour[i].dcol,
+        .row = target.row + kNeighbour[i].drow,
     };
 
     if (cell_at(n) == CELL_EMPTY) {
@@ -1302,11 +1304,11 @@ static void spin(uint8_t inner, uint8_t middle, uint8_t outer) {
     if (--inner) {
       continue;
     }
-    middle = (uint8_t)(middle - 1);
+    middle = middle - 1;
     if (middle) {
       continue;
     }
-    outer = (uint8_t)(outer - 1);
+    outer = outer - 1;
     if (!outer)
       break;
   }
@@ -1322,7 +1324,7 @@ static void wipe_occupancy_map(void) {
     s_mon.h2 = 0x27;
     lores_hline(at, 0x00);
 
-    const uint8_t row = (uint8_t)(at - 1);
+    const uint8_t row = at - 1;
     at = row;
     // BPL: row 0 is drawn, and the loop ends one step later.
     if (row & 0x80)
@@ -1485,7 +1487,7 @@ static uint16_t cell_row_base(uint8_t row) {
 /// Index into the 128-byte dot table at $6064: 16 inks of 8, four column
 /// phases in each of two scanline parities.
 static uint8_t dot_index(uint8_t ink, uint8_t scanline, uint8_t col) {
-  return (uint8_t)((uint8_t)(((ink << 1) | (scanline & 1)) << 2) | (col & 3));
+  return (((ink << 1) | (scanline & 1)) << 2) | (col & 3);
 }
 
 /// A byte of hi-res page 1. The page is $2000-$3FFF, and successive scanlines
@@ -1505,9 +1507,9 @@ void game_draw_cell(uint8_t ink, Cell c) {
   for (unsigned line = 0; line < 4; ++line) {
     // Built in $06 in two steps, and written out between them because it is
     // zero page and a probe may sample there.
-    const uint8_t idx = dot_index(ink, (uint8_t)line, c.col);
+    const uint8_t idx = dot_index(ink, line, c.col);
 
-    hgr_poke(dest + c.col, (uint8_t)(kHgrPattern[idx] & s_snake.shape_mask[line]));
+    hgr_poke(dest + c.col, kHgrPattern[idx] & s_snake.shape_mask[line]);
     dest += 0x0400; // one scanline down, i.e. +4 on the high byte
   }
   // The carry is what the loop's CPX #4 leaves.
@@ -1526,12 +1528,11 @@ void game_merge_cell(uint8_t ink, Cell c) {
   uint16_t dest = cell_row_base(c.row);
 
   for (unsigned line = 0; line < 4; ++line) {
-    const uint8_t parity = (uint8_t)(line & 1);
-    const uint8_t idx =
-        (uint8_t)((uint8_t)(((uint8_t)((parity << 7) | (ink >> 1))) << 2) | (c.col & 3));
+    const uint8_t parity = line & 1;
+    const uint8_t idx = (((parity << 7) | (ink >> 1)) << 2) | (c.col & 3);
 
     const uint16_t at = dest + c.col;
-    hgr_poke(at, (uint8_t)(((kHgrPattern[idx] ^ 0x7f) & s_snake.shape_mask[line]) | hgr_peek(at)));
+    hgr_poke(at, ((kHgrPattern[idx] ^ 0x7f) & s_snake.shape_mask[line]) | hgr_peek(at));
     dest += 0x0400;
   }
 }
@@ -1547,7 +1548,7 @@ void game_clear_hgr(void) {
   for (uint8_t page = 0x20;;) {
     uint8_t y = 0;
     do {
-      hgr_poke((uint16_t)(page << 8) + y, 0x00);
+      hgr_poke((page << 8) + y, 0x00);
       ++y;
     } while (y);
 
@@ -1579,7 +1580,7 @@ void game_plot_hline(uint8_t ink, Cell c, uint8_t to_col) {
     if (c.col == to_col)
       break;
 
-    c.col = (uint8_t)(c.col + 1);
+    c.col = c.col + 1;
   }
 }
 
@@ -1594,7 +1595,7 @@ void game_plot_vline(uint8_t ink, Cell c, uint8_t to_row) {
     if (c.row == to_row)
       break;
 
-    c.row = (uint8_t)(c.row + 1);
+    c.row = c.row + 1;
   }
 }
 
@@ -1612,7 +1613,7 @@ void game_lores_vline(Cell c, uint8_t to_row) {
     if (c.row == to_row)
       break;
 
-    c.row = (uint8_t)(c.row + 1);
+    c.row = c.row + 1;
   }
 }
 
@@ -1648,7 +1649,7 @@ static uint8_t dequeue_key(void) {
   }
 
   s_input.ring[at] = 0x00;
-  s_input.read = (uint8_t)((at + 1) & 0x0f);
+  s_input.read = (at + 1) & 0x0f;
   // X *is* live out of $6594 -- `apple2tc --ir` says so -- unlike X out of
   // $6C72, where the same check let the write go. So it is maintained.
   return key;
@@ -1958,7 +1959,7 @@ void game_tick_sound(void) {
         // Twelve more when there is a countdown to advance, which is every
         // pass of an actual note: 50 against 38 is most of a semitone.
         advance(12);
-        const uint8_t left = (uint8_t)(s_sound.countdown - 1);
+        const uint8_t left = s_sound.countdown - 1;
         s_sound.countdown = left;
         if (!left) {
           // The click, and the cycles between it and the previous one are
@@ -1969,7 +1970,7 @@ void game_tick_sound(void) {
 
           // Two INC s_sound.period: every click lengthens the period, so the pitch
           // falls for as long as the head keeps moving.
-          s_sound.period = (uint8_t)(s_sound.period + 2);
+          s_sound.period = s_sound.period + 2;
           s_sound.countdown = s_sound.period;
         }
       }
@@ -1995,7 +1996,7 @@ void game_tick_sound(void) {
       }
     }
 
-    const uint8_t left = (uint8_t)(s_sound.passes - 1);
+    const uint8_t left = s_sound.passes - 1;
     s_sound.passes = left;
     if (!left)
       break;
@@ -2027,11 +2028,11 @@ enum { kCharZero = 0xb0 };
 /// and it clears it again before returning -- so say so loudly rather than
 /// carry a decimal path that cannot be reached.
 static void cout_digit(uint8_t digit) {
-  rom_cout((uint8_t)(kCharZero + digit));
+  rom_cout(kCharZero + digit);
 }
 
 void game_print_bcd(uint8_t byte) {
-  const uint8_t high = (uint8_t)(byte >> 4);
+  const uint8_t high = byte >> 4;
 
   if (high) {
     note_digit(high);
@@ -2043,7 +2044,7 @@ void game_print_bcd(uint8_t byte) {
     // A leading zero: dropped, and nothing is printed.
   }
 
-  const uint8_t low = (uint8_t)(byte & 0x0f);
+  const uint8_t low = byte & 0x0f;
 
   if (low) {
     note_digit(low);
@@ -2085,8 +2086,8 @@ void game_add_score(void) {
     const uint8_t a = i < 2 ? s_progress.apple_value[i] : s_progress.score[i];
     const uint8_t m = i < 2 ? s_progress.score[i] : 0x00;
     const uint16_t r = adc_dec16(a, m, carry);
-    s_progress.score[i] = (uint8_t)r;
-    flags = (uint8_t)(r >> 8);
+    s_progress.score[i] = r;
+    flags = r >> 8;
     carry = flags & 0x01;
   }
 
@@ -2160,10 +2161,10 @@ uint8_t game_rand_byte(void) {
 /// Add one, in BCD, to the two-byte counter at \p at.
 static void bcd_inc16(uint8_t at[2]) {
   uint16_t r = adc_dec16(at[0], 0x01, 0x00);
-  at[0] = (uint8_t)r;
+  at[0] = r;
 
-  r = adc_dec16(at[1], 0x00, (uint8_t)(r >> 8) & 0x01);
-  at[1] = (uint8_t)r;
+  r = adc_dec16(at[1], 0x00, (r >> 8) & 0x01);
+  at[1] = r;
 }
 
 Cell game_place_apple(void) {
@@ -2208,10 +2209,10 @@ void game_set_apple_value(void) {
 
   for (;;) {
     uint16_t r = adc_dec16(per_apple, s_progress.apple_value[0], 0x00);
-    s_progress.apple_value[0] = (uint8_t)r;
+    s_progress.apple_value[0] = r;
 
-    r = adc_dec16(s_progress.apple_value[1], 0x00, (uint8_t)(r >> 8) & 0x01);
-    s_progress.apple_value[1] = (uint8_t)r;
+    r = adc_dec16(s_progress.apple_value[1], 0x00, (r >> 8) & 0x01);
+    s_progress.apple_value[1] = r;
 
     if (!--levels)
       break;
@@ -2266,7 +2267,7 @@ void game_draw_head(uint8_t ink, Cell c) {
 /// screen. Nothing about it runs when an apple is eaten; that path is $7743,
 /// and it touches four other counters and not this one.
 void game_award_extra_life(void) {
-  s_progress.lives = (uint8_t)adc_dec16(s_progress.lives, 0x01, 0x00);
+  s_progress.lives = adc_dec16(s_progress.lives, 0x01, 0x00);
   game_sound_sweep();
 }
 
@@ -2379,12 +2380,12 @@ uint8_t game_draw_side_walls(void) {
 
   // How far down the upper segment reaches, from the timer: the walls close in
   // as a life runs out.
-  const uint8_t wall_top = (uint8_t)((seed >> 2) + 1);
+  const uint8_t wall_top = (seed >> 2) + 1;
   plot_vline_at(INK_WALL_TOP, 0x00, 0x01, wall_top);
 
   plot_vline_at(INK_WALL_TOP, 0x27, 0x01, wall_top);
 
-  const uint8_t seam = (uint8_t)(wall_top + 1);
+  const uint8_t seam = wall_top + 1;
   // The lower segment.
   plot_vline_at(INK_WALL_BOTTOM, 0x27, seam, 0x27);
 
@@ -2421,7 +2422,7 @@ void game_read_key(void) {
     // The $0F is the ring's size and nothing checks it: widening it to $1F
     // passes every oracle, because no recording ever presses sixteen keys
     // faster than the game reads them. Do not tidy it.
-    const uint8_t next = (uint8_t)((at + 1) & 0x0f);
+    const uint8_t next = (at + 1) & 0x0f;
     if (next != s_input.read) {
       s_input.write = next;
       return;
@@ -2451,7 +2452,7 @@ void game_read_key(void) {
 /// Where glyph \p glyph's eight rows live. The font starts at $66A9 and the
 /// first glyph in it is the space, $20.
 static uint16_t glyph_rows(uint8_t glyph) {
-  return (uint16_t)(0x66a9 + (uint16_t)(glyph - 0x20) * 8);
+  return 0x66a9 + (glyph - 0x20) * 8;
 }
 
 /// The hi-res address matching the text cursor. BASL/BASH at $28 point at the
@@ -2461,13 +2462,13 @@ static uint16_t hires_cursor(void) {
   // Each half separately, and that is not an accident of the split: the low
   // byte wraps at 8 bits without carrying into the high one, so a cursor near
   // the end of a line addresses the start of the same hi-res row.
-  const uint8_t hi = (uint8_t)((s_mon.bas >> 8) - 0x04 + 0x20);
-  const uint8_t lo = (uint8_t)((s_mon.bas & 0xff) + s_mon.ch);
-  return (uint16_t)(lo | (hi << 8));
+  const uint8_t hi = (s_mon.bas >> 8) - 0x04 + 0x20;
+  const uint8_t lo = (s_mon.bas & 0xff) + s_mon.ch;
+  return lo | (hi << 8);
 }
 
 void game_cout_hook(uint8_t ch) {
-  const uint8_t glyph = (uint8_t)(ch & 0x7f);
+  const uint8_t glyph = ch & 0x7f;
 
   if (glyph >= 0x20) {
     // The original's SBC/ADC pairs honour the D flag. COUT is never reached in
@@ -2487,10 +2488,10 @@ void game_cout_hook(uint8_t ch) {
     uint16_t dest = hires_cursor();
 
     for (unsigned row = 0; row < 8; ++row) {
-      hgr_poke(dest, peek((uint16_t)(src + row)));
+      hgr_poke(dest, peek(src + row));
 
       // One hi-res scanline down within the character cell, which is +$400.
-      dest = (uint16_t)(dest + 0x0400);
+      dest = dest + 0x0400;
 
       // `INX / CPX #8 / BNE`: the branch is taken on every pass but the last.
     }
@@ -2598,8 +2599,8 @@ static void speaker_access(uint8_t port) {
       dump = fopen(path, "w");
   }
   if (dump)
-    fprintf(dump, "%u %u\n", (unsigned)s_cycles, (unsigned)port);
-  peek((uint16_t)(0xc000 + port));
+    fprintf(dump, "%u %u\n", s_cycles, (unsigned)port);
+  peek(0xc000 + port);
 }
 
 static void click_speaker(void) {
@@ -2666,7 +2667,7 @@ static LifeEnd snake_step(uint8_t shape, uint8_t *cell_out) {
   game_draw_head(INK_SNAKE, head);
 
   // $62B8 -- the direction back into 1..4, and the ink is the direction.
-  const uint8_t dir = (uint8_t)((((uint8_t)(s_snake.direction - 1)) & 3) + 1);
+  const uint8_t dir = ((s_snake.direction - 1) & 3) + 1;
   s_snake.direction = dir;
   rom_setcol(dir);
 
@@ -2674,8 +2675,8 @@ static LifeEnd snake_step(uint8_t shape, uint8_t *cell_out) {
 
   // $62D1 -- advance the head, and see what is there.
   const Cell next = {
-      .col = (uint8_t)(head.col + kColDelta[dir]),
-      .row = (uint8_t)(head.row + kRowDelta[dir]),
+      .col = head.col + kColDelta[dir],
+      .row = head.row + kRowDelta[dir],
   };
   s_snake.head = next;
   const uint8_t cell = scrn_cell(next);
@@ -2759,13 +2760,13 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
     if (code == KEY_TURN_CW) {
       shape = kSnakeShape[TURN_CW][dir];
       // Computing the wrap early would be tidier and would not match.
-      s_snake.direction = (uint8_t)(dir - 1);
+      s_snake.direction = dir - 1;
       goto draw;
     }
 
     if (code == KEY_TURN_CCW) {
       shape = kSnakeShape[TURN_CCW][dir];
-      s_snake.direction = (uint8_t)(dir + 1);
+      s_snake.direction = dir + 1;
       goto draw;
     }
 
@@ -2824,7 +2825,7 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
 
   tail: /* trim the tail, unless the snake is still growing */
     if (s_snake.growth) {
-      s_snake.growth = (uint8_t)(s_snake.growth - 1);
+      s_snake.growth = s_snake.growth - 1;
       s_sound.click_count = 0x07;
     } else {
       const Cell tail = s_snake.tail;
@@ -2842,8 +2843,8 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
       // must follow, so the same delta tables move it on.
       const uint8_t tail_dir = under;
       const Cell tail_next = {
-          .col = (uint8_t)(tail.col + kColDelta[tail_dir]),
-          .row = (uint8_t)(tail.row + kRowDelta[tail_dir]),
+          .col = tail.col + kColDelta[tail_dir],
+          .row = tail.row + kRowDelta[tail_dir],
       };
       s_snake.tail = tail_next;
       const uint8_t ahead = scrn_cell(tail_next);
@@ -2852,13 +2853,13 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
       // direction 1-4 stored under the next body segment), not one of
       // Shape's four named entries -- a one-off outside the closed set,
       // left bare on purpose.
-      plot_shape_at((uint8_t)(ahead + 0x0c), INK_SNAKE, tail_next);
+      plot_shape_at(ahead + 0x0c, INK_SNAKE, tail_next);
     }
 
   pace: /* the timer, the walls, and the delay that sets the speed */
     click_speaker();
     {
-      const uint8_t left = (uint8_t)(s_life_timer - 1);
+      const uint8_t left = s_life_timer - 1;
       s_life_timer = left;
       if (left == 0) {
         return LIFE_TIMEOUT;
@@ -2898,7 +2899,7 @@ LifeEnd game_play_loop(uint8_t *cell_out) {
         // irregular the way the original is.
         advance(41);
         click_speaker();
-        s_sound.click_count = (uint8_t)(s_sound.click_count - 1);
+        s_sound.click_count = s_sound.click_count - 1;
       }
       --n;
     } while (n != 0);
@@ -2962,7 +2963,7 @@ static bool steer_try(uint8_t dir) {
     switch (v) {
     case MOVE_TARGET_TAKEN:
       // $6AD9 CMP #$0F left these.
-      move_taken = (cell != CELL_APPLE);
+      move_taken = cell != CELL_APPLE;
       break;
     case MOVE_ROW_ZERO:
     case MOVE_OK:
@@ -3166,10 +3167,10 @@ void game_status_panel(void) {
 void game_bonus_screen(void) {
   // $78B3 -- double the apple's value into $78B0/$78B1, in BCD.
   const uint16_t lo = adc_dec16(s_progress.apple_value[0], s_progress.apple_value[0], 0x00);
-  s_progress.bonus[0] = (uint8_t)lo;
+  s_progress.bonus[0] = lo;
   const uint16_t hi =
-      adc_dec16(s_progress.apple_value[1], s_progress.apple_value[1], (uint8_t)(lo >> 8) & 0x01);
-  s_progress.bonus[1] = (uint8_t)hi;
+      adc_dec16(s_progress.apple_value[1], s_progress.apple_value[1], (lo >> 8) & 0x01);
+  s_progress.bonus[1] = hi;
 
   // Twice, because the bonus is twice the apple value and game_add_score adds
   // it once.
@@ -3229,7 +3230,7 @@ void game_bonus_screen(void) {
       click_speaker();
       --x;
     } while (x != 0);
-    passes = (uint8_t)(passes - 1);
+    passes = passes - 1;
   } while (passes != 0);
 }
 
@@ -3300,7 +3301,7 @@ void game_begin_life(void) {
 
 void game_setup_screen(void) {
   // $7980 -- keep $0E/$0F inside the window game_rand_byte expects.
-  const uint8_t hi = (uint8_t)(s_rand_ptr >> 8);
+  const uint8_t hi = s_rand_ptr >> 8;
   bool clamp_lo = hi >= 0x1f;
   if (!clamp_lo) {
     clamp_lo = hi < 0x18;
@@ -3308,7 +3309,7 @@ void game_setup_screen(void) {
   if (clamp_lo) {
     s_rand_ptr &= 0xffde;
   }
-  s_rand_ptr = (uint16_t)((s_rand_ptr & 0x1fff) | 0x1800);
+  s_rand_ptr = (s_rand_ptr & 0x1fff) | 0x1800;
 
   // $73D8 -- the first call through here never asks anything.
   if (!s_setup_seen) {
@@ -3353,7 +3354,7 @@ wait: /* $741C */
       break;
     }
 
-    const uint8_t inner = (uint8_t)(inner_count + 1);
+    const uint8_t inner = inner_count + 1;
     inner_count = inner;
     if (inner != 0) {
       continue;
@@ -3379,7 +3380,7 @@ wait: /* $741C */
     }
 
     // $7451 -- the outer counter. When it wraps too, nobody is answering.
-    const uint8_t outer = (uint8_t)(outer_count + 1);
+    const uint8_t outer = outer_count + 1;
     outer_count = outer;
     if (outer == 0) {
       s_demo_mode = true;
@@ -3400,7 +3401,7 @@ wait: /* $741C */
       goto wait;
     }
     // $7470 -- a digit. The subtract is a plain SBC with carry set.
-    s_difficulty = (uint8_t)(key - 0xb0);
+    s_difficulty = key - 0xb0;
     s_demo_mode = false;
     io_poke(0xc010, 0x00);
     return;
@@ -3886,17 +3887,17 @@ static void game_play_one_life(void) {
 /// BCD add across a low/high pair, as SED/CLC/ADC/ADC leaves it.
 static void bcd_add16(uint8_t at[2], uint8_t by) {
   uint16_t r = adc_dec16(at[0], by, 0);
-  at[0] = (uint8_t)r;
-  r = adc_dec16(at[1], 0x00, (uint8_t)(r >> 8) & 0x01);
-  at[1] = (uint8_t)r;
+  at[0] = r;
+  r = adc_dec16(at[1], 0x00, (r >> 8) & 0x01);
+  at[1] = r;
 }
 
 /// BCD subtract across a low/high pair, as SED/SEC/SBC/SBC leaves it.
 static void bcd_sub16(uint8_t at[2], uint8_t by) {
   uint16_t r = sbc_dec16(at[0], by, 1);
-  at[0] = (uint8_t)r;
-  r = sbc_dec16(at[1], 0x00, (uint8_t)(r >> 8) & 0x01);
-  at[1] = (uint8_t)r;
+  at[0] = r;
+  r = sbc_dec16(at[1], 0x00, (r >> 8) & 0x01);
+  at[1] = r;
 }
 
 /// How a round ended, and so how far game_cold_start's loop nest unwinds. The
@@ -3923,7 +3924,7 @@ void game_cold_start(void) {
     // probe-acceptance.sh aligns the two builds on -- see GAME_CYCLES_ANCHOR.
     GAME_CYCLES_ANCHOR(0x3750, 2);
     for (unsigned i = 0; i != 256; ++i) {
-      poke((uint16_t)(0x1800 + page * 256 + i), peek((uint16_t)(0x3800 + page * 256 + i)));
+      poke(0x1800 + page * 256 + i, peek(0x3800 + page * 256 + i));
     }
   }
 
@@ -3995,7 +3996,7 @@ void game_cold_start(void) {
               }
             }
 
-            s_snake.growth = (uint8_t)(s_snake.growth + 0x0a); // ten more cells
+            s_snake.growth = s_snake.growth + 0x0a; // ten more cells
 
             // $7793 -- anything left in the round?
             if (s_progress.left[0] || s_progress.left[1]) {
@@ -4084,7 +4085,7 @@ void game_cold_start(void) {
               }
               {
                 const uint16_t r = sbc_dec16(s_progress.lives, 0x01, 0x01);
-                s_progress.lives = (uint8_t)r;
+                s_progress.lives = r;
               }
               ending = ROUND_RETRY; // $789A: JMP $76C7
               break;
@@ -4093,9 +4094,9 @@ void game_cold_start(void) {
             /* $77EA -- the round is empty, so the level is cleared. */
             {
               const uint16_t r = adc_dec16(s_progress.level, 0x01, 0x00);
-              s_progress.level = (uint8_t)r;
+              s_progress.level = r;
             }
-            s_script_index = (uint8_t)(s_script_index + 1);
+            s_script_index = s_script_index + 1;
             // $77F8 -- no life was lost this round, so it earns a bonus.
             if (s_progress.lives == s_progress.lives_at_level_start) {
               game_bonus_screen();
@@ -4112,7 +4113,7 @@ void game_cold_start(void) {
           game_status_panel();
           if (s_step_delay >= 0x03) {
             // $7730 -- two steps faster each life, but never past 3.
-            s_step_delay = (uint8_t)(s_step_delay - 2);
+            s_step_delay = s_step_delay - 2;
           }
           game_play_one_life();
         }
@@ -4298,15 +4299,15 @@ void init_emulated(void) {
      it, so what is there beforehand does not matter, and $FF is what the
      machine would have had. */
   for (unsigned a = 0x0803; a != 0x3750; ++a)
-    ram_poke((uint16_t)a, 0xFF);
+    ram_poke(a, 0xFF);
   for (unsigned a = 0x854F; a != 0xC000; ++a)
-    ram_poke((uint16_t)a, 0xFF);
+    ram_poke(a, 0xFF);
 
   /* Then the state the boot itself produced: zero page, the stack and its live
      contents, the $03xx vectors, and the text screen. This comes last because
      it must win over both of the above. */
   for (unsigned i = 0; i != SB_ENTRY_RAM_LEN; ++i)
-    ram_poke((uint16_t)i, kSnakeByteEntryRam[i]);
+    ram_poke(i, kSnakeByteEntryRam[i]);
 
   /* The plotter's block used to be $0000-$0008 and is a C object now, so the
      line above no longer initialises it. Take it from the same snapshot, or
@@ -4319,16 +4320,16 @@ void init_emulated(void) {
   s_mon.wndwdth = kSnakeByteEntryRam[0x21];
   s_mon.wndtop = kSnakeByteEntryRam[0x22];
   s_mon.wndbtm = kSnakeByteEntryRam[0x23];
-  s_mon.gbas = (uint16_t)(kSnakeByteEntryRam[0x26] | (kSnakeByteEntryRam[0x27] << 8));
-  s_mon.bas = (uint16_t)(kSnakeByteEntryRam[0x28] | (kSnakeByteEntryRam[0x29] << 8));
-  s_mon.bas2 = (uint16_t)(kSnakeByteEntryRam[0x2a] | (kSnakeByteEntryRam[0x2b] << 8));
+  s_mon.gbas = kSnakeByteEntryRam[0x26] | (kSnakeByteEntryRam[0x27] << 8);
+  s_mon.bas = kSnakeByteEntryRam[0x28] | (kSnakeByteEntryRam[0x29] << 8);
+  s_mon.bas2 = kSnakeByteEntryRam[0x2a] | (kSnakeByteEntryRam[0x2b] << 8);
   s_mon.h2 = kSnakeByteEntryRam[0x2c];
   s_mon.v2 = kSnakeByteEntryRam[0x2d];
   s_mon.mask = kSnakeByteEntryRam[0x2e];
   s_mon.color = kSnakeByteEntryRam[0x30];
   s_mon.invflg = kSnakeByteEntryRam[0x32];
-  s_mon.csw = (uint16_t)(kSnakeByteEntryRam[0x36] | (kSnakeByteEntryRam[0x37] << 8));
-  s_mon.ksw = (uint16_t)(kSnakeByteEntryRam[0x38] | (kSnakeByteEntryRam[0x39] << 8));
+  s_mon.csw = kSnakeByteEntryRam[0x36] | (kSnakeByteEntryRam[0x37] << 8);
+  s_mon.ksw = kSnakeByteEntryRam[0x38] | (kSnakeByteEntryRam[0x39] << 8);
   s_mon.a2l = kSnakeByteEntryRam[0x3e];
 
   /* Registers. SP matters most -- the live stack bytes above are meaningless

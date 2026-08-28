@@ -23,6 +23,22 @@ the machine and forced one file per program. Three things from it worth having:
   reach `system-inc.h`: the `--simple-c` back end has no coroutine and no such
   hook.
 
+**The casts are gone** (2026-08-27). 165 `(uint8_t)`/`(uint16_t)` over
+`snake-byte.c` and `rom.c` are **4**. Nearly all of them restated what C does on
+an assignment, a return or an argument, and they were removed mechanically: strip
+one, recompile at `-O2`, diff the disassembly against the untouched file, revert
+if it moved. Deleting only casts moves no line, so `__LINE__` inside `assert`
+stays put and the comparison is exact.
+
+**The codegen oracle is conservative and was wrong six times, in the safe
+direction.** It kept six casts; three of those only blocked an optimisation
+(gcc proves the relocation loop's addresses never leave 16 bits, drops a
+`cmp`/`sbb` for an `lea`). Those were settled by enumerating each expression's
+whole input domain in both spellings, with three known load-bearing casts as
+controls. The three real survivors are the ones whose truncated value escapes
+into an array index or into the low half of a word, and each now says so above
+itself. See the 2026-08-27 log entry and the playbook.
+
 The ROM/game boundary is four things wide: the ROM needs `s_mon`, `advance`,
 `GAME_CYCLES_COORD` and one callback; the game needs sixteen `rom_*`. They call
 each other at exactly one point in each direction — `rom_cout` dispatches up
@@ -735,6 +751,9 @@ compiler warnings of its own          0          under cc, clang and gcc; gated 
                                                 [warn]. One dead `ovf8` remains
                                                 at -Wall and predates the file
 adapters left                         0     42
+casts                                 4    165   `(uint8_t)`/`(uint16_t)` over both
+                                                hand-owned files; the 4 are 3 real
+                                                truncations and one for varargs
 lines                            5,806  16,195   the generated ext build, for scale
 ```
 

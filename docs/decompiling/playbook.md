@@ -1043,6 +1043,35 @@ you left out.
 generated it is noise on every call site, and here it was 140 of them. The tell
 is a qualifier that is true of everything.
 
+**A decompiler's casts are noise, with three exceptions, and the compiler
+will sort them for you.** Snake Byte's two hand-owned files carried 165
+`(uint8_t)`/`(uint16_t)` casts; 161 of them said nothing C does not already
+do -- a cast to the type of the variable being assigned, or of the value being
+returned. The three that survive are the ones whose truncated value *escapes*
+before anything else narrows it: into an array index, or into the low half of a
+16-bit word whose high half comes from elsewhere. The rule generalises --
+`(uint8_t)` composes away through `+ - * | & ^ <<`, and does not through `>>`,
+comparison, division, or an index.
+
+Do not decide these by reading. Remove one cast, recompile at `-O2`, and
+compare the disassembly against the untouched file: a cast that carries a value
+cannot leave codegen alone. Removing them one at a time and reverting any that
+moves the output settles the great majority mechanically, and *keeps* every one
+that matters without anybody adjudicating it. Since only casts are being
+deleted, no line numbers move, so `__LINE__` inside `assert` does not perturb
+the comparison and `-DNDEBUG` is unnecessary -- unlike the rename check above.
+
+**Then expect the oracle to be conservative, and finish the job by hand.** Six
+of Snake Byte's 165 moved the codegen; only three of those moved a *value*. The
+others blocked an optimisation: dropping a cast let gcc prove an address never
+wraps and pick a cheaper induction variable, or drop a `sbb` for an `lea`. The
+way to tell them apart is not more reading either -- write the old and new
+expressions side by side in a throwaway program and enumerate the whole input
+domain. Every one of these had a domain small enough to exhaust outright (2^24
+at worst), which turns "I believe this is equivalent" into a count. Include two
+or three casts you already know are load-bearing as controls, so a program that
+reports "identical" everywhere has been shown able to report anything else.
+
 **Group the globals before renaming them.** Decompiled code arrives as a flat
 sheet of file-scope variables, and no function signature says what it touches.
 The groups are usually already implied by a comment ("these belong to the ROM

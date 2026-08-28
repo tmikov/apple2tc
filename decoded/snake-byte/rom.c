@@ -49,15 +49,17 @@ struct Monitor s_mon;
 /// build a text address, and this one shifts by two and ORs, which lands on
 /// the lo-res page instead.
 static void rom_gbascalc(uint8_t row) {
-  const uint8_t odd = (uint8_t)(row & 0x01);
-  const uint8_t page = (uint8_t)(((row >> 0x01) & 0x03) | 0x04);
-  uint8_t band = (uint8_t)(row & 0x18);
+  const uint8_t odd = row & 0x01;
+  const uint8_t page = ((row >> 0x01) & 0x03) | 0x04;
+  uint8_t band = row & 0x18;
 
   if (odd) {
-    band = (uint8_t)((band + 0x7f) + odd);
+    band = (band + 0x7f) + odd;
   }
 
-  s_mon.gbas = (uint16_t)((uint8_t)((uint8_t)(band << 0x02) | band) | (page << 8));
+  // The cast is the ASL: band reaches $98, so the shift carries out of the
+  // byte, and dropping it would leak bit 9 into the page below.
+  s_mon.gbas = ((uint8_t)(band << 0x02) | band) | (page << 8);
 }
 
 /// $F80E PLOT1. Store the color mask ($30) into the lo-res half-byte selected
@@ -66,9 +68,9 @@ static void rom_plot1(uint8_t col) {
   // One lo-res cell: replace the half of the byte MASK selects with the
   // matching half of COLOR, leaving the other half alone. `(old ^ colour) &
   // mask ^ old` is the ROM's way of saying that in three instructions.
-  const uint16_t at = (uint16_t)(s_mon.gbas + col);
+  const uint16_t at = s_mon.gbas + col;
   const uint8_t old = peek(at);
-  poke(at, (uint8_t)(((old ^ s_mon.color) & s_mon.mask) ^ old));
+  poke(at, ((old ^ s_mon.color) & s_mon.mask) ^ old);
 }
 
 /* ========================================================================== */
@@ -83,18 +85,18 @@ static void rom_plot1(uint8_t col) {
 /// which is $F0 with the carry set and $EF without; only the low bit of the
 /// row can make the difference, so the sum is one of the two masks.
 void rom_plot(uint8_t row, uint8_t col) {
-  const uint8_t half = (uint8_t)(row >> 0x01);
+  const uint8_t half = row >> 0x01;
   const bool upper = (row & 0x01) != 0;
   // PHP/PLP across GBASCALC, to carry the LSR's bit past a call that clobbers
   // the flags. The bit is `row & 0x01`, and nothing else survived the round
   // trip, so it is simply the value.
   rom_gbascalc(half);
 
-  const uint8_t carry = (uint8_t)(row & 0x01);
+  const uint8_t carry = row & 0x01;
   uint8_t mask = 0x0f;
 
   if (upper) {
-    mask = (uint8_t)(((uint16_t)mask + 0x00e0) + carry);
+    mask = (mask + 0x00e0) + carry;
   }
 
   s_mon.mask = mask;
@@ -129,22 +131,22 @@ void rom_hline(uint8_t row, uint8_t from_col) {
   rom_plot(row, col);
 
 across: /* one column at a time, up to H2 */
-  carry = (uint8_t)(col >= s_mon.h2);
+  carry = col >= s_mon.h2;
   if (carry) {
     goto done;
   }
 
-  col = (uint8_t)(col + 0x01);
+  col = col + 0x01;
   rom_plot1(col);
   if (!carry) {
     goto across;
   }
 
 down: /* one row at a time, up to V2 */
-  row = (uint8_t)(((uint16_t)row + 0x0001) + carry);
+  row = (row + 0x0001) + carry;
 
   rom_plot(row, col);
-  carry = (uint8_t)(row >= s_mon.v2);
+  carry = row >= s_mon.v2;
   if (!carry) {
     goto down;
   }
@@ -161,8 +163,8 @@ void rom_setcol(uint8_t ink) {
   // The lo-res colour is stored in both nibbles, so a PLOT can take whichever
   // half MASK selects without shifting. Four ASLs and an ORA get there in the
   // original; the carry they leave is read by nothing.
-  const uint8_t low = (uint8_t)(ink & 0x0f);
-  s_mon.color = (uint8_t)((low << 0x04) | low);
+  const uint8_t low = ink & 0x0f;
+  s_mon.color = (low << 0x04) | low;
 }
 
 /* ========================================================================== */
@@ -173,18 +175,18 @@ uint8_t rom_scrn(uint8_t row, uint8_t col) {
   // The row's low bit says which half of the byte holds this cell, and the
   // ROM keeps it across GBASCALC on the stack -- as the whole status
   // register, because LSR put it in the carry and PHP is one byte.
-  const uint8_t half = (uint8_t)(row >> 0x01);
+  const uint8_t half = row >> 0x01;
   const bool upper = (row & 0x01) != 0;
 
   rom_gbascalc(half);
 
-  uint8_t cell = peek((uint16_t)(s_mon.gbas + col));
+  uint8_t cell = peek(s_mon.gbas + col);
 
   // The original brackets GBASCALC with PHP/PLP to keep the LSR's carry. It is
   // read by nothing here.
 
   if (upper) {
-    cell = (uint8_t)(cell >> 0x04);
+    cell = cell >> 0x04;
   }
 
   return cell & 0x0f;
@@ -218,7 +220,7 @@ home: /* $FC58 */
     // +1 below: $FC4D's `ADC #$00` has no CLC in front of it, and this is why.
     const bool step = rom_clreolz(0x00);
 
-    line = (uint8_t)(line + step);
+    line = line + step;
 
     const bool past_bottom = line >= s_mon.wndbtm;
     if (!past_bottom) {
@@ -283,15 +285,15 @@ void rom_fc68(void) {
     return;
   }
 
-  s_mon.cv = (uint8_t)(s_mon.cv - 0x01);
+  s_mon.cv = s_mon.cv - 0x01;
   line = s_mon.wndtop;
   step = rom_vtabz(line);
 
 scroll: /* one line up per pass */
   s_mon.bas2 = s_mon.bas;
-  col = (uint8_t)(s_mon.wndwdth - 0x01);
+  col = s_mon.wndwdth - 0x01;
   // $FC82's ADC has no CLC either; the carry is whatever VTABZ last returned.
-  line = (uint8_t)(((uint16_t)line + 0x0001) + step);
+  line = (line + 0x0001) + step;
 
   if (line >= s_mon.wndbtm) {
     // That was the last line.
@@ -303,9 +305,9 @@ scroll: /* one line up per pass */
 copy: /* one character, right to left */
 {
   const uint8_t at = col;
-  poke((uint16_t)(s_mon.bas2 + at), peek((uint16_t)(s_mon.bas + at)));
-  const uint8_t next = (uint8_t)(at - 0x01);
-  negative = (uint8_t)(next & 0x80);
+  poke(s_mon.bas2 + at, peek(s_mon.bas + at));
+  const uint8_t next = at - 0x01;
+  negative = next & 0x80;
   col = next;
   if (!negative) {
     goto copy;
@@ -421,9 +423,9 @@ emit: /* $FB94 JMP $FBFD */
   // Falls into the trampoline charge before continuing.
 
 store: /* put the character at the cursor */
-  poke((uint16_t)(s_mon.bas + s_mon.ch), ch);
+  poke(s_mon.bas + s_mon.ch, ch);
 
-  s_mon.ch = (uint8_t)(s_mon.ch + 0x01);
+  s_mon.ch = s_mon.ch + 0x01;
   {
     const uint8_t width = s_mon.wndwdth;
     const bool past_right_edge = s_mon.ch >= width;
@@ -455,7 +457,7 @@ dispatch: /* not printable; which control code is it? */
   /* backspace. Off the left edge wraps to the end of the line above,
      which is why it falls into the cursor-up path rather than returning. */
   {
-    const uint8_t back = (uint8_t)(s_mon.ch - 0x01);
+    const uint8_t back = s_mon.ch - 0x01;
     s_mon.ch = back;
     if (!(back & 0x80)) {
       goto out;
@@ -463,7 +465,7 @@ dispatch: /* not printable; which control code is it? */
   }
 
   s_mon.ch = s_mon.wndwdth;
-  s_mon.ch = (uint8_t)(s_mon.ch - 0x01);
+  s_mon.ch = s_mon.ch - 0x01;
 
   {
     const uint8_t top = s_mon.wndtop;
@@ -475,14 +477,14 @@ dispatch: /* not printable; which control code is it? */
     }
   }
 
-  s_mon.cv = (uint8_t)(s_mon.cv - 0x01);
+  s_mon.cv = s_mon.cv - 0x01;
   // TABV
   rom_vtabz(s_mon.cv);
   goto out;
 
 bell: /* Ctrl-G, or a control code the monitor does not know */
 {
-  const uint8_t differs = (uint8_t)(ch != 0x87);
+  const uint8_t differs = ch != 0x87;
   if (differs) {
     // Not the bell either. Drop it.
     goto out;
@@ -496,7 +498,7 @@ bell: /* Ctrl-G, or a control code the monitor does not know */
   for (;;) { /* $FBE4 */
     rom_wait(0x0c);
     io_peek(0xc030); // the click; the read is the write
-    clicks = (uint8_t)(clicks - 0x01);
+    clicks = clicks - 0x01;
     if (!clicks)
       break;
   }
@@ -507,7 +509,7 @@ carriage_return: /* to the left edge, then down */
   s_mon.ch = 0x00;
 
 line_feed: /* $FC66 */
-  s_mon.cv = (uint8_t)(s_mon.cv + 0x01);
+  s_mon.cv = s_mon.cv + 0x01;
   rom_fc68(); // JMP -- a tail call, and where a scroll happens.
 
 out:
@@ -570,7 +572,7 @@ void rom_cout1(uint8_t ch) {
   const bool printable = ch >= 0xa0;
 
   if (printable) {
-    ch = (uint8_t)(ch & s_mon.invflg);
+    ch = ch & s_mon.invflg;
   }
 
   // The original saves Y in YSAV1 across the call and puts it back, because
@@ -606,10 +608,10 @@ void rom_setkbd(void) {
   // answers page $FD, where its own KEYIN and COUT1 live. A real slot would
   // give $Cn00 instead -- decoded, never taken, because the game never sets
   // one.
-  const uint8_t slot = (uint8_t)(s_mon.a2l & 0x0f);
+  const uint8_t slot = s_mon.a2l & 0x0f;
   uint8_t page, low;
   if (slot) {
-    page = (uint8_t)(slot | 0xc0);
+    page = slot | 0xc0;
     low = 0x00;
     // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
   } else {
@@ -617,7 +619,7 @@ void rom_setkbd(void) {
     low = entry_low;
   }
 
-  s_mon.ksw = (uint16_t)(low | (page << 8));
+  s_mon.ksw = low | (page << 8);
 }
 
 /// $FE93 SETVID. Point COUT's vector back at the ROM's own COUT1.
@@ -638,10 +640,10 @@ void rom_setvid(void) {
   // answers page $FD, where its own KEYIN and COUT1 live. A real slot would
   // give $Cn00 instead -- decoded, never taken, because the game never sets
   // one.
-  const uint8_t slot = (uint8_t)(s_mon.a2l & 0x0f);
+  const uint8_t slot = s_mon.a2l & 0x0f;
   uint8_t page, low;
   if (slot) {
-    page = (uint8_t)(slot | 0xc0);
+    page = slot | 0xc0;
     low = 0x00;
     // $FEA5 BEQ -- provably always taken (Y was just loaded 0).
   } else {
@@ -649,7 +651,7 @@ void rom_setvid(void) {
     low = entry_low;
   }
 
-  s_mon.csw = (uint16_t)(low | (page << 8));
+  s_mon.csw = low | (page << 8);
 }
 
 /// $FBC1 BASCALC. Turn a text line number in A into that line's base address
@@ -669,23 +671,23 @@ void rom_setvid(void) {
 uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
   // LSR: the carry is the line's low bit, and it is what decides the ADC below.
   const uint8_t odd = line & 0x01;
-  const uint8_t page = (uint8_t)(((line >> 1) & 0x03) | 0x04);
+  const uint8_t page = ((line >> 1) & 0x03) | 0x04;
   uint8_t band = line & 0x18;
 
   if (odd) {
     // ADC #$7F with the carry the LSR just set, i.e. +$80: the second half of
     // the band.
-    band = (uint8_t)((uint16_t)(band + 0x007f) + odd);
+    band = (band + 0x007f) + odd;
   }
 
   // ASL twice, then OR the original back in -- the original does this in BASL
   // itself, which is why the band is stored there first. The second shift's
   // carry out is what VTABZ adds straight back in, which is why it is returned
   // rather than left in a flag.
-  const uint16_t shifted = (uint16_t)(band << 0x02);
+  const uint16_t shifted = band << 0x02;
   *carry_out = ((shifted & 0x01ff) >> 8) != 0;
-  const uint8_t addr_lo = (uint8_t)shifted | band;
-  s_mon.bas = (uint16_t)(addr_lo | (page << 8));
+  const uint8_t addr_lo = shifted | band;
+  s_mon.bas = addr_lo | (page << 8);
   return addr_lo;
 }
 
@@ -701,10 +703,11 @@ bool rom_vtabz(uint8_t line) {
   bool carry;
   const uint8_t base = rom_bascalc(line, &carry);
 
-  const uint16_t r = ((uint16_t)base + s_mon.wndlft) + carry;
+  const uint16_t r = (base + s_mon.wndlft) + carry;
   // VTABZ adds WNDLFT to BASL and leaves BASH exactly as BASCALC set it, so
-  // this really is a write of one half.
-  s_mon.bas = (uint16_t)((s_mon.bas & 0xff00) | (uint8_t)r);
+  // this really is a write of one half -- and the cast is what makes it one:
+  // r carries the ADC's ninth bit, which must not reach BASH.
+  s_mon.bas = (s_mon.bas & 0xff00) | (uint8_t)r;
 
   return ((r >> 8) & 0x01) != 0;
 }
@@ -733,9 +736,9 @@ bool rom_clreolz(uint8_t col) {
   const uint8_t space = 0xa0; // a space, high bit set
 
   for (;;) {
-    poke((uint16_t)(s_mon.bas + col), space);
+    poke(s_mon.bas + col, space);
 
-    const uint8_t next = (uint8_t)(col + 1);
+    const uint8_t next = col + 1;
     col = next;
 
     const uint8_t width = s_mon.wndwdth;
@@ -777,18 +780,18 @@ void rom_wait(uint8_t n) {
       // bell's clicks, so this charge is the tone. Nothing exercises it, so
       // the number rests on the 6502's timings rather than on a measurement.
       advance(5);
-      const uint16_t r = (uint16_t)(inner - 0x0001) - (uint8_t)(0x01 - carry);
-      carry = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
-      inner = (uint8_t)r;
+      const uint16_t r = (inner - 0x0001) - (0x01 - carry);
+      carry = 0x01 - ((r >> 8) & 0x01);
+      inner = r;
       not_zero = inner;
       if (!not_zero)
         break;
     }
 
     // The outer one: the copy off the stack, down by one.
-    const uint16_t r = (uint16_t)(n - 0x0001) - (uint8_t)(0x01 - carry);
-    carry = (uint8_t)(0x01 - ((uint8_t)(r >> 8) & 0x01));
-    n = (uint8_t)r;
+    const uint16_t r = (n - 0x0001) - (0x01 - carry);
+    carry = 0x01 - ((r >> 8) & 0x01);
+    n = r;
     not_zero = n;
     if (!not_zero)
       break;

@@ -3157,3 +3157,53 @@ The test is `tests/pacing`: a stub engine (13 functions and `g_debug`) driving
 a2host with no window, which `a2host` being deliberately sokol-free is what
 makes possible. Thirteen checks. Mutation-tested -- setting the stored interval
 to zero, which is exactly what the original bug did, fails two of them.
+
+---
+
+## 2026-08-27 (after the splits) — 165 casts become 4
+
+**Status:** validated · **Scope:** snake-byte
+
+`snake-byte.c` and `rom.c` were full of casts the decompiler emits by
+construction: `s_mon.cv = (uint8_t)(s_mon.cv - 0x01)`, `poke((uint16_t)(bas +
+col), ch)`, `line = (uint8_t)(((uint16_t)line + 0x0001) + step)`. C already
+truncates on assignment, on return and on an argument, so almost all of them
+were saying a second time what the declaration says once.
+
+**The oracle did the sorting.** A cast that carries a value cannot leave `-O2`
+codegen alone, so: strip one, recompile, diff the disassembly against the
+untouched file, revert if it moved. Because only casts are being deleted no
+line moves, so `__LINE__` inside `assert` is stable and the comparison is exact
+without `-DNDEBUG`. 174 attempts, 159 accepted with no argument needed from
+anybody.
+
+**And then the oracle was wrong six times, in the safe direction.** It kept six
+casts; only three of them carry a value. The other three blocked an
+optimisation -- without the cast gcc proves the relocation loop's addresses
+never leave 16 bits and picks a cheaper induction variable, and drops a `cmp`/
+`sbb` pair for one `lea`. Identical semantics, different instructions.
+
+Those six were settled by enumerating the whole input domain of each expression
+in both spellings -- 2^24 at the worst, 512 at the best -- with three known
+load-bearing casts included as controls so a program reporting "identical"
+everywhere had been shown able to report otherwise. Four came back identical
+over their full domain. `rom_wait`'s came back identical over `carry` in
+{0, 1}, which is its whole range (one initialiser and one assignment, both
+0 or 1) and differs over [0, 255], which is the useful form of that answer:
+the removal is safe *because of* a local invariant, not unconditionally.
+
+**What the three survivors have in common** is that the truncated value escapes
+before anything else narrows it -- `kShapeMaskTable[(uint8_t)((shape << 2) +
+line)]` is an index, and `(bas & 0xff00) | (uint8_t)r` is the low half of a word
+whose high half comes from elsewhere. `(uint8_t)` composes away through
+`+ - * | & ^ <<` and does not through `>>`, comparison, division or an index.
+All three now carry a comment saying so, because the next reader will otherwise
+delete them for the same reason the other 161 went.
+
+**Verification:** all 30 gate checks, `verify.sh` 4/4, `run-tests.sh`, and
+6,000 release-build frame hashes byte-identical to HEAD's. `-Wall -Wextra`
+warning counts unchanged at 1 each -- and that comparison had to be redone,
+because the first attempt compiled the HEAD copies from `/tmp`, where
+`#include "rom.h"` did not resolve; ten implicit-declaration warnings looked
+briefly like a ten-warning improvement. That is the playbook's own trap, from a
+new direction: check the baseline compiled before believing what it says.
