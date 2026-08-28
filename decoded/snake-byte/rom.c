@@ -50,7 +50,7 @@ struct Monitor s_mon;
 /// the lo-res page instead.
 static void rom_gbascalc(uint8_t row) {
   const uint8_t odd = row & 0x01;
-  const uint8_t page = ((row >> 0x01) & 0x03) | 0x04;
+  const uint8_t page = ((row >> 1) & 0x03) | 0x04;
   uint8_t band = row & 0x18;
 
   if (odd) {
@@ -59,7 +59,7 @@ static void rom_gbascalc(uint8_t row) {
 
   // The cast is the ASL: band reaches $98, so the shift carries out of the
   // byte, and dropping it would leak bit 9 into the page below.
-  s_mon.gbas = ((uint8_t)(band << 0x02) | band) | (page << 8);
+  s_mon.gbas = ((uint8_t)(band << 2) | band) | (page << 8);
 }
 
 /// $F80E PLOT1. Store the color mask ($30) into the lo-res half-byte selected
@@ -85,7 +85,7 @@ static void rom_plot1(uint8_t col) {
 /// which is $F0 with the carry set and $EF without; only the low bit of the
 /// row can make the difference, so the sum is one of the two masks.
 void rom_plot(uint8_t row, uint8_t col) {
-  const uint8_t half = row >> 0x01;
+  const uint8_t half = row >> 1;
   const bool upper = (row & 0x01) != 0;
   // PHP/PLP across GBASCALC, to carry the LSR's bit past a call that clobbers
   // the flags. The bit is `row & 0x01`, and nothing else survived the round
@@ -164,7 +164,7 @@ void rom_setcol(uint8_t ink) {
   // half MASK selects without shifting. Four ASLs and an ORA get there in the
   // original; the carry they leave is read by nothing.
   const uint8_t low = ink & 0x0f;
-  s_mon.color = (low << 0x04) | low;
+  s_mon.color = (low << 4) | low;
 }
 
 /* ========================================================================== */
@@ -175,7 +175,7 @@ uint8_t rom_scrn(uint8_t row, uint8_t col) {
   // The row's low bit says which half of the byte holds this cell, and the
   // ROM keeps it across GBASCALC on the stack -- as the whole status
   // register, because LSR put it in the carry and PHP is one byte.
-  const uint8_t half = row >> 0x01;
+  const uint8_t half = row >> 1;
   const bool upper = (row & 0x01) != 0;
 
   rom_gbascalc(half);
@@ -186,7 +186,7 @@ uint8_t rom_scrn(uint8_t row, uint8_t col) {
   // read by nothing here.
 
   if (upper) {
-    cell = cell >> 0x04;
+    cell = cell >> 4;
   }
 
   return cell & 0x0f;
@@ -684,7 +684,7 @@ uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
   // itself, which is why the band is stored there first. The second shift's
   // carry out is what VTABZ adds straight back in, which is why it is returned
   // rather than left in a flag.
-  const uint16_t shifted = band << 0x02;
+  const uint16_t shifted = band << 2;
   *carry_out = ((shifted & 0x01ff) >> 8) != 0;
   const uint8_t addr_lo = shifted | band;
   s_mon.bas = addr_lo | (page << 8);
