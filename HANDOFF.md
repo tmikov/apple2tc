@@ -4,6 +4,36 @@ Read this first. It is the entry point for resuming the work on branch
 `snake-byte`. Everything below is measured or committed — where something is a
 guess, it says so.
 
+**The game is three translation units now** (2026-08-27, `4c07a1d`..`99e770a`).
+`snake-byte.c` is 4,375 lines — the game. `rom.c` is the Apple II ROM's 796,
+with `rom.h` and `clock.h` as the interface between them. `system2-impl.c` is
+two lines that compile the machine once.
+
+Getting there needed the engine split first, because `system2-inc.h` defined
+the machine and forced one file per program. Three things from it worth having:
+
+- **The header was already single-TU-only**, and inconsistently: fourteen of
+  its functions were non-static *definitions*, so two includers would already
+  have collided. The `static` on the rest bought privacy nothing wanted.
+- **Out-of-lining the accessors costs nothing measurable** — forcing the eleven
+  hot ones out of line moved a 40,000-frame run from 2.50 s to 2.51 s. That is
+  not why they stay `static inline` in the header; they stay because they are
+  accessors. It is why the rest could move without agonising.
+- **`emulated_entry_point` was the only interface change**, and it did not
+  reach `system-inc.h`: the `--simple-c` back end has no coroutine and no such
+  hook.
+
+The ROM/game boundary is four things wide: the ROM needs `s_mon`, `advance`,
+`GAME_CYCLES_COORD` and one callback; the game needs sixteen `rom_*`. They call
+each other at exactly one point in each direction — `rom_cout` dispatches up
+into `game_cout_hook`, which hands back down to `rom_cout1`.
+
+**The gate needed four edits and found the first itself**: `$FB7C` is the ROM's
+one probe-carrying address, so `site_addrs` produced five block heads instead of
+six until it scanned both files. `yield-lint.awk` had a latent bug only a second
+file could expose — it reported `NR`, cumulative across files — and now uses
+`FNR` and resets per file.
+
 **The directory was reorganised on 2026-08-27** (`023c28f`, `e6c9e9e`,
 `scripts/` after them). The
 artifact is `decoded/snake-byte/snake-byte.c` — it used to be
@@ -410,11 +440,17 @@ probing entry addresses across both cold scenarios, not assumed:
 | `rom_wait` | called only from BELL1; nothing emits Ctrl-G |
 | COUTZ's Ctrl-S handshake, bell and backspace | the game prints only printable characters, returns and line feeds |
 
-`a2rom.c` and `game.c` are **`#include`d, never compiled separately**.
-`system2-inc.h` defines the machine state (`s_ram`, `s_a`, the `CYCLES` macro)
-with internal linkage, so a second translation unit would get its *own* copy of
-everything and link cleanly while being silently wrong. Both are marked
-`HEADER_FILE_ONLY` in CMake to prevent exactly that.
+`reference/a2rom.c` and `reference/game.c` are **`#include`d, never compiled
+separately**, and marked `HEADER_FILE_ONLY` in CMake to enforce it. That was
+once true of everything built on this engine: `system2-inc.h` *defined* the
+machine with internal linkage, so a second translation unit got its own private
+copy and linked cleanly while being silently wrong.
+
+**That constraint is gone** (2026-08-27, `4c07a1d`..`355b0a8`). The machine is
+split into `apple2tc/system2.h` — `extern` state and the accessors, still
+inline — and `apple2tc/system2-impl.inc`, the definitions, compiled once per
+program. `system2-inc.h` survives as a two-line shim for programs that are a
+single file and want to stay that way, which is still all of `reference/`.
 
 - `a2rom.c` — the 9 ROM entry points, plus `GBASCALC`, `PLOT1` and the `$FB78`
   `COUTZ` subtree, which were deleted as collateral when the 9 became external.

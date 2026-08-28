@@ -970,6 +970,46 @@ the invariant holds without anyone computing the offset. Prefer
 over-provisioning plus a comparison that truncates, over a tuned number that
 has to be re-derived whenever anything moves.
 
+### A runtime header that *defines* the machine costs you separate compilation
+
+Decompiler runtimes tend to ship as one header that both declares and defines
+the emulated machine — registers, RAM, the accessors — with everything `static`
+so that including it "just works". It does, once. It also means every program
+built on it is a single translation unit, and the decompiled output is usually
+the largest file anyone will ever have to read.
+
+Two things make this worth fixing rather than living with:
+
+**It is probably already broken, half way.** Check whether any of the header's
+functions are non-`static` definitions. Here fourteen were — the host-facing ABI
+— so two includers would have collided at link time regardless. The `static` on
+the remainder was buying per-TU privacy that nothing wanted, on top of a header
+that could not be included twice anyway.
+
+**The split is smaller than it looks.** Declarations header plus an
+implementation fragment; the state becomes `extern`; the one-to-three-line
+accessors stay in the header as `static inline`, so nothing at a call site
+changes. A program that wants one TU includes both — which is what the old
+header becomes, a two-line shim — and a program that wants more compiles the
+fragment once in its own `.c`.
+
+Measure before assuming the inlining matters: forcing the eleven hot accessors
+out of line moved a 40,000-frame run by 0.01 s, because the emulated machine was
+never the bottleneck. That measurement is not the reason to keep them inline —
+they are accessors — but it is the reason not to argue about the rest.
+
+Expect exactly one interface change, and look for it early: some hook the
+*program* supplies and the runtime calls. Here it was the coroutine's entry
+point, `static` in the header and defined by each decompiled program; once the
+thread lives in another TU it cannot be. That one word touches the emitter and
+every generated file, so do it alone, first, and confirm the regeneration diff
+is only that word.
+
+**What it unlocks is the thing you actually wanted.** Once the runtime stops
+forcing one file, the decompiled program can be split along its own seams. The
+ROM entry points came out of Snake Byte as a normal `.c` — 682 lines, 12% of the
+file — with an interface four symbols wide.
+
 ### Making it readable, after it is correct
 
 A decompilation that passes its oracles is not yet something a person will
