@@ -724,9 +724,12 @@ ext_prog="$bin/decoded/snake-byte/snake-bytec1-ext-run"
 # off the block-head list. Checked on 2026-08-24 after exactly that happened:
 # an adapter went away, its plain CYCLES went with it, and the native's SHARED
 # spelling was suddenly the only mention of $6216.
-site_addrs "$here/snake-byte.c" > "$here/testdata/blocks-cold.txt"
+# The cold build is two translation units now: the game and the Apple II ROM
+# beside it. $FB7C, the ROM's one probe-carrying address, lives in rom.c, so
+# both are scanned or the site list comes up one short.
+site_addrs "$here/snake-byte.c" "$here/rom.c" > "$here/testdata/blocks-cold.txt"
 
-for a in $(grep -ohE 'GAME_CYCLES_SHARED\(0x[0-9a-f]+' "$here/snake-byte.c" \
+for a in $(grep -ohE 'GAME_CYCLES_SHARED\(0x[0-9a-f]+' "$here/snake-byte.c" "$here/rom.c" \
              | sed 's/.*0x//' | sort -u); do
   if ! grep -qx "$a" "$here/testdata/blocks-cold.txt"; then
     echo "FAIL [cold]: GAME_CYCLES_SHARED(\$$a) but no other source emits it" >&2
@@ -936,7 +939,8 @@ fi
 warn_names=""
 for c in $warn_cc; do
   out=$("$c" -I "$here/../../include" -std=gnu11 -fsyntax-only \
-          "$here/snake-byte.c" 2>&1 | grep 'snake-byte\.c.*warning' || true)
+          "$here/snake-byte.c" "$here/rom.c" 2>&1 |
+          grep -E '(snake-byte|rom)\.c.*warning' || true)
   if [ -n "$out" ]; then
     echo "FAIL [warn]: $(basename "$c") warns about snake-byte.c" >&2
     echo "$out" >&2
@@ -958,7 +962,7 @@ echo "[warn] PASS: clean under$warn_names"
 # keys to a program that has stopped drawing frames.
 #
 # Two checks, and the static one is the real guarantee.
-awk -f "$here/scripts/yield-lint.awk" "$here/snake-byte.c" || exit 1
+awk -f "$here/scripts/yield-lint.awk" "$here/snake-byte.c" "$here/rom.c" || exit 1
 echo "[yield] PASS: every loop that reads input can suspend"
 
 # And a live one, because a lint can only see what it knows to look for.

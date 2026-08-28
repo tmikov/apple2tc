@@ -18,6 +18,8 @@
 # what a loop can block on; a charge is `advance()` or any `GAME_CYCLES` form,
 # since those charge too.
 
+FNR == 1 { ntop = 0; depth = 0 }   # each file starts clean
+
 function flag_all(what,   i) {
   for (i = 0; i < ntop; i++)
     if (what == "input") saw_input[i] = 1; else saw_charge[i] = 1
@@ -31,7 +33,7 @@ function flag_all(what,   i) {
   # A loop header opens a new scope to watch. Braceless bodies are covered by
   # the per-line flagging above, which has already run for this line.
   if (line ~ /^[ \t]*(for|while)[ \t]*\(/ || line ~ /^[ \t]*do[ \t]*\{/) {
-    start[ntop] = NR; startdepth[ntop] = depth
+    start[ntop] = FNR; startdepth[ntop] = depth
     saw_input[ntop] = 0; saw_charge[ntop] = 0
     text[ntop] = line
     ntop++
@@ -44,7 +46,7 @@ function flag_all(what,   i) {
   n = gsub(/\}/, "}", line); depth -= n
 
   # close every loop whose body has ended
-  while (ntop > 0 && depth <= startdepth[ntop-1] && NR > start[ntop-1]) {
+  while (ntop > 0 && depth <= startdepth[ntop-1] && FNR > start[ntop-1]) {
     ntop--
     if (saw_input[ntop] && !saw_charge[ntop]) {
       bad++
