@@ -54,7 +54,7 @@ static void rom_gbascalc(uint8_t row) {
   uint8_t band = row & 0x18;
 
   if (odd) {
-    band = (band + 0x7f) + odd;
+    band = band + 0x7f + odd;
   }
 
   // The cast is the ASL: band reaches $98, so the shift carries out of the
@@ -96,7 +96,7 @@ void rom_plot(uint8_t row, uint8_t col) {
   uint8_t mask = 0x0f;
 
   if (upper) {
-    mask = (mask + 0x00e0) + carry;
+    mask = mask + 0xe0 + carry;
   }
 
   s_mon.mask = mask;
@@ -143,7 +143,7 @@ across: /* one column at a time, up to H2 */
   }
 
 down: /* one row at a time, up to V2 */
-  row = (row + 0x0001) + carry;
+  row = row + 0x01 + carry;
 
   rom_plot(row, col);
   carry = row >= s_mon.v2;
@@ -293,7 +293,7 @@ scroll: /* one line up per pass */
   s_mon.bas2 = s_mon.bas;
   col = s_mon.wndwdth - 0x01;
   // $FC82's ADC has no CLC either; the carry is whatever VTABZ last returned.
-  line = (line + 0x0001) + step;
+  line = line + 0x01 + step;
 
   if (line >= s_mon.wndbtm) {
     // That was the last line.
@@ -677,7 +677,7 @@ uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
   if (odd) {
     // ADC #$7F with the carry the LSR just set, i.e. +$80: the second half of
     // the band.
-    band = (band + 0x007f) + odd;
+    band = band + 0x7f + odd;
   }
 
   // ASL twice, then OR the original back in -- the original does this in BASL
@@ -703,7 +703,7 @@ bool rom_vtabz(uint8_t line) {
   bool carry;
   const uint8_t base = rom_bascalc(line, &carry);
 
-  const uint16_t r = (base + s_mon.wndlft) + carry;
+  const uint16_t r = base + s_mon.wndlft + carry;
   // VTABZ adds WNDLFT to BASL and leaves BASH exactly as BASCALC set it, so
   // this really is a write of one half -- and the cast is what makes it one:
   // r carries the ADC's ninth bit, which must not reach BASH.
@@ -780,7 +780,7 @@ void rom_wait(uint8_t n) {
       // bell's clicks, so this charge is the tone. Nothing exercises it, so
       // the number rests on the 6502's timings rather than on a measurement.
       advance(5);
-      const uint16_t r = (inner - 0x0001) - (0x01 - carry);
+      const uint16_t r = inner - 0x01 - (0x01 - carry);
       carry = 0x01 - ((r >> 8) & 0x01);
       inner = r;
       not_zero = inner;
@@ -789,7 +789,7 @@ void rom_wait(uint8_t n) {
     }
 
     // The outer one: the copy off the stack, down by one.
-    const uint16_t r = (n - 0x0001) - (0x01 - carry);
+    const uint16_t r = n - 0x01 - (0x01 - carry);
     carry = 0x01 - ((r >> 8) & 0x01);
     n = r;
     not_zero = n;

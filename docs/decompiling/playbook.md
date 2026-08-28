@@ -1061,6 +1061,14 @@ that matters without anybody adjudicating it. Since only casts are being
 deleted, no line numbers move, so `__LINE__` inside `assert` does not perturb
 the comparison and `-DNDEBUG` is unnecessary -- unlike the rename check above.
 
+**Sweep the literals afterwards; the decompiler sizes them to the cast.** A
+`(uint16_t)` came with `0x0001` and `0x00e0`, so deleting the cast strands a
+four-digit literal in byte-wide arithmetic -- and the same 6502 `ADC #$7F`
+appeared as `0x7f` in one routine and `0x007f` in another for exactly that
+reason. The parenthesis the cast needed strands too: `(band + 0x7f) + odd` is
+one associative chain wearing a grouping it no longer has a use for. Neither is
+a semantic change, so the same codegen oracle confirms the whole sweep at once.
+
 **Then expect the oracle to be conservative, and finish the job by hand.** Six
 of Snake Byte's 165 moved the codegen; only three of those moved a *value*. The
 others blocked an optimisation: dropping a cast let gcc prove an address never
