@@ -1061,14 +1061,6 @@ that matters without anybody adjudicating it. Since only casts are being
 deleted, no line numbers move, so `__LINE__` inside `assert` does not perturb
 the comparison and `-DNDEBUG` is unnecessary -- unlike the rename check above.
 
-**Sweep the literals afterwards; the decompiler sizes them to the cast.** A
-`(uint16_t)` came with `0x0001` and `0x00e0`, so deleting the cast strands a
-four-digit literal in byte-wide arithmetic -- and the same 6502 `ADC #$7F`
-appeared as `0x7f` in one routine and `0x007f` in another for exactly that
-reason. The parenthesis the cast needed strands too: `(band + 0x7f) + odd` is
-one associative chain wearing a grouping it no longer has a use for. Neither is
-a semantic change, so the same codegen oracle confirms the whole sweep at once.
-
 **Then expect the oracle to be conservative, and finish the job by hand.** Six
 of Snake Byte's 165 moved the codegen; only three of those moved a *value*. The
 others blocked an optimisation: dropping a cast let gcc prove an address never
@@ -1079,6 +1071,25 @@ domain. Every one of these had a domain small enough to exhaust outright (2^24
 at worst), which turns "I believe this is equivalent" into a count. Include two
 or three casts you already know are load-bearing as controls, so a program that
 reports "identical" everywhere has been shown able to report anything else.
+
+**Sweep the spellings afterwards, in two passes, because they are two
+different problems.** The first is cast residue: a `(uint16_t)` came with
+`0x0001` and `0x00e0`, so deleting it strands a four-digit literal in byte-wide
+arithmetic -- the same 6502 `ADC #$7F` appeared as `0x7f` in one routine and
+`0x007f` in another for exactly that reason. The parenthesis the cast needed
+strands with it, leaving `(band + 0x7f) + odd`, one associative chain wearing a
+grouping nothing uses any more.
+
+The second is not residue at all and will be there whether or not you touch the
+casts: **the decompiler prints every immediate in hex, including the ones that
+are not immediates.** A shift count is a repetition count, so `band << 0x02`
+sitting above `page << 8` is two spellings of one idea. Normalising them is
+what finally made Snake Byte's BASCALC and GBASCALC look like the twins the
+comment says they are -- `((line >> 1) & 0x03) | 0x04` against
+`((row >> 1) & 0x03) | 0x04`, where one of them had worn `>> 0x01`.
+
+Neither pass is a semantic change, so the same codegen oracle confirms each
+outright.
 
 **Group the globals before renaming them.** Decompiled code arrives as a flat
 sheet of file-scope variables, and no function signature says what it touches.
