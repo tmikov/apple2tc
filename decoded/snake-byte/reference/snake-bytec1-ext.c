@@ -143,7 +143,7 @@ void FUNC_CROUT(uint16_t ret_addr);
 void FUNC_SETNORM(uint16_t ret_addr);
 void FUNC_BELL(uint16_t ret_addr);
 
-static void emulated_entry_point(void) {
+void emulated_entry_point(void) {
   func_t001(false);
 }
 

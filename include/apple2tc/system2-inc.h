@@ -216,7 +216,7 @@ static int s_emu_enabled = 0; // 0: disabled. 1: enabled. -1: stop.
 
 static int s_remaining_cycles;
 
-static void emulated_entry_point(void);
+void emulated_entry_point(void);
 
 static int emulated_thread(void *arg) {
   mtx_lock(&s_emu_mutex);

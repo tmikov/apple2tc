@@ -201,7 +201,7 @@ void func_7979(uint16_t ret_addr);
 void FUNC_PREAD(uint16_t ret_addr);
 void FUNC_MON_WAIT(uint16_t ret_addr);
 
-static void emulated_entry_point(void) {
+void emulated_entry_point(void) {
   func_t001(false);
 }
 

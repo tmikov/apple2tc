@@ -258,7 +258,7 @@ void rom_wait(uint8_t n);
 
 /// The program starts here. There used to be a func_t001 in between -- the
 /// generated dispatch -- and by the end it was a stub that called this.
-static void emulated_entry_point(void) {
+void emulated_entry_point(void) {
   game_cold_start();
 }
 

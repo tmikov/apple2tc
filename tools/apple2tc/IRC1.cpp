@@ -115,7 +115,7 @@ void IRC1Mod::run() {
         getName(&func));
 
   fprintf(os_, "\n");
-  fprintf(os_, "static void emulated_entry_point(void) {\n");
+  fprintf(os_, "void emulated_entry_point(void) {\n");
   fprintf(os_, "  %s(false);\n", getName(mod_->getStartFunction()));
   fprintf(os_, "}\n");
 

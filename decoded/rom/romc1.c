@@ -120,7 +120,7 @@ void FUNC_MON_RESTORE(uint16_t ret_addr);
 void FUNC_GETNUM(uint16_t ret_addr);
 void FUNC_ZMODE(uint16_t ret_addr);
 
-static void emulated_entry_point(void) {
+void emulated_entry_point(void) {
   func_t001(false);
 }
 

@@ -128,7 +128,7 @@ void FUNC_SETKBD(uint16_t ret_addr);
 void FUNC_SETVID(uint16_t ret_addr);
 void FUNC_SAV1(uint16_t ret_addr);
 
-static void emulated_entry_point(void) {
+void emulated_entry_point(void) {
   func_t001(false);
 }
 
