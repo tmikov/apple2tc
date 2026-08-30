@@ -74,7 +74,7 @@ to. In four passes:
 | `s_a`/`s_x`/`s_y` | 307 | **15** | COUT's X/Y promise, the entry load |
 | `branchTarget` | 122 | **0** | — |
 
-Read **"Getting the machine out of the code"** in the playbook before doing any
+Read **step 6, "Get the machine out of the code"**, in the playbook before doing any
 of this to another binary. It is the method rather than the result, and the
 method matters more than usual here because three of the four passes had an
 approach that felt right and was wrong: narrowing a probe in the same step as
@@ -184,7 +184,7 @@ and its code/data classifications are evidence, not verdicts.
 
 | File | What it holds |
 | --- | --- |
-| `docs/decompiling/playbook.md` | The transferable method: findings, procedure, red-flag table. Maturity is honestly marked — steps 1-4 have been executed, 5-6 have not. |
+| `docs/decompiling/playbook.md` | The transferable method, organized as seven steps in the order the work is done, plus techniques and a hazard index. All seven have been executed once, on this game. **Read it before doing any of this to another binary.** |
 | `docs/decompiling/decision-log.md` | Append-only rationale. **Never edit existing entries**; add new ones and mark old ones `superseded`. Read it from the end: the 2026-08-15 entry's "Left open" list went stale for six days before anyone noticed, so trust the newest entry over any earlier one's forward-looking notes. |
 | `decoded/snake-byte/labels.txt` | Established names, each with its evidence in a comment. |
 | `decoded/snake-byte/code-at.txt` | The two hand-asserted reachability claims, each with its argument. Read before adding a third. |
@@ -1038,7 +1038,7 @@ the **registers**, then the **lookup tables**. Each made the next legible, which
 is why the order is worth keeping.
 
 They are kept here at length because they are this game's record. **The
-transferable copy is the playbook's "Getting the machine out of the code"** —
+transferable copy is the playbook's step 6, "Get the machine out of the code"** —
 read that one first if the next binary is not Snake Byte; this is the evidence
 behind it.
 
@@ -1686,34 +1686,15 @@ which would pick up both the recovery fix and `--extern-routines`.
 
 ## Traps
 
-Mistakes already made here. The log has the full accounts.
+Snake Byte-specific only. **Everything transferable that used to be listed here
+is now in the playbook's hazard index** (`docs/decompiling/playbook.md`), where
+each row names the step it bites at — 11 of the 25 rows this table held were
+already said there in different words, and 13 more were promoted on 2026-08-29.
+Read that index, not this table, before starting work. The decision log has the
+full accounts of all of them.
 
 | Trap | Reality |
 | --- | --- |
-| "A changed frame trace means my code ran" | It only proves *something* changed. Pressing `C` at nine different cycles changed the trace every time; a call counter showed the target ran **zero** times. Instrument and count. |
-| "Absent from `BranchTargets`" = unreachable | The list is capped at 500 entries and records only *targets*, so fall-through blocks read as absent either way. Different claims; only "unreachable" is worth relying on, and it needs an argument. |
-| `--asm` `Code range` markers as a coverage measure | They appear only at discontinuities — 260 bytes against 3,931 bytes of real instructions. Count instructions. |
-| Externalizing entry points will shrink the output a lot | It removed 112 blocks, not ~1,430. Library code is reachable both via its entry points *and* via the start PC, non-additively (112 and 48 alone, 1,530 together). |
-| A self-modification warning in game code | Check for the inline-string-after-`JSR` idiom first. Snake Byte's only steady-state "self-modifying" block was the string `"VALUE: "`. |
-| Replacing a routine that dispatches through a vector | `COUT` is `JMP ($36)` and the game repoints it. `rom_cout` honours the vector and aborts loudly on an unknown target — the trace cannot catch a wrong guess there. |
-| clangd/IDE diagnostics in this repo | It lacks the include paths and reports cascading phantom errors (`CircularList.h file not found`, `s_a` undeclared in `a2rom.c`). Trust `ninja` and the test suite. |
-| A bodyless `ir::Function` | `getAddress()` derives from `getEntryBlock()`, which asserts on an empty block list — silent UB under `NDEBUG`. Use `Function::isExternal()`. |
-| Adding a `--code-at` target is enough to reach it | It also needs the `ORIGIN` half. Only a block that is a successor of a *dynamic* branch gets an address-to-block map entry; without one the code is decompiled but unreachable, and you still get `Unknown address`. |
-| `--code-at` will tell you if you point it at data | It cannot. That untraced bytes are code is exactly what you are asserting. It only checks the target starts a block and the origin is a branch, and warns if the target decodes to an invalid instruction. The real check is that the surrounding data boundaries come out right. |
-| The compiler will DCE unreachable blocks | It will not. `dce()` removes only instructions, and every `Void`-typed instruction counts as having side effects. A pass that orphans blocks must delete them itself. |
-| Two frame-hash traces that disagree mean one engine is wrong | Not between *different* engines. Frame hashing presumes a shared sampling clock; the generated engine yields only at block boundaries and an interpreter between instructions, so two perfectly equivalent implementations still disagree in 1-3 frame bursts around transitions. Same-engine comparison is fine, and is what `verify.sh` does. |
-| Comparing register traces across engines | `CPURegLiveness` and `dce` drop stores to dead registers by design, so the generated code does not maintain `Y` or the flags where nothing reads them. Traces diverge on line 2. `--compat` makes the format diffable, not the content. |
-| A rejection test that greps for `FATAL` | Twice during the probe work a test passed while covering nothing, because a *different* check fired first and satisfied the grep. Assert the specific message, and prove the test can fail by deleting the check it covers and watching the suite go red. |
-| A probe that produces no output | Says nothing about agreement. A probe on a non-block-head address fires in the interpreter and does not exist in the generated program; the report then reads as agreement while covering less than you think. |
-| `snake-byte.lst` shows you every keyboard read | It cannot. `$7541` and `$664A` are reached only through `--code-at` control flow, so the disassembler never traced them and the listing prints them as `DFB` data. `$760F`, the read that takes 6 of the 19 keys in the hires scenario, is visible *only* in the generated C. Grep the C, not the listing, for anything on a `--code-at` path. |
-| `--ret-addr` is a cosmetic verification flag | It is on for a correctness reason. Without it a `JSR` pushes the sentinel `$FFFE`, and the inline-data-after-`JSR` idiom — which Snake Byte uses — finds its data by *reading* that address. It costs nothing (same `push16`, different compile-time constant). But it is **not** for a shipped artifact: that wants `ret_addr == 0`, no emulated stack at all. |
-| Every `CYCLES`-shaped call site is a program location | It is not. The taken-branch penalty is charged on the *edge*, in a block carrying the branch's address that the program is never actually *at* — so it must not trace or dispatch probes, or one execution of that branch gets reported twice. Hence `AddEdgeCycles`/`CYCLES_EDGE`. 698 ROM addresses are edges and 121 of them are also real block heads, so the two are not distinguishable by address. |
-| A plan's list of keyboard-read sites is complete because it was grepped once | Snake Byte's coordinate plan named three sites (`$FD1B`, `$741F`, `$7890`); a fourth, `$6217` — the in-game ingest that clears the strobe and fills the ring buffer at `$623C` — was missing. Recording with only the three captured 11 of 23 keys, not 11 cycle-quantised ones: once a script delivers via `key` at all, the host's per-frame drain stands down entirely (`probe_uses_key()`), so an uncovered site's keys are never delivered, not merely mis-timed. Found by recording and counting, not by reading the disassembly harder. |
-| A green gate proves the code you just wrote | Only if the binary was rebuilt. Twice on 2026-08-24 `probe-acceptance.sh` reported six green cold checks against a stale executable — once because ninja saw no work for a file it had just been handed (same-second mtime), once because the build had failed and the old binary was still there. The script now refuses to run if any program is older than its sources; before that check existed, the only defence was reading the `Linking` line above the result. |
-| `-Wall` will tell you when a store goes dead | Not for a file-scope static. `s_ink` was written at fourteen sites and read at none for a whole build, and `-Wall`, `-Wextra` and the gate were all green. It only warns about *locals* (`-Wunused-but-set-variable`, itself a separate warning from `-Wunused-variable`). And it says nothing at all about a dead `ram_poke`, which is what seven of the moved stores turned out to be. Classify the sites; do not wait to be told. |
-| "In `rom_*`, registers are the algorithm", so leave them | True of `c` and `d`. False of `b`, `i`, `v`, `n` and `not_z`, which is 115 of the 222 flag references. The phrase was being quoted rather than checked. |
-| A green gate proves a routine you just rewrote | Only if a scenario runs it. Inverting `rom_fc68`'s scroll test or `rom_wait`'s countdown test passes all six cold checks, because nothing scrolls and nothing emits Ctrl-G. `probe-acceptance.sh`'s unverified list already names those addresses; read it before believing a pass. |
-| A test that fails proves the check it names | Task 3's own drain-guard regression test specified `--frames=10`. At that frame count the buggy (unguarded) and the fixed (guarded) build produce byte-identical output — the installed keyboard site isn't even reached until roughly frame 8.3, and the one key that would distinguish the two builds is stamped for a point roughly 59 frames further out — so the test failed identically before and after the fix and proved nothing either way. Needed `--frames=100`. A red result is only evidence once you have also seen it turn green for the right reason. |
 | `cold_compare`'s ext/cold `--frames` pair scales proportionally | It does not. The gap between them is the fixed number of frames the booting build spends in ROM boot before its first `$3750` — roughly 150 frames, independent of the total budget. The shipped 1300/1150 pair happens to have a ~150-frame gap; raising both by the same *ratio* (or the same round number) does not preserve it. Tried 40000/39000 (a 1000-frame gap): cold fell ~800-900 frames short of the booting build's trace length and the gate failed on "cold produced N blocks, fewer than needed" — not a content mismatch. Confirmed by re-running cold alone at `--frames=39900`: byte-identical to the booting build's aligned trace. Compute the cold-side number from the fixed offset, not from the ext-side number scaled down. |
 
 ---
