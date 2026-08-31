@@ -2293,7 +2293,7 @@ void game_sound_sweep(void) {
     do {
       // The rising half of the sweep: x clicks apart, and x shrinks.
       advance(5);
-    } while (y);
+    } while (--y);
 
     // The click, at whichever port $6C2C last chose. Neither the Y it loads
     // nor the byte it reads outlives the next pass.
@@ -2305,19 +2305,19 @@ void game_sound_sweep(void) {
     // stop working and no oracle in this repo looks at sound.
     advance(13);
     speaker_access(s_sound.port);
-  } while (x);
+  } while (--x);
 
   do {
     uint8_t y = x;
     do {
       // The falling half, x counting back up.
       advance(5);
-    } while (y);
+    } while (--y);
 
     advance(13);
     // The click itself. The read *is* the write -- see the note above.
     speaker_access(s_sound.port);
-  } while (x);
+  } while (++x);
 }
 
 /// show \p key as the binding of slot \p slot on the redefinition

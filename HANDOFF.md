@@ -88,6 +88,11 @@ ends, and stage 4 of the design -- restructuring the sound routine with
 understanding rather than mechanically -- which was always out of scope. The
 game's own C is done.
 
+**The toggle capture is the exception to the 40,000 below: it runs 6,000**,
+because its baseline is a committed file and every frame costs lines in it.
+6,000 is derived from the first `game_sound_sweep` call at frame 3,942, not
+chosen round. Do not lower it without re-deriving that number.
+
 **The gate compares 40,000 frames now, not 1,300** (2026-08-27, `0287e48`).
 It was raised because a review measured what the old budget could see: two of
 four structural mutations of `game_cold_start`'s loop nest survived a
@@ -102,6 +107,19 @@ is, so nothing has to encode how long the boot takes. Coverage went from
 cites 20,298,539 of them; 252,364 of the `hires` run's 260,128 hits are a
 single address and `$7890` never fires at all. The screen and memory
 comparisons are what actually constrain a rewrite of the game's structure.
+
+**A sound bug lived through the gate for four days** (2026-08-30, found by an
+external review). `game_sound_sweep` played 2 clicks instead of 512 from
+`7451af0`: the clock collapse deleted `if (--y) TICK(1);` as a charge, and the
+counter was inside it. Four of the file's nine `if ((--|++)` conditions had a
+charge as their entire body; those four broke and the five with a `continue` or
+`break` did not.
+
+The toggle timeline is exactly the oracle for this and **ran 1,300 frames while
+the routine is first reached at 3,942**. It runs 6,000 now, derived from that
+number; `play` is unaffected at any budget. Mutation-tested, and the sweep is
+instrumented at 512 clicks per call. **Ask what an oracle reaches, not just what
+it compares** -- and see the playbook, since both halves generalise.
 
 **Before trusting a green run.** Two defects reached the user through a fully
 green gate on 2026-08-26 -- the game hung on ESC, and three compiler warnings

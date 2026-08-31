@@ -74,7 +74,7 @@ here=$(dirname "$0")/..
 # Cheap to rule out: every program is newer than every source that can change
 # what it does.
 stale=0
-for prog_src in     "snake-byte-run:snake-byte.c game-image.inc rom-image.inc"     "snake-bytec1-ext-run:reference/snake-bytec1-ext.c reference/snake-byte-ext.c reference/a2rom.c reference/game.c reference/game_native.c"     "snake-byte-easyc1-ext-run:reference/snake-byte-easyc1-ext.c reference/snake-byte-easy-ext.c reference/a2rom.c reference/game.c reference/game_native.c"     "snake-bytec1-run:reference/snake-bytec1.c"; do
+for prog_src in     "snake-byte-run:snake-byte.c rom.c rom.h clock.h system2-impl.c entry-state-inc.h game-image.inc rom-image.inc"     "snake-bytec1-ext-run:reference/snake-bytec1-ext.c reference/snake-byte-ext.c reference/a2rom.c reference/game.c reference/game_native.c"     "snake-byte-easyc1-ext-run:reference/snake-byte-easyc1-ext.c reference/snake-byte-easy-ext.c reference/a2rom.c reference/game.c reference/game_native.c"     "snake-bytec1-run:reference/snake-bytec1.c"; do
   prog="$bin/decoded/snake-byte/${prog_src%%:*}"
   [ -x "$prog" ] || continue
   for src in ${prog_src#*:}; do
@@ -888,6 +888,16 @@ cold_compare hires testdata/play-hires.pkeys testdata/play-hires-cold.pkeys
 # which is where they go while the game demos itself). hires is all $20,
 # because it presses C at the attract screen and edits keys rather than
 # playing.
+#
+# 6000 frames, not the 1300 this ran at until 2026-08-30, and the number is
+# derived rather than round. game_sound_sweep -- the only routine in the game
+# whose entire output is sound -- is first reached at frame 3942 of hires, so
+# at 1300 the sound oracle never entered the one place it was most needed, and
+# a collapse that deleted its two counters along with their cycle charges was
+# green here for four days. play is unaffected either way: all of its speaker
+# activity is over well before frame 1300 and its baseline is the same 573
+# lines at any budget. Mutation-tested at both 4500 and 6000; do not lower it
+# below the first sweep without re-deriving that frame number.
 for sc in play:testdata/toggle-play.txt hires:testdata/toggle-hires.txt; do
   name=${sc%%:*}; want=${sc#*:}
   case $name in
@@ -895,7 +905,7 @@ for sc in play:testdata/toggle-play.txt hires:testdata/toggle-hires.txt; do
     hires) keys=testdata/play-hires-cold.pkeys ;;
   esac
   A2_TOGGLE_DUMP="$regen/toggle-$name.txt" \
-    "$bin/decoded/snake-byte/snake-byte-run" --frames=1300 --no-sound \
+    "$bin/decoded/snake-byte/snake-byte-run" --frames=6000 --no-sound \
     --key-file="$here/$keys" --probe="$here/testdata/trace-cold.probe" \
     --probe-out=/dev/null > /dev/null 2>&1
   if ! diff -q "$here/$want" "$regen/toggle-$name.txt" > /dev/null; then

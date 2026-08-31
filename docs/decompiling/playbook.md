@@ -1157,6 +1157,47 @@ gates on frame hashes would inherit the drift with no way to tell it from a bug.
 **The trade is 49 statements against an oracle you keep.** Cosmetic
 consolidation is the cheapest kind of change to give up, so give it up first.
 
+**`[6502]` Some charges carry the loop counter, and deleting them stops the
+loop counting.** Collapsing charges is a deletion pass, and one shape the
+decompiler emits makes deletion unsafe:
+
+```c
+do {
+  TICK(4);
+  if (--y)      /* the loop counter lives in the charge's condition */
+    TICK(1);
+} while (y);
+```
+
+That is how `DEY / BNE` comes out: the branch costs a cycle more when taken, so
+the charge is guarded by the test and the *decrement* sits in the guard. Delete
+the charge as a charge and the statement goes, and the counter with it. Snake
+Byte's `game_sound_sweep` lost all four of its counters this way and played 2
+clicks where it should play 512, undetected for four days.
+
+**The tell is that the `if`'s entire body is a charge.** Where the body does
+something as well — `{ TICK(1); continue; }`, `{ TICK(3); break; }` — deleting
+the charge leaves the control flow standing. Snake Byte had nine such
+conditions and only the four bare ones were dangerous, so this is a grep before
+you start, not a review afterwards: find `if ((--|++)` and check what is in the
+body besides the charge.
+
+**`[general]` An oracle's frame budget is part of the oracle.** The bug above
+survived the check built to catch exactly it. The speaker's toggle timeline
+*is* the waveform and goes red on any timing change — but it ran 1,300 frames
+and the routine is first reached at frame 3,942, so the one oracle aimed at
+sound never entered the one routine that is nothing but sound. The checks that
+did run long enough could not see it: the routine writes no memory, draws
+nothing, and those comparisons are deliberately cycle-blind. Every check was
+green and every check was honest.
+
+**Ask of each oracle not what it compares but what it reaches.** A budget is a
+silent scope limit — nothing reports "this check ended before your code ran".
+Derive the number from the latest thing it must cover and name that frame in a
+comment beside it, rather than inheriting whatever the check was first written
+with. When a routine's only observable effect is one that some oracle covers,
+count the entries before believing the green.
+
 ---
 
 ## 7. Make it an artifact

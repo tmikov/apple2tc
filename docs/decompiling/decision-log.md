@@ -3207,3 +3207,66 @@ because the first attempt compiled the HEAD copies from `/tmp`, where
 `#include "rom.h"` did not resolve; ten implicit-declaration warnings looked
 briefly like a ten-warning improvement. That is the playbook's own trap, from a
 new direction: check the baseline compiled before believing what it says.
+
+---
+
+## 2026-08-30 — The sweep that lost its counters
+
+**Status:** validated · **Scope:** snake-byte
+
+An external review found a real bug. `game_sound_sweep` -- the noise for
+clearing a round -- played **2 clicks where it should play 512**, and had done
+since `7451af0` on 2026-08-26.
+
+The cause is the shape the charge had. `DEY / BNE` decompiles to
+
+```c
+do { TICK(4); if (--y) TICK(1); } while (y);
+```
+
+because the branch costs a cycle more when taken. The virtual-clock collapse
+deleted the charges, and all four counters were *inside* them. The file has
+nine `if ((--|++)` conditions; the five whose body does something else as well
+(`continue`, `break`) survived intact, and the four whose body was only a
+charge did not. That is the grep to run before the next collapse.
+
+**Why every oracle was green, which is the more useful half.** The toggle
+timeline is the speaker's waveform and is precisely the check for this. It ran
+**1,300 frames**; the routine is first reached at frame **3,942** of hires. So
+the one oracle aimed at sound never entered the one routine that is nothing but
+sound, and its baseline had been re-recorded during the same clock work, which
+would have frozen the bug in even if it had.
+
+Everything else ran 40,000 frames and reached the routine five times, and none
+of it could see the difference: the sweep writes no memory, draws nothing, and
+the cold checks are deliberately cycle-blind. The reference build has the
+correct code, so the two builds genuinely diverge and the gate reports them
+identical. `game_sound_sweep`'s own comment already said "no oracle in this
+repo looks at sound" -- and then a different sound bug walked through the gap
+it named.
+
+**Fixed and gated.** The toggle capture runs 6,000 frames now, derived from
+that 3,942 and not rounded to it; `play` is unaffected at any budget, since all
+its speaker activity is over before frame 1,300. Mutation-tested: re-breaking
+the four counters turns `[toggle/hires]` red. Instrumented entry-to-exit, the
+sweep produces **512 clicks at all five calls**.
+
+**Attribution was checked rather than assumed.** Everything else in this batch
+-- 98 functions made static, five ROM helpers made private, the entry snapshot
+included instead of pasted, eleven stale comments, one wrapper inlined -- is
+byte-identical over a 6,000-frame free run to the build before the review. The
+sweep fix is the only behavioural change, and it first shows at frame 1,361.
+
+**Three more from the same review, all confirmed:**
+
+- The **staleness guard listed only `snake-byte.c`** and the two images, so it
+  had not noticed the 2026-08-27 split into `rom.c`/`clock.h`/`system2-impl.c`.
+  It could have validated an old binary after any of those changed -- the exact
+  failure its own comment was written about.
+- **`entry-state-inc.h` was generated and never included.** `snake-byte.c`
+  carried a reformatted but byte-identical copy, so `make-entry-state.sh` wrote
+  a file the build did not read, and regenerating the snapshot would have
+  changed nothing while looking like it had.
+- **47 of the file's functions had external linkage and 3 needed it.** Now that
+  the rest are `static`, `-Wall` can finally report a dead one; it reports none
+  today, which is the first time that has been checked rather than assumed.
