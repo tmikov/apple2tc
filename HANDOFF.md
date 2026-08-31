@@ -451,6 +451,24 @@ dispatch, HLINE falling into VLINEZ, HOME's provably-always-taken BCS — the
 labels keep their addresses and get names. It is not a failure to structure
 them further; it is what the code is.
 
+`game_cold_start` is 75 lines now, not 237 (2026-08-30). Its round prologue is
+`start_round()` and its life-loop body is `handle_life_result()`, which returns
+a `RoundEnd` instead of assigning one and breaking -- so the nest reads as four
+loops with short bodies. `ROUND_CONTINUE` is the not-an-ending member, named
+apart the way `LIFE_CONTINUE` is.
+
+**A third extraction was proposed and rejected.** `start_new_game` would move
+$7691/$76B7 out of the bottom of the outer loops, and their being at the bottom
+is the whole mechanism by which the cold entry skips them exactly once -- see
+the paragraph below. Extracting it leaves the call in the same unusual place
+and points the comment at a call instead of at code.
+
+**Mutation-tested, because this is where the gate is weakest.** Six mutations:
+four caught, both survivors proven inert by measurement rather than assumed so.
+`[cold/hires]` caught all four -- hoisting `start_round` out of its loop,
+breaking the life loop on the wrong value, returning `ROUND_CONTINUE` for a
+cleared round, and returning `ROUND_RETRY` for the fallthrough.
+
 `game_cold_start` looked like one of those and was not (2026-08-27). Its 21
 gotos and 13 labels are now four nested `for (;;)` loops — new game, new
 level, round, life — with zero labels. Twelve of the thirteen labels were

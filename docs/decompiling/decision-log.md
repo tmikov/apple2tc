@@ -3270,3 +3270,53 @@ sweep fix is the only behavioural change, and it first shows at frame 1,361.
 - **47 of the file's functions had external linkage and 3 needed it.** Now that
   the rest are `static`, `-Wall` can finally report a dead one; it reports none
   today, which is the first time that has been checked rather than assumed.
+
+---
+
+## 2026-08-30 (after that) — Two of the three extractions
+
+**Status:** validated · **Scope:** snake-byte
+
+The review's last item proposed pulling `start_round`, `handle_life_result` and
+`start_new_game` out of `game_cold_start`'s four-deep nest. Two were done and
+the third was refused.
+
+`handle_life_result` is the one worth having. The life loop already computed a
+`RoundEnd` and broke on it, so the extraction is only moving code behind a
+return value that existed. It returns `ROUND_CONTINUE` where the original falls
+into $7719 -- a not-an-ending member kept last and named apart, exactly as
+`LIFE_CONTINUE` already is in `LifeEnd`. 237 lines become 75.
+
+**`start_new_game` was refused, and the reason is the one the nest was built
+around.** $7691 and $76B7 sit at the *bottom* of the two outer loops because
+the cold entry, $3783's `JMP $76C2`, comes in three levels down and must skip
+them exactly once with no flag. Extracting them into a function does not move
+the call, so the shape stays as odd as it was, and the comment explaining why
+the initialisation is at the bottom would then be explaining a call site. The
+awkwardness is the position, not the length.
+
+**The mutation test is the point of this entry.** A block-head trace comparing
+six addresses is not evidence about control flow, and `1fb69a8` measured two of
+four structural mutations surviving 20,000 frames -- which is why the budget is
+40,000. So six mutations were run against the *new* structure:
+
+| mutation | result |
+| --- | --- |
+| `start_round` hoisted out of the round loop | `[cold/hires]` |
+| life loop breaks on `ROUND_GAME_OVER` instead of `!= ROUND_CONTINUE` | `[cold/hires]` |
+| cleared round returns `ROUND_CONTINUE` | `[cold/hires]` |
+| the fallthrough returns `ROUND_RETRY` | `[cold/hires]` |
+| `game_draw_playfield` before the counter resets | survived |
+| `s_life_time = s_level_time` before `game_draw_playfield` | survived |
+
+**Both survivors were then shown to be no-ops, not gaps**, which is the part
+worth copying. `game_draw_playfield` reads neither `left` nor `quota`. It *can*
+rewrite `s_level_time` through the script's `OP_STORE` -- so the second one
+looked like a real ordering dependency -- but instrumenting it shows the op
+fires 8 times across the two scenarios and every one writes the 100 already
+there. A level script with a different time would make that line's position
+observable; none in the committed set has one. `start_round` says so above
+itself.
+
+A surviving mutation is a question, not a verdict. Answer it by measuring what
+the mutated code actually reads.
