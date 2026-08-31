@@ -26,6 +26,15 @@ struct Monitor s_mon;
  * Apple II ROM entry points, hand-written                                  *
  * ========================================================================== */
 
+/* Private to this file: nothing outside the ROM calls them, so they are not in
+   rom.h. Declared here because rom_home and rom_fc68 call them from above
+   their definitions. */
+static uint8_t rom_bascalc(uint8_t line, bool *carry_out);
+static bool rom_vtabz(uint8_t line);
+static void rom_clreol(void);
+static bool rom_clreolz(uint8_t col);
+static void rom_wait(uint8_t n);
+
 /* COUT1, defined below. rom_cout dispatches to it, and so does the game's own
    hi-res text handler once it has drawn its glyph. */
 
@@ -668,7 +677,7 @@ void rom_setvid(void) {
 /// Compute BASH and BASL for line \p line, returning BASL's low byte and, in
 /// \p carry_out, the bit shifted out of the second ASL -- which VTABZ adds
 /// straight back in.
-uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
+static uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
   // LSR: the carry is the line's low bit, and it is what decides the ADC below.
   const uint8_t odd = line & 0x01;
   const uint8_t page = ((line >> 1) & 0x03) | 0x04;
@@ -699,7 +708,7 @@ uint8_t rom_bascalc(uint8_t line, bool *carry_out) {
 /// Returns the carry out of `ADC WNDLFT`, which the scroll at $FC81 reads as
 /// the +1 that steps to the next line -- the same trick HOME plays with
 /// CLREOLZ's. The carry going *in* is BASCALC's, from its second ASL.
-bool rom_vtabz(uint8_t line) {
+static bool rom_vtabz(uint8_t line) {
   bool carry;
   const uint8_t base = rom_bascalc(line, &carry);
 
@@ -718,7 +727,7 @@ bool rom_vtabz(uint8_t line) {
 /// caller is on the scroll path, and nothing the game does scrolls. The body
 /// is three instructions and its tail call *is* exercised, so what is
 /// unverified is the starting column and the jump.
-void rom_clreol(void) {
+static void rom_clreol(void) {
   rom_clreolz(s_mon.ch); // JMP -- a tail call; nobody reads its carry.
 }
 
@@ -732,7 +741,7 @@ void rom_clreol(void) {
 /// Returns the carry its final `CPY WNDWDTH` leaves, which is not decoration:
 /// HOME's CLRSC2 loop reaches its `ADC #$00` with no CLC of its own and uses
 /// this as the +1 that steps to the next line, and $FC9A branches on it.
-bool rom_clreolz(uint8_t col) {
+static bool rom_clreolz(uint8_t col) {
   const uint8_t space = 0xa0; // a space, high bit set
 
   for (;;) {
@@ -758,7 +767,7 @@ bool rom_clreolz(uint8_t col) {
 /// A comes back as 0 and the carry set. The inner loop counts A down to zero
 /// from a copy on the stack, and the outer one counts the original down, so
 /// the total is quadratic in A rather than linear.
-void rom_wait(uint8_t n) {
+static void rom_wait(uint8_t n) {
   /* The SBC's Z, which both loops branch on. A local for the same reason the
      scroll's N is one: nothing outside this routine ever read the flag, and
      each read here follows the SBC that sets it.

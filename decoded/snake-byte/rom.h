@@ -115,12 +115,6 @@ void rom_setkbd(void);
 /// i.e. to COUT1 at $FDF0.
 void rom_setvid(void);
 
-uint8_t rom_bascalc(uint8_t line, bool *carry_out);
-bool rom_vtabz(uint8_t line);
-void rom_clreol(void);
-bool rom_clreolz(uint8_t col);
-void rom_wait(uint8_t n);
-
 /// $FDF0 COUT1. The ROM's own character output, which the game's hi-res
 /// renderer falls back to for control characters and calls when it is done.
 void rom_cout1(uint8_t ch);

@@ -153,18 +153,8 @@ typedef struct {
   int8_t dy;
 } Bouncer;
 
-void game_cold_start(void);
-void rom_plot(uint8_t row, uint8_t col);
-void rom_hline(uint8_t row, uint8_t from_col);
-void rom_setcol(uint8_t ink);
-uint8_t rom_scrn(uint8_t row, uint8_t col);
-void rom_home(void);
-void rom_fc68(void);
-void rom_cout(uint8_t ch);
-void rom_setkbd(void);
-void rom_setvid(void);
-void game_move_bouncer(Bouncer *b);
-void game_print_inline_str(uint16_t ret_addr);
+static void game_cold_start(void);
+static void game_print_inline_str(uint16_t ret_addr);
 
 /// The program starts here. There used to be a func_t001 in between -- the
 /// generated dispatch -- and by the end it was a stub that called this.
@@ -184,22 +174,22 @@ void emulated_entry_point(void) {
 /// start a life: put the snake's head in \p head_col and set both
 /// bouncers going from opposite corners. Returns the value the original left
 /// in A, which its one caller stores as the tail column.
-uint8_t game_start_life(uint8_t head_col);
+static uint8_t game_start_life(uint8_t head_col);
 
 /// copy shape \p shape's four scanline masks into $6060, and return
 /// the last one.
-void game_load_shape_masks(uint8_t shape);
+static void game_load_shape_masks(uint8_t shape);
 
 /// point the ROM's character-output vector at the game's own hi-res
 /// handler, so every later COUT reaches game_cout_hook.
-void game_install_cout_vector(void);
+static void game_install_cout_vector(void);
 
 /// step \p b one cell along its deltas and redraw it, reflecting off
 /// whatever it hits.
-void bouncer_step(Bouncer *b);
+static void bouncer_step(Bouncer *b);
 
 /// What $6AB8 decided about a candidate move. The original says all of this
-/// in A and the Z flag; the adapter puts it back.
+/// in A and the Z flag; here it is the return type.
 typedef enum {
   /// The target cell holds something other than empty or an apple.
   MOVE_TARGET_TAKEN,
@@ -214,113 +204,113 @@ typedef enum {
 
 /// judge a step in direction \p dir. \p cell_out receives what the
 /// occupancy map held at the target, which the original leaves in A.
-MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out);
+static MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out);
 
 /// copy s_progress.score over s_progress.best if it beats
 /// it, comparing BCD bytes most significant first.
-void game_promote_high_score(void);
+static void game_promote_high_score(void);
 
 /// $6148 / $615A -- runs of hi-res cells along a row or down a column.
-void game_plot_hline(uint8_t ink, Cell c, uint8_t to_col);
-void game_plot_vline(uint8_t ink, Cell c, uint8_t to_row);
+static void game_plot_hline(uint8_t ink, Cell c, uint8_t to_col);
+static void game_plot_vline(uint8_t ink, Cell c, uint8_t to_row);
 
 /// the lo-res half of a vertical run, restoring $03.
-void game_lores_vline(Cell c, uint8_t to_row);
+static void game_lores_vline(Cell c, uint8_t to_row);
 
 /// step the bouncers the difficulty calls for, then return the next
 /// queued key.
-uint8_t game_step_bouncers(void);
+static uint8_t game_step_bouncers(void);
 
 /// draw the loaded shape into cell \p c in ink \p ink, replacing.
-void game_draw_cell(uint8_t ink, Cell c);
+static void game_draw_cell(uint8_t ink, Cell c);
 
 /// the same, merged into what is already there.
-void game_merge_cell(uint8_t ink, Cell c);
+static void game_merge_cell(uint8_t ink, Cell c);
 
 /// zero hi-res page 1.
-void game_clear_hgr(void);
+static void game_clear_hgr(void);
 
 /// clear the screen, draw the border, and run the current level's
 /// display list from $8000.
-void game_draw_playfield(void);
+static void game_draw_playfield(void);
 
 /// Sweep columns outward from the snake looking for an apple, and leave the
 /// nearest one where the auto-steer will find it.
-void game_find_nearest_apple(void);
+static void game_find_nearest_apple(void);
 
 /// turn \p key, the byte just taken off the ring, into the code the
 /// game acts on: a direction, a joystick setting applied on the spot, or $00
 /// for nothing. Reads the joystick itself when one is selected and the key
 /// was not a direction.
-uint8_t game_read_direction(uint8_t key);
+static uint8_t game_read_direction(uint8_t key);
 
 /// blink slot \p slot on the key-redefinition screen until the player
 /// presses something it will accept, and return that key.
-uint8_t game_edit_key(uint8_t slot);
+static uint8_t game_edit_key(uint8_t slot);
 
 /// the program's entry, and the outermost loop: relocate the level
 /// data, initialise the game's state, then new game -> level -> round -> life
 /// forever. Never returns; the game has no way out.
-void game_cold_start(void);
+static void game_cold_start(void);
 
 /// ESC pauses until any key is pressed; Ctrl-S toggles the sound.
 /// Every key the dispatch chain did not recognise arrives here and is ignored.
 ///
 /// Returns the key the Ctrl-S test actually saw, which is \p key unless ESC
 /// paused: the keypress that ends the pause replaces it and is tested in turn.
-void game_pause_or_toggle_sound(uint8_t key);
+static void game_pause_or_toggle_sound(uint8_t key);
 
 /// twenty passes of the falling tone that plays while the head moves.
-void game_tick_sound(void);
+static void game_tick_sound(void);
 
 /// print \p byte as two decimal digits, dropping leading zeros.
-void game_print_bcd(uint8_t byte);
+static void game_print_bcd(uint8_t byte);
 
 /// print a single "0" if the number just printed was all zeros.
-void game_print_zero_if_blank(void);
+static void game_print_zero_if_blank(void);
 
 /// add the two-byte BCD value in s_progress.apple_value to the four-byte score.
-void game_add_score(void);
+static void game_add_score(void);
 
 /// set the lo-res plot colour from an ink byte: 0 erases, anything
 /// else draws.
-void game_set_ink(uint8_t ink);
+static void game_set_ink(uint8_t ink);
 
 /// read the byte at the $000A pointer into A and advance it.
-uint8_t game_next_byte(void);
+static uint8_t game_next_byte(void);
 
 /// the game's pseudo-random byte, always $00-$7F.
-uint8_t game_rand_byte(void);
+static uint8_t game_rand_byte(void);
 
 /// put an apple on a free cell, by rejection sampling.
-Cell game_place_apple(void);
+static Cell game_place_apple(void);
 
 /// recompute what one apple is worth for the current level.
-void game_set_apple_value(void);
+static void game_set_apple_value(void);
 
 /// plot the head on the occupancy map and flag it as newly there.
-void game_mark_head(uint8_t row, uint8_t col);
+static void game_mark_head(uint8_t row, uint8_t col);
 
 /// draw a cell, merging the head shape over it if the head is on it.
-void game_draw_head(uint8_t ink, Cell c);
+static void game_draw_head(uint8_t ink, Cell c);
 
 /// count one apple eaten, and make the noise for it.
-void game_award_extra_life(void);
+static void game_award_extra_life(void);
 
 /// load a shape and draw it into the current cell.
-void game_plot_shape(uint8_t ink, Cell c);
+static void game_plot_shape(uint8_t ink, Cell c);
 
 /// the rising-then-falling sweep an eaten apple makes.
-void game_sound_sweep(void);
+static void game_sound_sweep(void);
 
 /// show \p key as slot \p slot's binding on the redefinition screen.
-void game_show_key(uint8_t slot, uint8_t key);
+static void game_show_key(uint8_t slot, uint8_t key);
 
 /// draw both side walls, and leave SCRN of the bottom-centre cell.
-uint8_t game_draw_side_walls(void);
+static uint8_t game_draw_side_walls(void);
 
 /// poll the keyboard and push what it finds into the ring at $623C.
-void game_read_key(void);
+static void game_read_key(void);
 
 /// draw \p ch through the game's own hi-res font, then hand it on to
 /// the ROM's COUT1 so the cursor still moves.
@@ -352,7 +342,7 @@ typedef enum {
 /// play one life: steer, move, draw and pace the snake until
 /// something ends it. \p cell_out receives the occupancy byte the head landed
 /// on, which is only meaningful for LIFE_CRASH.
-LifeEnd game_play_loop(uint8_t *cell_out);
+static LifeEnd game_play_loop(uint8_t *cell_out);
 
 /// What the auto-steer decided. $6A32 answers in A, and $6288 re-examines the
 /// answer as though it had been typed, so the two spellings are a key and a
@@ -375,21 +365,21 @@ SteerChoice game_auto_steer(uint8_t *key_out);
 
 /// draw the status panel: six labelled BCD fields in a 2x3 grid
 /// across the bottom three text rows, then home the cursor.
-void game_status_panel(void);
+static void game_status_panel(void);
 
 /// the bonus screen: award twice the apple's value, draw a box over
 /// the playfield, print BONUS and the amount, and hold it there.
-void game_bonus_screen(void);
+static void game_bonus_screen(void);
 
 /// set up a life and hand over to the main loop: the snake as a
 /// single cell at the bottom centre facing up, ten segments of growth owed,
 /// the timer full, and the key ring empty.
-void game_begin_life(void);
+static void game_begin_life(void);
 
 /// the setup screen: seed the random pointer, then either ask for a
 /// difficulty (falling back to the demo if nobody answers) or run the key
 /// redefinition screen.
-void game_setup_screen(void);
+static void game_setup_screen(void);
 
 /* ========================================================================== *
  * Routines decompiled by hand -- declarations                              *
@@ -397,11 +387,10 @@ void game_setup_screen(void);
 
 /// the game's own COUT handler, a hi-res text renderer.
 /// print the NUL-terminated string that follows the call.
-void game_print_inline_str(uint16_t ret_addr);
+static void game_print_inline_str(uint16_t ret_addr);
 
 /// Step \p b one cell along its deltas and redraw it, reflecting off whatever
 /// it hits.
-void game_move_bouncer(Bouncer *b);
 
 /// Play one life, and leave the reason it ended in s_life_outcome.
 static void game_play_one_life(void);
@@ -759,7 +748,7 @@ static uint8_t s_life_timer = 0x61;
 /* Converted routines                                                         */
 /* ========================================================================== */
 
-uint8_t game_start_life(uint8_t head_col) {
+static uint8_t game_start_life(uint8_t head_col) {
   s_snake.head.col = head_col;
 
   // Opposite corners, converging. The original's nine stores are these two.
@@ -773,7 +762,7 @@ uint8_t game_start_life(uint8_t head_col) {
   return 0x14;
 }
 
-void game_load_shape_masks(uint8_t shape) {
+static void game_load_shape_masks(uint8_t shape) {
   // Four masks per shape at $6174, into the four the plotter reads.
   uint8_t last = 0;
   for (unsigned line = 0; line < 4; ++line) {
@@ -784,7 +773,7 @@ void game_load_shape_masks(uint8_t shape) {
   }
 }
 
-void game_install_cout_vector(void) {
+static void game_install_cout_vector(void) {
   // CSWL/CSWH at $36/$37, pointed at $664A.
   s_mon.csw = 0x664a;
 }
@@ -835,7 +824,7 @@ static bool cell_taken(uint8_t col, uint8_t row) {
   return rom_scrn(row, col) != CELL_EMPTY;
 }
 
-void bouncer_step(Bouncer *b) {
+static void bouncer_step(Bouncer *b) {
   unsigned blocked = 0;
 
   if (b->row == 0) {
@@ -1055,7 +1044,7 @@ static bool s_setup_seen = true;
 /// Most significant first, which is the order the compare runs in.
 static const uint8_t kMsbFirst[4] = {3, 2, 1, 0};
 
-void game_promote_high_score(void) {
+static void game_promote_high_score(void) {
   bool beats_it = true;
 
   for (unsigned i = 0; i < 4; ++i) {
@@ -1095,7 +1084,7 @@ static uint8_t cell_at(Cell c) {
   return rom_scrn(c.row, c.col);
 }
 
-void game_find_nearest_apple(void) {
+static void game_find_nearest_apple(void) {
   static const uint8_t kLastRow = 0x27;
 
   Cell c = {.col = s_snake.head.col, .row = 1};
@@ -1145,9 +1134,6 @@ void game_find_nearest_apple(void) {
 /* a table here. In the original they are 60 bytes of straight-line code with */
 /* the offsets and the block addresses interleaved.                           */
 /*                                                                            */
-/* The verdict comes back as an enum and the adapter turns it into A and the  */
-/* flags, which is the one thing that cannot move into this file while        */
-/* generated callers still branch on them.                                    */
 /* ========================================================================== */
 
 /// Where each neighbour is, and the four block addresses the original spends
@@ -1162,7 +1148,7 @@ static const struct {
     {0, -1},
 };
 
-MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
+static MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
   // The head plus this direction's deltas.
   const Cell target = {
       .col = kColDelta[dir] + s_snake.head.col,
@@ -1268,7 +1254,7 @@ static void lores_plot(uint8_t row, uint8_t col) {
   rom_plot(row, col);
 }
 
-/// $7019 through its adapter: the next display-list byte.
+/// $7019's name for game_next_byte: the next display-list byte.
 static uint8_t script_byte(void) {
   return game_next_byte();
 }
@@ -1390,7 +1376,7 @@ static void seek_script(void) {
   }
 }
 
-void game_draw_playfield(void) {
+static void game_draw_playfield(void) {
   game_clear_hgr();
   select_hires_page2();
   spin(0x00, 0x00, 0x04); // the counts $7056 used to store into $02/$03
@@ -1501,7 +1487,7 @@ static uint8_t hgr_peek(uint16_t addr) {
 }
 
 /// draw the loaded shape into one cell, replacing what was there.
-void game_draw_cell(uint8_t ink, Cell c) {
+static void game_draw_cell(uint8_t ink, Cell c) {
   uint16_t dest = cell_row_base(c.row);
 
   for (unsigned line = 0; line < 4; ++line) {
@@ -1524,7 +1510,7 @@ void game_draw_cell(uint8_t ink, Cell c) {
 /// The index degenerates to (ink >> 1) * 4 + (col & 3). Changing it to match
 /// $60F7 fails the screen check, so whatever the author meant, it is load
 /// bearing.
-void game_merge_cell(uint8_t ink, Cell c) {
+static void game_merge_cell(uint8_t ink, Cell c) {
   uint16_t dest = cell_row_base(c.row);
 
   for (unsigned line = 0; line < 4; ++line) {
@@ -1544,7 +1530,7 @@ void game_merge_cell(uint8_t ink, Cell c) {
 /// hi-res page wiping downward -- and the design gave that up deliberately:
 /// the fill is not worth preserving, and $7056 follows immediately with a
 /// 1.29 s hold that still is, so the pair still reads as one pause.
-void game_clear_hgr(void) {
+static void game_clear_hgr(void) {
   for (uint8_t page = 0x20;;) {
     uint8_t y = 0;
     do {
@@ -1569,8 +1555,8 @@ void game_clear_hgr(void) {
 
 /// a horizontal run of hi-res cells, from \p c along row c.row to
 /// \p to_col. The original walked $02/$03 and left $02 on the endpoint, which
-/// its adapter returned in A; that is the return value here.
-void game_plot_hline(uint8_t ink, Cell c, uint8_t to_col) {
+/// its caller read out of A; nothing reads it here, so nothing returns it.
+static void game_plot_hline(uint8_t ink, Cell c, uint8_t to_col) {
   // Loads the four scanline masks the cell drawers read. The mask it
   // returns was the original\'s result in A and nothing reads it.
   game_load_shape_masks(s_snake.shape);
@@ -1585,7 +1571,7 @@ void game_plot_hline(uint8_t ink, Cell c, uint8_t to_col) {
 }
 
 /// the same down a column: rows $03 through $08 in column $02.
-void game_plot_vline(uint8_t ink, Cell c, uint8_t to_row) {
+static void game_plot_vline(uint8_t ink, Cell c, uint8_t to_row) {
   // Loads the four scanline masks the cell drawers read. The mask it
   // returns was the original\'s result in A and nothing reads it.
   game_load_shape_masks(s_snake.shape);
@@ -1602,7 +1588,7 @@ void game_plot_vline(uint8_t ink, Cell c, uint8_t to_row) {
 /// the lo-res half of a vertical run. Unlike the hi-res one it puts
 /// $03 back where it found it, because the caller draws the hi-res run over
 /// the same coordinates next.
-void game_lores_vline(Cell c, uint8_t to_row) {
+static void game_lores_vline(Cell c, uint8_t to_row) {
   // The original saves the starting row on the stack, because the hi-res half
   // of a display list's 'V' runs the same span next and the loop below walks
   // c.row to the end of it. Every caller states both ends now.
@@ -1627,7 +1613,7 @@ void game_lores_vline(Cell c, uint8_t to_row) {
 /// argument now.
 static void step_bouncer_slot(int slot) {
   Bouncer b = s_bouncers[slot];
-  game_move_bouncer(&b);
+  bouncer_step(&b);
   s_bouncers[slot] = b;
 }
 
@@ -1635,10 +1621,10 @@ static void step_bouncer_slot(int slot) {
 /// Only a byte with bit 7 set counts; the slot is cleared and the read index
 /// advances. Returns what the original leaves in A.
 ///
-/// $6216, the RTS all paths share, is charged by the adapter and not here.
-/// game_read_key also ends there and is not converted, so $6216 is still a
-/// probe site -- and converting one of a shared block's two paths, while the
-/// other still reports, is exactly how the two engines stop agreeing. The
+/// $6216 is the RTS all paths share, this one's and game_read_key's. While
+/// only one of the two was converted it had to stay a probe site, because
+/// converting one of a shared block's two paths while the other still reports
+/// is exactly how the two engines stop agreeing. Both are C now. The
 /// trace caught it; the pinned site count could not, because the count was
 /// right.
 static uint8_t dequeue_key(void) {
@@ -1657,7 +1643,7 @@ static uint8_t dequeue_key(void) {
 
 /// step as many bouncers as the difficulty calls for, then fall into
 /// the key dequeue whose byte is the return value.
-uint8_t game_step_bouncers(void) {
+static uint8_t game_step_bouncers(void) {
   const uint8_t difficulty = s_difficulty;
 
   if (!difficulty) {
@@ -1721,7 +1707,7 @@ static bool switch_pressed(uint16_t sw) {
   return !(io_peek(sw) & 0x80);
 }
 
-uint8_t game_read_direction(uint8_t key) {
+static uint8_t game_read_direction(uint8_t key) {
   if (attract_mode()) {
     if (s_input.joystick) {
       if (switch_pressed(0xc061)) {
@@ -1918,7 +1904,7 @@ static uint8_t edit_key_prompt(uint8_t slot) {
   }
 }
 
-uint8_t game_edit_key(uint8_t slot) {
+static uint8_t game_edit_key(uint8_t slot) {
   uint8_t key;
   do {
     edit_key_blank(slot);
@@ -1941,7 +1927,7 @@ uint8_t game_edit_key(uint8_t slot) {
 /* and the click itself is one indexed read. See the $7642 header for why that */
 /* shape was chosen.                                                          */
 
-void game_tick_sound(void) {
+static void game_tick_sound(void) {
   s_sound.passes = 0x14; // twenty
 
   for (;;) {
@@ -2031,7 +2017,7 @@ static void cout_digit(uint8_t digit) {
   rom_cout(kCharZero + digit);
 }
 
-void game_print_bcd(uint8_t byte) {
+static void game_print_bcd(uint8_t byte) {
   const uint8_t high = byte >> 4;
 
   if (high) {
@@ -2057,7 +2043,7 @@ void game_print_bcd(uint8_t byte) {
 
 /// called after the last byte of a number: if nothing significant was
 /// printed, the number was zero, and one "0" is printed for the whole of it.
-void game_print_zero_if_blank(void) {
+static void game_print_zero_if_blank(void) {
   if (digit_seen()) {
     return;
   }
@@ -2069,7 +2055,7 @@ void game_print_zero_if_blank(void) {
 /* add to the score                                                  */
 /* ========================================================================== */
 
-void game_add_score(void) {
+static void game_add_score(void) {
   // Decimal mode for the whole run, and adc_dec16 rather than a second
   // hand-written BCD adder: it is the one the emulator and the generated code
   // both use, so it cannot disagree with them about the undefined corners of
@@ -2111,15 +2097,14 @@ void game_add_score(void) {
 ///
 /// The original takes its argument in the Z flag rather than in A, because
 /// every caller reaches it with `LDA $01 / JSR $7024` and $01 is the same ink
-/// byte the hi-res plotter takes. Here it is the byte, and the adapter asserts
-/// that the flag agreed with it.
-void game_set_ink(uint8_t ink) {
+/// byte the hi-res plotter takes. Here it is simply the byte.
+static void game_set_ink(uint8_t ink) {
   rom_setcol(ink ? INK_OCCUPIED : INK_ERASE); // JMP $F864 -- a tail call.
 }
 
 /// read the byte the $000A pointer addresses and advance it. The
 /// display-list interpreter's only way of reading its script.
-uint8_t game_next_byte(void) {
+static uint8_t game_next_byte(void) {
   const uint8_t b = peek(s_script_ptr);
 
   ++s_script_ptr;
@@ -2145,7 +2130,7 @@ uint8_t game_next_byte(void) {
 /// The restart does not advance the pointer -- it stores $1800 and jumps
 /// straight back to the load -- so a byte at $1800 with bit 7 set would hang
 /// the game. Nothing enforces that; the original simply relies on it.
-uint8_t game_rand_byte(void) {
+static uint8_t game_rand_byte(void) {
   ++s_rand_ptr;
 
   for (;;) {
@@ -2167,7 +2152,7 @@ static void bcd_inc16(uint8_t at[2]) {
   at[1] = r;
 }
 
-Cell game_place_apple(void) {
+static Cell game_place_apple(void) {
   // Rejection sampling: two pseudo-random bytes as column and row, ask the
   // lo-res map whether that cell is free, and start over if it is not.
   // game_rand_byte returns $00-$7F while the field is 40x40, so most draws
@@ -2201,7 +2186,7 @@ Cell game_place_apple(void) {
 /// what one apple is worth: the difficulty's entry in the $71C8 table
 /// added to itself once per level, in BCD, into s_progress.apple_value. X is never touched in
 /// the original's loop, which is what makes it the same entry every time.
-void game_set_apple_value(void) {
+static void game_set_apple_value(void) {
   s_progress.apple_value[0] = 0x00;
   s_progress.apple_value[1] = 0x00;
   const uint8_t per_apple = kAppleValueTable[s_difficulty];
@@ -2228,7 +2213,7 @@ void game_set_apple_value(void) {
 /// mark the head on the lo-res occupancy map, at the row and column
 /// the caller has already loaded, and raise the two flags that say it is
 /// there: s_snake.head_moved for the next draw and s_sound.period to start the tone.
-void game_mark_head(uint8_t row, uint8_t col) {
+static void game_mark_head(uint8_t row, uint8_t col) {
   rom_plot(row, col);
 
   s_snake.head_moved = true;
@@ -2240,7 +2225,7 @@ void game_mark_head(uint8_t row, uint8_t col) {
 /// draw the cell the caller set up, and if s_snake.head_moved says the head is on
 /// it, merge shape 1 over the top so the head reads as a head rather than
 /// replacing the body cell underneath. s_snake.head_moved is consumed here.
-void game_draw_head(uint8_t ink, Cell c) {
+static void game_draw_head(uint8_t ink, Cell c) {
   game_plot_shape(ink, c);
 
   if (s_snake.head_moved) {
@@ -2266,13 +2251,13 @@ void game_draw_head(uint8_t ink, Cell c) {
 /// reached from $77EA, the round-cleared path, straight after the bonus
 /// screen. Nothing about it runs when an apple is eaten; that path is $7743,
 /// and it touches four other counters and not this one.
-void game_award_extra_life(void) {
+static void game_award_extra_life(void) {
   s_progress.lives = adc_dec16(s_progress.lives, 0x01, 0x00);
   game_sound_sweep();
 }
 
 /// load a shape and draw it, which is the pair every caller wants.
-void game_plot_shape(uint8_t ink, Cell c) {
+static void game_plot_shape(uint8_t ink, Cell c) {
   game_load_shape_masks(s_snake.shape);
   game_draw_cell(ink, c); // JMP -- a tail call.
 }
@@ -2285,7 +2270,7 @@ void game_plot_shape(uint8_t ink, Cell c) {
 /// DEX wraps to 255 and the delay between clicks runs 256, 255, ... 1 and the
 /// pitch rises; the second counts X up from 0, so the delay runs 256, 1, 2,
 /// ... 255 and it falls again.
-void game_sound_sweep(void) {
+static void game_sound_sweep(void) {
   uint8_t x = 0x00;
 
   do {
@@ -2324,7 +2309,7 @@ void game_sound_sweep(void) {
 /// screen. The two arrow keys have no printable glyph, so they are shown as
 /// 'f' and 'g', which is where the arrow shapes live in the game's own font at
 /// $66A9.
-void game_show_key(uint8_t slot, uint8_t key) {
+static void game_show_key(uint8_t slot, uint8_t key) {
   uint8_t glyph = key;
   if (key == 0x88) { // left arrow
     glyph = 0xe6;
@@ -2347,7 +2332,7 @@ void game_show_key(uint8_t slot, uint8_t key) {
 
 /// both side walls, each in two segments of different ink, with the
 /// seam at a row derived from s_life_timer. The seam is what the player aims for.
-uint8_t game_draw_side_walls(void) {
+static uint8_t game_draw_side_walls(void) {
   // The snake's tempo, and the reason this is an advance rather than nothing.
   //
   // Both side walls are redrawn once per snake step, and on a 6502 that took
@@ -2408,7 +2393,7 @@ uint8_t game_draw_side_walls(void) {
 /// then. The byte is written and then disowned by not committing the index,
 /// which is a byte of work saved and a slot of the ring left holding a key
 /// nobody will read until it is overwritten.
-void game_read_key(void) {
+static void game_read_key(void) {
   // $6217 is on the replay coordinate, and is also where ram.probe and
   // screen.probe take their samples. It keeps its probe for both reasons.
   GAME_CYCLES_COORD(0x6217, 10);
@@ -2430,8 +2415,7 @@ void game_read_key(void) {
   }
 
   // The RTS belongs to the routine before this one, and both early exits
-  // share it -- as does the key dequeue, whose adapter still emits it.
-  // A and X are the live-out set, and both are set above on every path.
+  // share it, as does dequeue_key.
 }
 
 /* ========================================================================== */
@@ -2625,7 +2609,7 @@ static void click_speaker(void) {
 /* binary alone. This comment is the only record that they are unverified.    */
 /* ========================================================================== */
 
-void game_pause_or_toggle_sound(uint8_t key) {
+static void game_pause_or_toggle_sound(uint8_t key) {
   if (key == KEY_ESC) {
     for (;;) {
       // ESC pauses the game here until any key is pressed, and this charge is
@@ -2733,7 +2717,7 @@ static LifeEnd snake_step(uint8_t shape, uint8_t *cell_out) {
   return LIFE_CRASH;
 }
 
-LifeEnd game_play_loop(uint8_t *cell_out) {
+static LifeEnd game_play_loop(uint8_t *cell_out) {
   game_find_nearest_apple();
 
   for (;;) {
@@ -3075,7 +3059,7 @@ static void clear_leading_zero_flag(void) {
   s_mon.h2 = 0x00;
 }
 
-void game_status_panel(void) {
+static void game_status_panel(void) {
   // SCORE, row $14 column $00. Four BCD bytes in s_progress.score, little-endian.
   s_mon.cv = 0x14;
   s_mon.ch = 0x00;
@@ -3154,17 +3138,17 @@ void game_status_panel(void) {
 /* consecutive calls to game_add_score, each adding the full                   */
 /* s_progress.apple_value. Neither reads the other's answer.                   */
 /*                                                                            */
-/* This routine is *entered with decimal mode set* -- unusual here, and the    */
-/* reason the adapter cannot assert against it the way the others do. The      */
-/* generated C makes the same claim: its binary-mode path is dead, folded away */
-/* because D is known set on entry. $78C7 clears it before anything else runs. */
+/* This routine is *entered with decimal mode set* -- unusual here, and why it */
+/* carries no assert_binary_mode. The generated C makes the same claim: its     */
+/* binary-mode path is dead, folded away because D is known set on entry.      */
+/* $78C7 clears it before anything else runs.                                  */
 /*                                                                            */
 /* Then a box: a frame in ink 9 and its interior wiped in ink 0, four rows at  */
 /* a time. The text goes through the game's own hi-res font, which is what     */
 /* $6641 installs and what the two pokes at $795F take back out again.         */
 /* ========================================================================== */
 
-void game_bonus_screen(void) {
+static void game_bonus_screen(void) {
   // $78B3 -- double the apple's value into $78B0/$78B1, in BCD.
   const uint16_t lo = adc_dec16(s_progress.apple_value[0], s_progress.apple_value[0], 0x00);
   s_progress.bonus[0] = lo;
@@ -3251,7 +3235,7 @@ void game_bonus_screen(void) {
 /* for the same reason.                                                        */
 /* ========================================================================== */
 
-void game_begin_life(void) {
+static void game_begin_life(void) {
   const uint8_t tail_col = game_start_life(0x14);
 
   s_snake.tail.col = tail_col; // from $6630, by way of $660F
@@ -3299,7 +3283,7 @@ void game_begin_life(void) {
 /* so this comment is the only record that they are unverified.                */
 /* ========================================================================== */
 
-void game_setup_screen(void) {
+static void game_setup_screen(void) {
   // $7980 -- keep $0E/$0F inside the window game_rand_byte expects.
   const uint8_t hi = s_rand_ptr >> 8;
   bool clamp_lo = hi >= 0x1f;
@@ -3503,7 +3487,7 @@ wait: /* $741C */
 /// the emulated stack pointer ends where the caller left it either way, and
 /// ram.probe compares only the live stack.
 ///
-void game_print_inline_str(uint16_t ret_addr) {
+static void game_print_inline_str(uint16_t ret_addr) {
   s_str_ptr = ret_addr;
   rom_fc68(); // VTAB to the current CV
 
@@ -3554,10 +3538,8 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* scanline's mask.                                                           */
 /*                                                                            */
 /* Decoded by hand from snake-byte.lst and the tables read out of             */
-/* snake-byte.b33. The CYCLES constants and the block boundaries they sit on  */
-/* deliberately mirror what apple2tc generates for the same addresses, so the */
-/* block-head trace stays identical and probe-acceptance.sh can compare this  */
-/* against the interpreter instruction for instruction.                       */
+/* snake-byte.b33, and checked against them byte for byte -- the gate cannot  */
+/* check a table entry nothing reads.                                         */
 /* ========================================================================== */
 
 /* ========================================================================== */
@@ -3692,11 +3674,6 @@ void game_print_inline_str(uint16_t ret_addr) {
 /* that scenario. 'E', 'P' and the $71C4 fallthrough are not, and cannot be   */
 /* by replay: 'E' needs level 30, and no script in the game uses 'P'.         */
 /*                                                                            */
-/* On flags: as elsewhere in this file the routine leaves what the 6502 would */
-/* leave, since generated callers can observe it. The exception is a load     */
-/* immediately before a call that overwrites the flags anyway -- LDA/LDY into */
-/* the ROM's HLINE and PLOT -- where only the register is set, matching what  */
-/* game_cout_hook already does at $669F.                                      */
 /* ========================================================================== */
 
 /* ========================================================================== */
@@ -3776,20 +3753,6 @@ void game_print_inline_str(uint16_t ret_addr) {
 /*   back the way it came.                                                    */
 /* ========================================================================== */
 
-void game_move_bouncer(Bouncer *b) {
-  // Adapter. The body is bouncer_step(), defined above.
-  //
-  // Cost: the trace gives up every block head in here except $64C8's, which
-  // stays below. The cycles do not move -- bouncer_step charges each block
-  // with GAME_CYCLES -- so the frame hashes and the memory samples are
-  // unaffected.
-  //
-
-  // The state the original leaves behind: A holds the row it loaded first, and
-  // the flags come from that load.
-
-  bouncer_step(b);
-}
 
 /* ========================================================================== */
 /* $728D, $6BFB                                                               */
@@ -3912,7 +3875,7 @@ typedef enum {
   ROUND_GAME_OVER,
 } RoundEnd;
 
-void game_cold_start(void) {
+static void game_cold_start(void) {
   /* copy eight pages of level data from $3800 down to $1800. The
      original walks them by incrementing the operands of its own LDA and STA
      ($3754 and $3757), which is why it re-enters $3750 eight times rather
@@ -4155,128 +4118,11 @@ void game_cold_start(void) {
  * The machine state at $3750                                               *
  * ========================================================================== */
 
-/* Generated by make-entry-state.sh. Do not edit. */
-/* Snake Byte's machine state at $3750, captured from snake-bytec1-ext-run. */
-
-/* RAM $0000-$0802. Outside this: the game image, the ROM, and $FF. */
-#define SB_ENTRY_RAM_LEN 0x803
-static const uint8_t kSnakeByteEntryRam[SB_ENTRY_RAM_LEN] = {
-    76,  60,  212, 76,  58,  219, 255, 255, 255, 255, 76,  153, 225, 255, 0,   107, 255, 0,   255,
-    4,   0,   255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0,   40,  0,   24,  0,   3,
-    255, 255, 128, 5,   255, 255, 255, 255, 255, 255, 255, 255, 255, 221, 255, 40,  240, 253, 27,
-    253, 255, 255, 255, 255, 0,   255, 255, 255, 255, 255, 255, 255, 255, 255, 0,   255, 255, 255,
-    255, 255, 10,  0,   80,  55,  85,  255, 0,   255, 255, 255, 255, 255, 255, 255, 255, 255, 56,
-    255, 255, 255, 255, 255, 255, 255, 255, 1,   8,   3,   8,   3,   8,   3,   8,   0,   192, 255,
-    255, 0,   192, 255, 255, 255, 255, 255, 0,   255, 255, 0,   8,   255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 0,   255, 255, 255, 255, 255, 3,   76,  255, 0,   255, 255, 255, 255, 255,
-    255, 0,   0,   0,   0,   142, 0,   0,   55,  80,  0,   0,   0,   142, 221, 64,  0,   0,   0,
-    0,   0,   10,  255, 3,   8,   230, 184, 208, 2,   230, 185, 173, 6,   2,   201, 58,  176, 10,
-    201, 32,  240, 239, 56,  233, 48,  56,  233, 208, 96,  128, 79,  199, 82,  255, 255, 255, 255,
-    255, 255, 255, 255, 255, 0,   255, 127, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 1,   0,   0,   255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 101, 235, 216, 220, 236,
-    99,  236, 151, 14,  236, 90,  231, 218, 241, 34,  216, 193, 241, 0,   1,   1,   168, 250, 140,
-    49,  52,  49,  54,  48,  0,   49,  0,   48,  0,   255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-    255, 89,  250, 3,   224, 69,  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 193, 208, 208, 204, 197, 160,
-    221, 219, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 255, 255, 255, 255, 255, 255, 255, 255, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 255,
-    255, 255, 255, 255, 255, 255, 255, 221, 195, 193, 204, 204, 160, 177, 180, 177, 182, 176, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 255, 255, 255, 255, 255, 255,
-    255, 255, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 255, 255, 255, 255, 255, 255, 255, 255, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 255, 255, 255, 255, 255, 255, 255, 255, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 255, 255,
-    255, 255, 255, 255, 255, 255, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 255, 255, 255, 255, 255, 255, 255,
-    255, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160, 160,
-    160, 160, 160, 160, 160, 160, 160, 193, 255, 255, 255, 255, 255, 255, 255, 0,   0,   0,
-};
-
-#define SB_ENTRY_A 0x37
-#define SB_ENTRY_X 0x9D
-#define SB_ENTRY_Y 0x50
-#define SB_ENTRY_SP 0xF6
-#define SB_ENTRY_STATUS 0x00
-#define SB_ENTRY_VID_CONTROL 0x01
+/* Generated by make-entry-state.sh, and included rather than pasted: until
+   2026-08-30 this file carried a reformatted copy of the whole thing, so
+   regenerating the snapshot changed a header the build did not read and the
+   copy here went on being the real one. Nothing said so. */
+#include "entry-state-inc.h"
 
 /* ========================================================================== *
  * Startup                                                                  *
