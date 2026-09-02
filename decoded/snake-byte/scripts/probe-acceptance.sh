@@ -960,6 +960,40 @@ for c in $warn_cc; do
 done
 echo "[warn] PASS: clean under$warn_names"
 
+# --- is the program's export list what it is supposed to be? ---------------
+#
+# `static` is the only thing that makes -Wall report a dead function, so a
+# missed one costs the warning as well as the linkage. This check exists
+# because the 2026-08-30 pass that made 98 functions static missed
+# game_auto_steer, and nothing noticed for two days: the pass drove off a
+# hand-written list of return types and `SteerChoice` was not on it, which is
+# the "derive the set, do not trust the list" trap in its purest form.
+#
+# nm is the derivation. Three symbols is the whole contract -- two the engine
+# calls (a2engine.h) and one rom.c calls -- so a fourth is either a new
+# interface that belongs in this list with a reason, or a missing `static`.
+exports_want="emulated_entry_point game_cout_hook init_emulated"
+exports_obj="$bin/decoded/snake-byte/CMakeFiles/snake-byte-obj.dir/snake-byte.c.o"
+if [ -f "$exports_obj" ]; then
+  exports_got=$(nm -g --defined-only "$exports_obj" |
+                  awk '$2 == "T" || $2 == "D" || $2 == "B" { print $3 }' |
+                  sort | tr '\n' ' ')
+  exports_got=${exports_got% }
+  exports_want_sorted=$(printf '%s\n' $exports_want | sort | tr '\n' ' ')
+  exports_want_sorted=${exports_want_sorted% }
+  if [ "$exports_got" != "$exports_want_sorted" ]; then
+    echo "FAIL [exports]: snake-byte.c exports the wrong set" >&2
+    echo "  want: $exports_want_sorted" >&2
+    echo "  got:  $exports_got" >&2
+    echo "  A new name here is a missing 'static' unless it is a new interface." >&2
+    exit 1
+  fi
+  echo "[exports] PASS: snake-byte.c exports exactly $exports_want_sorted"
+else
+  echo "FAIL [exports]: no object file at $exports_obj" >&2
+  exit 1
+fi
+
 # --- can every waiting loop still be interrupted? --------------------------
 #
 # The one class of defect this gate is structurally blind to, and it shipped:

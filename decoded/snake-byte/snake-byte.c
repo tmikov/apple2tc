@@ -361,7 +361,7 @@ typedef enum {
 
 /// Steer toward the nearest apple, trying candidate directions in order of
 /// usefulness and taking the first that snake_move_verdict() allows.
-SteerChoice game_auto_steer(uint8_t *key_out);
+static SteerChoice game_auto_steer(uint8_t *key_out);
 
 /// draw the status panel: six labelled BCD fields in a 2x3 grid
 /// across the bottom three text rows, then home the cursor.
@@ -2963,7 +2963,7 @@ static bool steer_try(uint8_t dir) {
   return move_taken == 0;
 }
 
-SteerChoice game_auto_steer(uint8_t *key_out) {
+static SteerChoice game_auto_steer(uint8_t *key_out) {
   const uint8_t apple_row = s_apple.row;
   const uint8_t apple_col = s_apple.col;
   const uint8_t head_row = s_snake.head.row;
