@@ -121,6 +121,18 @@ number; `play` is unaffected at any budget. Mutation-tested, and the sweep is
 instrumented at 512 clicks per call. **Ask what an oracle reaches, not just what
 it compares** -- and see the playbook, since both halves generalise.
 
+**The gate is 31 checks** (2026-09-01). `[exports]` pins `snake-byte.c`'s
+export set at three names via `nm`, after a review found `game_auto_steer` still
+externally linked: the pass that made 98 functions static drove off a
+hand-written list of return types and missed `SteerChoice`. `-Wall` could not
+help, because it reports an unused function only when it is `static` -- the
+missing `static` suppressed its own warning.
+
+Two scripts check the docs now: `docs/decompiling/same-code.sh` is the codegen
+oracle (the playbook's version of it was a snippet that demonstrated the trap it
+named), and `docs/decompiling/lint-playbook.sh` checks the tag vocabulary,
+internal links and hazard-index drift.
+
 **Before trusting a green run.** Two defects reached the user through a fully
 green gate on 2026-08-26 -- the game hung on ESC, and three compiler warnings
 -- so start from what the checks do not cover. The block-head trace compares

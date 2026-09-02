@@ -42,6 +42,14 @@ per failure mode, each naming the step where it bites.
 | `[apple2tc]` | true of this decompiler and its tools |
 | `[process]` | true of how the work is verified and sequenced |
 | `[game]` | observed once, may not generalize |
+| `[general]` | true of software work, not of decompilation especially |
+
+**Checking this document.** `docs/decompiling/lint-playbook.sh` verifies the
+tag vocabulary, the internal links and the hazard index's step references, and
+prints where the index has fallen behind the rules. `docs/decompiling/
+same-code.sh` is the codegen oracle the steps below refer to. Both exist
+because this file asserted things about itself that had quietly stopped being
+true.
 
 **Maturity.** Every step has been executed once, on Snake Byte, between
 2026-08-02 and 2026-08-27. The findings are measured rather than predicted, but
@@ -1209,10 +1217,24 @@ person will tinker with. That is a separate pass, and it is mostly about
 deleting: comments, casts, spellings, and the file boundaries the runtime was
 forcing on you.
 
-**What it costs.** Nothing, if each change is confirmed by
-[the codegen oracle](#proving-an-edit-changed-no-code) rather than by the gate.
-Everything in this step should emit identical instructions, and the ones that
-do not should be enumerable.
+**What it costs.** It depends which of two kinds of change you are making, and
+conflating them is how a step that "should emit identical instructions" gets
+claimed for one that cannot.
+
+- **Cosmetic edits** -- comments, casts, spellings, names. Confirmed by
+  [the codegen oracle](#proving-an-edit-changed-no-code) alone, one at a time,
+  no gate run needed. These *must* emit identical instructions; an exception is
+  a finding, not a tolerance.
+- **Structural edits** -- splitting the runtime header, splitting the program
+  into translation units, extracting a function. These change what the compiler
+  sees by design, so the codegen oracle does not apply and the gate is the
+  check. Snake Byte's TU split was verified this way and also by comparing
+  before/after sections, which agreed except for two `__LINE__` immediates --
+  worth doing, but that is evidence, not a guarantee the category carries.
+
+Function extraction sits in the second group and is the one to be careful with,
+because the trace half of a gate can be blind to it: see
+[calibrating by mutation](#calibrate-the-oracle-by-mutating-what-you-just-changed).
 
 ### The runtime header
 
@@ -1251,7 +1273,15 @@ is only that word.
 **What it unlocks is the thing you actually wanted.** Once the runtime stops
 forcing one file, the decompiled program can be split along its own seams. The
 ROM entry points came out of Snake Byte as a normal `.c` — 682 lines, 12% of
-the file — with an interface four symbols wide.
+the file.
+
+**Count the interface in both directions, and count it from the header.** This
+paragraph claimed "four symbols wide" until 2026-09-01, which was the count of
+what the ROM needs *from the game* -- `s_mon`, `advance`, `GAME_CYCLES_COORD`,
+one callback -- read as though it were the whole boundary. `rom.h` actually
+publishes twelve: the monitor's state, ten ROM entry points and the game's
+callback. The seam is still a good one, but a number taken from one direction
+of a two-way interface will flatter it.
 
 ### Comments
 
@@ -1347,6 +1377,26 @@ Note what `-fsyntax-only` does *not* report: unused functions. It comes back
 clean on a file with three dead ones, which is how they survived a check that
 looked like it covered this.
 
+**`[process]` And `-Wall` only reports an unused function that is `static`**, so
+the warning you want depends on linkage you may not have. The check that does
+not depend on it is `nm`, against a written-down list:
+
+```bash
+nm -g --defined-only build/…/prog.c.o | awk '$2 ~ /^[TDB]$/ { print $3 }' | sort
+```
+
+Compare that to the set the program is *supposed* to export and fail on any
+difference. Snake Byte's is three names -- two the runtime calls, one the ROM
+file calls -- so a fourth is either a new interface, which belongs in the list
+with a reason, or a missing `static`. This is `[exports]` in
+probe-acceptance.sh, and it exists because the pass that made 98 functions
+static missed one: it drove off a hand-written list of return types and
+`SteerChoice` was not on it. Two days later the symbol was still exported, the
+gate was green, and `-Wall` had nothing to say because the function was not
+`static` -- the two failures protect each other in exactly the wrong direction.
+[Derive the set](#derive-the-set-a-list-written-before-the-work-is-a-starting-point);
+`nm` is the derivation.
+
 **`[process]` An empty diagnostic list is not a clean one.** Check that the
 comparison you are relying on actually ran. A "before and after" here reported
 zero warnings for the old file because it had been copied out of its directory,
@@ -1399,15 +1449,26 @@ the old names to the new ones in the old output.
 
 One trap that will cost you an afternoon: compile the old version **in its own
 directory**, or a relative `#include` fails, the compiler aborts before emitting
-anything, and the empty output compares equal to nothing at all.
+anything, and the empty output compares equal to nothing at all. That happened
+here on 2026-08-27 -- three warnings were reported as a regression on the
+strength of a comparison that had never run.
+
+`docs/decompiling/same-code.sh` is the recipe, because a recipe you retype is a
+recipe you get wrong: this section carried a five-line shell snippet until
+2026-09-01 that reproduced the very trap named above, and printed two
+disassemblies without diffing them.
 
 ```bash
-git show HEAD:path/to/file.c > /tmp/old.c
-for f in /tmp/old.c path/to/file.c; do
-  cc -I include -I . -O2 -std=gnu11 -c $f -o /tmp/$(basename $f).o
-  objdump -d --no-show-raw-insn /tmp/$(basename $f).o | sed 's/^ *[0-9a-f]*:\t//' | tail -n +3
-done  # diff the two outputs
+docs/decompiling/same-code.sh decoded/snake-byte/rom.c        # vs HEAD
+docs/decompiling/same-code.sh decoded/snake-byte/rom.c <rev>  # vs anything
 ```
+
+It builds the old copy beside the new one in a directory of symlinks to the
+file's siblings, strips addresses and label numbers, diffs, and exits 0 on
+identical. **It refuses rather than guesses**: if either side does not compile
+it says the comparison is void and exits 2. Since it takes the old file against
+*current* siblings, a header that changed in the same commit will trip that --
+which is a real limit, not a bug, and it says so.
 
 ## Calibrate the oracle by mutating what you just changed
 
@@ -1518,8 +1579,13 @@ backwards from the C:
 so a one-liner disassembles any range:
 
 ```bash
-printf 'loadb33 game.b33\nlabels labels.txt\ndis $664A $66A8\n' | id
+printf 'loadb33 game.b33\nlabels labels.txt\ndis $664A $66A8\n' \
+  | <build-dir>/tools/id/id
 ```
+
+**Spell the path.** Bare `id` is coreutils' user-identity command, on every
+`PATH` there is, and it exits 0 printing `uid=...` -- so the pipeline appears to
+work and produces no disassembly at all.
 
 It resolves the built-in Apple II symbol database automatically (`COUT1`,
 `BASH`, `CSWL`), so you get named operands, not bare addresses. `dis` takes an
@@ -1595,9 +1661,17 @@ and commit each slice independently.
 
 A routine that does `PLA/PLA`, walks a `$00`-terminated string following its call
 site, then `PHA/PHA/RTS` to resume past it, will be rejected for stack imbalance
-at both ends. Such routines are not recovered but *rewritten*:
-`print_str(const char *)`, with each call site's inline bytes lifted into a real
-string literal.
+at both ends.
+
+**Two separate jobs, and only the first is required.** Recovering the *control
+flow* -- teaching the tracer that the bytes after the `JSR` are data and
+execution resumes past them -- is what unblocks the decompilation, and it is
+what `--inline-str` does. Lifting each call site's bytes into a C string
+literal is a readability cleanup on top, and Snake Byte never did it: its
+`game_print_inline_str(uint16_t ret_addr)` still takes an address and reads the
+game's own image through `peek`, because the strings live in the memory image
+the program already carries and hoisting them would duplicate those bytes.
+Take the first; decide on the second per binary.
 
 **It also produces phantom self-modifying-code warnings**, because the
 disassembler traces into the string and decodes text as instructions.
@@ -1701,7 +1775,14 @@ question does not arise.
 # Hazard index
 
 One row per failure mode, with the step where it bites. Sorted by step, so
-reading the rows for the step you are on is a pre-flight check.
+reading the rows for the step you are on is a pre-flight check. `T` files a
+hazard that belongs to the tooling rather than to any one step.
+
+**This table is maintained by hand and drifts.** Three rows for step 6.6 were
+missing for two days after the rules were written, including the one that cost
+a shipped sound bug. `lint-playbook.sh` will not catch that -- no script can
+tell which rule is a hazard -- but it prints the steps where rules outnumber
+rows, which is where to look. Run it after adding a rule.
 
 | Step | Signal | What it means |
 | --- | --- | --- |
@@ -1767,6 +1848,9 @@ reading the rows for the step you are on is a pre-flight check.
 | 6.4 | A table's size stated rather than derived | The listing does not delimit tables. Find the next code address. A 16-byte table that is really 128 is invisible until a caller indexes past 16 — and sizing to the maximum a *recording* reaches has the same failure mode. |
 | 6.4 | The gate as a check on lookup-table contents | It only covers entries something reads. Compare the array against the binary byte for byte; it is a dozen lines of script and the only thing that covers the rest. |
 | 6.4 | "It is the image, not a variable" as a reason to leave an address | Check whether it is really a reason. Here it stood in for "I have not derived the extent" — a lookup indexed by a small integer is an array. |
+| 6.6 | A cycle charge whose condition has a side effect | `if (--y) TICK(1);` is how `DEY / BNE` decompiles. Delete the charge and the counter goes with it: Snake Byte's sound sweep played 2 clicks instead of 512 for four days. Grep `if ((--\|++)` before collapsing; the dangerous ones are those whose whole body is the charge. |
+| 6.6 | An oracle that reaches the code it is aimed at | A budget is a silent scope limit. The speaker timeline ran 1,300 frames while the routine that is nothing but sound is first reached at 3,942, so the one check for it never entered it. Derive the number from the latest thing it must cover, and name that frame beside it. |
+| 6.6 | A charge deleted from a loop that polls for input | It was the coroutine's only suspend point, so the loop now spins forever against a host that never runs. Derive the set with a lint over every loop that reads the keyboard; a survivor list written before the work will miss some. |
 | 6.6 | Consecutive cycle charges treated as obviously mergeable | The arithmetic is identical; the control flow is not. A charging macro that also tests the frame budget loses a test when two merge, so frame boundaries move — 4 frames of 1,300 here. Tried and not kept. |
 | 7 | Trusting IDE/clangd diagnostics on this repo | clangd lacks the include paths and reports cascading phantom errors. Trust `ninja` and the test suite. |
 | 7 | A `\file` comment after a merge | It describes the file it was written for. One here still explained an adapter split directly above the code that had eliminated all three of its claims. Sweep the header whenever a file absorbs another. |

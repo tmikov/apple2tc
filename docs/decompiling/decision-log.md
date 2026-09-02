@@ -3320,3 +3320,61 @@ itself.
 
 A surviving mutation is a question, not a verdict. Answer it by measuring what
 the mutated code actually reads.
+
+---
+
+## 2026-09-01 — The playbook checked against itself
+
+**Status:** validated · **Scope:** docs, snake-byte
+
+A review of the playbook found eight defects. All eight were real. The useful
+pattern is that **six were the document asserting something about itself that
+had stopped being true** -- not bad advice, stale advice, which reads exactly
+the same.
+
+**One was a live code defect and it was mine.** `game_auto_steer` still had
+external linkage after the 2026-08-30 pass that made 98 functions static. The
+pass drove off a hand-written list of return types and `SteerChoice` was not on
+it -- the "derive the set, do not trust the list" trap, committed the same week
+I wrote that rule down. Two failures then protected each other in the wrong
+direction: `-Wall` reports an unused function only when it is `static`, so the
+missing `static` also suppressed the warning that would have found it.
+
+`nm` is the derivation, and it is now `[exports]` in probe-acceptance.sh: the
+program's export set must be exactly three names. Mutation-tested. **The gate
+is 31 checks.**
+
+**The broken recipe is now a script.** The section on proving an edit changed no
+code named the trap -- compile the old copy in its own directory or its
+relative includes fail silently -- and then printed a snippet that wrote to
+`/tmp` and did the exact thing it warned against. It also printed two
+disassemblies without diffing them. `docs/decompiling/same-code.sh` replaces
+it, exits 2 rather than guessing when either side fails to compile, and is
+self-tested on all three paths. A recipe you retype is a recipe you get wrong.
+
+**And the `id` example invoked coreutils.** `... | id` runs the user-identity
+command, prints `uid=...`, and exits 0 -- so it looks like it worked and
+produces no disassembly. Every tool example that shares a name with something on
+`PATH` needs its path spelled.
+
+**Three were claims that flattered the work.** The ROM boundary was described as
+"four symbols wide"; that was the count in one direction of a two-way interface,
+and `rom.h` publishes twelve. Step 7 promised every change in it emits identical
+instructions, while itself containing the translation-unit split, which cannot.
+The inline-string section described lifting call-site bytes into C string
+literals, which Snake Byte never did -- it still passes an address and reads the
+image. Each is now split into what was actually done and what was optional.
+
+**The hazard index had drifted, including on the entry that mattered.** Step 6.6
+had eight tagged rules and one row; the three missing ones included the
+counter-inside-a-charge hazard -- the one that cost the shipped sound bug two
+days earlier. Rows added. **No script can tell which rule is a hazard**, so
+`lint-playbook.sh` does what is checkable -- tag vocabulary, internal links,
+step references -- and *prints* where rules outnumber rows. It found the 6.6 gap
+on its first run, along with an undeclared `[general]` tag.
+
+**Not done: the structural rewrite.** The review also proposed reformatting all
+1,784 lines into "Rule / Evidence / Check". That is a real improvement to
+consider and it is not mine to make unilaterally -- the document was
+deliberately restructured on 2026-08-27 into its current shape, and a second
+reorganisation four days later should be a decision, not a review response.
