@@ -3378,3 +3378,45 @@ on its first run, along with an undeclared `[general]` tag.
 consider and it is not mine to make unilaterally -- the document was
 deliberately restructured on 2026-08-27 into its current shape, and a second
 reorganisation four days later should be a decision, not a review response.
+
+---
+
+## 2026-09-02 — The playbook's third field
+
+**Status:** validated · **Scope:** docs
+
+The review that found the eight defects also proposed reformatting all 1,784
+lines into Rule / Evidence / Check. I called that "a real improvement" and then
+did not do it, which was the wrong pair of positions to hold at once. Measured
+before acting, the proposal turns out to be right about the problem and 2/3
+redundant about the fix:
+
+- **The document is already Rule / Evidence.** Every rule opens with a bolded
+  sentence and follows with prose. Labelling that prose `*Evidence.*` adds a
+  word and a line and no information.
+- **The third field was genuinely missing.** 80 of 107 rules name something
+  executable somewhere in the body, but only **17 end on an imperative** — so
+  the check existed and was buried mid-paragraph, which is exactly "hard to use
+  operationally".
+
+So: append a `**Check:**` line to all 107 rules, and leave the prose alone.
+
+**Append-only bought an oracle, which a prose edit does not usually get.**
+Because nothing existing is touched, stripping every `**Check:**` paragraph
+must reproduce the previous file byte for byte — and does. That is the whole
+verification for a 107-site edit to a 1,900-line document, and it is stronger
+than review: it makes "did I drop a sentence somewhere in the middle" a
+question with a mechanical answer. The same trick applies to any additive doc
+change.
+
+**The payoff is extraction, not appearance.** `lint-playbook.sh --checks 6.6`
+prints the eight things to actually do at the clock step. The rules stay
+readable as prose; the checks become a pre-flight list without being maintained
+as a second copy — which is the failure mode the hazard index already has.
+
+Two bugs in my own splice, both caught by the oracle rather than by reading:
+the strip regex only removed the first line of a wrapped block (so it reported
+a false difference), and the splice searched for `##`-level headings only, so
+the last rule's check landed past a `#` heading. The second is the same class
+of error as the `SteerChoice` miss two days earlier: a pattern written to match
+what I had in front of me rather than derived from what the format allows.

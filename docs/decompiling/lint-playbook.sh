@@ -14,10 +14,49 @@ Exit 0 clean, 1 with findings.
 import os
 import re
 import sys
+import textwrap
 
-path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), 'playbook.md')
+args = [a for a in sys.argv[1:] if not a.startswith('--')]
+flags = [a for a in sys.argv[1:] if a.startswith('--')]
+default = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'playbook.md')
+# under --checks the positional argument is a step, not a path
+path = default if ('--checks' in flags or not args) else args[0]
 text = open(path).read()
+
+# --checks [step]: print the rule/check pairs, which is how you use this
+# document while working rather than while editing it.
+if '--checks' in flags:
+    want = args[0] if args else None
+    step, shown = None, 0
+    para, in_check = [], False
+
+    def flush():
+        global shown
+        if para:
+            body = ' '.join(' '.join(para).split())
+            for k, ln in enumerate(textwrap.wrap(body, 74)):
+                print(f'  [{step}] {ln}' if k == 0 else f'         {ln}')
+            shown += 1
+            para.clear()
+
+    for line in text.split('\n'):
+        m = re.match(r'^#{2,3} (\S+?)\.? (.+)$', line)
+        if m and not in_check:
+            step = m.group(1).rstrip('.')
+        if line.startswith('**Check:** '):
+            flush()
+            in_check = want is None or step == want
+            if in_check:
+                para.append(line[len('**Check:** '):])
+        elif in_check:
+            if line.strip():
+                para.append(line)
+            else:
+                flush()
+                in_check = False
+    flush()
+    print(f'\n{shown} check(s)' + (f' for step {want}' if want else ''))
+    sys.exit(0)
 lines = text.split('\n')
 findings = []
 
@@ -51,7 +90,24 @@ for m in re.finditer(r'\]\(#([^)]+)\)', text):
         line = text[:m.start()].count('\n') + 1
         report('link', f'line {line}: #{m.group(1)} matches no heading')
 
-# --- 3. the hazard index covers every step that has rules ------------------
+# --- 3. every rule carries a check ----------------------------------------
+# The rule is the claim and the prose is the evidence; without a third field
+# the reader still has to work out what to *do*. Only 17 of 107 rules ended on
+# an imperative before 2026-09-02, so the check was there but buried.
+rule_starts = [m.start() for m in re.finditer(r'^\*\*`\[\w+\]` ', text, re.M)]
+for i, s in enumerate(rule_starts):
+    end = rule_starts[i + 1] if i + 1 < len(rule_starts) else len(text)
+    chunk = text[s:end]
+    h = re.search(r'^#{1,6} ', chunk, re.M)
+    if h:
+        chunk = chunk[:h.start()]
+    if '**Check:**' not in chunk:
+        head = re.match(r'\*\*`\[\w+\]` (.+?)\*\*', chunk, re.S)
+        name = ' '.join(head.group(1).split())[:60] if head else '?'
+        line = text[:s].count('\n') + 1
+        report('check', f'line {line}: rule has no **Check:** -- {name}')
+
+# --- 4. the hazard index covers every step that has rules ------------------
 try:
     index_at = next(i for i, l in enumerate(lines) if l.startswith('# Hazard index'))
 except StopIteration:
@@ -71,7 +127,7 @@ for row in re.findall(r'^\| ([^|]+) \|', index, re.M):
 for s in sorted(row_steps - body_steps - {'—', '-', 'T'}):
     report('index', f'a row is filed under step {s}, which is not a section')
 
-# --- 4. rules per step vs rows per step, so drift is visible ---------------
+# --- 5. rules per step vs rows per step, so drift is visible ---------------
 # Not an error: not every rule is a hazard. But a step whose rule count has
 # grown well past its row count is where the index rots, and it rots silently.
 def step_of(pos):
