@@ -54,12 +54,12 @@ per failure mode, each naming the step where it bites.
 The first two were always here; the third was added on 2026-09-02, after a
 review pointed out that the document was hard to use while working rather than
 while reading. The checks were mostly present already and buried mid-paragraph
-— only 17 of 107 rules ended on an imperative — so this surfaces them rather
+— few rules ended on an imperative — so this surfaces them rather
 than inventing them. `lint-playbook.sh --checks [step]` prints just the checks,
 which is the pre-flight list for the step you are on:
 
 ```bash
-docs/decompiling/lint-playbook.sh --checks 6.6   # the 8 checks for the clock
+docs/decompiling/lint-playbook.sh --checks 6.6   # the checks for the clock
 ```
 
 The lint fails if any rule lacks one. **Evidence is deliberately not labelled**
@@ -102,8 +102,8 @@ cheap now and awkward later.
 
 **`[apple2tc]` Entry-point choice dominates output size.** Snake Byte traces
 from the reset vector `$FA62`, so the program boots ROM into BASIC and the
-recorded keystrokes type `CALL 14160`. Result: 1,442 of 2,097 basic blocks in
-the output are Applesoft and Monitor ROM, against 641 blocks of actual game.
+recorded keystrokes type `CALL 14160`. Result: most of the basic blocks in the
+output are Applesoft and Monitor ROM, and the actual game is the minority.
 
 **Check:** Count blocks inside the program's own address range against the
 total, before planning any conversion work.
@@ -112,10 +112,11 @@ total, before planning any conversion work.
 not.** Snake Byte pulls in ~1,430 ROM blocks and calls only **9 distinct entry
 points**. Count the distinct `JSR`/`JMP` targets crossing into ROM first. But
 do not assume that externalizing them removes the ROM: measured, it removed
-**112 blocks**, not 1,430. Library code is typically reachable by two
+**almost none of it**. Library code is typically reachable by two
 independent routes — through its public entry points, *and* through whatever
 the program's start PC leads to. Both must be severed, and they are strongly
-non-additive (112 and 48 separately, 1,530 together). Retargeting the entry
+non-additive: cutting either alone removes little, cutting both removes nearly
+all of it. Retargeting the entry
 point is the other half, and it is step 4b.
 
 **Check:** Count the distinct `JSR`/`JMP` targets crossing the boundary; then
@@ -170,8 +171,9 @@ structure it.
 Fixed 2026-08-02 in commit `ea29cdc`: `int stackLevel = 0;` sat inside the
 per-block loop, so the universal `PHA`-at-entry / `PLA`-before-`RTS` idiom was
 rejected as unbalanced. Depth is now propagated along CFG edges and required to
-be zero only at `RTS`. Measured effect on Snake Byte: **53 → 75** routines
-identified, and the generated C from 108 to 152 function lines.
+be zero only at `RTS`. Measured effect on Snake Byte: **substantially more
+routines identified**, and correspondingly more of the generated C in real
+functions.
 
 **Check:** Count accepted routines before and after any `scanCandidate` change;
 the delta is the measurement.
@@ -207,8 +209,8 @@ that previously looked inert. Re-measure after every recovery change.
 cascade now removes.
 
 **`[6502]` One unrecoverable routine can block many.** Snake Byte's `$7230`
-inline-string printer is not merely 10 unrecovered call sites — it transitively
-blocks 5 other game routines through the cascade above. When triaging which
+inline-string printer is not merely its own unrecovered call sites — it
+transitively blocks several other game routines through the cascade above. When triaging which
 rejections to fix first, weight them by how many callers they block, not by
 their own call count. The idiom itself is in
 [Techniques: the inline-string idiom](#the-inline-string-after-jsr-idiom).
@@ -250,8 +252,8 @@ the decompiler accept something it used to reject.
 The right shape turned out to be a calling convention rather than a relaxed
 check: `--alt-exit` (`routines.cpp`, `CallAlt`/`ReturnAlt`) stops the walk *at*
 the unwinding block instead of following it, the routine returns which exit it
-took, and the caller switches on that. `func_6a32` is then 50 blocks spanning
-`$6A32..$6AB5` and the three structural checks come back clean. The lesson
+took, and the caller switches on that. `func_6a32` is then a single routine
+spanning `$6A32..$6AB5` and the three structural checks come back clean. The lesson
 generalises past this one idiom — **when the classifier rejects something, the
 question is what shape would let it be expressed, not which check to disable.**
 
@@ -381,10 +383,10 @@ either way. It needed `--frames=100`.
 
 **`[6502]` Measure the trace's coverage; do not assume it.** Distinct-hash
 count is dominated by static stretches, not gameplay. Snake Byte's 1,300-frame
-trace has only **191** distinct hashes: frames 0–168 are keystrokes at the
-BASIC prompt, 177–278 and 371–472 are identical 101-frame title/attract
-plateaus, and continuous gameplay only runs from ~472 to the end — about 828
-frames, 14 seconds. Correlate hash-run boundaries against the key file's cycle
+trace has **few distinct hashes**: the opening frames are keystrokes at the
+BASIC prompt, two long stretches are identical title/attract plateaus, and
+continuous gameplay only runs from partway in to the end — a matter of
+seconds. Correlate hash-run boundaries against the key file's cycle
 stamps to find where gameplay actually starts, and check the tail is still
 changing: a long frozen tail means a crash or an early-exhausted key file.
 Expecting "several hundred" of anything is how this goes wrong — static
@@ -396,8 +398,8 @@ static.
 
 **`[process]` Measure what the oracle covers, per site, or it will flatter
 you.** Snake Byte's cross-engine gate compares ~2.7 million block-head hits
-between the interpreter and the generated build, and passes. It reaches **744
-of 1,669 block heads — 45%**. Everything else is compared against nothing, and
+between the interpreter and the generated build, and passes. It reaches **well
+under half the block heads**. Everything else is compared against nothing, and
 a mutation there passes every check. The "a probe never fired" guard does not
 catch this: it is per *probe*, and the trace is one probe installed at every
 address, so it fires constantly while individual sites stay dead. Derive
@@ -409,8 +411,8 @@ are the blocks where a decode error has no other net under it.
 hit count.
 
 **`[process]` A big number is not coverage until you know its distribution.** A
-rewrite here cited "20,298,539 block heads match". Of one scenario's 260,128
-hits, 252,364 were a single address, and the address most relevant to the
+rewrite here cited "twenty million block heads match". Nearly all of one
+scenario's hits were a single address, and the address most relevant to the
 change fired zero times. Before quoting a count as evidence, sort it by what
 produced it. A number that large is *reassuring* in a way that is very hard to
 argue with, which is exactly why it should be checked.
@@ -454,10 +456,9 @@ it is the honest measure of progress.
 baseline when it does change.
 
 **`[process]` Coverage clusters by feature, so report it that way.** Snake
-Byte's 60 unverified hand-written blocks are not 60 scattered branches; they
-are the joystick (15), one unused display-list opcode (7), ROM paths for
-arguments the game never passes (20), pause and mute (6), and five smaller
-groups. Grouped like that the list is a description of what the recordings do
+Byte's unverified hand-written blocks are not scattered branches; they
+are the joystick, one unused display-list opcode, ROM paths for arguments the
+game never passes, pause and mute, and a few smaller groups. Grouped like that the list is a description of what the recordings do
 not do, which is actionable. Listed as addresses it is noise nobody reads.
 
 **Check:** Group the uncovered blocks by feature and report the groups.
@@ -475,7 +476,7 @@ worth relying on, and it takes an argument.
 starting point.** Snake Byte's coordinate plan named three keyboard-read sites
 (`$FD1B`, `$741F`, `$7890`). A fourth, `$6217` — the in-game ingest that clears
 the strobe and fills the ring buffer — was missing. Recording with only the
-three captured 11 of 23 keys, and not 11 mis-timed ones: once a script delivers
+three captured only some of the keys, and not mis-timed ones: once a script delivers
 via `key` at all, the host's per-frame drain stands down entirely, so an
 uncovered site's keys are never delivered. Found by recording and counting, not
 by reading the disassembly harder.
@@ -522,7 +523,7 @@ about, or accept that whole screens are checked by only one of the two.
 **`[process]` Build the last oracle while the first ones can still check it.**
 The screen-state check was added while the trace and memory checks were intact,
 so it could be *shown* to catch a defect they caught — a display-list operand
-swap, failing at sample 7,503 of 26,111. Added after they were gone, it would
+swap, failing partway through the samples. Added after they were gone, it would
 have been an assumption.
 
 **Check:** Add a new oracle while the existing ones still work, and show it
@@ -536,9 +537,9 @@ enter the routine. `probe-acceptance.sh` does enter it and stamps its input on
 a probe counter rather than on cycles, deliberately, so that the two engines'
 cycle phase cannot perturb replay — being cycle-independent is exactly what
 makes it useless here. Measured: 4 cycles written as 5 passes everything;
-written as 4,000 it fails on frame-boundary drift. **Read a routine's coverage
-per property, not as one number** — the same "84/104 hand-written blocks run"
-reports the checked control flow and the unchecked timing alike.
+written as a wildly wrong value it fails on frame-boundary drift. **Read a
+routine's coverage per property, not as one number** — the same "most
+hand-written blocks run" the checked control flow and the unchecked timing alike.
 
 **Check:** Report coverage per property — control flow, timing, state — never
 as one number.
@@ -613,7 +614,7 @@ than its sources. Before that check existed, the only defence was reading the
 `/tmp` are only as fresh as the last run that reached them: a suite that aborts
 early leaves the *previous* run's files in place, and reading them cost an hour
 chasing a routine the stale trace said never executed and the current one says
-runs 110 times.
+runs constantly.
 
 **Check:** Fail the gate if any binary is older than its sources.
 
@@ -699,8 +700,8 @@ callers resume at — which presented as "the inline-string idiom leaves orphans
 and is nothing of the kind.
 
 `--prune-returns` drops them: the fall block of every erased `JSR` is a
-candidate, and any `RTS` still naming one loses it. On Snake Byte, 64 edges and
-298 further blocks. Reach for this before anything cleverer because it checks
+candidate, and any `RTS` still naming one loses it. On Snake Byte it removed a
+substantial further set of edges and blocks. Reach for this before anything cleverer because it checks
 itself — deleting unreachable text cannot move a frame hash, a memory sample or
 a trace, so every oracle must stay exactly where it was.
 
@@ -734,7 +735,7 @@ golden trace because it is differential.
 Do it in two commits even so: retarget first and delete nothing, so the entry
 change can be shown to be behaviour-preserving on its own; then delete what is
 unreachable. Snake Byte's first commit changed one initializer and installed
-2KB of state; the second removed 1,686 of 1,775 dispatch cases. Reachability
+2KB of state; the second removed nearly every dispatch case. Reachability
 comes from [walking the IR](#for-reachability-walk-the-ir-not-the-emitted-c),
 not from the emitted C.
 
@@ -792,8 +793,8 @@ survive to the end — they look at video memory, which is the machine's no
 matter who wrote it. Memory hashes survive until a variable's *storage* leaves
 emulated RAM, because until then an adapter can write everything back before
 returning. The block-head trace dies first, per routine, the moment a branch
-moves into real C. So a single-block routine converts for free and a 62-block
-one costs 61 sites; sort by payoff per site and the order writes itself.
+moves into real C. So a single-block routine converts for free and a many-block
+one costs a site per internal edge; sort by payoff per site and the order writes itself.
 
 **Check:** Order conversions by which oracle each spends, and retire each one
 deliberately.
@@ -889,7 +890,7 @@ cycles, still runs, and never reaches the list. The probe is not installed,
 neither engine reports it, and the diff is clean because both sides say nothing.
 Measured: one routine written as a loop over a table of addresses took eight
 sites out of the gate silently, and the site-count floor was far too coarse to
-notice 1,669 become 1,661. Lint for it.
+notice a handful go missing. Lint for it.
 
 **Check:** Lint that every hand-written cycle site carries a literal address.
 
@@ -914,8 +915,8 @@ comparison.** Probe-stamped replay counts hits at named addresses and stamps
 keystrokes on that counter. Some of them sit inside game routines. Converting
 one — charging its cycles but dropping its probe — stops the counter advancing
 there, and every key recorded after that point arrives at a different instant.
-It is caught, because only the generated side drifts, but caught as a
-640,983-line block-head diff naming four addresses in an unrelated screen. Give
+It is caught, because only the generated side drifts, but caught as an
+enormous block-head diff naming four addresses in an unrelated screen. Give
 those sites their own spelling and assert that the set of addresses using it
 equals the coordinate's.
 
@@ -1065,7 +1066,7 @@ there: the ROM's COUT1 never touches X, and the hook saves and restores it
 without looking, so "whatever COUT left behind" is whatever you left behind,
 and every caller already had it as a parameter. The stack went the same way: a
 6502 pushes because JSR clobbers registers, and a C call cannot touch a
-caller's local, so all 21 PHA/PLA pairs were protecting values from nothing.
+caller's local, so every PHA/PLA pair was protecting a value from nothing.
 
 The general point is not "there is never a floor" — it is that **a floor is a
 claim and gets the same treatment as any other**. Two wrong liveness claims in
@@ -1125,7 +1126,7 @@ to read **trace PASS, screen PASS, memory FAIL**. That failure is the only proof
 the oracle was watching those bytes. Narrow the probe afterwards, then mutate
 each new edge address and watch memory alone catch it. Narrowing first is
 indistinguishable from narrowing over bytes nothing writes, and you will never
-find out which you did. Snake Byte: 34 edges across four slices, all 34 caught.
+find out which you did. Snake Byte: every edge across four slices was caught.
 
 Not every edge that fails to be caught is a hole. One address here is
 recomputed before every use, so a stray write is overwritten before the next
@@ -1186,7 +1187,7 @@ not per block.
 
 **`[process]` Count the effect, not the identifier.** Snake Byte's memory row
 read "3 remaining" because it counted the externally-linked accessor pair; the
-file also reads through a `static` pair, which was 20 more calls. The same trap
+file also reads through a `static` pair, which was many more calls. The same trap
 as counting hex literals, from a new direction. Grep for every read of the RAM
 array, and check whether the accessor routes some addresses elsewhere — four of
 those calls were `$C0xx`, which is IO, not memory.
@@ -1202,13 +1203,13 @@ and the test is poisoning.
 **`[process]` Classify every site; do not inspect them.** For a flag or a
 register, split all its occurrences into reads and writes, then ask per name
 which reads a write can reach. This is a script, and it is the difference
-between an answer and an impression. On Snake Byte it retired five of seven
-status flags and 290 of 307 register references — and the two impressions that
+between an answer and an impression. On Snake Byte it retired most of the
+status flags and nearly all the register references — and the two impressions that
 survived contact were both wrong.
 
 "In the ROM, registers are the algorithm" is a hypothesis. Checked on Snake
 Byte's flags it held for `C` and `D` and was false for `B`, `I`, `V`, `N` and
-`Z` — 115 of 222 references. `B` was never read at all; `I` and `V` were only
+`Z` — between them, half the references. `B` was never read at all; `I` and `V` were only
 ever pushed so they could be popped back into themselves.
 
 **Check:** Split every occurrence into reads and writes, then ask per name
@@ -1237,7 +1238,7 @@ because a run never took it is the unexercised-path trap. Deleting it because
 the regions that set the flag are *closed* is sound: Snake Byte's six SED/CLD
 regions were checked mechanically and contain only helpers that take their
 decimal-ness as an argument, and no call into the code with the other arm. Then
-the arm is unreachable by construction and the measurement — 3,942 tests, all
+the arm is unreachable by construction and the measurement — every test
 binary — is corroboration rather than evidence.
 
 **Check:** Delete an arm because the regions that set the flag are closed,
@@ -1358,7 +1359,7 @@ four keys. Count the *consequences* of a charge, not the charges.
 **incidental**, paying for arithmetic nobody can hear or see; and
 **load-bearing** — it sets a pitch, it is a pause someone can see, or it is the
 only point at which a waiting loop can hand control back. Snake Byte's split
-was 838 to 23. Deleting the first pile is most of what makes the file readable.
+was overwhelmingly the first kind. Deleting that pile is most of what makes the file readable.
 
 **`[process]` Check what your oracles are stamped on before you believe any of
 this is safe.** If probes sample on cycles or frames, deleting the clock
@@ -1375,7 +1376,7 @@ addresses — before touching the clock.
 **`[process]` Sweep for every spelling before believing you are done.** A cycle
 charge usually has more than one name — one that probes and one that does not,
 one for edges, one for the sites carrying replay coordinates. Snake Byte's
-collapse went from 838 to 23 and left fifteen behind, purely because they were
+collapse left a handful behind, purely because they were
 spelled differently from the name being grepped, and they turned out to be the
 ones holding all the address tables. Grep for the macro that *expands* to the
 charge, not for the name you have been typing.
@@ -1391,7 +1392,7 @@ makes the tone go sharp. Three ways the measurement lies:
   and those callees still charge. Measure the routine's *own* charges with an
   accumulator saved and zeroed on entry and restored on exit — and use
   `__attribute__((cleanup))` on it, or every early return goes unreported. One
-  routine here would have been charged 73,939 instead of 148.
+  routine here would have been charged for its whole loop instead of one pass.
 - **A region can contain charges that survive for other reasons.**
   Probe-carrying sites charge for themselves. Counting them in the calibrated
   value double-charges the loop; here that made a wait loop 50% slow and only
@@ -1444,13 +1445,13 @@ budget is spent and yields if it is. Merging removes one such test, so a frame
 boundary lands later.
 
 Snake Byte tried this, measured it, and did not keep it — which is the useful
-part. Over two full scenarios: 4 frames of 1,300 and 3 of 1,300 changed their
-video hash, frame cycle counts moved by up to 56, and the run drifted 4 cycles
-in 22.1 million. The program-defined probes were byte identical at all 16,332
-samples, so nothing about the program changed. It buys 49 fewer statements and
-costs a permanent, unrecoverable difference in a real oracle: anyone who later
-gates on frame hashes would inherit the drift with no way to tell it from a bug.
-**The trade is 49 statements against an oracle you keep.** Cosmetic
+part. Over two full scenarios a handful of frames changed their
+video hash, frame cycle counts moved slightly, and the run drifted a few cycles
+in millions. The program-defined probes were byte identical at every sample, so
+nothing about the program changed. It buys a small reduction in statement count
+and costs a permanent, unrecoverable difference in a real oracle: anyone who
+later gates on frame hashes would inherit the drift with no way to tell it from
+a bug. **The trade is a few statements against an oracle you keep.** Cosmetic
 consolidation is the cheapest kind of change to give up, so give it up first.
 
 **Check:** Do not merge adjacent charges. The test one of them performs is not
@@ -1471,8 +1472,8 @@ do {
 That is how `DEY / BNE` comes out: the branch costs a cycle more when taken, so
 the charge is guarded by the test and the *decrement* sits in the guard. Delete
 the charge as a charge and the statement goes, and the counter with it. Snake
-Byte's `game_sound_sweep` lost all four of its counters this way and played 2
-clicks where it should play 512, undetected for four days.
+Byte's `game_sound_sweep` lost all four of its counters this way and played a
+couple of clicks where it should play a sweep, undetected for four days.
 
 **The tell is that the `if`'s entire body is a charge.** Where the body does
 something as well — `{ TICK(1); continue; }`, `{ TICK(3); break; }` — deleting
@@ -1569,8 +1570,7 @@ is only that word.
 
 **What it unlocks is the thing you actually wanted.** Once the runtime stops
 forcing one file, the decompiled program can be split along its own seams. The
-ROM entry points came out of Snake Byte as a normal `.c` — 682 lines, 12% of
-the file.
+ROM entry points came out of Snake Byte as a normal `.c`.
 
 **Count the interface in both directions, and count it from the header.** This
 paragraph claimed "four symbols wide" until 2026-09-01, which was the count of
@@ -1615,18 +1615,17 @@ code that used to be there.
 
 **`[process]` Names that encode a distinction which has since dissolved are pure
 cost.** A `_native` suffix separated hand-written from generated code; once
-nothing is generated it is noise on every call site, and here it was 140 of
-them. The tell is a qualifier that is true of everything.
+nothing is generated it is noise, and it was on every call site. The tell is a qualifier that is true of everything.
 
 **Check:** Drop a qualifier once it is true of everything.
 
 ### Casts and spellings
 
 **`[apple2tc]` A decompiler's casts are noise, with three exceptions, and the
-compiler will sort them for you.** Snake Byte's two hand-owned files carried 165
-`(uint8_t)`/`(uint16_t)` casts; 161 of them said nothing C does not already do —
-a cast to the type of the variable being assigned, or of the value being
-returned. The three that survive are the ones whose truncated value *escapes*
+compiler will sort them for you.** Snake Byte's two hand-owned files were full
+of `(uint8_t)`/`(uint16_t)` casts, and nearly all of them said nothing C does
+not already do — a cast to the type of the variable being assigned, or of the
+value being returned. The few that survive are the ones whose truncated value *escapes*
 before anything else narrows it: into an array index, or into the low half of a
 16-bit word whose high half comes from elsewhere. The rule generalises —
 `(uint8_t)` composes away through `+ - * | & ^ <<`, and does not through `>>`,
@@ -1640,8 +1639,8 @@ matters without anybody adjudicating it. Since only casts are being deleted, no
 line numbers move, so `__LINE__` inside `assert` does not perturb the comparison
 and `-DNDEBUG` is unnecessary — unlike the rename check.
 
-**Then expect the oracle to be conservative, and finish the job by hand.** Six
-of the 165 moved the codegen; only three of those moved a *value*. The others
+**Then expect the oracle to be conservative, and finish the job by hand.** A
+handful moved the codegen; fewer still moved a *value*. The others
 blocked an optimisation: dropping a cast let gcc prove an address never wraps
 and pick a cheaper induction variable, or drop an `sbb` for an `lea`. The way to
 tell them apart is not more reading either — write the old and new expressions
@@ -1703,8 +1702,8 @@ Compare that to the set the program is *supposed* to export and fail on any
 difference. Snake Byte's is three names -- two the runtime calls, one the ROM
 file calls -- so a fourth is either a new interface, which belongs in the list
 with a reason, or a missing `static`. This is `[exports]` in
-probe-acceptance.sh, and it exists because the pass that made 98 functions
-static missed one: it drove off a hand-written list of return types and
+probe-acceptance.sh, and it exists because the pass that made the file's
+functions static missed one: it drove off a hand-written list of return types and
 `SteerChoice` was not on it. Two days later the symbol was still exported, the
 gate was green, and `-Wall` had nothing to say because the function was not
 `static` -- the two failures protect each other in exactly the wrong direction.
@@ -1803,7 +1802,7 @@ A gate tells you it is green. It does not tell you whether it was *looking*. The
 cheap way to find out is to break the thing you just changed, on purpose, in the
 specific ways it could plausibly be wrong, and see which checks notice.
 
-Done here after a 218-line, 21-`goto` state machine was re-nested into four
+Done here after a sprawling `goto` state machine was re-nested into four
 loops. Four structural mutations were planted:
 
 | planted bug | 1,300-frame gate | 20,000-frame trace | 40,000-frame screen |
@@ -1832,8 +1831,8 @@ moves.
 *Used by 6.2 and 6.3.*
 
 Assign a *wrong* value and run the gate. Deleting leaves the previous value in
-place, which can coincidentally be the one a reader wanted; poisoning cannot. 42
-register writes and 18 flag writes were cleared this way in batches, which also
+place, which can coincidentally be the one a reader wanted; poisoning cannot.
+Register writes and flag writes were cleared this way in batches, which also
 makes it cheap: one build and one gate run per batch, not per site.
 
 ## A liveness claim must come from the fixpoint, not from reading
@@ -1863,11 +1862,12 @@ other way (`A, X, ...`, so the key dequeue's X write stays).
 `apple2tc --ir` prints `Succ(...)` on every block header and every `Call` with
 its target, which is a complete CFG and call graph in text; a walk from any
 address is a dozen lines and needs nothing new from the decompiler. Snake Byte:
-1,776 blocks reduce to 89 from `$3750`, and all 89 are game code.
+the blocks reachable from `$3750` are a small fraction of the whole, and every
+one of them is game code.
 
 The emitted C looks like it would do as well and does not. Scanning it for
 `block_id = N` picks up the digits inside `pop16`, `tmp3_U16` and `sbc_dec16`,
-inventing edges to block 16 and reporting 104 live cases against the true 89.
+inventing edges to block 16 and reporting more live cases than there are.
 The C is a rendering of the IR; the IR is the thing with the edges in it.
 
 The general form: when you want to write a script that parses generated C, check
@@ -1880,8 +1880,8 @@ whether the generating tool already has the data in its IR.
 Converting a routine deletes the block-head trace for it — that is the trade —
 which also deletes the only tool that can say *where* the new C diverges from
 the old. Snake Byte's top-level conversion came out with two inverted conditions
-and the failure presented as "the game plays on instead of pausing", about
-57,000 blocks after the mistake.
+and the failure presented as "the game plays on instead of pausing", an
+enormous distance downstream of the mistake with nothing linking the two.
 
 The fix is to respell every cycle charge in the converted file with the variant
 that keeps its probe, rebuild, and diff against the generated original
@@ -2127,7 +2127,7 @@ rows, which is where to look. Run it after adding a rule.
 | 3c | Expecting "several hundred" of anything | Static stretches dominate replay traces. Measure the number; explain it if it surprises you. |
 | 3c | Inferring "this code never runs" from the trace file | Branch-target lists are capped and record only targets, so fall-through blocks read as absent either way. Instrument and count. |
 | 3c | "Absent from the trace" treated as "unreachable" | Different claims. Only the second is worth relying on, and it takes an argument, not an absence of evidence. |
-| 3c | "No probe never fired" read as coverage | Per-probe, not per-address. One probe at 1,669 sites fires constantly while most sites stay dead. Intersect the site list with the trace. |
+| 3c | "No probe never fired" read as coverage | Per-probe, not per-address. One probe covering many sites fires constantly while most of those sites stay dead. Intersect the site list with the trace. |
 | 3c | Full block coverage of an arithmetic routine | Says nothing about the values. BCD-vs-binary on a byte the score never reaches fails no check. |
 | 3c | A block covered by a recording that never varies its inputs | Coverage says entered, not tested. Two identical lookup tables make reading the wrong one free. |
 | 3c | Coverage reported as a list of addresses | Group by feature. "The joystick" is actionable; forty hex numbers are not. |
@@ -2155,11 +2155,11 @@ rows, which is where to look. Run it after adding a rule.
 | 5 | Converting a routine that contains an input-coordinate address | The replay counter stops advancing there and every later keystroke lands elsewhere. Keep the probe, and lint that only coordinate addresses do. |
 | 5 | Every cycle-charging call site treated as a program location | The taken-branch penalty is charged on the *edge*, in a block the program is never at — so it must not trace or dispatch probes. 698 ROM addresses here are edges and 121 are also real block heads, so address alone cannot distinguish them. |
 | 5 | `--ret-addr` treated as a cosmetic verification flag | It is on for correctness: without it a `JSR` pushes a sentinel, and the inline-data-after-`JSR` idiom finds its data by *reading* that address. But it is not for a shipped artifact, which wants no emulated stack. |
-| 6 | Calling something "the floor" | It is a claim like any other and deserves the same check. The last 15 register uses here were declared irreducible; Y was read by nobody and X was already a parameter at every call site. |
+| 6 | Calling something "the floor" | It is a claim like any other and deserves the same check. The last register uses here were declared irreducible; Y was read by nobody and X was already a parameter at every call site. |
 | 6.1 | Renaming and restructuring in the same step | Every failure now has two candidate causes. |
 | 6.2 | Narrowing a probe and a storage move in one step | The narrowing then proves nothing: it is indistinguishable from a hash over bytes nobody writes. Move first with the probe untouched and require *trace PASS, screen PASS, memory FAIL*. |
-| 6.2 | A store kept "for faithfulness" once its byte leaves RAM | Often it was scaffolding. Seven here were computed in a local, committed through the struct the routine was handed, and mirrored to an address nothing read. |
-| 6.2 | `-Wall` treated as the dead-store detector | It says nothing about a dead `ram_poke`, and nothing about a **file-scope static** written and never read. One was written at fourteen sites, read at none, and every warning and every gate stayed green. `-Wunused-but-set-variable` covers locals only. |
+| 6.2 | A store kept "for faithfulness" once its byte leaves RAM | Often it was scaffolding. Several here were computed in a local, committed through the struct the routine was handed, and mirrored to an address nothing read. |
+| 6.2 | `-Wall` treated as the dead-store detector | It says nothing about a dead `ram_poke`, and nothing about a **file-scope static** written and never read. One was written at many sites, read at none, and every warning and every gate stayed green. `-Wunused-but-set-variable` covers locals only. |
 | 6.2 | Threading a global and deleting its writes in one commit | A mistake in either gets attributed to the other, and the intermediate state — written, never read — is exactly what no warning catches. Thread, gate, then delete. |
 | 6.2 | An inherited value inferred from the call site | Mutate it. Two inherited inks were inferred here; one is caught only by the scenario that presses `C`, and would have been wrong in silence under the other. |
 | 6.2 | An emulated stack around a C call | A 6502 pushes because JSR clobbers registers. A C call cannot touch a caller's local. Check balance per routine before removing — a loop that pops at the top and pushes at the bottom looks unbalanced statically and is not. |
@@ -2190,4 +2190,4 @@ rows, which is where to look. Run it after adding a rule.
 | T | Guessing whether a register is live after a call | `apple2tc --ir` prints per-function `LiveIn`/`LiveOut`. Reading the caller by hand is four routines of tracing for a fact the tool already computed. |
 | T | Reading a routine's body to find its parameters | Follow the calls. `rom_cout` reads X and Y as well as A, because it dispatches through `JMP ($36)` into a hook that reads them — invisible in its own body. Both wrong liveness claims here were produced by reading. |
 | T | Deleting a store to test whether it is dead | Poison it instead — assign a wrong value and run the gate. A deleted store leaves the *previous* value behind, which can coincidentally be the one a reader wanted. |
-| T | A disassembly listing read as showing every read site | It cannot show code reached only through an asserted edge — the listing prints it as `DFB`. One keyboard read taking 6 of 19 keys in a scenario was visible only in the generated C. Grep the C. |
+| T | A disassembly listing read as showing every read site | It cannot show code reached only through an asserted edge — the listing prints it as `DFB`. One keyboard read taking a share of a scenario's keys was visible only in the generated C. Grep the C. |

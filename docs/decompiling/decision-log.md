@@ -3443,3 +3443,24 @@ Deleting comments moves lines, so `__LINE__` inside `assert` perturbs the
 codegen oracle; run it with `-DNDEBUG` and the comparison is exact again:
 `CFLAGS="-O2 -std=gnu11 -g0 -DNDEBUG" same-code.sh` reported identical
 instructions.
+
+## 2026-09-03 -- no tallies in prose
+
+The playbook was written with counts everywhere: how many casts, how many
+blocks, how many rules, how many lines a file came to. Stripped, and the
+convention from here is that prose does not record them.
+
+Two things are wrong with them. They stale on the next edit, so a reader who
+checks one finds it false and learns to trust none of it. And they are a
+performance of rigour: a number makes a sentence *feel* measured while
+verifying nothing about the claim it is attached to. "Nearly all of the casts
+said nothing C does not already do" is the finding; the count was decoration
+over it.
+
+What survives is numbers that are load-bearing -- a tool's cap, an oracle's
+frame budget, an address, a domain size that makes exhaustion feasible, a
+magnitude that is itself the point. The test: if the sentence still says the
+same thing with "most" or "a handful" in place of the digits, the digits were
+never doing anything.
+
+Counts remain useful while working. They just do not get written down.
