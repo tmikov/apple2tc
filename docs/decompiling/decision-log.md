@@ -3464,3 +3464,21 @@ same thing with "most" or "a handful" in place of the digits, the digits were
 never doing anything.
 
 Counts remain useful while working. They just do not get written down.
+
+## 2026-09-03 -- comments are for the reader, not the grader
+
+The playfield banner carried its 6502 block count, the byte size of the CMP/BNE
+chain it replaced, a sentence on whether decompiling it was worth the trace it
+cost, and a count of its own list. One sentence in it was for a reader: that
+`$8000` holds one script per level, each ending in `'*'`, which is why the
+opcode enum below it makes sense.
+
+The count of scripts went too, and for a reason worth recording: the banner said
+one number and `OP_RESTART` four lines below implied another. Neither was
+checkable from the file, so a reader could only learn that the comments disagree.
+The load-bearing half was "one per level", which is what explains the skip-
+forward search.
+
+This is the same defect as the file header and the tallies, and now has a rule:
+what is left after the work is a reader who accepts the code as it stands. Every
+sentence about how the code got there is addressed to someone else.

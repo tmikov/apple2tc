@@ -1157,17 +1157,15 @@ static MoveVerdict snake_move_verdict(uint8_t dir, uint8_t *cell_out) {
 }
 
 /* ========================================================================== */
-/* draw the playfield                                                */
+/* Draw the playfield                                                         */
 /*                                                                            */
-/* 62 blocks in one routine, and six things: set the video mode, spin, wipe    */
-/* the occupancy map, open the wall gaps the difficulty calls for, draw the    */
-/* border in both representations, and run the level's display list.           */
+/* Set the video mode, wipe the occupancy map, open the wall gaps the         */
+/* difficulty calls for, draw the border in both representations, then run    */
+/* the level's display list.                                                  */
 /*                                                                            */
-/* The display list is the reason this one was worth the trace it cost. $8000  */
-/* holds 29 scripts, one per level, each ending in '*'; the interpreter skips  */
-/* level-1 scripts to find the current one and then dispatches single-letter   */
-/* opcodes. As a chain of CMP/BNE with the operand loads interleaved it is 180 */
-/* bytes that read as noise.                                                  */
+/* The display list lives at $8000: one script per level, each ending in '*'. */
+/* The interpreter skips over earlier levels' scripts to find the current one */
+/* and dispatches single-letter opcodes.                                      */
 /* ========================================================================== */
 
 /// The display list's opcodes. Single letters, in Apple II ASCII.

@@ -1619,6 +1619,26 @@ nothing is generated it is noise, and it was on every call site. The tell is a q
 
 **Check:** Drop a qualifier once it is true of everything.
 
+**`[process]` A comment is for the person reading the code, not the person
+grading the work.** Three kinds of sentence fail that test and all three
+accumulate, because each felt like the interesting part while the work was being
+done: how hard it was, what it cost, whether it was worth it ("the reason this
+one was worth the trace it cost"); measurements of the thing being replaced
+rather than the thing in front of you ("62 blocks in one routine", "180 bytes
+that read as noise" -- a disassembly the reader does not have open); and counting
+your own enumeration ("and six things:"), which falsifies the sentence the moment
+anyone adds a seventh. What survives is what the code cannot say for itself --
+here, that `$8000` holds one script per level, each ending in `'*'`, which is a
+fact about the binary and the reason the opcode enum below it is legible.
+
+The tell is the past tense, and any sentence defending a decision. A reader has
+no opinion about the decision; they are downstream of it. That material is real
+and belongs in decision-log.md, where someone is looking for it.
+
+**Check:** For each sentence in a comment, ask whether a reader who accepts the
+code as it stands can use it. Delete effort, cost, provenance, and counts of what
+the comment itself lists.
+
 ### Casts and spellings
 
 **`[apple2tc]` A decompiler's casts are noise, with three exceptions, and the
