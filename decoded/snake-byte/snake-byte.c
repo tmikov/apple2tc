@@ -19,7 +19,7 @@
 ///   - the ROM entry points the game calls, as C (`rom.c`), plus the captured
 ///     entry state: zero page, the stack, the registers, one soft switch.
 ///     See make-entry-state.sh.
-/// The two images are 2,020 lines of hex and live in `game-image.inc` and
+/// The two images are hex, so they live in `game-image.inc` and
 /// `rom-image.inc`.
 
 #include <stdint.h>
