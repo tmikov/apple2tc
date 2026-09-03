@@ -6,53 +6,25 @@
  */
 
 /// \file
-/// Snake Byte: the whole game in one translation unit, sharing nothing.
+/// Snake Byte: the whole game as one translation unit, entered at the game's
+/// own entry point with the machine state an Apple II boot would have left.
+/// There is no Applesoft, no boot, and nothing here is generated -- this file
+/// is owned by hand, so change it freely and let the gate answer.
 ///
-/// It starts at the game's own entry point with the machine state an Apple II
-/// boot would have left, and runs the game as C. There is no Applesoft, and
-/// nothing here is generated.
-///
-/// Why one file for the game
-/// -------------------------
-/// It no longer has to be. `apple2tc/system2-inc.h` used to *define* the
-/// emulated machine with internal linkage, so anything built on it shared one
-/// translation unit; the machine is now split into `system2.h` and
-/// `system2-impl.inc`, and this program compiles the second half once in
-/// `system2-impl.c`. This file includes only the declarations.
-///
-/// The better reason is ownership. The other targets in this directory are
-/// scaffolding -- controls this one is checked against, and one fixture -- and
-/// while this file shared sources with them, every change here had to stay
-/// safe for builds running a dispatch over the same addresses. It shares
-/// nothing now. Change it freely; the gate says whether the game still
-/// behaves.
-///
-/// What is in here that is not the game
-/// ------------------------------------
-///   - `s_mem_3750`, the game's own binary image, for its data: the level
-///     scripts, the font, the tables.
+/// Three things in here are not the game:
+///   - `s_mem_3750`, the game's own binary image, kept for its *data*: the
+///     level scripts, the font, the tables.
 ///   - `s_mem_d000`, the Apple II ROM image -- not for its code, but because
-///     the death pause reads its delay lengths out of ROM *as data*.
-///   - the ROM entry points the game calls, as C. They are the machine's code
-///     rather than the game's, but there is no category of code here that
-///     belongs to someone else.
-///   - the entry state: zero page, the stack, the registers and one soft
-///     switch, captured with --snapshot-at. See make-entry-state.sh.
+///     the death pause reads its delay lengths out of ROM as data.
+///   - the ROM entry points the game calls, as C (`rom.c`), plus the captured
+///     entry state: zero page, the stack, the registers, one soft switch.
+///     See make-entry-state.sh.
+/// The two images are 2,020 lines of hex and live in `game-image.inc` and
+/// `rom-image.inc`.
 ///
-/// The two images are 2,020 lines of hex, so they live in `game-image.inc` and
-/// `rom-image.inc`. That is a concession to reading the file, not a retreat
-/// from owning it.
-///
-/// How it is checked
-/// -----------------
-/// `probe-acceptance.sh` runs this against a build that boots the real machine
-/// and requires the two to agree: the screen and memory at every in-game
-/// sample, and the speaker's toggle timeline. The screen check is the one that
-/// survives as more of this file turns into ordinary C.
-///
-/// One hazard when editing. `assert()` bakes `__LINE__` into the text section,
-/// so deleting a comment changes the emitted code. To prove an edit is
-/// comment-only, compile `-O2 -g0 -DNDEBUG -S` before and after and diff.
+/// `scripts/probe-acceptance.sh` is the check: it runs this against a build
+/// that boots the real machine and requires the two to agree on the screen and
+/// memory at every in-game sample, and on the speaker's toggle timeline.
 
 #include <stdint.h>
 #include <stdio.h>

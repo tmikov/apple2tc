@@ -3420,3 +3420,26 @@ a false difference), and the splice searched for `##`-level headings only, so
 the last rule's check landed past a `#` heading. The second is the same class
 of error as the `SteerChoice` miss two days earlier: a pattern written to match
 what I had in front of me rather than derived from what the format allows.
+
+## 2026-09-03 -- the file header says what the file is, not how it got that way
+
+`snake-byte.c` opened with a 48-line header, half of which was a defence of
+decisions against objections a reader of the code does not have: fourteen lines
+on why the game is one translation unit, told through what `system2-inc.h`
+*used to* do before the engine split, and a note that the file used to share
+sources with the control builds. HANDOFF.md:509-516 already tells that story,
+and tells it in the place where someone would look for it.
+
+Cut to 20 lines. What survives is what a reader of *this* file needs and cannot
+get from the code: that nothing here is generated, and the three things in the
+file that are not the game -- in particular that the ROM image is present for
+its data, not its code, which is the one genuinely surprising fact in the file.
+The `assert()`/`__LINE__` editing hazard went too; it is not specific to this
+file and is documented in the playbook's `-DNDEBUG` entry.
+
+A header comment is orientation, not a record. The record is this file.
+
+Deleting comments moves lines, so `__LINE__` inside `assert` perturbs the
+codegen oracle; run it with `-DNDEBUG` and the comparison is exact again:
+`CFLAGS="-O2 -std=gnu11 -g0 -DNDEBUG" same-code.sh` reported identical
+instructions.
