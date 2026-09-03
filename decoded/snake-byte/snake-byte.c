@@ -952,7 +952,7 @@ static uint8_t s_difficulty;
 static bool s_demo_mode;
 
 /// Which of the 29 display lists at $8000 this level draws, 1-based.
-/// select_script skips that many '*'-terminated scripts to find it.
+/// seek_script skips that many '*'-terminated scripts to find it.
 static uint8_t s_script_index;
 
 /// The level's time allowance, which seeds s_life_time at the start of every
@@ -975,7 +975,7 @@ static uint8_t s_level_time;
  */
 
 /// Into the current display list. game_next_byte reads through it and bumps
-/// it; select_script points it at the right script first.
+/// it; seek_script points it at the right script first.
 static uint16_t s_script_ptr = 0x994c;
 
 /// Into the string that follows a JSR to game_print_inline_str -- which is
@@ -1325,7 +1325,12 @@ static void draw_border(uint8_t ink) {
 
 /// Walk the pointer to the current level's script, skipping one whole script
 /// per level below it. DEX first, so level 1 skips nothing.
+///
+/// The index is 1-based, and the decrement below relies on it: at zero it would
+/// wrap and walk off the end of the display lists.
 static void seek_script(void) {
+  assert(s_script_index >= 1);
+
   uint8_t left = s_script_index;
   s_script_ptr = 0x8000;
 
