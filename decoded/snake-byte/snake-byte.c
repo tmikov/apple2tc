@@ -8,8 +8,8 @@
 /// \file
 /// Snake Byte: the whole game as one translation unit, entered at the game's
 /// own entry point with the machine state an Apple II boot would have left.
-/// There is no Applesoft, no boot, and nothing here is generated -- this file
-/// is owned by hand, so change it freely and let the gate answer.
+/// There is no Applesoft, no boot, and nothing here is generated: this file is
+/// owned by hand.
 ///
 /// Three things in here are not the game:
 ///   - `s_mem_3750`, the game's own binary image, kept for its *data*: the
@@ -21,10 +21,6 @@
 ///     See make-entry-state.sh.
 /// The two images are 2,020 lines of hex and live in `game-image.inc` and
 /// `rom-image.inc`.
-///
-/// `scripts/probe-acceptance.sh` is the check: it runs this against a build
-/// that boots the real machine and requires the two to agree on the screen and
-/// memory at every in-game sample, and on the speaker's toggle timeline.
 
 #include <stdint.h>
 #include <stdio.h>
