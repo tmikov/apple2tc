@@ -1639,6 +1639,33 @@ and belongs in decision-log.md, where someone is looking for it.
 code as it stands can use it. Delete effort, cost, provenance, and counts of what
 the comment itself lists.
 
+**`[6502]` The source machine's necessities are not the target's, and a comment
+cannot rescue code that no longer does anything.** `game_next_byte` incremented
+a `uint16_t` script pointer and then tested whether the low byte had wrapped --
+with an empty branch body and a comment explaining that the original had to bump
+the high byte too. True of the 6502, where a pointer is two bytes you carry
+between by hand; meaningless in C, where the increment already carried. The
+comment created the confusion it existed to prevent: a reader meets an empty
+branch whose note says work is required, and can only conclude that a line was
+lost or that this is an unmarked TODO. Delete the construct. If the fact is
+worth keeping at all, it is one line saying the 16-bit increment carries where
+the original needed a second `INC`.
+
+Nothing will find these for you. `-Wempty-body` fires on `if (x);` and not on
+`if (x) { }`, and a branch with no body cannot move codegen, so every oracle
+stays green on it permanently. They survive until somebody reads the file.
+
+The same applies to an original address that names the thing the reader is
+already looking at. "Read the byte the `$000A` pointer addresses" identifies a
+variable that is right there and has a name; the address is the C's own
+provenance, restated. An address earns its place when it points somewhere the C
+does not go -- into the binary's data, or at a routine someone may want to
+disassemble.
+
+**Check:** After the machine's idiom is gone, delete what it required rather
+than commenting it -- empty branches, hand-carried arithmetic, a flag the type
+system now maintains. Cite an original address only when it points outside the C.
+
 ### Casts and spellings
 
 **`[apple2tc]` A decompiler's casts are noise, with three exceptions, and the

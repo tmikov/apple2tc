@@ -2054,7 +2054,7 @@ static void game_add_score(void) {
 }
 
 /* ========================================================================== */
-/* two small ones                                             */
+/* The ink, and the display-list pointer                                      */
 /* ========================================================================== */
 
 /// tell the ROM's lo-res plotter which colour to draw the occupancy
@@ -2068,15 +2068,11 @@ static void game_set_ink(uint8_t ink) {
   rom_setcol(ink ? INK_OCCUPIED : INK_ERASE); // JMP $F864 -- a tail call.
 }
 
-/// read the byte the $000A pointer addresses and advance it. The
-/// display-list interpreter's only way of reading its script.
+/// Read the byte the display-list pointer addresses and advance it. The
+/// interpreter's only way of reading its script.
 static uint8_t game_next_byte(void) {
   const uint8_t b = peek(s_script_ptr);
-
   ++s_script_ptr;
-  if (!(s_script_ptr & 0xff)) {
-    // The low byte wrapped, so the original had to bump the high one too.
-  }
   return b;
 }
 

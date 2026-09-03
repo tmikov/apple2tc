@@ -3482,3 +3482,25 @@ forward search.
 This is the same defect as the file header and the tallies, and now has a rule:
 what is left after the work is a reader who accepts the code as it stands. Every
 sentence about how the code got there is addressed to someone else.
+
+## 2026-09-03 -- what the 6502 needed, C does not
+
+`game_next_byte` advanced a `uint16_t` and then tested whether the low byte had
+wrapped, with an empty branch body and a comment noting that the original had to
+bump the high byte too. The comment was correct about the 6502 and useless to
+anyone reading C, where the increment carried on its own; all it achieved was to
+make an empty branch look like a lost line or an unmarked TODO.
+
+Its own comment also opened by naming `$000A`, the pointer's address in the
+original. The variable is right there and has a name. An original address is
+worth citing when it points somewhere the C does not go -- into the binary's
+data, or at a routine someone may want to disassemble; not when it is the C's
+own provenance restated.
+
+Worth recording because nothing here could have caught it. `-Wempty-body` does
+not fire on a braced empty block, and a branch with no body cannot move codegen,
+so the gate, the oracles and `-Wall` were all permanently green on it. Fossils
+of the source machine are found by reading and by nothing else.
+
+The comment rule now covers both halves: delete what the old machine required
+rather than explaining it, and cite an address only when it points outside the C.
