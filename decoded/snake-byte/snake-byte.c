@@ -124,8 +124,7 @@ typedef struct {
 static void game_cold_start(void);
 static void game_print_inline_str(uint16_t ret_addr);
 
-/// The program starts here. There used to be a func_t001 in between -- the
-/// generated dispatch -- and by the end it was a stub that called this.
+/// The program starts here.
 void emulated_entry_point(void) {
   game_cold_start();
 }
@@ -387,17 +386,15 @@ static Bouncer s_bouncers[2] = {
 
 /* --- The game's own tables ------------------------------------------------ */
 /*
- * Read-only data inside the loaded image, and const arrays here. They were
- * ram_peek(kTable + i) until 2026-08-25, which is what a 6502 has to write and
- * not what the data is: every one of these is a lookup indexed by a small
- * integer.
+ * Read-only data inside the loaded image, and const arrays here. Reaching them
+ * with ram_peek(kTable + i) is what a 6502 has to write, not what the data is:
+ * every one of these is a lookup indexed by a small integer.
  *
  * Every extent below is *derived*, not assumed -- the playbook's own red flag,
  * because the listing does not delimit a table and a 16-byte one that is
  * really 128 is invisible until something indexes past 16. Each says where its
  * end comes from. The bytes are the shipped image's, transcribed from
- * snake-byte.b33; a wrong byte in any of them moves pixels, and the screen
- * oracle compares 6,808 and 9,524 samples.
+ * snake-byte.b33; a wrong byte in any of them moves pixels.
  */
 
 /// each hi-res cell row's base address. The original splits the
@@ -951,7 +948,7 @@ static uint8_t s_difficulty;
 /// set the death pause does not wait to be told to carry on.
 static bool s_demo_mode;
 
-/// Which of the 29 display lists at $8000 this level draws, 1-based.
+/// Which display list at $8000 this level draws, 1-based.
 /// seek_script skips that many '*'-terminated scripts to find it.
 static uint8_t s_script_index;
 
@@ -1197,10 +1194,8 @@ static void plot_at(uint8_t ink, Cell c) {
   game_plot_shape(ink, c);
 }
 
-/// The three runs, with their ink and both endpoints as arguments instead of
-/// as assignments before the call. What they buy is that a caller states the
-/// whole run in one place, including the two things it used to inherit from
-/// whatever ran before it.
+/// The three runs, with their ink and both endpoints as arguments rather than
+/// as assignments before the call, so a caller states a whole run in one place.
 static void plot_hline_at(uint8_t ink, uint8_t col, uint8_t row, uint8_t to_col) {
   game_plot_hline(ink, (Cell){.col = col, .row = row}, to_col);
 }
@@ -1309,8 +1304,8 @@ static void draw_border(uint8_t ink) {
   lores_hline(0x27, 0x00);
 
   // The four sides, twice: once on the lo-res occupancy map and once in
-  // hi-res. Four of these seven used to leave the endpoint out and inherit
-  // $27 from the call above; it is written at each of them now.
+  // hi-res. The original leaves most of these endpoints out and inherits $27
+  // from the call above; each is written out here.
   lores_vline_at(0x00, 0x00, 0x27);
   lores_vline_at(0x27, 0x00, 0x27);
   plot_hline_at(ink, 0x00, 0x00, 0x27);
@@ -1350,7 +1345,7 @@ static void seek_script(void) {
 static void game_draw_playfield(void) {
   game_clear_hgr();
   select_hires_page2();
-  spin(0x00, 0x00, 0x04); // the counts $7056 used to store into $02/$03
+  spin(0x00, 0x00, 0x04); // the counts $7056 stores into $02/$03
   wipe_occupancy_map();
 
   s_mon.wndtop = 0x14;
@@ -1793,8 +1788,7 @@ static uint8_t slot_glyph(int slot) {
 /// the dark half: erase the glyph and wait, polling nothing.
 static void edit_key_blank(uint8_t slot) {
   // The original parks the slot at $0002 for the whole routine, because COUT
-  // clobbers X and every step below needs it again. Here it is the parameter,
-  // and the glyph blitter no longer has anything to clobber it with.
+  // clobbers X and every step below needs it again. Here it is the parameter.
   s_mon.ch = slot_col(slot);
   s_mon.cv = slot_row(slot);
   rom_fc68();
@@ -1995,10 +1989,9 @@ static void game_print_bcd(uint8_t byte) {
     note_digit(high);
   }
 
+  // A leading zero is dropped, printing nothing.
   if (digit_seen()) {
     cout_digit(high);
-  } else {
-    // A leading zero: dropped, and nothing is printed.
   }
 
   const uint8_t low = byte & 0x0f;
@@ -2170,7 +2163,7 @@ static void game_set_apple_value(void) {
       break;
   }
 
-  // D is the whole of this routine's live-out set now that V has gone.
+  // D is the whole of this routine's live-out set.
 }
 
 /* ========================================================================== */
@@ -2303,7 +2296,7 @@ static uint8_t game_draw_side_walls(void) {
   // The snake's tempo, and the reason this is an advance rather than nothing.
   //
   // Both side walls are redrawn once per snake step, and on a 6502 that took
-  // 28,848 cycles -- measured at all 82 calls of a play run, where it is that
+  // 28,848 cycles -- measured at every call of a play run, where it is that
   // number every time. It is 1.7 frames, 28 ms, a quarter of the 115 ms a
   // step takes. Drawing is instant here now, so without this charge the step
   // falls to 84 ms and the snake moves a quarter faster: not a rendering
@@ -2394,10 +2387,7 @@ static void game_read_key(void) {
 /* on to $FDF0, which is what keeps the cursor, scrolling and the rest of      */
 /* COUT's behaviour working underneath.                                       */
 /*                                                                            */
-/* Everything the original parked below $0009 is a local here. It used to have */
-/* to stay in emulated RAM, because ram.probe hashed $0000-$00FF and the       */
-/* residue had to match the original's down to the loop counter's last value;  */
-/* that range left the hash when the storage moved, on 2026-08-23.             */
+/* Everything the original parked below $0009 is a local here.                 */
 /* ========================================================================== */
 
 /// Where glyph \p glyph's eight rows live. The font starts at $66A9 and the
@@ -2584,9 +2574,9 @@ static void game_pause_or_toggle_sound(uint8_t key) {
       // the only thing that lets the host draw a frame and deliver the key
       // that ends the wait. Seven cycles is one pass of the original.
       //
-      // Deleting it is what shipped on 2026-08-26: the game hung on ESC and a
-      // second ESC could not reach it. No recording presses ESC, so all 28
-      // checks passed. yield-lint.awk exists because of this loop.
+      // Do not delete it. Without it the game hangs on ESC and a second ESC
+      // cannot reach it -- and no recording presses ESC, so every check passes
+      // anyway. yield-lint.awk exists because of this loop.
       advance(7);
       key = io_peek(0xc000);
       if (key & 0x80)
@@ -2874,10 +2864,8 @@ static LifeEnd game_play_loop(uint8_t *cell_out) {
 /* the give-up. The auto-steer only runs when $0302 is set, which is a mode    */
 /* chosen at the setup screen ($73DD, $7457, $7478) that none of them picks.   */
 /* The blocks nothing exercises are $6A83, $6A8B, $6A9F, $6AA7, $6AA9, $6AB1   */
-/* and $6AB3, decoded from the binary the way $664A was, and this comment is   */
-/* now the only record of it -- converting the routine takes those addresses   */
-/* off the site list, so probe-acceptance.sh no longer counts them among the   */
-/* unverified.                                                                 */
+/* and $6AB3, decoded from the binary the way $664A was. Nothing exercises     */
+/* them, so this comment is the only record of what they hold.                 */
 /* ========================================================================== */
 
 /// the absolute-direction key that turns the snake to face \p dir.
@@ -3744,9 +3732,7 @@ static void game_print_inline_str(uint16_t ret_addr) {
 /* ========================================================================== */
 
 /// play one life and record how it ended in s_life_outcome, which is where
-/// $7739 reads it. What used to be an adapter is just this write-back now: no
-/// return address, and A is not left holding the reason because nothing reads
-/// it there any more.
+/// $7739 reads it.
 static void game_play_one_life(void) {
   uint8_t cell = 0;
   // CELL_EMPTY/CELL_APPLE here are not the occupancy map -- they are
@@ -4118,10 +4104,9 @@ static void game_cold_start(void) {
  * The machine state at $3750                                               *
  * ========================================================================== */
 
-/* Generated by make-entry-state.sh, and included rather than pasted: until
-   2026-08-30 this file carried a reformatted copy of the whole thing, so
-   regenerating the snapshot changed a header the build did not read and the
-   copy here went on being the real one. Nothing said so. */
+/* Generated by make-entry-state.sh, and included rather than pasted, so that
+   regenerating the snapshot is what the build reads. A copy here would go on
+   being the real one with nothing to say so. */
 #include "entry-state-inc.h"
 
 /* ========================================================================== *
@@ -4155,10 +4140,10 @@ void init_emulated(void) {
   for (unsigned i = 0; i != SB_ENTRY_RAM_LEN; ++i)
     ram_poke(i, kSnakeByteEntryRam[i]);
 
-  /* The plotter's block used to be $0000-$0008 and is a C object now, so the
-     line above no longer initialises it. Take it from the same snapshot, or
-     the first read before any write would see zero where the booting build
-     sees what BASIC left there. */
+  /* The plotter's block is a C object rather than $0000-$0008, so the loop
+     above does not initialise it. Take it from the same snapshot, or the first
+     read before any write sees zero where the booting build sees what BASIC
+     left there. */
   s_snake.shape = kSnakeByteEntryRam[0x00];
   s_mon.ch = kSnakeByteEntryRam[0x24];
   s_mon.cv = kSnakeByteEntryRam[0x25];

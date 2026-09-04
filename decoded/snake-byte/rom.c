@@ -42,11 +42,9 @@ static void rom_wait(uint8_t n);
 /* ========================================================================== */
 /* Private helpers.                                                           */
 /*                                                                            */
-/* $F847 GBASCALC and $F80E PLOT1 used to be emitted as `FUNC_GBASCALC` and    */
-/* `FUNC_PLOT1`. Their only callers were $F800/$F819/$F871, so once those      */
-/* became external the two helpers became unreachable and the decompiler       */
-/* dropped them. They are reproduced here verbatim from the pre-externs        */
-/* output.                                                                     */
+/* $F847 GBASCALC and $F80E PLOT1, whose only callers are $F800/$F819/$F871.   */
+/* Reproduced verbatim from the decompiler's output rather than decoded by     */
+/* hand.                                                                       */
 /* ========================================================================== */
 
 /// $F847 GBASCALC. The lo-res twin of BASCALC: a row 0-47 in A becomes that
@@ -634,12 +632,9 @@ void rom_setkbd(void) {
 /// $FE93 SETVID. Point COUT's vector back at the ROM's own COUT1.
 ///
 /// This is how the game gets out of its hi-res text hook -- or would be. It
-/// writes CSWL/CSWH, which up to 2026-08-24 meant zero page $36/$37, and now
-/// means the two variables those became. Between the move and this commit the
-/// store went to RAM and was read by nobody, which nothing caught: the entry
-/// snapshot already holds $FDF0 there, and the game only calls SETVID once, at
-/// startup, before it has repointed anything. Had it ever called it after
-/// installing the hook, COUT would have stayed hooked.
+/// writes CSWL/CSWH, and the game calls it once, at startup, before it has
+/// repointed anything. Had it ever called it after installing the hook, COUT
+/// would have stayed hooked.
 void rom_setvid(void) {
   s_mon.a2l = 0x00;
   // The same, for $FDF0 (COUT1).
