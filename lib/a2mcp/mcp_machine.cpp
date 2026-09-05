@@ -8,6 +8,7 @@
 #include "mcp_machine.h"
 #include "mcp_paths.h"
 #include "mcp_server.h"
+#include "mcp_sound.h"
 
 // Each header brackets its own declarations in `extern "C"` under
 // `#ifdef __cplusplus`, so no wrapper is needed here -- and adding one would
@@ -65,6 +66,10 @@ void machine_boot(const nlohmann::json &args) {
     a2host_init_emulation();
     s_booted = true;
   }
+  // Last, because a2host_init_emulation() -- reached directly above or via
+  // a2host_reboot() -- calls a2_io_init(), which clears the speaker callback.
+  // Installing any earlier would lose it on every boot and every reboot.
+  sound_install();
 }
 
 nlohmann::json machine_status(void) {

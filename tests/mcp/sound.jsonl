@@ -1,0 +1,4 @@
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"boot","arguments":{"binary":"mcp-tmp/beep.b33"}}}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"run","arguments":{"frames":120}}}
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"sound","arguments":{"save_wav":"mcp-tmp/beep.wav"}}}

@@ -10,6 +10,7 @@
 #include "mcp_paths.h"
 #include "mcp_screen.h"
 #include "mcp_server.h"
+#include "mcp_sound.h"
 
 // Same reasoning as mcp_screen.cpp/mcp_machine.cpp: a2io.h pulls in
 // soundqueue.h, which uses <atomic> in its C++ branch, so it must not be
@@ -160,10 +161,21 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
         if (n != png.size())
           throw ToolError("short write to " + save->get<std::string>());
       }
-      content.push_back(
-          {{"type", "image"}, {"data", base64(png)}, {"mimeType", "image/png"}});
+      content.push_back({{"type", "image"}, {"data", base64(png)}, {"mimeType", "image/png"}});
     }
     return nlohmann::json{{"content", content}};
+  }
+  if (name == "sound") {
+    if (!machine_booted())
+      throw ToolError("not booted: call boot first");
+    std::string wav_path;
+    auto save = args.find("save_wav");
+    if (save != args.end()) {
+      if (!save->is_string())
+        throw ToolError("save_wav must be a string");
+      wav_path = save->get<std::string>();
+    }
+    return text_result(sound_report(wav_path));
   }
   throw ToolError("unknown tool: " + name);
 }

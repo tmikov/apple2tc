@@ -13,6 +13,7 @@ add_library(a2mcp_lib
   mcp_paths.cpp mcp_paths.h
   mcp_screen.cpp mcp_screen.h
   mcp_server.cpp mcp_server.h
+  mcp_sound.cpp mcp_sound.h
   mcp_tools.cpp mcp_tools.h
   )
 target_link_libraries(a2mcp_lib a2host a2io support)

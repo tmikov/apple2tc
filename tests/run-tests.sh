@@ -455,6 +455,25 @@ if ! diff -u mcp-tmp/keys-mcp.txt mcp-tmp/keys-a2run.txt; then
   exit 1
 fi
 
+# `sound`: beep.s toggles the speaker every ~1005 cycles (see beep.s for the
+# NMOS 6502 timing this comes from), 200 times, then goes silent forever.
+$a6502 mcp/beep.s mcp-tmp/beep.b33
+mcp_transcript sound
+# The exact frequency depends on the delay loop's real cycle count, so assert
+# the band the program can produce rather than a single number. The reply is
+# a JSON object dumped into a JSON string, so its own quotes reach the
+# transcript backslash-escaped, matching what mcp_tools.cpp's text_result()
+# actually writes -- see the "sound" case in mcp_tools.cpp -- not the
+# unescaped quotes a naive grep would expect.
+if ! grep -qE '\\"approx_frequency_hz\\": (4[5-9][0-9]|5[0-6][0-9])' mcp-tmp/sound.txt; then
+  echo "FAIL: sound did not report the ~510 Hz tone the program plays" >&2
+  exit 1
+fi
+if [ "$(head -c 4 mcp-tmp/beep.wav)" != "RIFF" ]; then
+  echo "FAIL: save_wav did not write a WAV" >&2
+  exit 1
+fi
+
 # realpath resolves symlinks, so a link pointing outside the root is the same
 # rejection as a "../" path -- but only if the jail resolves before it opens.
 ln -sf /etc/passwd mcp-tmp/escape.dsk
