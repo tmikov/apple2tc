@@ -545,6 +545,30 @@ if ! grep '"id":5' mcp-tmp/guard.txt | grep -q '32-bit cycle counter'; then
   exit 1
 fi
 
+# A wrong-typed argument used to be a fifth way to take the server down (or, for
+# `scale`, to silently misbehave instead): nlohmann's typed accessors throw
+# nlohmann::json::type_error on a type mismatch, and a non-integer `scale` is
+# not a mismatch at all -- it is silently truncated by a plain static_cast,
+# so the "must be 1 or 2" check never saw the real value. Request 3 is that
+# truncation (scale: 1.5), 4 is a type mismatch serve() used to let escape
+# uncaught (render: 42, the reproduction named in review), 5 is a second
+# truncation shape (scale as a string). Request 6 -- an ordinary `status` in
+# the same session -- is what actually matters: mcp/malformed.expected pins
+# its reply, so if any of 3-5 crashed the process instead of answering with
+# isError, request 6 would be missing from the transcript and the diff below
+# would fail on a truncated file, not just a wrong one.
+mcp_transcript malformed
+for id in 3 4 5; do
+  if ! grep -q "\"id\":$id.*\"isError\":true" mcp-tmp/malformed.txt; then
+    echo "FAIL: malformed request $id did not come back as isError" >&2
+    exit 1
+  fi
+done
+if ! grep -q '"id":6' mcp-tmp/malformed.txt; then
+  echo "FAIL: a2mcp died on a malformed argument instead of answering the next request" >&2
+  exit 1
+fi
+
 # `screen` as PNG. Base64 of a PNG is long, so the committed transcript covers
 # only the save_to success case and the root-escape rejection -- the inline
 # case below is checked directly instead of via a baseline.
