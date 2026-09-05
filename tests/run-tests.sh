@@ -356,6 +356,23 @@ mcp_transcript() {
 mcp_transcript handshake
 mcp_transcript boot
 mcp_transcript reboot
+mcp_transcript run
+
+# a2mcp's frame loop must be a2run's. Same 40 frames, same video state.
+$a2run --frames=40 --hash-frames=mcp-tmp/run-a2run.txt > /dev/null
+$a2mcp --root=. --hash-frames=mcp-tmp/run-a2mcp.txt < mcp/run.jsonl > /dev/null
+if ! diff -q mcp-tmp/run-a2run.txt mcp-tmp/run-a2mcp.txt; then
+  echo "FAIL: a2mcp's frame loop diverges from a2run's over the same 40 frames" >&2
+  exit 1
+fi
+
+mcp_transcript stop --probe=mcp/stop.probe --probe-out=mcp-tmp/stop-report.txt
+# The reply's content is a JSON object serialised into a JSON string, so its
+# quotes reach the transcript backslash-escaped.
+if ! grep -q 'stop_reason\\": \\"probe' mcp-tmp/stop.txt; then
+  echo "FAIL: a probe's stop did not end an a2mcp run" >&2
+  exit 1
+fi
 
 # realpath resolves symlinks, so a link pointing outside the root is the same
 # rejection as a "../" path -- but only if the jail resolves before it opens.

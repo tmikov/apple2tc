@@ -23,4 +23,9 @@ bool machine_booted(void);
 /// The machine's current state. Throws ToolError if it has not been booted.
 nlohmann::json machine_status(void);
 
+/// Advance emulated time by \p args["frames"] frames, or until a probe's
+/// `stop` or the engine itself ends the run early. Throws ToolError if it has
+/// not been booted, or on a bad argument.
+nlohmann::json machine_run(const nlohmann::json &args);
+
 } // namespace a2mcp

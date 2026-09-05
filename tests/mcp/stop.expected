@@ -1,0 +1,3 @@
+{"id":1,"jsonrpc":"2.0","result":{"capabilities":{"tools":{}},"protocolVersion":"2025-06-18","serverInfo":{"name":"a2mcp","version":"1"}}}
+{"id":2,"jsonrpc":"2.0","result":{"content":[{"text":"{\n  \"cycles\": 0,\n  \"frame\": 0,\n  \"keys_pending\": 1,\n  \"stopped\": false,\n  \"video\": {\n    \"mixed\": false,\n    \"mode\": \"text\",\n    \"page\": 0\n  }\n}","type":"text"}]}}
+{"id":3,"jsonrpc":"2.0","result":{"content":[{"text":"{\n  \"cycles\": 153450,\n  \"frame\": 10,\n  \"frames_run\": 10,\n  \"stop_reason\": \"probe\"\n}","type":"text"}]}}

@@ -85,4 +85,56 @@ nlohmann::json machine_status(void) {
       {"stopped", a2host_engine_stopped()}};
 }
 
+nlohmann::json machine_run(const nlohmann::json &args) {
+  if (!machine_booted())
+    throw ToolError("not booted: call boot first");
+
+  auto it = args.find("frames");
+  if (it == args.end() || !it->is_number_unsigned())
+    throw ToolError("frames is required and must be a positive integer");
+  const uint64_t frames = it->get<uint64_t>();
+  // Bounded because an unbounded run hangs the server with no way for the
+  // client to interrupt it. 216000 frames is an hour of emulated time.
+  if (frames < 1 || frames > 216000)
+    throw ToolError("frames must be between 1 and 216000");
+
+  const std::string until = args.value("until", std::string("frames"));
+  if (until != "frames" && until != "screen_change")
+    throw ToolError("until must be \"frames\" or \"screen_change\"");
+
+  const char *reason = "limit";
+  uint64_t ran = 0;
+  for (; ran != frames;) {
+    // Deliberately the same order as a2host_run_headless(): simulate, then
+    // record (which advances the frame counter and writes --hash-frames),
+    // then test the stop conditions.
+    a2host_simulate_frame();
+    ++ran;
+    const bool at_limit = a2host_record_frame();
+    if (a2host_engine_stopped()) {
+      reason = "engine";
+      break;
+    }
+    if (a2host_stop_requested()) {
+      reason = "probe";
+      break;
+    }
+    // a2mcp never passes --frames, so frame_limit_ is 0 and this cannot fire.
+    // Kept because the loop is a2run's and must stay a2run's; a silent
+    // divergence here is exactly what Task 6's replay diff would blame on
+    // key stamping.
+    if (at_limit) {
+      reason = "frame_limit";
+      break;
+    }
+  }
+
+  nlohmann::json out = {
+      {"frames_run", ran},
+      {"stop_reason", reason},
+      {"frame", a2host_frame_no()},
+      {"cycles", get_cycles()}};
+  return out;
+}
+
 } // namespace a2mcp

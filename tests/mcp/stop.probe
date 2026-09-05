@@ -1,0 +1,9 @@
+counter hits
+
+probe halt(site = pc) {
+  hits = hits + 1
+  printf("halt at %04X\n", site)
+  stop
+}
+
+install halt at $FD0C

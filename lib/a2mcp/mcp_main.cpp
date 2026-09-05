@@ -7,9 +7,12 @@
 
 #include "mcp_server.h"
 
+#include "apple2tc/a2host_api.h"
+
 #include <cstdio>
 #include <cstring>
 #include <iostream>
+#include <vector>
 
 namespace {
 
@@ -57,7 +60,32 @@ int main(int argc, char *argv[]) {
     return 2;
   }
   a2mcp::set_options(opts);
+
+  // A whitelist, not a pass-through: a2host_parse_args owns --trace,
+  // --trace-keys, --probe-dump and --help, all of which write to stdout, which
+  // carries JSON-RPC and nothing else. Building the vector here means an
+  // option can only reach the library if this file names it.
+  std::vector<std::string> forwarded;
+  forwarded.push_back("a2mcp");
+  if (!opts.probe.empty())
+    forwarded.push_back("--probe=" + opts.probe);
+  if (!opts.probe_out.empty())
+    forwarded.push_back("--probe-out=" + opts.probe_out);
+  if (!opts.hash_frames.empty())
+    forwarded.push_back("--hash-frames=" + opts.hash_frames);
+  std::vector<char *> argp;
+  for (auto &s : forwarded)
+    argp.push_back(const_cast<char *>(s.c_str()));
+  // Exits on a bad script, which is correct: it happens before the first
+  // request is served, and the client sees the diagnostic on stderr.
+  a2host_parse_args((int)argp.size(), argp.data());
+
   // Unbuffered stdin would defeat getline; stdout is flushed per reply in
   // serve(). Nothing else may write to stdout -- see the header comment.
-  return a2mcp::serve(std::cin, std::cout);
+  const int rc = a2mcp::serve(std::cin, std::cout);
+  // hash_file_ is closed only here; Task 6's diff against a2run's own
+  // --hash-frames output needs the tail flushed, not just whatever
+  // a2host_record_frame() wrote mid-run.
+  a2host_shutdown();
+  return rc;
 }

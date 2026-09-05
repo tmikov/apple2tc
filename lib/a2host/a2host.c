@@ -166,6 +166,9 @@ bool a2host_key_replay_active(void) {
 bool a2host_engine_stopped(void) {
   return engine_stopped_;
 }
+bool a2host_stop_requested(void) {
+  return probe_stop_requested();
+}
 
 uint8_t io_peek(uint16_t addr) {
   return a2_io_peek(&io_, addr, get_cycles());

@@ -112,6 +112,10 @@ unsigned a2host_frame_no(void);
 /// limit.
 bool a2host_engine_stopped(void);
 
+/// True once a probe script's `stop` has fired. A front end driving its own
+/// frame loop must check this, as a2host_run_headless() does.
+bool a2host_stop_requested(void);
+
 /// Run to the frame limit with no window, hashing as it goes. Does not return.
 void a2host_run_headless(void);
 

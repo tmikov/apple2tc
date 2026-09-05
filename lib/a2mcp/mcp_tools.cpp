@@ -113,6 +113,8 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
   }
   if (name == "status")
     return text_result(machine_status());
+  if (name == "run")
+    return text_result(machine_run(args));
   throw ToolError("unknown tool: " + name);
 }
 
