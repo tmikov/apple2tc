@@ -108,6 +108,16 @@ bool a2host_record_frame(void);
 /// Frames simulated so far.
 unsigned a2host_frame_no(void);
 
+/// FNV-1a over what is currently *displayed*: the mode bits, and only the
+/// page(s) the mode shows.
+///
+/// Deliberately not the frame-hash oracle's hash_video_state(), which covers
+/// both text pages and both hires pages whatever the mode, so that a
+/// divergence in a page used as a data structure is still caught. Built on
+/// that, a "has the screen changed" test would fire on every frame of any
+/// double-buffered program.
+uint64_t a2host_visible_hash(void);
+
 /// True once the engine has asked to stop early — a breakpoint, or a collection
 /// limit.
 bool a2host_engine_stopped(void);

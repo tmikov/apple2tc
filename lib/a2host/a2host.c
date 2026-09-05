@@ -668,6 +668,47 @@ static uint64_t hash_video_state(void) {
   return h;
 }
 
+/// FNV-1a over what is currently *displayed*: the mode bits, and only the
+/// page(s) the mode shows.
+///
+/// Deliberately not hash_video_state() above, which covers both text pages and
+/// both hires pages whatever the mode is, so that the frame-hash oracle still
+/// catches a divergence in a page a game uses as a data structure rather than
+/// a display -- Snake Byte's never-shown lo-res page is exactly that. Built on
+/// that hash, a "has the screen changed" test would fire on the first frame of
+/// any double-buffered program and every frame after, which is useless. This
+/// hash exists for that "did the screen change" question instead.
+uint64_t a2host_visible_hash(void) {
+  uint64_t h = 1469598103934665603ULL;
+  const uint8_t *ram = get_ram();
+  const a2_vidmode_t mode = a2_io_get_vidmode(&io_);
+  const bool mixed = a2_io_is_vidmode_mixed(&io_);
+
+  uint8_t header[2] = {(uint8_t)mode, (uint8_t)mixed};
+  for (unsigned i = 0; i < sizeof(header); ++i) {
+    h ^= header[i];
+    h *= 1099511628211ULL;
+  }
+
+  // The text page is displayed in TEXT, and in the bottom four lines of a
+  // mixed graphics mode. GR reads the same page as the text mode does.
+  if (mode != A2_VIDMODE_HGR || mixed) {
+    const uint8_t *text = ram + a2_io_get_text_page_offset(&io_);
+    for (unsigned i = 0; i < 0x400; ++i) {
+      h ^= text[i];
+      h *= 1099511628211ULL;
+    }
+  }
+  if (mode == A2_VIDMODE_HGR) {
+    const uint8_t *hires = ram + a2_io_get_hires_page_offset(&io_);
+    for (unsigned i = 0; i < 0x2000; ++i) {
+      h ^= hires[i];
+      h *= 1099511628211ULL;
+    }
+  }
+  return h;
+}
+
 /// Emit this frame's hash if requested and advance the frame counter.
 /// Returns true when the frame limit has been reached.
 bool a2host_record_frame(void) {

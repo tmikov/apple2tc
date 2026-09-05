@@ -104,6 +104,7 @@ nlohmann::json machine_run(const nlohmann::json &args) {
 
   const char *reason = "limit";
   uint64_t ran = 0;
+  const uint64_t base_hash = until == "screen_change" ? a2host_visible_hash() : 0;
   for (; ran != frames;) {
     // Deliberately the same order as a2host_run_headless(): simulate, then
     // record (which advances the frame counter and writes --hash-frames),
@@ -117,6 +118,10 @@ nlohmann::json machine_run(const nlohmann::json &args) {
     }
     if (a2host_stop_requested()) {
       reason = "probe";
+      break;
+    }
+    if (until == "screen_change" && a2host_visible_hash() != base_hash) {
+      reason = "screen_change";
       break;
     }
     // a2mcp never passes --frames, so frame_limit_ is 0 and this cannot fire.

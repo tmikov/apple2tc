@@ -383,6 +383,40 @@ if ! grep -q 'APPLE \]\[' mcp-tmp/screen-text.txt; then
   exit 1
 fi
 
+$a6502 mcp/visible-page.s mcp-tmp/visible-page.b33
+mcp_transcript change
+# visible-page.s stays in text mode while continuously scribbling on the text
+# page, which text mode does display, so a screen_change run must stop on it
+# almost immediately -- well short of the 600-frame cap.
+#
+# Scoped to request 4's own reply line: request 3 is a plain frame-limited
+# run and always reports stop_reason "limit" too, so a check against the
+# whole transcript would pass no matter what request 4 said.
+if ! grep '"id":4' mcp-tmp/change.txt | grep -q 'stop_reason\\": \\"screen_change'; then
+  echo "FAIL: screen_change did not fire on a write to the displayed page" >&2
+  exit 1
+fi
+
+$a6502 mcp/hidden-page.s mcp-tmp/hidden-page.b33
+mcp_transcript hidden
+# hidden-page.s is visible-page.s's sibling: identical but for which page it
+# scribbles on. It stays in text mode while continuously writing to hi-res
+# page 1, which text mode does not display. a2host_visible_hash() must not
+# see it: the mode-aware hash is the whole point, so a program scribbling on
+# a page the display is not showing must not look like a screen change, and
+# the run must go the full 300 frames. Unlike `change` above, this is the
+# test that actually discriminates a mode-aware hash from hash_video_state()
+# -- making a2host_visible_hash() an alias for hash_video_state() turns this
+# one red while leaving `change` green, since a mode-blind hash still notices
+# a write to the displayed page too.
+#
+# Scoped to request 4's own reply line for the same reason as `change` above:
+# request 3 always reports "limit" too.
+if ! grep '"id":4' mcp-tmp/hidden.txt | grep -q 'stop_reason\\": \\"limit'; then
+  echo "FAIL: screen_change fired on a page that is not displayed" >&2
+  exit 1
+fi
+
 # realpath resolves symlinks, so a link pointing outside the root is the same
 # rejection as a "../" path -- but only if the jail resolves before it opens.
 ln -sf /etc/passwd mcp-tmp/escape.dsk
