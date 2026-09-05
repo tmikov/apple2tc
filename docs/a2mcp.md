@@ -141,6 +141,18 @@ cheapest representation the current mode allows — see above for what that
 means in HGR. `"image"` renders any mode (including HGR) to a PNG, returned
 inline as base64; `save_to` additionally writes it to a path under `--root`.
 
+`render` picks how a HGR image is decoded: `"color"` (default) is the per-dot
+artifact approximation the GUI has always drawn — the Apple II's 7.16 MHz dot
+clock is exactly twice the 3.58 MHz colourburst, so an isolated dot's colour
+here depends on its horizontal parity, and the same feature can render violet
+in one column and green in the next. `"color140"` decodes at the true
+colour-clock resolution instead (doubled back to 280x192 pixels), so a
+feature comes out in one consistent colour — this is the mode to reach for to
+read what a scene shows. `"mono"` drops colour entirely (1-bit white on
+black), the cleanest input for finding shapes. `render` is accepted in every
+mode but only changes anything in HGR; TEXT and GR ignore it. An unrecognised
+value is a tool error, the same as an unrecognised `format`.
+
 ### `keys`
 
 ```json

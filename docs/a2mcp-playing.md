@@ -121,6 +121,24 @@ press a key that should do something visible, step, and compare — with `screen
 in `text` or GR mode if the game is in one of those, since a 40x24 grid diffs by
 eye far more reliably than a hi-res picture.
 
+## Reading a hi-res picture: pick the render mode
+
+`screen`'s default `render:"color"` is the per-dot artifact approximation the
+GUI has always drawn, and it is the wrong choice for looking *at* the picture:
+an isolated white feature can render violet in one column and green in the
+next, purely from which column it happens to fall on. Two modes fix that for
+different purposes:
+
+- `render:"color140"` decodes at the Apple II's true colour-clock resolution,
+  so a feature comes out in one consistent colour instead of a dotted
+  necklace. Use it when you need to read what a hi-res scene actually shows.
+- `render:"mono"` drops colour entirely -- 1-bit white on black. It is the
+  cleanest input for finding shapes (a sprite, a wall, a bullet), since there
+  is no artifact colour to distract from where the pixels actually are.
+
+Reach for `mono` when the question is "where is it", and `color140` when the
+question is "what does it look like".
+
 ## Spacing keys is how you emulate holding one down
 
 `keys` schedules; `frames_between` sets the gap. There is no key-repeat and no
