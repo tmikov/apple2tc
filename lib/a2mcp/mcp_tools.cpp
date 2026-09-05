@@ -77,11 +77,19 @@ nlohmann::json tool_schemas(void) {
         "mode allows: 40x24 ASCII in text mode, a 40x48 grid of hex colour digits "
         "in lo-res (GR), and in hi-res (HGR) only a note that an image is needed. "
         "\"image\" renders any mode to an inline PNG. `save_to` also writes the "
-        "PNG to a path under the server's root."},
+        "PNG to a path under the server's root. `render` picks how a HGR image "
+        "is decoded: \"color\" (default) is the per-dot artifact approximation "
+        "this tool has always drawn, where an isolated dot's colour depends on "
+        "its horizontal parity; \"color140\" decodes at the true colour-clock "
+        "resolution instead, so a feature comes out in one consistent colour -- "
+        "use it to read a scene. \"mono\" is 1-bit white on black, the cleanest "
+        "input for finding shapes. `render` is accepted in every mode but only "
+        "affects HGR; it is ignored in TEXT and GR."},
        {"inputSchema",
         {{"type", "object"},
          {"properties",
           {{"format", {{"type", "string"}, {"enum", {"text", "image", "both"}}}},
+           {"render", {{"type", "string"}, {"enum", {"color", "mono", "color140"}}}},
            {"save_to", {{"type", "string"}}}}}}}});
 
   tools.push_back(
@@ -145,6 +153,16 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
     const std::string format = args.value("format", std::string("text"));
     if (format != "text" && format != "image" && format != "both")
       throw ToolError("unknown format \"" + format + "\"");
+    const std::string render = args.value("render", std::string("color"));
+    a2_hgr_mode_t hgr_mode;
+    if (render == "color")
+      hgr_mode = A2_HGR_COLOR;
+    else if (render == "mono")
+      hgr_mode = A2_HGR_MONO;
+    else if (render == "color140")
+      hgr_mode = A2_HGR_COLOR140;
+    else
+      throw ToolError("unknown render \"" + render + "\"");
     // Only the PNG can be saved, so asking to save a text-mode reading is a
     // mistake worth naming: silently ignoring it leaves the agent believing a
     // file it will later fail to find was written.
@@ -163,7 +181,7 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
       content.push_back({{"type", "text"}, {"text", text}});
     }
     if (format == "image" || format == "both") {
-      const std::string png = screen_png();
+      const std::string png = screen_png(hgr_mode);
       auto save = args.find("save_to");
       if (save != args.end()) {
         if (!save->is_string())

@@ -7,6 +7,11 @@
 
 #pragma once
 
+// Same reasoning as mcp_screen.cpp: a2io.h pulls in soundqueue.h, which uses
+// <atomic> in its C++ branch, so it must not be wrapped in an extern "C"
+// block here -- it already brackets its own declarations correctly.
+#include "apple2tc/a2io.h"
+
 #include <string>
 
 namespace a2mcp {
@@ -22,7 +27,9 @@ std::string screen_gr(void);
 
 /// The current screen (whatever mode it is in) rendered to a PNG, at a fixed
 /// blink phase so that a paused machine's screenshot is reproducible.
-std::string screen_png(void);
+/// \param hgr_mode - which of the a2_hgr_mode_t renderers to use for a HGR
+///     page. Ignored (but harmless to pass) in TEXT and GR mode.
+std::string screen_png(a2_hgr_mode_t hgr_mode);
 
 /// Standard base64 encoding (RFC 4648), with '=' padding.
 std::string base64(const std::string &bytes);

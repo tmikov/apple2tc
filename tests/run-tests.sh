@@ -598,6 +598,45 @@ if ! grep -q '"mimeType":"image/png"' mcp-tmp/inline-image.txt || \
   exit 1
 fi
 
+# `screen`'s `render` parameter -- the colour-clock HGR decoder.
+#
+# Applesoft's HCOLOR values are documented (1=green, 2=violet, 3=white,
+# 5=orange, 6=blue), so a BASIC program that draws one bar per colour is
+# ground truth the emulator itself can generate, rather than a bit pattern
+# hand-verified against prose. mcp/hgr-render.jsonl types that program in,
+# lets it run, then reads it back three ways: "color140" (the point of this
+# feature -- decode at true colour-clock resolution so each bar comes out in
+# one consistent colour), "mono", and a bogus render value that must be
+# rejected the same way an unknown `format` is.
+mcp_transcript hgr-render
+
+python3 mcp/check_hgr_png.py bars mcp-tmp/hgr-bars.png
+if [ $? -ne 0 ]; then
+  echo "FAIL: render=color140 did not decode the HCOLOR bars to the documented colours" >&2
+  exit 1
+fi
+
+# The structural check that doubling actually happened -- that COLOR140 is
+# genuinely decoding at 140-pixel resolution and not just relabelling the
+# per-dot COLOR renderer's output: every colour cell must land on two equal
+# adjacent pixels.
+python3 mcp/check_hgr_png.py pairs mcp-tmp/hgr-bars.png
+if [ $? -ne 0 ]; then
+  echo "FAIL: render=color140's output pixels are not paired at 140 resolution" >&2
+  exit 1
+fi
+
+python3 mcp/check_hgr_png.py mono mcp-tmp/hgr-mono.png
+if [ $? -ne 0 ]; then
+  echo "FAIL: render=mono produced a pixel that is not pure black or white" >&2
+  exit 1
+fi
+
+if ! grep '"id":8' mcp-tmp/hgr-render.txt | grep -q '"isError":true'; then
+  echo "FAIL: an unknown screen render value was not rejected" >&2
+  exit 1
+fi
+
 # ...but that check, and every other check in this repo, runs the host in
 # *fixed-step* mode -- because reproducibility is what they all exist for. The
 # wall-clock mode a person plays on had no coverage at all, and was totally
