@@ -373,6 +373,31 @@ if ! grep -q 'stop_reason\\": \\"probe' mcp-tmp/stop.txt; then
   echo "FAIL: a probe's stop did not end an a2mcp run" >&2
   exit 1
 fi
+# ...and the *next* run must advance again. The probe's stop flag is sticky in
+# the library (a2run exits on it, so it never needs clearing); if a2mcp did not
+# clear it per run, request 4 would come back with frames_run 1 and
+# stop_reason "probe" forever, and no tool -- not even boot, which preserves
+# probe state on purpose -- could get the server moving again.
+if ! grep '"id":4' mcp-tmp/stop.txt | grep -q 'frames_run\\": 10'; then
+  echo "FAIL: a probe's stop wedged every later a2mcp run" >&2
+  exit 1
+fi
+
+# --probe= is forwarded to the library, and probe_out() defaults to *stdout* --
+# which here carries JSON-RPC. Without --probe-out=, the stop.probe script's
+# printf must still not land in the protocol stream. Every stdout line has to
+# be a JSON object; the report line goes to stderr instead.
+$a2mcp --root=. --probe=mcp/stop.probe < mcp/stop.jsonl \
+  > mcp-tmp/probe-stdout.txt 2> mcp-tmp/probe-stderr.txt
+if grep -qvE '^\{' mcp-tmp/probe-stdout.txt; then
+  echo "FAIL: a probe's printf wrote into a2mcp's JSON-RPC stream" >&2
+  grep -nvE '^\{' mcp-tmp/probe-stdout.txt >&2
+  exit 1
+fi
+if ! grep -q 'halt at FD0C' mcp-tmp/probe-stderr.txt; then
+  echo "FAIL: the probe report did not reach stderr either -- it went nowhere" >&2
+  exit 1
+fi
 
 mcp_transcript screen-text
 # The banner is plain text inside the reply, not JSON-escaped, so an
@@ -483,6 +508,40 @@ printf '%s\n' \
   > mcp-tmp/symlink.jsonl
 if ! $a2mcp --root=. < mcp-tmp/symlink.jsonl | grep -q '"isError":true'; then
   echo "FAIL: a2mcp followed a symlink out of --root" >&2
+  exit 1
+fi
+
+# The four ways a tool call used to end badly, in one transcript. Each reply is
+# pinned by mcp/guard.expected; what the greps below add is that the failure is
+# the *intended* one and that the server is still there afterwards.
+#
+# The write side of the jail gets its own symlink, mirroring the read-side one
+# above: resolving only the parent directory and re-attaching the final
+# component writes straight through a link sitting at that component.
+# The link's target has to exist, or the rejection would be "cannot resolve"
+# rather than the escape this is about.
+escape_dir=$(mktemp -d)
+printf 'untouched' > "$escape_dir/target.png"
+ln -sf "$escape_dir/target.png" mcp-tmp/wescape.png
+mcp_transcript guard
+if [ "$(cat "$escape_dir/target.png")" != "untouched" ]; then
+  echo "FAIL: a2mcp wrote a screenshot through a symlink pointing out of --root" >&2
+  rm -rf "$escape_dir"
+  exit 1
+fi
+rm -rf "$escape_dir"
+# A regular file that is in the jail but is not a disk image reached
+# mountDisk(), which exit(2)s -- killing the server mid-call with the client
+# still waiting. Request 8 answering at all is the half that matters.
+if ! grep -q '"id":8' mcp-tmp/guard.txt; then
+  echo "FAIL: a2mcp died mid-session instead of returning a tool error" >&2
+  exit 1
+fi
+# A long text at a wide spacing overflows the 32-bit cycle stamp: the keys wrap
+# below the current cycle and all fire at once, and the .keys file comes out
+# non-monotonic. A refusal is the only honest answer.
+if ! grep '"id":5' mcp-tmp/guard.txt | grep -q '32-bit cycle counter'; then
+  echo "FAIL: a long keys call wrapped its cycle stamps instead of being refused" >&2
   exit 1
 fi
 

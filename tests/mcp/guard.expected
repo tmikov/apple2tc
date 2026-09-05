@@ -1,0 +1,8 @@
+{"id":1,"jsonrpc":"2.0","result":{"capabilities":{"tools":{}},"protocolVersion":"2025-06-18","serverInfo":{"name":"a2mcp","version":"1"}}}
+{"id":2,"jsonrpc":"2.0","result":{"content":[{"text":"not a disk image: mcp/stop.probe (a DSK/DO image is exactly 143360 bytes)","type":"text"}],"isError":true}}
+{"id":3,"jsonrpc":"2.0","result":{"content":[{"text":"not booted: call boot first","type":"text"}],"isError":true}}
+{"id":4,"jsonrpc":"2.0","result":{"content":[{"text":"{\n  \"cycles\": 0,\n  \"frame\": 0,\n  \"keys_pending\": 1,\n  \"keys_scheduled\": 0,\n  \"stopped\": false,\n  \"video\": {\n    \"mixed\": false,\n    \"mode\": \"text\",\n    \"page\": 0\n  }\n}","type":"text"}]}}
+{"id":5,"jsonrpc":"2.0","result":{"content":[{"text":"the last key would be stamped past the end of the 32-bit cycle counter: shorten text or reduce frames_between","type":"text"}],"isError":true}}
+{"id":6,"jsonrpc":"2.0","result":{"content":[{"text":"save_to needs format \"image\" or \"both\": there is no file to write","type":"text"}],"isError":true}}
+{"id":7,"jsonrpc":"2.0","result":{"content":[{"text":"path escapes the server root: mcp-tmp/wescape.png","type":"text"}],"isError":true}}
+{"id":8,"jsonrpc":"2.0","result":{"content":[{"text":"{\n  \"cycles\": 0,\n  \"frame\": 0,\n  \"keys_pending\": 1,\n  \"keys_scheduled\": 0,\n  \"stopped\": false,\n  \"video\": {\n    \"mixed\": false,\n    \"mode\": \"text\",\n    \"page\": 0\n  }\n}","type":"text"}]}}

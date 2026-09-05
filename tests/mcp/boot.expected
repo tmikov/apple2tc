@@ -3,5 +3,5 @@
 {"id":3,"jsonrpc":"2.0","result":{"content":[{"text":"{\n  \"cycles\": 0,\n  \"frame\": 0,\n  \"keys_pending\": 1,\n  \"keys_scheduled\": 0,\n  \"stopped\": false,\n  \"video\": {\n    \"mixed\": false,\n    \"mode\": \"text\",\n    \"page\": 0\n  }\n}","type":"text"}]}}
 {"id":4,"jsonrpc":"2.0","result":{"content":[{"text":"{\n  \"cycles\": 0,\n  \"frame\": 0,\n  \"keys_pending\": 1,\n  \"keys_scheduled\": 0,\n  \"stopped\": false,\n  \"video\": {\n    \"mixed\": false,\n    \"mode\": \"text\",\n    \"page\": 0\n  }\n}","type":"text"}]}}
 {"id":5,"jsonrpc":"2.0","result":{"content":[{"text":"path escapes the server root: ../CLAUDE.md","type":"text"}],"isError":true}}
-{"id":6,"jsonrpc":"2.0","result":{"content":[{"text":"no such file: /home/tmikov/work/apple2tc/tests/mcp/does-not-exist.dsk","type":"text"}],"isError":true}}
+{"id":6,"jsonrpc":"2.0","result":{"content":[{"text":"no such file: mcp/does-not-exist.dsk","type":"text"}],"isError":true}}
 {"id":7,"jsonrpc":"2.0","result":{"content":[{"text":"{\n  \"cycles\": 0,\n  \"frame\": 0,\n  \"keys_pending\": 1,\n  \"keys_scheduled\": 0,\n  \"stopped\": false,\n  \"video\": {\n    \"mixed\": false,\n    \"mode\": \"text\",\n    \"page\": 0\n  }\n}","type":"text"}]}}
