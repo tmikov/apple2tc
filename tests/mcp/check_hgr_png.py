@@ -8,9 +8,11 @@ call always produces. No external dependencies beyond the standard library
 neighbours already do in run-tests.sh.
 
 Usage:
-    check_hgr_png.py bars <path.png>   -- HCOLOR colour-bar oracle check
-    check_hgr_png.py mono <path.png>   -- only pure black/white pixels
-    check_hgr_png.py pairs <path.png>  -- columns 2k and 2k+1 are identical
+    check_hgr_png.py bars <path.png>          -- HCOLOR colour-bar oracle check
+    check_hgr_png.py mono <path.png>          -- only pure black/white pixels
+    check_hgr_png.py pairs <path.png>         -- columns 2k and 2k+1 are identical
+    check_hgr_png.py row <path.png> <y> <white|black>
+                                               -- row y is solid white/black
 """
 import struct
 import sys
@@ -125,11 +127,38 @@ def check_pairs(path):
     sys.exit(0 if bad == 0 else 1)
 
 
+def check_row(path, y, expect):
+    _w, _h, rows = read_png(path)
+    row = rows[y]
+    black = sum(1 for px in row if px == (0, 0, 0))
+    white = sum(1 for px in row if px == (255, 255, 255))
+    other = len(row) - black - white
+    print("row %3d: black=%d white=%d other=%d (want solid %s)" % (y, black, white, other, expect))
+    if expect == "white":
+        ok = black == 0 and other == 0
+    elif expect == "black":
+        ok = white == 0 and other == 0
+    else:
+        print("unknown expect %r" % expect, file=sys.stderr)
+        sys.exit(2)
+    sys.exit(0 if ok else 1)
+
+
 def main(argv):
+    if len(argv) < 2:
+        print(__doc__, file=sys.stderr)
+        return 2
+    mode = argv[1]
+    if mode == "row":
+        if len(argv) != 5:
+            print("usage: check_hgr_png.py row <path.png> <y> <white|black>", file=sys.stderr)
+            return 2
+        check_row(argv[2], int(argv[3]), argv[4])
+        return 0
     if len(argv) != 3:
         print("usage: check_hgr_png.py {bars|mono|pairs} <path.png>", file=sys.stderr)
         return 2
-    mode, path = argv[1], argv[2]
+    path = argv[2]
     if mode == "bars":
         check_bars(path)
     elif mode == "mono":

@@ -82,14 +82,15 @@ nlohmann::json tool_schemas(void) {
         "this tool has always drawn, where an isolated dot's colour depends on "
         "its horizontal parity; \"color140\" decodes at the true colour-clock "
         "resolution instead, so a feature comes out in one consistent colour -- "
-        "use it to read a scene. \"mono\" is 1-bit white on black, the cleanest "
-        "input for finding shapes. `render` is accepted in every mode but only "
-        "affects HGR; it is ignored in TEXT and GR."},
+        "use it to read a scene. \"mono140\" collapses the same colour-clock "
+        "cells to white-if-any-ink/black-if-none, an occupancy mask with no "
+        "colour to reason about -- use it to find shapes. `render` is accepted "
+        "in every mode but only affects HGR; it is ignored in TEXT and GR."},
        {"inputSchema",
         {{"type", "object"},
          {"properties",
           {{"format", {{"type", "string"}, {"enum", {"text", "image", "both"}}}},
-           {"render", {{"type", "string"}, {"enum", {"color", "mono", "color140"}}}},
+           {"render", {{"type", "string"}, {"enum", {"color", "color140", "mono140"}}}},
            {"save_to", {{"type", "string"}}}}}}}});
 
   tools.push_back(
@@ -157,10 +158,10 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
     a2_hgr_mode_t hgr_mode;
     if (render == "color")
       hgr_mode = A2_HGR_COLOR;
-    else if (render == "mono")
-      hgr_mode = A2_HGR_MONO;
     else if (render == "color140")
       hgr_mode = A2_HGR_COLOR140;
+    else if (render == "mono140")
+      hgr_mode = A2_HGR_MONO140;
     else
       throw ToolError("unknown render \"" + render + "\"");
     // Only the PNG can be saved, so asking to save a text-mode reading is a
