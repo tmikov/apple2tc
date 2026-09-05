@@ -132,12 +132,31 @@ different purposes:
 - `render:"color140"` decodes at the Apple II's true colour-clock resolution,
   so a feature comes out in one consistent colour instead of a dotted
   necklace. Use it when you need to read what a hi-res scene actually shows.
-- `render:"mono"` drops colour entirely -- 1-bit white on black. It is the
-  cleanest input for finding shapes (a sprite, a wall, a bullet), since there
-  is no artifact colour to distract from where the pixels actually are.
+- `render:"mono140"` collapses those same colour-clock cells to
+  white-if-either-dot-is-set, black-if-neither -- an ink/no-ink occupancy
+  mask with no colour to reason about. Use it for finding shapes (a sprite,
+  a wall, a bullet), the same job you might expect a plain 1-bit rendering
+  to do.
 
-Reach for `mono` when the question is "where is it", and `color140` when the
-question is "what does it look like".
+Reach for `mono140` when the question is "where is it", and `color140` when
+the question is "what does it look like".
+
+There is no `render:"mono"` here, and that is deliberate rather than an
+omission. A colour fill on this hardware *is physically* an alternating dot
+pattern -- HCOLOR green, for instance, is every other dot lit, not a solid
+run of dots that happens to look green. A faithful bit-for-bit monochrome
+rendering of that is therefore not a solid region at all; it is a
+one-pixel-pitch comb. Measured across a solid-green terrain row:
+
+    per-dot:      . # . # . # . # . # . # . # . # . # . #
+    colour-clock: # # # # # # # # # # # # # # # # # # # #
+
+Run a connected-components pass over the left row and a single landmass
+turns into 140 one-pixel slivers. `mono140` is built at colour-clock
+resolution specifically so a colour fill lands as the solid region it
+visually is -- that is what makes it the tool for finding shapes, and why a
+truthful per-dot monochrome view is the wrong one for that job even though
+it sounds like it should be the simplest choice.
 
 ## Spacing keys is how you emulate holding one down
 

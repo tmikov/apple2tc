@@ -148,10 +148,16 @@ here depends on its horizontal parity, and the same feature can render violet
 in one column and green in the next. `"color140"` decodes at the true
 colour-clock resolution instead (doubled back to 280x192 pixels), so a
 feature comes out in one consistent colour — this is the mode to reach for to
-read what a scene shows. `"mono"` drops colour entirely (1-bit white on
-black), the cleanest input for finding shapes. `render` is accepted in every
-mode but only changes anything in HGR; TEXT and GR ignore it. An unrecognised
-value is a tool error, the same as an unrecognised `format`.
+read what a scene shows. `"mono140"` collapses those same colour-clock cells
+to white-if-either-dot-is-set, black-if-neither — an ink/no-ink occupancy
+mask with no colour to reason about, which is what you want for finding
+shapes (a sprite, a wall, a bullet). There is deliberately no faithful
+per-dot monochrome mode on this interface: on real hardware a colour fill
+*is* an alternating dot pattern, so a truthful 1-bit rendering of a filled
+region comes out as a one-pixel-pitch comb rather than a shape — the wrong
+tool for exactly the job `mono140` exists to do. `render` is accepted in
+every mode but only changes anything in HGR; TEXT and GR ignore it. An
+unrecognised value is a tool error, the same as an unrecognised `format`.
 
 ### `keys`
 
