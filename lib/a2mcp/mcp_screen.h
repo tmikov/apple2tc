@@ -20,4 +20,11 @@ std::string screen_text(void);
 /// mode -- the bottom four text lines.
 std::string screen_gr(void);
 
+/// The current screen (whatever mode it is in) rendered to a PNG, at a fixed
+/// blink phase so that a paused machine's screenshot is reproducible.
+std::string screen_png(void);
+
+/// Standard base64 encoding (RFC 4648), with '=' padding.
+std::string base64(const std::string &bytes);
+
 } // namespace a2mcp

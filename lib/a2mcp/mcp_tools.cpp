@@ -7,6 +7,7 @@
 
 #include "mcp_tools.h"
 #include "mcp_machine.h"
+#include "mcp_paths.h"
 #include "mcp_screen.h"
 #include "mcp_server.h"
 
@@ -15,6 +16,8 @@
 // wrapped in extern "C" here.
 #include "apple2tc/a2host_api.h"
 #include "apple2tc/a2io.h"
+
+#include <cstdio>
 
 namespace a2mcp {
 namespace {
@@ -128,18 +131,38 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
     if (!machine_booted())
       throw ToolError("not booted: call boot first");
     const std::string format = args.value("format", std::string("text"));
-    if (format != "text")
-      throw ToolError("format \"" + format + "\" is not implemented yet");
-    const a2_vidmode_t mode = a2_io_get_vidmode(a2host_io());
-    std::string text;
-    if (mode == A2_VIDMODE_TEXT)
-      text = screen_text();
-    else if (mode == A2_VIDMODE_GR)
-      text = screen_gr();
-    else
-      text = "hi-res: no text rendering. Call screen with format \"image\".";
+    if (format != "text" && format != "image" && format != "both")
+      throw ToolError("unknown format \"" + format + "\"");
     nlohmann::json content = nlohmann::json::array();
-    content.push_back({{"type", "text"}, {"text", text}});
+    if (format == "text" || format == "both") {
+      const a2_vidmode_t mode = a2_io_get_vidmode(a2host_io());
+      std::string text;
+      if (mode == A2_VIDMODE_TEXT)
+        text = screen_text();
+      else if (mode == A2_VIDMODE_GR)
+        text = screen_gr();
+      else
+        text = "hi-res: no text rendering. Call screen with format \"image\".";
+      content.push_back({{"type", "text"}, {"text", text}});
+    }
+    if (format == "image" || format == "both") {
+      const std::string png = screen_png();
+      auto save = args.find("save_to");
+      if (save != args.end()) {
+        if (!save->is_string())
+          throw ToolError("save_to must be a string");
+        const std::string path = jail_path(save->get<std::string>(), true);
+        FILE *f = fopen(path.c_str(), "wb");
+        if (!f)
+          throw ToolError("cannot write " + save->get<std::string>());
+        const size_t n = fwrite(png.data(), 1, png.size(), f);
+        fclose(f);
+        if (n != png.size())
+          throw ToolError("short write to " + save->get<std::string>());
+      }
+      content.push_back(
+          {{"type", "image"}, {"data", base64(png)}, {"mimeType", "image/png"}});
+    }
     return nlohmann::json{{"content", content}};
   }
   throw ToolError("unknown tool: " + name);

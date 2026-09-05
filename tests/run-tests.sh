@@ -467,6 +467,42 @@ if ! $a2mcp --root=. < mcp-tmp/symlink.jsonl | grep -q '"isError":true'; then
   exit 1
 fi
 
+# `screen` as PNG. Base64 of a PNG is long, so the committed transcript covers
+# only the save_to success case and the root-escape rejection -- the inline
+# case below is checked directly instead of via a baseline.
+mcp_transcript image
+
+# A PNG starts with the eight-byte signature 89 50 4E 47 0D 0A 1A 0A.
+if [ ! -s mcp-tmp/shot.png ] || [ "$(head -c 8 mcp-tmp/shot.png | od -An -tx1 | tr -d ' ')" \
+     != "89504e470d0a1a0a" ]; then
+  echo "FAIL: save_to did not write a PNG" >&2
+  exit 1
+fi
+
+# Base64 of that same signature starts iVBORw0KGgo -- confirms the inline
+# content block in image.expected actually carries a PNG rather than
+# something else that happened to pass the mimeType check.
+if ! grep -q 'iVBORw0KGgo' mcp/image.expected; then
+  echo "FAIL: screen format=image's save_to reply did not inline a PNG too" >&2
+  exit 1
+fi
+
+# The inline-PNG case (format "image" with no save_to) is not in the
+# committed transcript -- its base64 would dominate the baseline -- so it is
+# checked with a one-off invocation instead.
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"boot","arguments":{}}}' \
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"run","arguments":{"frames":120}}}' \
+  '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"screen","arguments":{"format":"image"}}}' \
+  > mcp-tmp/inline-image.jsonl
+$a2mcp --root=. < mcp-tmp/inline-image.jsonl > mcp-tmp/inline-image.txt
+if ! grep -q '"mimeType":"image/png"' mcp-tmp/inline-image.txt || \
+   ! grep -q 'iVBORw0KGgo' mcp-tmp/inline-image.txt; then
+  echo "FAIL: screen format=image did not return an inline PNG content block" >&2
+  exit 1
+fi
+
 # ...but that check, and every other check in this repo, runs the host in
 # *fixed-step* mode -- because reproducibility is what they all exist for. The
 # wall-clock mode a person plays on had no coverage at all, and was totally

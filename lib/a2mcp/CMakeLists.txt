@@ -6,6 +6,7 @@
 # The MCP front end: a2host driven by JSON-RPC instead of by a frame limit.
 # No sokol -- like a2run, it links no graphics stack at all.
 include_directories(${APPLE2TC_ROOT_DIR}/external/json/include)
+include_directories(${APPLE2TC_ROOT_DIR}/external/stb)
 
 add_library(a2mcp_lib
   mcp_machine.cpp mcp_machine.h

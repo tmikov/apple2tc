@@ -6,6 +6,7 @@
  */
 
 #include "mcp_screen.h"
+#include "mcp_server.h"
 
 // Each header brackets its own declarations in `extern "C"` under
 // `#ifdef __cplusplus`, so no wrapper is needed here -- and adding one would
@@ -14,6 +15,10 @@
 #include "apple2tc/a2engine.h"
 #include "apple2tc/a2host_api.h"
 #include "apple2tc/a2io.h"
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#define STBI_WRITE_NO_STDIO
+#include "stb_image_write.h"
 
 namespace a2mcp {
 namespace {
@@ -119,6 +124,71 @@ std::string screen_gr(void) {
     for (unsigned i = 0; i != 20; ++i)
       pos = text.find('\n', pos) + 1;
     out += text.substr(pos);
+  }
+  return out;
+}
+
+namespace {
+
+void png_sink(void *ctx, void *data, int size) {
+  static_cast<std::string *>(ctx)->append(static_cast<const char *>(data), (size_t)size);
+}
+
+} // namespace
+
+std::string screen_png(void) {
+  const a2_iostate_t *io = a2host_io();
+  const uint8_t *ram = get_ram();
+  // Blink phase is a function of wall-clock time in the renderers, so a fixed
+  // value is passed instead: a screenshot of a paused machine must not depend
+  // on when it was taken.
+  const uint64_t kBlinkMs = 0;
+
+  static a2_screen screen;
+  switch (a2_io_get_vidmode(io)) {
+  case A2_VIDMODE_TEXT:
+    apple2_render_text_screen(ram + a2_io_get_text_page_offset(io), &screen, kBlinkMs);
+    break;
+  case A2_VIDMODE_GR:
+    apple2_render_gr_screen(
+        ram + a2_io_get_text_page_offset(io), &screen, kBlinkMs, a2_io_is_vidmode_mixed(io));
+    break;
+  case A2_VIDMODE_HGR:
+    apple2_render_hgr_screen(
+        ram + a2_io_get_hires_page_offset(io), ram + a2_io_get_text_page_offset(io), &screen,
+        kBlinkMs, a2_io_is_vidmode_mixed(io), false);
+    break;
+  }
+
+  std::string out;
+  if (!stbi_write_png_to_func(
+          png_sink, &out, A2_SCREEN_W, A2_SCREEN_H, 4, screen.data,
+          A2_SCREEN_W_POT * (int)sizeof(a2_rgba8)))
+    throw ToolError("PNG encoding failed");
+  return out;
+}
+
+std::string base64(const std::string &bytes) {
+  static const char kAlpha[] =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string out;
+  out.reserve((bytes.size() + 2) / 3 * 4);
+  size_t i = 0;
+  for (; i + 2 < bytes.size(); i += 3) {
+    const uint32_t v = (uint8_t)bytes[i] << 16 | (uint8_t)bytes[i + 1] << 8 |
+        (uint8_t)bytes[i + 2];
+    out.push_back(kAlpha[v >> 18 & 63]);
+    out.push_back(kAlpha[v >> 12 & 63]);
+    out.push_back(kAlpha[v >> 6 & 63]);
+    out.push_back(kAlpha[v & 63]);
+  }
+  if (i != bytes.size()) {
+    const bool two = bytes.size() - i == 2;
+    const uint32_t v = (uint8_t)bytes[i] << 16 | (two ? (uint8_t)bytes[i + 1] << 8 : 0);
+    out.push_back(kAlpha[v >> 18 & 63]);
+    out.push_back(kAlpha[v >> 12 & 63]);
+    out.push_back(two ? kAlpha[v >> 6 & 63] : '=');
+    out.push_back('=');
   }
   return out;
 }
