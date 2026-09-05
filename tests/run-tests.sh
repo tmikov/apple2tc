@@ -455,6 +455,99 @@ if ! grep -qF '1111111111111111111111111111111111111111' mcp-tmp/gr.txt; then
   exit 1
 fi
 
+# `run`'s "screen_update" `until` value: two detectors that both count as one
+# "update" -- a page-2 flip, and a settle (a change that then holds for K=2
+# consecutive frame boundaries).
+#
+# flip.s flips PAGE2 four times, each landing in its own host frame (see the
+# fixture's own comment for why the delay between flips is tuned to a window
+# that is long enough to guarantee that but short enough that the settle
+# detector's own K=2 window never closes in between -- otherwise the idle gap
+# during the delay would itself register as a spurious settle, double
+# counting one flip as two updates). Requests 3 and 4 ask for two updates
+# each and must land exactly on flip 2 and flip 4 -- not flip 1 (too early)
+# and not flip 3 (too late).
+$a6502 mcp/flip.s mcp-tmp/flip.b33
+mcp_transcript flip
+if ! grep '"id":3' mcp-tmp/flip.txt | grep -q 'updates\\": 2'; then
+  echo "FAIL: screen_update did not count exactly two flips by request 3" >&2
+  exit 1
+fi
+if ! grep '"id":4' mcp-tmp/flip.txt | grep -q 'updates\\": 2'; then
+  echo "FAIL: screen_update did not count exactly two more flips by request 4" >&2
+  exit 1
+fi
+# Request 5 asks for one more update, but the program has thrown all four
+# flips it has and is now spinning forever: there is nothing left to detect,
+# so the call must run to its frame cap rather than fire early on a stale
+# flip count, and the reply must say so.
+if ! grep '"id":5' mcp-tmp/flip.txt | grep -q 'stop_reason\\": \\"limit'; then
+  echo "FAIL: screen_update fired again after the program's last flip" >&2
+  exit 1
+fi
+if ! grep '"id":5' mcp-tmp/flip.txt | grep -q 'updates\\": 0'; then
+  echo "FAIL: screen_update reported updates after the program's last flip" >&2
+  exit 1
+fi
+if ! grep '"id":5' mcp-tmp/flip.txt | grep -q 'no complete-frame boundary was found'; then
+  echo "FAIL: screen_update's frame-cap reply is missing the note" >&2
+  exit 1
+fi
+
+# flip-over.jsonl asks for one more update (5) than the program will ever
+# throw (4), in a single call whose window spans well past the last real
+# flip -- this is what catches "count the flip only, reset the quiescence
+# state" not holding: flip.s gives page 1 and page 2 different content up
+# front specifically so every flip also changes the visible hash, and a
+# version of machine_run that credits both the flip and that hash change
+# would leave `dirty` set after the last flip instead of clearing it, so two
+# frames later the settle detector would fire a bogus fifth update. The
+# honest answer is to run out the full 60-frame cap having only ever seen
+# four.
+mcp_transcript flip-over
+if ! grep '"id":3' mcp-tmp/flip-over.txt | grep -q 'stop_reason\\": \\"limit'; then
+  echo "FAIL: screen_update counted a fifth update the program never produced" >&2
+  exit 1
+fi
+if ! grep '"id":3' mcp-tmp/flip-over.txt | grep -q 'updates\\": 4'; then
+  echo "FAIL: screen_update did not honestly report all four real flips" >&2
+  exit 1
+fi
+
+# settle.s writes to the *displayed* page five times, then stops and spins.
+# Request 3 must detect the settle well short of its 60-frame cap -- the
+# writing itself is done by around frame 8 (five ~1.4-frame-spaced writes),
+# so a settle past, say, frame 30 would mean the detector is not firing on
+# quiescence at all.
+$a6502 mcp/settle.s mcp-tmp/settle.b33
+mcp_transcript settle
+if ! grep '"id":3' mcp-tmp/settle.txt | grep -q 'stop_reason\\": \\"screen_update'; then
+  echo "FAIL: no settle was detected after settle.s stopped writing" >&2
+  exit 1
+fi
+if ! grep '"id":3' mcp-tmp/settle.txt | grep -qE 'frames_run\\": ([1-9]|[12][0-9])[^0-9]'; then
+  echo "FAIL: the settle in request 3 did not fire well short of the frame cap" >&2
+  exit 1
+fi
+# The test that actually proves "static counts as nothing": request 4 starts
+# from the now-settled, unchanging screen and asks for one more update. A
+# settle requires *prior activity* within the call, so this must run all the
+# way to its own frame cap instead of firing on request 3's leftover state --
+# an instant return here would mean an already-static screen was mistaken for
+# a completed picture.
+if ! grep '"id":4' mcp-tmp/settle.txt | grep -q 'stop_reason\\": \\"limit'; then
+  echo "FAIL: screen_update returned immediately on an already-static screen" >&2
+  exit 1
+fi
+if ! grep '"id":4' mcp-tmp/settle.txt | grep -q 'updates\\": 0'; then
+  echo "FAIL: screen_update reported an update on an already-static screen" >&2
+  exit 1
+fi
+if ! grep '"id":4' mcp-tmp/settle.txt | grep -q 'no complete-frame boundary was found'; then
+  echo "FAIL: screen_update's frame-cap reply on a static screen is missing the note" >&2
+  exit 1
+fi
+
 # `keys` schedules rather than injects, and the .keys file it can write is the
 # whole reason to prefer that: a session recorded through the tool must replay
 # bit-for-bit under a2run's own --key-file=.
@@ -552,19 +645,22 @@ fi
 # so the "must be 1 or 2" check never saw the real value. Request 3 is that
 # truncation (scale: 1.5), 4 is a type mismatch serve() used to let escape
 # uncaught (render: 42, the reproduction named in review), 5 is a second
-# truncation shape (scale as a string). Request 6 -- an ordinary `status` in
-# the same session -- is what actually matters: mcp/malformed.expected pins
-# its reply, so if any of 3-5 crashed the process instead of answering with
-# isError, request 6 would be missing from the transcript and the diff below
-# would fail on a truncated file, not just a wrong one.
+# truncation shape (scale as a string). Requests 7 and 8 are `run`'s `updates`
+# hitting the identical shape of bug -- a float (7) and an in-type but
+# out-of-range value (8), so both the type check and the range check are
+# exercised. Request 9 -- an ordinary `status` in the same session -- is what
+# actually matters: mcp/malformed.expected pins its reply, so if any of
+# 3-5/7-8 crashed the process instead of answering with isError, request 9
+# would be missing from the transcript and the diff below would fail on a
+# truncated file, not just a wrong one.
 mcp_transcript malformed
-for id in 3 4 5; do
+for id in 3 4 5 7 8; do
   if ! grep -q "\"id\":$id.*\"isError\":true" mcp-tmp/malformed.txt; then
     echo "FAIL: malformed request $id did not come back as isError" >&2
     exit 1
   fi
 done
-if ! grep -q '"id":6' mcp-tmp/malformed.txt; then
+if ! grep -q '"id":9' mcp-tmp/malformed.txt; then
   echo "FAIL: a2mcp died on a malformed argument instead of answering the next request" >&2
   exit 1
 fi

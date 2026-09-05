@@ -159,8 +159,22 @@ nlohmann::json machine_run(const nlohmann::json &args) {
     throw ToolError("frames must be between 1 and 216000");
 
   const std::string until = args.value("until", std::string("frames"));
-  if (until != "frames" && until != "screen_change")
-    throw ToolError("until must be \"frames\" or \"screen_change\"");
+  if (until != "frames" && until != "screen_change" && until != "screen_update")
+    throw ToolError("until must be \"frames\", \"screen_change\", or \"screen_update\"");
+
+  // Checked before extraction, same shape as `scale`/`frames_between`:
+  // args.value() would silently truncate a non-integer (`updates: 1.5`
+  // becomes 1 via a plain static_cast, no throw) past the range check below.
+  // Bounded at a number no real caller needs -- a call already terminates at
+  // `frames`, so this exists to catch a typo, not to prevent a hang.
+  uint64_t updates_target = 1;
+  if (auto it = args.find("updates"); it != args.end()) {
+    if (!it->is_number_unsigned())
+      throw ToolError("updates must be a positive integer");
+    updates_target = it->get<uint64_t>();
+  }
+  if (updates_target < 1 || updates_target > 1000)
+    throw ToolError("updates must be between 1 and 1000");
 
   // A probe's `stop` is sticky by default -- see s_stop_requested in
   // probe_vm.c -- which is right for a2run, where the run is the process, and
@@ -174,6 +188,26 @@ nlohmann::json machine_run(const nlohmann::json &args) {
   const char *reason = "limit";
   uint64_t ran = 0;
   const uint64_t base_hash = until == "screen_change" ? a2host_visible_hash() : 0;
+
+  // screen_update's state: an "update" is a moment the displayed picture is
+  // complete, and there are two ways to notice one -- see machine_run's
+  // doc comment in mcp_machine.h for the full state machine. `stable` counts
+  // consecutive unchanged frame boundaries since the last change; `dirty`
+  // records that a change is still waiting to be confirmed settled, which is
+  // what makes an already-static screen count as nothing (a settle requires
+  // prior activity) and what stops a settle from re-firing every frame once
+  // `stable` sails past K.
+  enum { kSettleFrames = 2 }; // K: consecutive stable frame boundaries that make a change a settle.
+  uint64_t prev_hash = 0;
+  unsigned flips_seen = 0;
+  unsigned stable = 0;
+  bool dirty = false;
+  uint64_t updates = 0;
+  if (until == "screen_update") {
+    prev_hash = a2host_visible_hash();
+    flips_seen = a2host_page_flips();
+  }
+
   for (; ran != frames;) {
     // Deliberately the same order as a2host_run_headless(): simulate, then
     // record (which advances the frame counter and writes --hash-frames),
@@ -193,6 +227,31 @@ nlohmann::json machine_run(const nlohmann::json &args) {
       reason = "screen_change";
       break;
     }
+    if (until == "screen_update") {
+      const uint64_t hash = a2host_visible_hash();
+      const unsigned flips_now = a2host_page_flips();
+      if (flips_now != flips_seen) {
+        // A flip -- a double-buffered program presenting a finished frame --
+        // is the completion event; count it and reset the settle machinery
+        // rather than also crediting the hash change a flip always causes
+        // too, which would double-count one presentation.
+        updates += (flips_now - flips_seen);
+        flips_seen = flips_now;
+        stable = 0;
+        dirty = false;
+      } else if (hash != prev_hash) {
+        stable = 0;
+        dirty = true;
+      } else if (++stable >= kSettleFrames && dirty) {
+        ++updates;
+        dirty = false;
+      }
+      prev_hash = hash;
+      if (updates >= updates_target) {
+        reason = "screen_update";
+        break;
+      }
+    }
     // a2mcp never passes --frames, so frame_limit_ is 0 and this cannot fire.
     // Kept because the loop is a2run's and must stay a2run's; a silent
     // divergence here is exactly what Task 6's replay diff would blame on
@@ -208,6 +267,15 @@ nlohmann::json machine_run(const nlohmann::json &args) {
       {"stop_reason", reason},
       {"frame", a2host_frame_no()},
       {"cycles", get_cycles()}};
+  // Conditional on `until`, the same precedent screen_change's own base_hash
+  // sets: a field that only ever matters for one `until` value does not
+  // belong in every baseline this reply has ever produced.
+  if (until == "screen_update") {
+    out["updates"] = updates;
+    if (updates < updates_target) {
+      out["note"] = "the visible page changed on every frame; no complete-frame boundary was found";
+    }
+  }
   return out;
 }
 

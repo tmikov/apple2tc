@@ -27,6 +27,20 @@ nlohmann::json machine_status(void);
 /// Advance emulated time by \p args["frames"] frames, or until a probe's
 /// `stop` or the engine itself ends the run early, and clearing any `stop` a
 /// previous run left set. Throws ToolError on a bad argument.
+///
+/// \p args["until"] == "screen_update" stops on the \p args["updates"]-th
+/// (default 1) moment the displayed picture is *complete*, counting two kinds
+/// of moment as the same thing: a page-2 flip (a double-buffered program just
+/// presented -- a2host_page_flips() changed during the frame), or a settle (
+/// the visible hash changed at some point, then held identical across
+/// kSettleFrames consecutive frame boundaries). A settle requires prior
+/// activity, so an already-static screen counts as nothing -- the call always
+/// means "advance to the next completed picture", never "return immediately
+/// because nothing is animating". When both fire on the same frame, only the
+/// flip is counted and the settle state is reset, because a flip already is
+/// the completion event. If the frame cap is reached with fewer updates than
+/// asked for, the reply says so: the screen changed on every frame and no
+/// complete-frame boundary was ever found.
 nlohmann::json machine_run(const nlohmann::json &args);
 
 /// Schedule the characters of \p args["text"] as keystrokes, spaced
