@@ -39,6 +39,15 @@ extern "C" {
 
 /* --- Setup ---------------------------------------------------------------- */
 
+/// Send probe `printf` output to stderr rather than stdout, for a front end
+/// whose stdout carries a protocol. Call before a2host_parse_args(), which is
+/// what acts on an explicit --probe-out=; that option still wins.
+///
+/// At the sink rather than at each caller on purpose: a probe opcode that
+/// prints is free to be added later without rediscovering that a2mcp's stdout
+/// is not a report.
+void a2host_probe_output_to_stderr(void);
+
 /// Parse the options this library owns. Anything unrecognised is offered to the
 /// engine via `engine_parse_arg`, then rejected.
 void a2host_parse_args(int argc, char *argv[]);
@@ -61,6 +70,12 @@ void a2host_enable_scheduled_keys(void);
 /// Scheduled rather than pushed because the stamp is what makes a session
 /// replayable: the file this writes is read back by --key-file= unchanged.
 void a2host_schedule_key(uint8_t ch, unsigned frames_ahead);
+
+/// Cycles in one emulated frame -- the fixed step a2host_simulate_frame() runs
+/// and the unit a2host_schedule_key()'s \p frames_ahead is counted in. A front
+/// end that must know where a key will land (to bound it against the 32-bit
+/// cycle counter, say) needs this number rather than a guess at the clock.
+unsigned a2host_frame_cycles(void);
 
 /// Scheduled keys not yet handed to the machine.
 unsigned a2host_scheduled_keys_pending(void);
@@ -141,6 +156,11 @@ bool a2host_engine_stopped(void);
 /// True once a probe script's `stop` has fired. A front end driving its own
 /// frame loop must check this, as a2host_run_headless() does.
 bool a2host_stop_requested(void);
+
+/// Forget that a probe's `stop` fired, so the next run is not stopped by the
+/// last one. For a front end where a run is one call among many rather than
+/// the whole process -- a2run exits on a `stop`, so it never needs this.
+void a2host_clear_stop_request(void);
 
 /// Run to the frame limit with no window, hashing as it goes. Does not return.
 void a2host_run_headless(void);

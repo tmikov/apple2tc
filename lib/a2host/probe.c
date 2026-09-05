@@ -23,6 +23,11 @@
 /// Where `probe_dispatch`'s eventual `printf` output goes. NULL means
 /// "unset", not "closed" -- `probe_out()` is what maps that to stdout.
 static FILE *s_out = NULL;
+/// Whether this file opened s_out and must therefore close it.
+/// probe_set_output_stream() hands us a stream we did not open (a2mcp gives us
+/// stderr), and fclose()ing that would take the front end's own diagnostics
+/// down with it.
+static bool s_out_owned = false;
 
 FILE *probe_out(void) {
   return s_out ? s_out : stdout;
@@ -268,12 +273,21 @@ void probe_set_output_path(const char *path) {
     probe_fatal_open("cannot open probe output", path);
   probe_close_output();
   s_out = f;
+  s_out_owned = true;
+}
+
+void probe_set_output_stream(FILE *f) {
+  probe_close_output();
+  s_out = f;
+  s_out_owned = false;
 }
 
 void probe_close_output(void) {
   if (s_out) {
-    fclose(s_out);
+    if (s_out_owned)
+      fclose(s_out);
     s_out = NULL;
+    s_out_owned = false;
   }
 }
 

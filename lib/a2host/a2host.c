@@ -181,6 +181,14 @@ bool a2host_stop_requested(void) {
   return probe_stop_requested();
 }
 
+void a2host_clear_stop_request(void) {
+  probe_clear_stop_request();
+}
+
+void a2host_probe_output_to_stderr(void) {
+  probe_set_output_stream(stderr);
+}
+
 uint8_t io_peek(uint16_t addr) {
   return a2_io_peek(&io_, addr, get_cycles());
 }
@@ -549,13 +557,16 @@ void a2host_schedule_key(uint8_t ch, unsigned frames_ahead) {
       exit(2);
     }
   }
-  const unsigned frame_cycles = (unsigned)((1.0 / 60.0) * clock_freq_);
-  const unsigned at = get_cycles() + frames_ahead * frame_cycles;
+  const unsigned at = get_cycles() + frames_ahead * a2host_frame_cycles();
   sched_keys_[sched_keys_count_].cycles = at;
   sched_keys_[sched_keys_count_].ch = ch;
   ++sched_keys_count_;
   if (sched_keys_file_)
     fprintf(sched_keys_file_, "%u %u\n", at, ch);
+}
+
+unsigned a2host_frame_cycles(void) {
+  return (unsigned)((1.0 / 60.0) * clock_freq_);
 }
 
 unsigned a2host_scheduled_keys_pending(void) {
@@ -641,6 +652,20 @@ void a2host_reboot(void) {
   // reboots is still one session, so the recording file itself stays open.
   sched_keys_count_ = 0;
   next_sched_key_ = 0;
+  // ...which is exactly what makes an open recording unreplayable from here
+  // on: the entries already written are stamped against the old counter, and
+  // everything after this point starts from zero again. Say so in both places
+  // -- on stderr for whoever is driving, and in the file itself, where
+  // load_key_file()'s `#` handling means the note costs the reader nothing but
+  // is right there when the replay misbehaves.
+  if (sched_keys_file_) {
+    fprintf(
+        stderr,
+        "WARNING: rebooted with a scheduled-key recording open; the cycle "
+        "counter restarts at 0, so the file is no longer monotonic and will "
+        "not replay under --key-file=\n");
+    fprintf(sched_keys_file_, "# reboot: cycle counter restarts at 0 here\n");
+  }
   a2host_init_emulation();
 }
 
