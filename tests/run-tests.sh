@@ -557,6 +557,23 @@ if [ ! -s mcp-tmp/shot.png ] || [ "$(head -c 8 mcp-tmp/shot.png | od -An -tx1 | 
   exit 1
 fi
 
+# The IHDR's colour-type byte is at offset 25 and must be 2, RGB.
+#
+# This is the check that names the failure. The transcript diff above would
+# also go red on a wrong encoding, but only until someone regenerates the
+# baseline -- which is exactly how this bug would come back, and how it got in.
+# What follows is what a perfectly valid, completely blank screenshot looked
+# like. a2_screen is "RGB encoding of the Apple2 screen"
+# and its fourth byte is padding that no renderer in a2io.c ever fills, so
+# encoding it as four-channel RGBA produced a 280x192 PNG in which every pixel
+# had alpha 0 -- correct signature, correct dimensions, byte-identical between
+# runs, and invisible in any viewer that honours alpha. Every structural
+# assertion passed. Only looking at a pixel found it.
+if [ "$(dd if=mcp-tmp/shot.png bs=1 skip=25 count=1 2>/dev/null | od -An -tu1 | tr -d ' ')" != "2" ]; then
+  echo "FAIL: the saved PNG is not RGB; an alpha channel here renders blank" >&2
+  exit 1
+fi
+
 # Base64 of that same signature starts iVBORw0KGgo -- confirms the inline
 # content block in image.expected actually carries a PNG rather than
 # something else that happened to pass the mimeType check.

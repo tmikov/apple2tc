@@ -16,6 +16,8 @@
 #include "apple2tc/a2host_api.h"
 #include "apple2tc/a2io.h"
 
+#include <vector>
+
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define STBI_WRITE_NO_STDIO
 #include "stb_image_write.h"
@@ -155,28 +157,48 @@ std::string screen_png(void) {
     break;
   case A2_VIDMODE_HGR:
     apple2_render_hgr_screen(
-        ram + a2_io_get_hires_page_offset(io), ram + a2_io_get_text_page_offset(io), &screen,
-        kBlinkMs, a2_io_is_vidmode_mixed(io), false);
+        ram + a2_io_get_hires_page_offset(io),
+        ram + a2_io_get_text_page_offset(io),
+        &screen,
+        kBlinkMs,
+        a2_io_is_vidmode_mixed(io),
+        false);
     break;
+  }
+
+  // Three channels, not four. a2_screen is "RGB encoding of the Apple2 screen"
+  // (a2io.h) and its fourth byte is padding: every renderer in a2io.c builds
+  // its pixels as {r, g, b, 0} and nothing ever fills that byte in. Handing
+  // stb four channels therefore emits a PNG whose every pixel is alpha 0 --
+  // structurally perfect, 280x192, deterministic, byte-identical between runs,
+  // and completely invisible in any viewer that honours alpha. Repacking to
+  // RGB is what makes the screenshot a picture rather than a transparent
+  // rectangle.
+  std::vector<uint8_t> rgb((size_t)A2_SCREEN_W * A2_SCREEN_H * 3);
+  for (unsigned y = 0; y != A2_SCREEN_H; ++y) {
+    const a2_rgba8 *src = screen.data + (size_t)y * A2_SCREEN_W_POT;
+    uint8_t *dst = rgb.data() + (size_t)y * A2_SCREEN_W * 3;
+    for (unsigned x = 0; x != A2_SCREEN_W; ++x) {
+      *dst++ = src[x].r;
+      *dst++ = src[x].g;
+      *dst++ = src[x].b;
+    }
   }
 
   std::string out;
   if (!stbi_write_png_to_func(
-          png_sink, &out, A2_SCREEN_W, A2_SCREEN_H, 4, screen.data,
-          A2_SCREEN_W_POT * (int)sizeof(a2_rgba8)))
+          png_sink, &out, A2_SCREEN_W, A2_SCREEN_H, 3, rgb.data(), A2_SCREEN_W * 3))
     throw ToolError("PNG encoding failed");
   return out;
 }
 
 std::string base64(const std::string &bytes) {
-  static const char kAlpha[] =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  static const char kAlpha[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   std::string out;
   out.reserve((bytes.size() + 2) / 3 * 4);
   size_t i = 0;
   for (; i + 2 < bytes.size(); i += 3) {
-    const uint32_t v = (uint8_t)bytes[i] << 16 | (uint8_t)bytes[i + 1] << 8 |
-        (uint8_t)bytes[i + 2];
+    const uint32_t v = (uint8_t)bytes[i] << 16 | (uint8_t)bytes[i + 1] << 8 | (uint8_t)bytes[i + 2];
     out.push_back(kAlpha[v >> 18 & 63]);
     out.push_back(kAlpha[v >> 12 & 63]);
     out.push_back(kAlpha[v >> 6 & 63]);
