@@ -67,6 +67,14 @@ never counts, so a `screen_update` call always means "advance to the next
 completed picture," not "return instantly because nothing is animating right
 now" — that instant-return case is what `screen_change` already covers.
 
+**Deliver your input before you ask for an update.** Keys are scheduled, so a
+burst of them is still arriving over the next many frames, and an update fires at
+whatever frame boundary satisfies it -- very likely one with half your keystrokes
+delivered. The working order is three calls: schedule the keys, `run` enough
+plain frames to deliver them (`frames_between` times the number of keys), and
+only then `run` with `until: "screen_update"` to land the shot. Doing it in two
+calls lands you on a picture of a half-executed intention.
+
 **The honest limitation:** a single-buffered game that redraws every single
 frame with no idle gap has no complete-frame boundary at frame resolution at
 all. `screen_update` cannot find what is not there — the call runs to its frame
@@ -144,6 +152,14 @@ from the picture — judge from the status line.
 For Neptune, the game showed `BO:20` (bombs) where the attract loop showed
 `BO:00`, and `SH` moved `00 → 04 → 03` across a firing burst and a hit. Counters
 that only a real game maintains are the cheap proof.
+
+**A full keyboard queue means the program stopped reading it.** `status` reports
+`keys_pending`, and the Apple II's hardware queue holds 32. If it sits at 32, the
+program is not consuming keys at all -- it has died, paused, entered a cutscene,
+or gone to a screen with its own input loop. That is a state change you would
+otherwise only infer from the picture, and it is how a mid-session death was
+spotted here: shields had been dropping, then input stopped being read entirely
+while the death animation played.
 
 More generally, when you are unsure whether a keypress reached the program:
 press a key that should do something visible, step, and compare — with `screen`
@@ -248,10 +264,30 @@ Verified in one session:
 | in game? | `BO:20` in a real game, `BO:00` in the attract loop |
 | controls | `J` left, `K` right, `I` up, `M` down, `A` fire (from the disk's own legend) |
 
-Not established, and worth knowing that it is not: whether `A` is really fire
-(pressing it moved `SH` from `00` to `04`, which is not what a fire button
-should do), what `SH` and `BO` count exactly, and whether space is the only way
-to start. Someone who plays it properly should correct this table.
+Measured while actually playing, which corrects two guesses in an earlier draft
+of this table:
+
+- **`SH` is a shield count that decreases as you are hit** -- observed `3 -> 2 ->
+  1` across one session. The earlier note here, that pressing `A` moved `SH` from
+  `00` to `04` and so could not be a fire button, was a misreading: that
+  transition was the game *starting* and granting shields, not the keypress.
+- **`screen_update` works on this game during real gameplay.** Across twelve
+  consecutive `run(frames=120, until="screen_update")` calls in live play, eight
+  landed on a completed picture -- most within 4 to 12 frames -- and four ran to
+  the cap with the `note`. So Neptune does have idle gaps between its animation
+  bursts, contradicting a reasonable prior guess that a continuously scrolling
+  game would never settle. Do not assume; measure the game in front of you.
+- **Neptune never flips pages during play**, so every update it produces is a
+  settle. Bolo does flip, but only in its attract and configuration menu, not in
+  gameplay. Between the two games in this repo, the page-flip detector currently
+  only ever fires on a menu.
+- **Your ship is a small compact white blob**; the orange-red starburst that
+  appears near the top left is an explosion, not you. Confirm with `mono140` if
+  in doubt -- as an occupancy mask it separates the two shapes immediately -- or
+  use the perturbation trick above.
+
+Still not established: what `BO` counts, and whether space is the only way to
+start.
 
 ## If this needs to auto-load
 
