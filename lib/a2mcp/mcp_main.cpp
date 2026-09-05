@@ -61,6 +61,13 @@ int main(int argc, char *argv[]) {
   }
   a2mcp::set_options(opts);
 
+  // Opened before serve() so the first scheduled key of the session lands in
+  // the file, and unconditionally on --keys-out= rather than folded into the
+  // engine whitelist below: it is this front end's own option, not one
+  // a2host_parse_args knows about.
+  if (!opts.keys_out.empty())
+    a2host_open_scheduled_keys_file(opts.keys_out.c_str());
+
   // A whitelist, not a pass-through: a2host_parse_args owns --trace,
   // --trace-keys, --probe-dump and --help, all of which write to stdout, which
   // carries JSON-RPC and nothing else. Building the vector here means an

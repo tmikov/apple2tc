@@ -54,6 +54,22 @@ void a2host_init_emulation(void);
 /// keypress too, or the replay sees one keystroke the original did not.
 void a2host_enable_scheduled_keys(void);
 
+/// Schedule a key \p frames_ahead frames from now, stamped on the cycle
+/// counter exactly as --key-file= entries are, and written to the file opened
+/// by a2host_open_scheduled_keys_file() if there is one.
+///
+/// Scheduled rather than pushed because the stamp is what makes a session
+/// replayable: the file this writes is read back by --key-file= unchanged.
+void a2host_schedule_key(uint8_t ch, unsigned frames_ahead);
+
+/// Scheduled keys not yet handed to the machine.
+unsigned a2host_scheduled_keys_pending(void);
+
+/// Record every scheduled key to \p path, in the `<cycles> <key>` format
+/// --key-file= reads. Exits on failure to open, so a front end must call it
+/// before it starts serving.
+void a2host_open_scheduled_keys_file(const char *path);
+
 /// Tear the emulated machine down and bring it back up, as if the process had
 /// just started. Frame and cycle counters restart at zero. Probe counters and
 /// any open report file deliberately survive, because a probe script's state is

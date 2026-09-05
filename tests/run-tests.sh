@@ -417,6 +417,31 @@ if ! grep '"id":4' mcp-tmp/hidden.txt | grep -q 'stop_reason\\": \\"limit'; then
   exit 1
 fi
 
+# `keys` schedules rather than injects, and the .keys file it can write is the
+# whole reason to prefer that: a session recorded through the tool must replay
+# bit-for-bit under a2run's own --key-file=.
+mcp_transcript keys --keys-out=mcp-tmp/session.keys --hash-frames=mcp-tmp/keys-mcp.txt
+# The reply is a JSON object dumped into a JSON string, so its own quotes reach
+# the transcript backslash-escaped and on one line -- grepping for `^]PRINT
+# 2+2` (bare prompt, line-anchored) never matches for that reason, not because
+# the assertion failed. An unanchored, unescaped substring search is what
+# proves the keystrokes actually reached BASIC; the exact evaluated answer is
+# already pinned by the transcript diff above, so it needs no grep of its own.
+if ! grep -qF 'PRINT 2+2' mcp-tmp/keys.txt; then
+  echo "FAIL: keys were scheduled but BASIC never ran them" >&2
+  exit 1
+fi
+
+# The reproducibility claim, and the reason the .keys file is the artifact: the
+# session must replay under a2run frame for frame. 300 = 120 + 180, the frames
+# the transcript runs.
+$a2run --frames=300 --key-file=mcp-tmp/session.keys \
+  --hash-frames=mcp-tmp/keys-a2run.txt > /dev/null
+if ! diff -u mcp-tmp/keys-mcp.txt mcp-tmp/keys-a2run.txt; then
+  echo "FAIL: a2run --key-file= does not reproduce the a2mcp session" >&2
+  exit 1
+fi
+
 # realpath resolves symlinks, so a link pointing outside the root is the same
 # rejection as a "../" path -- but only if the jail resolves before it opens.
 ln -sf /etc/passwd mcp-tmp/escape.dsk

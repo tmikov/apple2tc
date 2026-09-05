@@ -82,6 +82,7 @@ nlohmann::json machine_status(void) {
         {"mixed", a2_io_is_vidmode_mixed(io)},
         {"page", a2_io_get_vidpage_index(io)}}},
       {"keys_pending", a2_io_keys_count(io)},
+      {"keys_scheduled", a2host_scheduled_keys_pending()},
       {"stopped", a2host_engine_stopped()}};
 }
 
@@ -140,6 +141,37 @@ nlohmann::json machine_run(const nlohmann::json &args) {
       {"frame", a2host_frame_no()},
       {"cycles", get_cycles()}};
   return out;
+}
+
+nlohmann::json machine_keys(const nlohmann::json &args) {
+  if (!machine_booted())
+    throw ToolError("not booted: call boot first");
+  auto it = args.find("text");
+  if (it == args.end() || !it->is_string())
+    throw ToolError("text is required and must be a string");
+  const std::string text = it->get<std::string>();
+
+  uint64_t spacing = args.value("frames_between", (uint64_t)1);
+  if (spacing > 600)
+    throw ToolError("frames_between must be between 0 and 600");
+
+  unsigned n = 0;
+  for (char c : text) {
+    // The same translation --kbd-file uses, so that typing through the tool
+    // and typing through a file behave identically.
+    if (c == '\r')
+      continue;
+    if (c == '\n')
+      c = '\r';
+    if ((unsigned char)c > 0x7F)
+      throw ToolError("text must be ASCII");
+    a2host_schedule_key((uint8_t)c, (unsigned)(spacing * n));
+    ++n;
+  }
+  return {
+      {"scheduled", n},
+      {"pending", a2host_scheduled_keys_pending()},
+      {"note", "keys are delivered during a later run"}};
 }
 
 } // namespace a2mcp

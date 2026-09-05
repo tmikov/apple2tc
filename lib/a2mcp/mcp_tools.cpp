@@ -116,6 +116,8 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
     return text_result(machine_status());
   if (name == "run")
     return text_result(machine_run(args));
+  if (name == "keys")
+    return text_result(machine_keys(args));
   if (name == "screen") {
     if (!machine_booted())
       throw ToolError("not booted: call boot first");

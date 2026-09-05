@@ -28,4 +28,10 @@ nlohmann::json machine_status(void);
 /// not been booted, or on a bad argument.
 nlohmann::json machine_run(const nlohmann::json &args);
 
+/// Schedule the characters of \p args["text"] as keystrokes, spaced
+/// \p args["frames_between"] frames apart (default 1). They are not delivered
+/// now -- they reach the machine cycle-stamped, during a later machine_run().
+/// Throws ToolError if it has not been booted, or on a bad argument.
+nlohmann::json machine_keys(const nlohmann::json &args);
+
 } // namespace a2mcp

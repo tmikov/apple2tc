@@ -100,6 +100,17 @@ static unsigned next_key_press_ = 0;
 /// True when a front end schedules its own keys; see
 /// a2host_enable_scheduled_keys().
 static bool scheduled_keys_ = false;
+/// Keys scheduled by a front end, stamped on the cycle counter. A separate
+/// list from key_presses_ on purpose: that one's lifetime is read as "a replay
+/// is still live" (a2host_key_replay_active) and is freed on exhaustion by
+/// drain_key_presses but deliberately never by probe_deliver_keys. A list that
+/// is merely empty, and may grow again at any moment, does not fit those
+/// rules, and bending them would change behaviour for both existing front ends.
+static KeyPress *sched_keys_ = NULL;
+static unsigned sched_keys_count_ = 0;
+static unsigned sched_keys_capacity_ = 0;
+static unsigned next_sched_key_ = 0;
+static FILE *sched_keys_file_ = NULL;
 /// The very first frame is skipped rather than simulated, so that a front end
 /// pacing against a wall clock does not begin with a huge catch-up burst.
 static bool firstFrame_ = true;
@@ -522,6 +533,46 @@ void a2host_enable_scheduled_keys(void) {
   scheduled_keys_ = true;
 }
 
+void a2host_open_scheduled_keys_file(const char *path) {
+  if ((sched_keys_file_ = fopen(path, "wt")) == NULL) {
+    fprintf(stderr, "FATAL: cannot open scheduled key file \"%s\"\n", path);
+    exit(2);
+  }
+}
+
+void a2host_schedule_key(uint8_t ch, unsigned frames_ahead) {
+  if (sched_keys_count_ == sched_keys_capacity_) {
+    sched_keys_capacity_ = sched_keys_capacity_ ? sched_keys_capacity_ * 2 : 64;
+    sched_keys_ = realloc(sched_keys_, sched_keys_capacity_ * sizeof(*sched_keys_));
+    if (!sched_keys_) {
+      fprintf(stderr, "FATAL: out of memory scheduling keys\n");
+      exit(2);
+    }
+  }
+  const unsigned frame_cycles = (unsigned)((1.0 / 60.0) * clock_freq_);
+  const unsigned at = get_cycles() + frames_ahead * frame_cycles;
+  sched_keys_[sched_keys_count_].cycles = at;
+  sched_keys_[sched_keys_count_].ch = ch;
+  ++sched_keys_count_;
+  if (sched_keys_file_)
+    fprintf(sched_keys_file_, "%u %u\n", at, ch);
+}
+
+unsigned a2host_scheduled_keys_pending(void) {
+  return sched_keys_count_ - next_sched_key_;
+}
+
+/// The scheduled-key counterpart of drain_key_presses(). Unlike that one it
+/// never frees the list: the front end may schedule more at any point, and an
+/// empty list is not an ended replay.
+static void drain_scheduled_keys(void) {
+  const unsigned cycles = get_cycles();
+  while (next_sched_key_ != sched_keys_count_ && cycles >= sched_keys_[next_sched_key_].cycles) {
+    push_key(sched_keys_[next_sched_key_].ch);
+    ++next_sched_key_;
+  }
+}
+
 /// Everything needed to start the emulated program, with no graphics or audio.
 /// Shared by the windowed and headless front ends.
 void a2host_init_emulation(void) {
@@ -585,6 +636,11 @@ void a2host_reboot(void) {
   step_debt_ = 0.0;
   pending_elapsed_ = 0.0;
   pending_keys_count_ = 0;
+  // A reboot restarts the cycle counter at zero, so scheduled keys stamped
+  // against the previous run's counter would never fire; a session that
+  // reboots is still one session, so the recording file itself stays open.
+  sched_keys_count_ = 0;
+  next_sched_key_ = 0;
   a2host_init_emulation();
 }
 
@@ -607,6 +663,11 @@ void a2host_simulate_frame(void) {
   if (firstFrame_) {
     firstFrame_ = false;
   } else {
+    // Scheduled keys are an independent source, not an alternative to the
+    // chain below, so they are drained unconditionally rather than added to
+    // it as another else-if.
+    if (sched_keys_)
+      drain_scheduled_keys();
     // Both command-line sources outrank buffered keys: a recording already
     // contains whatever the program would have typed for itself.
     if (key_presses_)
@@ -736,6 +797,10 @@ void a2host_shutdown(void) {
   if (hash_file_) {
     fclose(hash_file_);
     hash_file_ = NULL;
+  }
+  if (sched_keys_file_) {
+    fclose(sched_keys_file_);
+    sched_keys_file_ = NULL;
   }
   // Before probe_close_output(): once the report file is closed, hit counts
   // are the only record left of what ran, and stderr (never the report file
