@@ -2,6 +2,6 @@
 {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"status","arguments":{}}}
 {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"boot","arguments":{}}}
 {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"status","arguments":{}}}
-{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"boot","arguments":{"disk1":"../etc/passwd"}}}
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"boot","arguments":{"disk1":"../CLAUDE.md"}}}
 {"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"boot","arguments":{"disk1":"mcp/does-not-exist.dsk"}}}
 {"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"status","arguments":{}}}
