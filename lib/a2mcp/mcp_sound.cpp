@@ -34,10 +34,12 @@ void spkr_cb(void *ctx, unsigned cycles) {
   s_stamps.push_back(cycles);
 }
 
-/// Walks the stamps at 44.1 kHz mono 8-bit, flipping the level at each one,
-/// behind a 44-byte RIFF header. Assumes a little-endian host, as the rest of
-/// the repo does.
-void write_wav(const std::string &path, double cpu_freq) {
+/// The stamps as a 44.1 kHz mono 8-bit WAV: walk them, flipping the level at
+/// each one, behind a 44-byte RIFF header. Returned rather than written,
+/// because writing a file under the server root is write_jailed_file()'s job
+/// and there is exactly one of those. Assumes a little-endian host, as the
+/// rest of the repo does.
+std::string build_wav(double cpu_freq) {
   const unsigned kRate = 44100;
   std::string pcm;
   if (!s_stamps.empty()) {
@@ -55,14 +57,13 @@ void write_wav(const std::string &path, double cpu_freq) {
     }
   }
 
-  FILE *f = fopen(path.c_str(), "wb");
-  if (!f)
-    throw ToolError("cannot write " + path);
-  auto u32 = [f](uint32_t v) { fwrite(&v, 4, 1, f); };
-  auto u16 = [f](uint16_t v) { fwrite(&v, 2, 1, f); };
-  fwrite("RIFF", 1, 4, f);
+  std::string wav;
+  auto raw = [&wav](const void *p, size_t n) { wav.append((const char *)p, n); };
+  auto u32 = [&raw](uint32_t v) { raw(&v, 4); };
+  auto u16 = [&raw](uint16_t v) { raw(&v, 2); };
+  wav.append("RIFF", 4);
   u32((uint32_t)(36 + pcm.size()));
-  fwrite("WAVEfmt ", 1, 8, f);
+  wav.append("WAVEfmt ", 8);
   u32(16); // PCM header size
   u16(1); // PCM
   u16(1); // mono
@@ -70,12 +71,10 @@ void write_wav(const std::string &path, double cpu_freq) {
   u32(kRate); // byte rate: 8-bit mono
   u16(1); // block align
   u16(8); // bits per sample
-  fwrite("data", 1, 4, f);
+  wav.append("data", 4);
   u32((uint32_t)pcm.size());
-  const size_t n = fwrite(pcm.data(), 1, pcm.size(), f);
-  fclose(f);
-  if (n != pcm.size())
-    throw ToolError("short write to " + path);
+  wav += pcm;
+  return wav;
 }
 
 } // namespace
@@ -121,7 +120,7 @@ nlohmann::json sound_report(const std::string &wav_path) {
   }
 
   if (!wav_path.empty())
-    write_wav(jail_path(wav_path, true), freq);
+    write_jailed_file(wav_path, build_wav(freq));
 
   nlohmann::json out = {{"segments", segments}};
   s_stamps.clear();

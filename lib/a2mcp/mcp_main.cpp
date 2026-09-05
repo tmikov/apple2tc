@@ -72,6 +72,14 @@ int main(int argc, char *argv[]) {
   // --trace-keys, --probe-dump and --help, all of which write to stdout, which
   // carries JSON-RPC and nothing else. Building the vector here means an
   // option can only reach the library if this file names it.
+  // Before a2host_parse_args, which is what acts on --probe-out= and must be
+  // able to override this. Not part of the whitelist below because it is not
+  // an option: --probe= is forwarded, and probe_out() defaults to *stdout*, so
+  // without this a script's printf would land in the middle of the JSON-RPC
+  // stream -- the one hole the whitelist cannot close, since it is the one
+  // a2mcp deliberately opens.
+  a2host_probe_output_to_stderr();
+
   std::vector<std::string> forwarded;
   forwarded.push_back("a2mcp");
   if (!opts.probe.empty())

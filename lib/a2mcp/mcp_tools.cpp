@@ -18,8 +18,6 @@
 #include "apple2tc/a2host_api.h"
 #include "apple2tc/a2io.h"
 
-#include <cstdio>
-
 namespace a2mcp {
 namespace {
 
@@ -118,6 +116,21 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
   auto text_result = [](const nlohmann::json &value) {
     return nlohmann::json{{"content", {{{"type", "text"}, {"text", value.dump(2)}}}}};
   };
+  // Both preconditions up front, in this order, rather than repeated down the
+  // dispatch below: an unknown name is not a machine-state problem, so it must
+  // be answered as itself even before the machine is up. The known names come
+  // from tool_schemas() so that this cannot drift from what the server
+  // advertises.
+  bool known = false;
+  for (const auto &tool : tool_schemas())
+    known = known || tool.at("name") == name;
+  if (!known)
+    throw ToolError("unknown tool: " + name);
+  // `boot` is the one tool that may run on a machine that is not up yet;
+  // everything else needs the same answer in the same words.
+  if (name != "boot" && !machine_booted())
+    throw ToolError("not booted: call boot first");
+
   if (name == "boot") {
     machine_boot(args);
     return text_result(machine_status());
@@ -129,11 +142,14 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
   if (name == "keys")
     return text_result(machine_keys(args));
   if (name == "screen") {
-    if (!machine_booted())
-      throw ToolError("not booted: call boot first");
     const std::string format = args.value("format", std::string("text"));
     if (format != "text" && format != "image" && format != "both")
       throw ToolError("unknown format \"" + format + "\"");
+    // Only the PNG can be saved, so asking to save a text-mode reading is a
+    // mistake worth naming: silently ignoring it leaves the agent believing a
+    // file it will later fail to find was written.
+    if (format == "text" && args.find("save_to") != args.end())
+      throw ToolError("save_to needs format \"image\" or \"both\": there is no file to write");
     nlohmann::json content = nlohmann::json::array();
     if (format == "text" || format == "both") {
       const a2_vidmode_t mode = a2_io_get_vidmode(a2host_io());
@@ -152,22 +168,13 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
       if (save != args.end()) {
         if (!save->is_string())
           throw ToolError("save_to must be a string");
-        const std::string path = jail_path(save->get<std::string>(), true);
-        FILE *f = fopen(path.c_str(), "wb");
-        if (!f)
-          throw ToolError("cannot write " + save->get<std::string>());
-        const size_t n = fwrite(png.data(), 1, png.size(), f);
-        fclose(f);
-        if (n != png.size())
-          throw ToolError("short write to " + save->get<std::string>());
+        write_jailed_file(save->get<std::string>(), png);
       }
       content.push_back({{"type", "image"}, {"data", base64(png)}, {"mimeType", "image/png"}});
     }
     return nlohmann::json{{"content", content}};
   }
   if (name == "sound") {
-    if (!machine_booted())
-      throw ToolError("not booted: call boot first");
     std::string wav_path;
     auto save = args.find("save_wav");
     if (save != args.end()) {
@@ -177,7 +184,9 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
     }
     return text_result(sound_report(wav_path));
   }
-  throw ToolError("unknown tool: " + name);
+  // Only reachable if a name is advertised by tool_schemas() and dispatched
+  // nowhere above.
+  throw ToolError("no implementation for tool: " + name);
 }
 
 } // namespace a2mcp

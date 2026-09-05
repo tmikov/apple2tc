@@ -20,18 +20,20 @@ void machine_boot(const nlohmann::json &args);
 /// True once machine_boot() has succeeded at least once.
 bool machine_booted(void);
 
-/// The machine's current state. Throws ToolError if it has not been booted.
+/// The machine's current state. Requires a booted machine -- call_tool() is
+/// what enforces that, once, for every tool but `boot`.
 nlohmann::json machine_status(void);
 
 /// Advance emulated time by \p args["frames"] frames, or until a probe's
-/// `stop` or the engine itself ends the run early. Throws ToolError if it has
-/// not been booted, or on a bad argument.
+/// `stop` or the engine itself ends the run early, and clearing any `stop` a
+/// previous run left set. Throws ToolError on a bad argument.
 nlohmann::json machine_run(const nlohmann::json &args);
 
 /// Schedule the characters of \p args["text"] as keystrokes, spaced
 /// \p args["frames_between"] frames apart (default 1). They are not delivered
 /// now -- they reach the machine cycle-stamped, during a later machine_run().
-/// Throws ToolError if it has not been booted, or on a bad argument.
+/// Throws ToolError on a bad argument, including one whose last key would be
+/// stamped past the end of the 32-bit cycle counter.
 nlohmann::json machine_keys(const nlohmann::json &args);
 
 } // namespace a2mcp
