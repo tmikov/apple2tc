@@ -52,4 +52,75 @@ std::string screen_text(void) {
   return ctx.out;
 }
 
+namespace {
+
+/// The standard Apple II lo-res palette, in nibble order.
+const char *const kGrColours[16] = {
+    "black",
+    "magenta",
+    "dark blue",
+    "purple",
+    "dark green",
+    "grey 1",
+    "medium blue",
+    "light blue",
+    "brown",
+    "orange",
+    "grey 2",
+    "pink",
+    "green",
+    "yellow",
+    "aqua",
+    "white"};
+
+} // namespace
+
+std::string screen_gr(void) {
+  const a2_iostate_t *io = a2host_io();
+  const uint8_t *page = get_ram() + a2_io_get_text_page_offset(io);
+  const bool mixed = a2_io_is_vidmode_mixed(io);
+  // In mixed mode the bottom four text rows replace the last eight cell rows.
+  const unsigned cell_rows = mixed ? 40 : 48;
+
+  std::string out;
+  out.reserve(cell_rows * 41 + 512);
+  for (unsigned cell_y = 0; cell_y != cell_rows; ++cell_y) {
+    const unsigned text_row = cell_y / 2;
+    for (unsigned x = 0; x != 40; ++x) {
+      // Same interleave as apple2_decode_text_screen() in lib/a2io/a2io.c
+      // ((scr_line % 8) * 128 + (scr_line / 8) * 40): `& 7`/`>> 3` are just
+      // `% 8`/`/ 8` for the unsigned, non-negative text_row here. Replicated
+      // rather than routed through that function because it decodes whole
+      // characters, which we would then have to un-pack back into nibbles.
+      const unsigned offset = (text_row & 7) * 0x80 + (text_row >> 3) * 40 + x;
+      const uint8_t b = page[offset];
+      // draw_gr_cb() in lib/a2io/a2io.c paints `ch & 0x0F` (the low nibble)
+      // into the upper of the pair's two cells first, then `ch >> 4` into the
+      // lower one -- so the even cell_y (upper cell) takes the low nibble.
+      const uint8_t nib = (cell_y & 1) ? (uint8_t)(b >> 4) : (uint8_t)(b & 0x0F);
+      out.push_back("0123456789ABCDEF"[nib]);
+    }
+    out.push_back('\n');
+  }
+
+  out += "\nlo-res colours: ";
+  for (unsigned i = 0; i != 16; ++i) {
+    out.push_back("0123456789ABCDEF"[i]);
+    out += "=";
+    out += kGrColours[i];
+    out += i == 15 ? "\n" : ", ";
+  }
+
+  if (mixed) {
+    out += "\ntext (bottom four lines):\n";
+    const std::string text = screen_text();
+    // The last four of the 24 lines screen_text() produces.
+    size_t pos = 0;
+    for (unsigned i = 0; i != 20; ++i)
+      pos = text.find('\n', pos) + 1;
+    out += text.substr(pos);
+  }
+  return out;
+}
+
 } // namespace a2mcp

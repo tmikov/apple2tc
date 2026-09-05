@@ -10,6 +10,12 @@
 #include "mcp_screen.h"
 #include "mcp_server.h"
 
+// Same reasoning as mcp_screen.cpp/mcp_machine.cpp: a2io.h pulls in
+// soundqueue.h, which uses <atomic> in its C++ branch, so it must not be
+// wrapped in extern "C" here.
+#include "apple2tc/a2host_api.h"
+#include "apple2tc/a2io.h"
+
 namespace a2mcp {
 namespace {
 
@@ -124,8 +130,16 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
     const std::string format = args.value("format", std::string("text"));
     if (format != "text")
       throw ToolError("format \"" + format + "\" is not implemented yet");
+    const a2_vidmode_t mode = a2_io_get_vidmode(a2host_io());
+    std::string text;
+    if (mode == A2_VIDMODE_TEXT)
+      text = screen_text();
+    else if (mode == A2_VIDMODE_GR)
+      text = screen_gr();
+    else
+      text = "hi-res: no text rendering. Call screen with format \"image\".";
     nlohmann::json content = nlohmann::json::array();
-    content.push_back({{"type", "text"}, {"text", screen_text()}});
+    content.push_back({{"type", "text"}, {"text", text}});
     return nlohmann::json{{"content", content}};
   }
   throw ToolError("unknown tool: " + name);

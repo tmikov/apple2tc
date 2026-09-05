@@ -15,4 +15,9 @@ namespace a2mcp {
 /// Trailing spaces are kept so column positions survive.
 std::string screen_text(void);
 
+/// The lo-res (GR) screen as a 40x48 grid of hex colour digits (40x40 in
+/// mixed mode), followed by a blank line, a colour legend, and -- in mixed
+/// mode -- the bottom four text lines.
+std::string screen_gr(void);
+
 } // namespace a2mcp

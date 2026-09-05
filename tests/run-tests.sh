@@ -417,6 +417,19 @@ if ! grep '"id":4' mcp-tmp/hidden.txt | grep -q 'stop_reason\\": \\"limit'; then
   exit 1
 fi
 
+$a6502 mcp/gr.s mcp-tmp/gr.b33
+mcp_transcript gr
+# The reply is a JSON object dumped into a JSON string, so its own quotes
+# reach the transcript backslash-escaped and on one line -- a line-anchored
+# `^1111111111` never matches for that reason, not because the grid is wrong.
+# A plain, unanchored substring search on the full 40-character run of `1`s
+# that gr.s paints across row 0 is specific enough that nothing else in the
+# transcript can satisfy it by accident.
+if ! grep -qF '1111111111111111111111111111111111111111' mcp-tmp/gr.txt; then
+  echo "FAIL: the lo-res grid does not show the colour-1 row the program painted" >&2
+  exit 1
+fi
+
 # `keys` schedules rather than injects, and the .keys file it can write is the
 # whole reason to prefer that: a session recorded through the tool must replay
 # bit-for-bit under a2run's own --key-file=.
