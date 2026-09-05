@@ -795,6 +795,10 @@ uint64_t a2host_visible_hash(void) {
   return h;
 }
 
+unsigned a2host_page_flips(void) {
+  return io_.page_flips;
+}
+
 /// Emit this frame's hash if requested and advance the frame counter.
 /// Returns true when the frame limit has been reached.
 bool a2host_record_frame(void) {

@@ -149,6 +149,12 @@ unsigned a2host_frame_no(void);
 /// double-buffered program.
 uint64_t a2host_visible_hash(void);
 
+/// Number of times A2_VC_PAGE2 has actually changed value over the whole
+/// session -- see a2_iostate_t::page_flips. A front end driving a "did the
+/// program just present a finished frame" check watches this counter change
+/// between two points, rather than the switch being merely accessed.
+unsigned a2host_page_flips(void);
+
 /// True once the engine has asked to stop early — a breakpoint, or a collection
 /// limit.
 bool a2host_engine_stopped(void);
