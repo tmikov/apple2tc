@@ -10,6 +10,7 @@ include_directories(${APPLE2TC_ROOT_DIR}/external/json/include)
 add_library(a2mcp_lib
   mcp_machine.cpp mcp_machine.h
   mcp_paths.cpp mcp_paths.h
+  mcp_screen.cpp mcp_screen.h
   mcp_server.cpp mcp_server.h
   mcp_tools.cpp mcp_tools.h
   )

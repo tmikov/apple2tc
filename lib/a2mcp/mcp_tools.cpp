@@ -7,6 +7,7 @@
 
 #include "mcp_tools.h"
 #include "mcp_machine.h"
+#include "mcp_screen.h"
 #include "mcp_server.h"
 
 namespace a2mcp {
@@ -115,6 +116,16 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
     return text_result(machine_status());
   if (name == "run")
     return text_result(machine_run(args));
+  if (name == "screen") {
+    if (!machine_booted())
+      throw ToolError("not booted: call boot first");
+    const std::string format = args.value("format", std::string("text"));
+    if (format != "text")
+      throw ToolError("format \"" + format + "\" is not implemented yet");
+    nlohmann::json content = nlohmann::json::array();
+    content.push_back({{"type", "text"}, {"text", screen_text()}});
+    return nlohmann::json{{"content", content}};
+  }
   throw ToolError("unknown tool: " + name);
 }
 

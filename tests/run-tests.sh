@@ -374,6 +374,15 @@ if ! grep -q 'stop_reason\\": \\"probe' mcp-tmp/stop.txt; then
   exit 1
 fi
 
+mcp_transcript screen-text
+# The banner is plain text inside the reply, not JSON-escaped, so an
+# unadorned grep finds it -- and finding it independently of the diff means a
+# wrong-but-stable baseline (960 spaces, mojibake) cannot pass silently.
+if ! grep -q 'APPLE \]\[' mcp-tmp/screen-text.txt; then
+  echo "FAIL: a2mcp read the text screen but did not find the ROM banner on it" >&2
+  exit 1
+fi
+
 # realpath resolves symlinks, so a link pointing outside the root is the same
 # rejection as a "../" path -- but only if the jail resolves before it opens.
 ln -sf /etc/passwd mcp-tmp/escape.dsk
