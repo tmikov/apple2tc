@@ -134,24 +134,24 @@ typedef enum { A2_VIDMODE_TEXT, A2_VIDMODE_GR, A2_VIDMODE_HGR } a2_vidmode_t;
 
 /// Disk II drive state.
 typedef struct {
-  uint8_t *nib_data; ///< Nibblized track data (all 35 tracks).
-  uint32_t position; ///< Byte offset within current track.
+  uint8_t *nib_data;      ///< Nibblized track data (all 35 tracks).
+  uint32_t position;      ///< Byte offset within current track.
   bool write_protected;
   bool mounted;
-  bool skip; ///< Timing toggle for read.
-  int current_track; ///< 0-34.
+  bool skip;              ///< Timing toggle for read.
+  int current_track;      ///< 0-34.
 } a2_disk2_drive_t;
 
 /// Disk II controller state.
 typedef struct {
-  uint8_t data_register; ///< 74LS323 shift register.
-  bool q6, q7; ///< Mode latches.
+  uint8_t data_register;      ///< 74LS323 shift register.
+  bool q6, q7;                ///< Mode latches.
   bool motor_on;
-  uint64_t motor_off_cycle; ///< Cycle when motor was turned off.
-  unsigned last_nibble_cycle; ///< Cycle when last nibble byte was clocked in.
-  int selected_drive; ///< 0 or 1.
-  uint8_t phases; ///< Bitmask of active phase magnets.
-  int phase_position; ///< Half-track 0-69.
+  uint64_t motor_off_cycle;   ///< Cycle when motor was turned off.
+  unsigned last_nibble_cycle;  ///< Cycle when last nibble byte was clocked in.
+  int selected_drive;         ///< 0 or 1.
+  uint8_t phases;             ///< Bitmask of active phase magnets.
+  int phase_position;         ///< Half-track 0-69.
   a2_disk2_drive_t drive[2];
 } a2_disk2_t;
 
