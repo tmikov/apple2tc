@@ -29,7 +29,12 @@ std::string screen_gr(void);
 /// blink phase so that a paused machine's screenshot is reproducible.
 /// \param hgr_mode - which of the a2_hgr_mode_t renderers to use for a HGR
 ///     page. Ignored (but harmless to pass) in TEXT and GR mode.
-std::string screen_png(a2_hgr_mode_t hgr_mode);
+/// \param scale - output pixels per colour cell for A2_HGR_COLOR140 and
+///     A2_HGR_MONO140: 1 for the native 140x192 image, 2 for the 280x192
+///     image doubled to match A2_HGR_COLOR (and everything else). Ignored
+///     (but harmless to pass) for every other mode, and for TEXT and GR --
+///     none of those have cells, so there is nothing for `scale` to mean.
+std::string screen_png(a2_hgr_mode_t hgr_mode, unsigned scale);
 
 /// Standard base64 encoding (RFC 4648), with '=' padding.
 std::string base64(const std::string &bytes);

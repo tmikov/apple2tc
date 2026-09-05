@@ -138,7 +138,7 @@ void png_sink(void *ctx, void *data, int size) {
 
 } // namespace
 
-std::string screen_png(a2_hgr_mode_t hgr_mode) {
+std::string screen_png(a2_hgr_mode_t hgr_mode, unsigned scale) {
   const a2_iostate_t *io = a2host_io();
   const uint8_t *ram = get_ram();
   // Blink phase is a function of wall-clock time in the renderers, so a fixed
@@ -147,7 +147,8 @@ std::string screen_png(a2_hgr_mode_t hgr_mode) {
   const uint64_t kBlinkMs = 0;
 
   static a2_screen screen;
-  switch (a2_io_get_vidmode(io)) {
+  const a2_vidmode_t vidmode = a2_io_get_vidmode(io);
+  switch (vidmode) {
   case A2_VIDMODE_TEXT:
     apple2_render_text_screen(ram + a2_io_get_text_page_offset(io), &screen, kBlinkMs);
     break;
@@ -166,6 +167,21 @@ std::string screen_png(a2_hgr_mode_t hgr_mode) {
     break;
   }
 
+  // `scale` only means anything for the two colour-clock HGR modes: the
+  // renderer above fills just their first 140 columns per row (a2io.h's
+  // a2_hgr_mode_t comments), one pixel per colour cell. Every other case --
+  // A2_HGR_COLOR's per-dot approximation, and TEXT/GR, none of which have
+  // cells -- always fills the full 280 and `scale` is accepted-and-ignored,
+  // the same precedent `render` already sets for TEXT/GR.
+  const bool cellMode =
+      vidmode == A2_VIDMODE_HGR && (hgr_mode == A2_HGR_COLOR140 || hgr_mode == A2_HGR_MONO140);
+  const unsigned width = (cellMode && scale == 1) ? 140 : A2_SCREEN_W;
+  // How many destination columns share one source column: 2 when widening a
+  // cell-mode render back to 280 for `scale: 2`, 1 (a straight copy)
+  // otherwise -- including `scale: 1`, where the renderer already produced
+  // exactly `width` columns natively.
+  const unsigned widen = (cellMode && scale == 2) ? 2 : 1;
+
   // Three channels, not four. a2_screen is "RGB encoding of the Apple2 screen"
   // (a2io.h) and its fourth byte is padding: every renderer in a2io.c builds
   // its pixels as {r, g, b, 0} and nothing ever fills that byte in. Handing
@@ -174,20 +190,20 @@ std::string screen_png(a2_hgr_mode_t hgr_mode) {
   // and completely invisible in any viewer that honours alpha. Repacking to
   // RGB is what makes the screenshot a picture rather than a transparent
   // rectangle.
-  std::vector<uint8_t> rgb((size_t)A2_SCREEN_W * A2_SCREEN_H * 3);
+  std::vector<uint8_t> rgb((size_t)width * A2_SCREEN_H * 3);
   for (unsigned y = 0; y != A2_SCREEN_H; ++y) {
     const a2_rgba8 *src = screen.data + (size_t)y * A2_SCREEN_W_POT;
-    uint8_t *dst = rgb.data() + (size_t)y * A2_SCREEN_W * 3;
-    for (unsigned x = 0; x != A2_SCREEN_W; ++x) {
-      *dst++ = src[x].r;
-      *dst++ = src[x].g;
-      *dst++ = src[x].b;
+    uint8_t *dst = rgb.data() + (size_t)y * width * 3;
+    for (unsigned x = 0; x != width; ++x) {
+      const a2_rgba8 &px = src[x / widen];
+      *dst++ = px.r;
+      *dst++ = px.g;
+      *dst++ = px.b;
     }
   }
 
   std::string out;
-  if (!stbi_write_png_to_func(
-          png_sink, &out, A2_SCREEN_W, A2_SCREEN_H, 3, rgb.data(), A2_SCREEN_W * 3))
+  if (!stbi_write_png_to_func(png_sink, &out, width, A2_SCREEN_H, 3, rgb.data(), width * 3))
     throw ToolError("PNG encoding failed");
   return out;
 }

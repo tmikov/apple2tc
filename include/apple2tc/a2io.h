@@ -54,11 +54,17 @@ void apple2_render_gr_screen(const uint8_t *pageStart, a2_screen *screen, uint64
 typedef enum {
   A2_HGR_COLOR, ///< Per-dot artifact approximation; what the GUI has always drawn.
   A2_HGR_MONO, ///< 1-bit white on black.
-  A2_HGR_COLOR140, ///< Decoded at colour-clock resolution, doubled back to 280.
+  A2_HGR_COLOR140, ///< Decoded at colour-clock resolution: one pixel per cell,
+                   ///< so apple2_render_hgr_screen_mode() only fills the first
+                   ///< 140 columns of each row for this mode. A caller that
+                   ///< wants the traditional 280-wide image doubles each
+                   ///< column back out itself.
   A2_HGR_MONO140, ///< Ink coverage at colour-clock resolution: a cell is white if
                   ///< either of its two dots is set, else black. A colour fill is
                   ///< an alternating dot pattern, so this is the occupancy mask
                   ///< that renders as a solid region instead of A2_HGR_MONO's comb.
+                  ///< Like A2_HGR_COLOR140, one pixel per cell: only the first
+                  ///< 140 columns of each row are filled.
 } a2_hgr_mode_t;
 
 /// Render the hires graphics (GR) page pointed by pageStart into a RGB screen.
@@ -77,7 +83,9 @@ void apple2_render_hgr_screen(
     bool mono);
 
 /// Render the hires graphics (HGR) page pointed by pageStart into a RGB
-/// screen, selecting one of the a2_hgr_mode_t render modes.
+/// screen, selecting one of the a2_hgr_mode_t render modes. A2_HGR_COLOR140
+/// and A2_HGR_MONO140 fill only the first 140 columns of each row -- see
+/// their a2_hgr_mode_t comments; every other mode fills all 280.
 /// \param textPageStart - the start of the text page. Only used if mixed == true.
 /// \param ms - millisecond since hardware reset. This is used to determine the
 ///     blink phase. Only needed if mixed == true.
