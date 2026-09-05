@@ -48,10 +48,22 @@ void apple2_render_text_screen(const uint8_t *pageStart, a2_screen *screen, uint
 ///     blink phase. Only needed if mixed == true.
 void apple2_render_gr_screen(const uint8_t *pageStart, a2_screen *screen, uint64_t ms, bool mixed);
 
+/// How a hi-res (HGR) page is turned into pixels. The Apple II's 7.16 MHz dot
+/// clock is exactly twice the 3.58 MHz NTSC colourburst, so two adjacent dots
+/// make one colour clock and the true colour resolution is 140, not 280.
+typedef enum {
+  A2_HGR_COLOR, ///< Per-dot artifact approximation; what the GUI has always drawn.
+  A2_HGR_MONO, ///< 1-bit white on black.
+  A2_HGR_COLOR140, ///< Decoded at colour-clock resolution, doubled back to 280.
+} a2_hgr_mode_t;
+
 /// Render the hires graphics (GR) page pointed by pageStart into a RGB screen.
 /// \param textPageStart - the start of the text page. Only used if mixed == true.
 /// \param ms - millisecond since hardware reset. This is used to determine the
 ///     blink phase. Only needed if mixed == true.
+/// \param mono - if true, render 1-bit white-on-black instead of colour. A thin
+///     wrapper around apple2_render_hgr_screen_mode(), kept so existing callers
+///     (lib/a2host/a2host_gui.c, lib/a2mcp) do not have to change.
 void apple2_render_hgr_screen(
     const uint8_t *grPageStart,
     const uint8_t *textPageStart,
@@ -59,6 +71,19 @@ void apple2_render_hgr_screen(
     uint64_t ms,
     bool mixed,
     bool mono);
+
+/// Render the hires graphics (HGR) page pointed by pageStart into a RGB
+/// screen, selecting one of the a2_hgr_mode_t render modes.
+/// \param textPageStart - the start of the text page. Only used if mixed == true.
+/// \param ms - millisecond since hardware reset. This is used to determine the
+///     blink phase. Only needed if mixed == true.
+void apple2_render_hgr_screen_mode(
+    const uint8_t *grPageStart,
+    const uint8_t *textPageStart,
+    a2_screen *screen,
+    uint64_t ms,
+    bool mixed,
+    a2_hgr_mode_t mode);
 
 typedef struct {
   /// Queue of float sound samples. Filled by the main thread, read by the
@@ -109,24 +134,24 @@ typedef enum { A2_VIDMODE_TEXT, A2_VIDMODE_GR, A2_VIDMODE_HGR } a2_vidmode_t;
 
 /// Disk II drive state.
 typedef struct {
-  uint8_t *nib_data;      ///< Nibblized track data (all 35 tracks).
-  uint32_t position;      ///< Byte offset within current track.
+  uint8_t *nib_data; ///< Nibblized track data (all 35 tracks).
+  uint32_t position; ///< Byte offset within current track.
   bool write_protected;
   bool mounted;
-  bool skip;              ///< Timing toggle for read.
-  int current_track;      ///< 0-34.
+  bool skip; ///< Timing toggle for read.
+  int current_track; ///< 0-34.
 } a2_disk2_drive_t;
 
 /// Disk II controller state.
 typedef struct {
-  uint8_t data_register;      ///< 74LS323 shift register.
-  bool q6, q7;                ///< Mode latches.
+  uint8_t data_register; ///< 74LS323 shift register.
+  bool q6, q7; ///< Mode latches.
   bool motor_on;
-  uint64_t motor_off_cycle;   ///< Cycle when motor was turned off.
-  unsigned last_nibble_cycle;  ///< Cycle when last nibble byte was clocked in.
-  int selected_drive;         ///< 0 or 1.
-  uint8_t phases;             ///< Bitmask of active phase magnets.
-  int phase_position;         ///< Half-track 0-69.
+  uint64_t motor_off_cycle; ///< Cycle when motor was turned off.
+  unsigned last_nibble_cycle; ///< Cycle when last nibble byte was clocked in.
+  int selected_drive; ///< 0 or 1.
+  uint8_t phases; ///< Bitmask of active phase magnets.
+  int phase_position; ///< Half-track 0-69.
   a2_disk2_drive_t drive[2];
 } a2_disk2_t;
 

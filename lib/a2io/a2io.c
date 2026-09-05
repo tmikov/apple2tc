@@ -123,6 +123,20 @@ void apple2_render_gr_screen(const uint8_t *pageStart, a2_screen *screen, uint64
   apple2_decode_text_screen(pageStart, &ctx, draw_gr_cb);
 }
 
+/// Composite-artifact colours for an isolated hi-res dot/colour-clock,
+/// indexed by (paletteBit << 1 | dotParity). Shared between the COLOR and
+/// COLOR140 renderers below so they agree about which colour is which.
+static const a2_rgba8 s_hgr_artifact_colors[4] = {
+    // Violet.
+    {255, 68, 253},
+    // Green.
+    {20, 245, 60},
+    // Blue.
+    {20, 207, 253},
+    // Red/orange.
+    {255, 106, 60},
+};
+
 void apple2_render_hgr_screen(
     const uint8_t *grPageStart,
     const uint8_t *textPageStart,
@@ -130,6 +144,17 @@ void apple2_render_hgr_screen(
     uint64_t ms,
     bool mixed,
     bool mono) {
+  apple2_render_hgr_screen_mode(
+      grPageStart, textPageStart, screen, ms, mixed, mono ? A2_HGR_MONO : A2_HGR_COLOR);
+}
+
+void apple2_render_hgr_screen_mode(
+    const uint8_t *grPageStart,
+    const uint8_t *textPageStart,
+    a2_screen *screen,
+    uint64_t ms,
+    bool mixed,
+    a2_hgr_mode_t mode) {
   // There are 8 1024B blocks. Block 0 starts at line 0, block 1 starts at line 1, etc.
   //
   // Each 1024KB block consists of 8 128B regions. Each region consists of 3 40B lines,
@@ -155,7 +180,7 @@ void apple2_render_hgr_screen(
         grPageStart + (scr_line % 8) * 1024 + ((scr_line / 8) % 8) * 128 + (scr_line / 64) * 40;
 
     a2_rgba8 *d = srow;
-    if (mono) {
+    if (mode == A2_HGR_MONO) {
       const a2_rgba8 fg = {0xFF, 0xFF, 0xFF, 0};
       const a2_rgba8 bg = {0, 0, 0, 0};
       for (unsigned bcol = 0; bcol != 40; ++start, ++bcol) {
@@ -164,25 +189,17 @@ void apple2_render_hgr_screen(
           *d = memb & 1 ? fg : bg;
         }
       }
-    } else {
-      // const orangeCol: Color = [255, 106, 60];
-      // const greenCol: Color = [20, 245, 60];
-      // const blueCol: Color = [20, 207, 253];
-      // const violetCol: Color = [255, 68, 253];
-      // const whiteCol: Color = [255, 255, 255];
-      // const blackCol: Color = [0, 0, 0];
+    } else if (mode == A2_HGR_COLOR) {
+      // Per-dot artifact approximation: walk one dot at a time with a
+      // one-dot lookahead ("last"). A set dot is white if the previous dot
+      // was also set; otherwise its colour comes from the palette bit
+      // (highBit) and which of the two dot phases it falls on (odd). This is
+      // deliberately naive -- an isolated dot's colour depends on its
+      // horizontal parity, so the same feature can render violet in one
+      // column and green in the next. A2_HGR_COLOR140 below decodes at the
+      // true colour-clock resolution instead.
       const a2_rgba8 black = {0, 0, 0};
       const a2_rgba8 white = {0xFF, 0xFF, 0xFF};
-      static a2_rgba8 colors[4] = {
-          // Violet.
-          {255, 68, 253},
-          // Green.
-          {20, 245, 60},
-          // Blue.
-          {20, 207, 253},
-          // Red.
-          {255, 106, 60},
-      };
       uint8_t odd = 0;
       uint8_t last = 0;
 
@@ -196,12 +213,69 @@ void apple2_render_hgr_screen(
             if (last)
               *d = white;
             else {
-              *d = colors[highBit | odd];
+              *d = s_hgr_artifact_colors[highBit | odd];
             }
           }
           last = memb & 1;
           odd ^= 1;
         }
+      }
+    } else {
+      // A2_HGR_COLOR140: decode at the true colour-clock resolution.
+      //
+      // The 7.16 MHz dot clock is exactly twice the 3.58 MHz NTSC
+      // colourburst, so two adjacent dots make one colour clock and the
+      // true colour resolution is 140, not 280. Expand the 40 bytes into
+      // 280 dots first, remembering which byte -- and hence which palette
+      // bit -- produced each one; then decode colour cell k (0..139) from
+      // dots 2k and 2k+1: both set is white, neither is black, and exactly
+      // one set picks a colour by which of the two dots it is (the phase)
+      // and that dot's palette bit. Each cell is emitted as two pixels so
+      // the image stays 280x192.
+      bool dots[280];
+      uint8_t hiBit[280];
+      {
+        const uint8_t *p = start;
+        unsigned idx = 0;
+        for (unsigned bcol = 0; bcol != 40; ++p, ++bcol) {
+          uint8_t memb = *p;
+          uint8_t highBit = (memb >> 6) & 2;
+          for (unsigned i = 0; i != 7; memb >>= 1, ++idx, ++i) {
+            dots[idx] = (memb & 1) != 0;
+            hiBit[idx] = highBit;
+          }
+        }
+      }
+
+      const a2_rgba8 black = {0, 0, 0};
+      const a2_rgba8 white = {0xFF, 0xFF, 0xFF};
+      for (unsigned k = 0; k != 140; ++k) {
+        unsigned i0 = 2 * k, i1 = i0 + 1;
+        a2_rgba8 c;
+        if (dots[i0] && dots[i1]) {
+          c = white;
+        } else if (!dots[i0] && !dots[i1]) {
+          c = black;
+        } else {
+          // Exactly one of the pair is set. Use its own dot parity and
+          // palette bit, indexed the same way the COLOR renderer's
+          // `colors[highBit | odd]` is, so the two renderers agree about
+          // which colour is which.
+          //
+          // Deliberate simplification: on real hardware the high bit also
+          // delays its 7 dots by half a dot, so a cell whose two dots
+          // straddle a byte boundary can, in theory, blend two palettes at
+          // sub-dot resolution. Neither this renderer nor A2_HGR_COLOR
+          // above implements that -- doing it properly means building the
+          // row at sub-dot resolution. It is skipped here because the goal
+          // is a legible idealised image, not NTSC accuracy, and the
+          // fringing that half-dot delay produces is exactly the noise this
+          // mode exists to remove.
+          unsigned seti = dots[i0] ? i0 : i1;
+          c = s_hgr_artifact_colors[hiBit[seti] | (seti & 1)];
+        }
+        d[i0] = c;
+        d[i1] = c;
       }
     }
   }
