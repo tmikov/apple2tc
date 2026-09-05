@@ -70,7 +70,7 @@ Output format flags: `--simple-c`, `--ir`, `--irc1`, `--asm` (default)
 - **`a6502`** — 6502 two-pass symbolic assembler (produces bit-accurate ROM images)
 - **`id`** — Interactive disassembler for binary exploration
 - **`textemu`** — text-mode (ncurses) emulator, plus `disk_test`. Needs Curses; unrelated to the a2emu/a2run pair
-- **`a2mcp`** — an MCP server front end, driven by JSON-RPC on stdin/stdout instead of a frame limit. Reach for this one when an agent needs to drive the machine interactively — boot, look at the screen, type, look again — rather than replay a fixed recording. See `docs/a2mcp.md`
+- **`a2mcp`** — an MCP server front end, driven by JSON-RPC on stdin/stdout instead of a frame limit. Reach for this one when an agent needs to drive the machine interactively — boot, look at the screen, type, look again — rather than replay a fixed recording. See `docs/a2mcp.md`, and `docs/a2mcp-playing.md` for driving it against an actual game
 
 `a2emu`, `a2run` and `a2mcp` are one program with three front ends. The
 machine, the command line, the keyboard and the probe engine are all

@@ -55,6 +55,14 @@ nothing else, so an option that could put other text there is simply not on
 the list. The whitelist alone is not enough for `--probe=`, which *is*
 forwarded: see `--probe-out=` above.
 
+## Playing a game with it
+
+`docs/a2mcp-playing.md` covers driving the machine against a real game: that a
+disk does not autoboot (type `PR#6`), that `until: "screen_change"` is for
+*reaching* a stable state and is useless once anything animates, how to read a
+game's control scheme out of its own disk image, and how to tell a game you are
+controlling from an attract loop that ignores you.
+
 ## The three things an agent cannot guess
 
 **Emulated time only advances inside `run`.** Between tool calls the machine
