@@ -176,6 +176,12 @@ typedef struct {
   uint8_t last_key;
   /// Video control status.
   uint8_t vid_control;
+  /// Number of times A2_VC_PAGE2 has actually changed value, counted at the
+  /// soft switch (LOWSCR/HISCR) in a2_io_peek() -- not the number of times
+  /// either switch was accessed, which is routine and far more frequent than
+  /// an actual page flip. A double-buffered program presenting a finished
+  /// frame is exactly a page-2 flip, which is what this exists to detect.
+  unsigned page_flips;
   /// Callback when speaker is accessed.
   void *spkr_cb_ctx;
   void (*spkr_cb)(void *ctx, unsigned cycles);

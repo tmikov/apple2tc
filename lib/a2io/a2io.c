@@ -475,11 +475,20 @@ uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
     case A2_LOWSCR:
       if (io->debug & A2_DEBUG_IO1)
         fprintf(stderr, "[%u] LOWSCR\n", cycles);
+      // Counted only on an actual change: this switch is read or written on
+      // every access whether or not the bit was already clear, and a2_io_poke
+      // reaches here twice per write (see its comment) -- comparing before to
+      // after, rather than counting accesses, is what keeps both of those
+      // from over-counting flips.
+      if (io->vid_control & A2_VC_PAGE2)
+        ++io->page_flips;
       io->vid_control &= ~A2_VC_PAGE2;
       break;
     case A2_HISCR:
       if (io->debug & A2_DEBUG_IO1)
         fprintf(stderr, "[%u] HISCR\n", cycles);
+      if (!(io->vid_control & A2_VC_PAGE2))
+        ++io->page_flips;
       io->vid_control |= A2_VC_PAGE2;
       break;
     case A2_LORES:
