@@ -19,8 +19,9 @@ apple2tc=$bin/tools/apple2tc/apple2tc
 id=$bin/tools/id/id
 a2run=$bin/tools/a2run/a2run
 a2emu=$bin/tools/a2emu/a2emu
+a2mcp=$bin/tools/a2mcp/a2mcp
 
-for tool in "$a6502" "$apple2tc" "$id" "$a2run" "$a2emu"; do
+for tool in "$a6502" "$apple2tc" "$id" "$a2run" "$a2emu" "$a2mcp"; do
   if [ ! -x "$tool" ]; then
     echo "Error: required binary not found: $tool" >&2
     exit 1
@@ -331,6 +332,28 @@ if ! diff -q frontend-run.txt frontend-emu.txt > /dev/null; then
   exit 1
 fi
 rm frontend-run.txt frontend-emu.txt
+
+# --- a2mcp -------------------------------------------------------------------
+# The MCP server is driven entirely by stdin, so a transcript of requests and a
+# baseline of replies is the whole test. Deterministic because headless is
+# fixed-step: the same requests run the same cycles every time.
+mkdir -p mcp-tmp
+
+mcp_transcript() {
+  # $1: base name under mcp/; $2...: extra a2mcp arguments
+  local base=$1; shift
+  if ! $a2mcp --root=. "$@" < "mcp/$base.jsonl" > "mcp-tmp/$base.txt" 2>"mcp-tmp/$base.err"; then
+    echo "FAIL: a2mcp exited non-zero on mcp/$base.jsonl" >&2
+    cat "mcp-tmp/$base.err" >&2
+    exit 1
+  fi
+  if ! diff -u "mcp/$base.expected" "mcp-tmp/$base.txt"; then
+    echo "FAIL: a2mcp transcript $base differs from its baseline" >&2
+    exit 1
+  fi
+}
+
+mcp_transcript handshake
 
 # ...but that check, and every other check in this repo, runs the host in
 # *fixed-step* mode -- because reproducibility is what they all exist for. The
@@ -832,5 +855,6 @@ if diff -q probe-tmp/replay-key.txt probe-tmp/replay-nokey.txt > /dev/null; then
 fi
 
 rm -rf probe-tmp
+rm -rf mcp-tmp
 
 echo "Success!"
