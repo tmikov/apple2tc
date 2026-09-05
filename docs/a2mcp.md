@@ -17,7 +17,8 @@ transcript for each against a committed baseline (`tests/mcp/*.jsonl` /
 `*.expected`) and separately checks that `a2mcp`'s own frame loop tracks
 `a2run`'s bit for bit, that a `keys`-recorded session replays under `a2run
 --key-file=`, and that a symlink cannot be used to read or write outside
-`--root`.
+`--root` -- one test for each direction, because the read and write halves of
+the jail resolve differently and only the read half used to be covered.
 
 ## Launching it
 
@@ -41,9 +42,9 @@ Options (`lib/a2mcp/mcp_main.cpp`):
 
 | option | effect |
 |---|---|
-| `--root=<dir>` | **Required.** Every path an agent supplies to `boot` or `screen`/`sound`'s `save_to`/`save_wav` is resolved against this directory and rejected if it resolves outside it — `realpath()` on both sides, so a symlink that points out of the jail is caught the same as a literal `../` (`lib/a2mcp/mcp_paths.cpp`). |
+| `--root=<dir>` | **Required.** Every path an agent supplies to `boot` or `screen`/`sound`'s `save_to`/`save_wav` is resolved against this directory and rejected if it resolves outside it — `realpath()` on both sides, so a symlink that points out of the jail is caught the same as a literal `../`. Reading and writing are separate entry points (`jail_existing_file()` / `jail_new_file()` in `lib/a2mcp/mcp_paths.cpp`), because a file being written need not exist yet: only its directory has to. A name that *does* exist is resolved either way, so an existing symlink at the final component of a `save_to` is judged by where it points. |
 | `--probe=<path>` | A probe script (`docs/probes.md`), compiled once at startup, before the first request is served. A bad script exits the process with a diagnostic on stderr rather than turning into a tool error, because at that point there is no client connected yet to hand an error to. |
-| `--probe-out=<path>` | Where the probe's `printf` output goes. Requires `--probe=`. |
+| `--probe-out=<path>` | Where the probe's `printf` output goes. Requires `--probe=`. Without it, a probe's `printf` goes to **stderr** — `a2host_probe_output_to_stderr()`, called before `a2host_parse_args`. The library's own default is stdout, which is right for `a2run` (whose stdout is a report) and would put script output into the middle of the JSON-RPC stream here. Fixed at the sink rather than by requiring this option, so a probe opcode that prints can be added later without rediscovering the problem. |
 | `--keys-out=<path>` | Opened before the server starts serving, so the first key any `keys` call schedules lands in the file. Every scheduled key is appended as a `<cycles> <key>` line — the same format `a2run --key-file=` reads — turning the whole session into a replayable recording. |
 | `--hash-frames=<path>` | Per-frame video-state hashes, written exactly as `a2run --hash-frames=` writes them. This is what lets `run` be diffed frame-for-frame against a plain `a2run` session — it is the test `tests/run-tests.sh` runs to prove the two frame loops agree. |
 
@@ -51,7 +52,8 @@ Options (`lib/a2mcp/mcp_main.cpp`):
 any other `a2host` option that writes to stdout is deliberately not forwarded
 (`mcp_main.cpp`'s comment on the whitelist) — stdout carries JSON-RPC and
 nothing else, so an option that could put other text there is simply not on
-the list.
+the list. The whitelist alone is not enough for `--probe=`, which *is*
+forwarded: see `--probe-out=` above.
 
 ## The three things an agent cannot guess
 
@@ -143,6 +145,9 @@ many frames apart (default 1); `\n` is translated to Return, the same
 translation `--kbd-file=` uses. The reply reports how many keys were
 scheduled and how many (across every `keys` call so far) are still waiting to
 be drained by a `run`.
+
+`format: "text"` has no file to write, so passing `save_to` with it is
+rejected rather than ignored.
 
 ### `sound`
 
@@ -242,6 +247,35 @@ The 17050-cycle spacing between consecutive keys is one frame's worth of
 cycles at the emulated 6502's clock rate — `frames_between: 1`, the `keys`
 default.
 
+## The error model
+
+**The tool layer never calls `exit()`.** Every failure `mcp_tools.cpp` and the
+`machine_*`/`sound_*`/`screen_*` functions under it can reach is a JSON-RPC
+error with a message, and the server goes on serving.
+
+That holds only because `a2mcp` validates ahead of the library's `*OrDie`
+paths, which are not so careful: `init_emulated` reads through
+`readFileOrDie`, `mountDisk` exits on an image `a2_disk2_mount` will not take,
+`loadB33` exits on a bad header, and `Emu6502::loadROM` asserts on an
+oversized ROM. So `boot` jails every path, confirms it is a regular file, and
+checks its size and header against the kind it was passed as, before the
+engine sees it; and every numeric argument is bounded before it is used.
+
+**The library beneath the tool layer can still exit, in these cases**, all of
+them known and none of them reachable through a well-formed call:
+
+  - `a2host_schedule_key()` exits if its `realloc` fails.
+  - `probe_fatal()` exits on a probe runtime fault — a stack overflow or
+    corrupt bytecode in a script that compiled — from inside the frame loop a
+    `run` is driving.
+  - Anything a future forwarded option or engine path adds that dies rather
+    than returning a failure. The pattern is the library's, not this front
+    end's, so the guard has to be re-established for each thing forwarded.
+
+The exits that are *by design* all happen before the first request is served:
+bad launch arguments, and probe compilation, where dying is correct and the
+MCP client shows the stderr.
+
 ## Known limitations
 
 These are properties of the shipped code, not open bugs waiting on a fix —
@@ -266,15 +300,16 @@ it.
    did. This is `a2io.c`'s pre-existing behaviour, not something `a2mcp`
    introduced.
 
-3. **A long `keys` call at a wide spacing can schedule into the past.**
-   `keys` stamps its *n*-th character at `spacing * n`, computed in 32-bit
-   `unsigned`, and the `text` argument has no length cap. At
-   `frames_between: 600` (the maximum), the multiplication wraps somewhere
-   around the 420th character, and the wrapped stamp can land below the
-   current cycle count — a key "scheduled" for a moment already past. In
-   practice this only bites a single call carrying hundreds of characters at
-   a wide spacing; ordinary use (default spacing, ordinary strings) is far
-   from the boundary.
+3. **A long `keys` call at a wide spacing is refused, not wrapped.** `keys`
+   stamps its *n*-th character `spacing * n` frames ahead, and the stamp the
+   machine stores is a 32-bit cycle count. The call computes where its last
+   key would land in 64-bit arithmetic first and raises a tool error if that
+   is past 2^32 — at `frames_between: 600` (the maximum) that is somewhere
+   around the 420th character of one call. The refusal is the limitation:
+   there is no way to schedule that far ahead, because the counter the stamp
+   lives in cannot hold it. Wrapping instead would put the key *below* the
+   current cycle count, firing the whole tail at once and writing a
+   `--keys-out=` file that no replay can read.
 
 4. **`frames_between: 0` past 32 keys drops keys.** The hardware keyboard
    queue holds 32 entries (`A2_KBD_QUEUE_SIZE`); stamping every key at the
@@ -293,7 +328,10 @@ it.
    file is non-monotonic and `a2run --key-file=` will not replay it
    correctly. Recording per *session* rather than per *boot* was a deliberate
    choice; this consequence of it was not designed around, and a session that
-   needs to reboot and still be replayable has no answer here yet.
+   needs to reboot and still be replayable has no answer here yet. What the
+   reboot does do is say so, twice: a warning on stderr, and a `# reboot:`
+   line in the recording itself, which `load_key_file()` skips as a comment —
+   so whoever finds the broken replay finds the reason in the file.
 
 6. **`screen_change` can fire on pixels nobody can see.** In mixed HGR mode,
    `a2host_visible_hash()` hashes the *entire* hi-res page, including the
@@ -302,7 +340,25 @@ it.
    into those hidden rows while the visible ones are static will end a
    `screen_change` run on a change nobody watching the screen would see.
 
-7. **`tests/mcp/image.expected` pins exact PNG bytes.** The baseline is the
+7. **A probe's `stop` ends the run, not the server.** `a2run` exits on a
+   probe `stop`, so the library's flag is sticky by design. Here a run is one
+   tool call among many, so `run` clears the flag before each call. Two
+   consequences: a `stop` cannot wedge the session (the next `run` advances
+   again), and `status` reports `stopped` for the gap between the run that
+   stopped and the next one, not forever. A script that wants to stop the
+   machine for good has to stop it on every frame it is asked to run.
+
+8. **Buffered keys and scheduled keys both drain.** `a2host_simulate_frame()`
+   drains scheduled keys unconditionally, then falls into the chain that
+   drains a `--key-file=` replay, a `--kbd-file=`, or the program's own
+   buffered keys — and a `--key-file=` replay suppresses buffered keys
+   (`key_presses_ != NULL`), where `a2mcp`'s scheduled keys do not. So a
+   program that registers buffered keys at `init_emulated()` gets both its own
+   keys and the agent's under `a2mcp`, and only the agent's under an `a2run`
+   replay of the same recording. Nothing bootable in this repository does
+   that, so no test covers it; it would be a real divergence for one that did.
+
+9. **`tests/mcp/image.expected` pins exact PNG bytes.** The baseline is the
    literal base64 of an stb-compressed PNG. This is not fragile to platform
    or compiler — `stb_image_write.h`'s PNG encoder is integer arithmetic
    throughout, unlike its HDR and JPEG paths — but a deliberate upgrade of

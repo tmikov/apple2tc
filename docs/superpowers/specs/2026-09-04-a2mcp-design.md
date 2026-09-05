@@ -218,17 +218,32 @@ it, `run` before `boot`, an unknown `format`, `frames` past the cap.
 
 ## The error model
 
-**The server never calls `exit()` while serving.** Every failure inside a tool
-call is a JSON-RPC error with a message.
+**The tool layer never calls `exit()`.** Every failure `mcp_tools.cpp` and the
+`machine_*`/`sound_*`/`screen_*` functions under it can reach is a JSON-RPC
+error with a message, and the server goes on serving.
 
-That is only reachable because `a2mcp` validates ahead of the library's
-`*OrDie` paths — `init_emulated` uses `readFileOrDie`, and `a2host_parse_args`
-and `probe_fatal` exit outright. So `boot()` jails and stats every path before
-the library sees it, and bounds every numeric argument.
+That holds only because `a2mcp` validates ahead of the library's `*OrDie`
+paths, which are not so careful: `init_emulated` reads through
+`readFileOrDie`, `mountDisk` exits on an image `a2_disk2_mount` will not take,
+`loadB33` exits on a bad header, and `Emu6502::loadROM` asserts on an
+oversized ROM. So `boot` jails every path, confirms it is a regular file, and
+checks its size and header against the kind it was passed as, before the
+engine sees it; and every numeric argument is bounded before it is used.
 
-The exits that remain all happen before the first request is served: bad launch
-arguments, and probe compilation, where dying is correct and the MCP client
-shows the stderr.
+**The library beneath the tool layer can still exit, in these cases**, all of
+them known and none of them reachable through a well-formed call:
+
+  - `a2host_schedule_key()` exits if its `realloc` fails.
+  - `probe_fatal()` exits on a probe runtime fault — a stack overflow or
+    corrupt bytecode in a script that compiled — from inside the frame loop a
+    `run` is driving.
+  - Anything a future forwarded option or engine path adds that dies rather
+    than returning a failure. The pattern is the library's, not this front
+    end's, so the guard has to be re-established for each thing forwarded.
+
+The exits that are *by design* all happen before the first request is served:
+bad launch arguments, and probe compilation, where dying is correct and the
+MCP client shows the stderr.
 
 ## Layout
 
