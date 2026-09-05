@@ -217,7 +217,16 @@ nlohmann::json machine_keys(const nlohmann::json &args) {
     throw ToolError("text is required and must be a string");
   const std::string text = it->get<std::string>();
 
-  uint64_t spacing = args.value("frames_between", (uint64_t)1);
+  // Checked before extraction, same shape as `scale` in mcp_tools.cpp:
+  // args.value() would silently truncate a non-integer (`frames_between:
+  // 1.5` becomes 1 via a plain static_cast, no throw) past the range check
+  // below.
+  uint64_t spacing = 1;
+  if (auto it = args.find("frames_between"); it != args.end()) {
+    if (!it->is_number_unsigned())
+      throw ToolError("frames_between must be a non-negative integer");
+    spacing = it->get<uint64_t>();
+  }
   if (spacing > 600)
     throw ToolError("frames_between must be between 0 and 600");
 

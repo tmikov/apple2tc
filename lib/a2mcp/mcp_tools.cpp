@@ -176,7 +176,16 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
       hgr_mode = A2_HGR_MONO140;
     else
       throw ToolError("unknown render \"" + render + "\"");
-    const int scale = args.value("scale", 2);
+    // Checked before extraction, the same way save_to is below: args.value()
+    // would silently truncate a non-integer (`scale: 1.5` becomes 1 via a
+    // plain static_cast in nlohmann's number conversion, no throw) and the
+    // range check below would then never see the real value.
+    int scale = 2;
+    if (auto it = args.find("scale"); it != args.end()) {
+      if (!it->is_number_integer())
+        throw ToolError("scale must be an integer (1 or 2)");
+      scale = it->get<int>();
+    }
     if (scale != 1 && scale != 2)
       throw ToolError("scale must be 1 or 2");
     // Only the PNG can be saved, so asking to save a text-mode reading is a
