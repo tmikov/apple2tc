@@ -354,6 +354,20 @@ mcp_transcript() {
 }
 
 mcp_transcript handshake
+mcp_transcript boot
+mcp_transcript reboot
+
+# realpath resolves symlinks, so a link pointing outside the root is the same
+# rejection as a "../" path -- but only if the jail resolves before it opens.
+ln -sf /etc/passwd mcp-tmp/escape.dsk
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"boot","arguments":{"disk1":"mcp-tmp/escape.dsk"}}}' \
+  > mcp-tmp/symlink.jsonl
+if ! $a2mcp --root=. < mcp-tmp/symlink.jsonl | grep -q '"isError":true'; then
+  echo "FAIL: a2mcp followed a symlink out of --root" >&2
+  exit 1
+fi
 
 # ...but that check, and every other check in this repo, runs the host in
 # *fixed-step* mode -- because reproducibility is what they all exist for. The

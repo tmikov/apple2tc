@@ -47,6 +47,19 @@ void a2host_parse_args(int argc, char *argv[]);
 /// initialisation. No graphics or audio.
 void a2host_init_emulation(void);
 
+/// Declare that this front end supplies keys programmatically, the way
+/// --key-file= does. Must be called before a2host_init_emulation(): it is part
+/// of the condition for the dummy keypress that init pushes, and a front end
+/// whose session is meant to be replayable with --key-file= must take that
+/// keypress too, or the replay sees one keystroke the original did not.
+void a2host_enable_scheduled_keys(void);
+
+/// Tear the emulated machine down and bring it back up, as if the process had
+/// just started. Frame and cycle counters restart at zero. Probe counters and
+/// any open report file deliberately survive, because a probe script's state is
+/// the run's, not the machine's.
+void a2host_reboot(void);
+
 /// The IO state — video mode, keyboard queue, disk. Owned here because the host
 /// is what renders it, replays keys into it and hashes it.
 a2_iostate_t *a2host_io(void);
@@ -91,6 +104,9 @@ unsigned a2host_begin_repaint(double elapsed_sec);
 /// Emit this frame's hash if asked, and advance the frame counter. Returns true
 /// when the frame limit is reached.
 bool a2host_record_frame(void);
+
+/// Frames simulated so far.
+unsigned a2host_frame_no(void);
 
 /// True once the engine has asked to stop early — a breakpoint, or a collection
 /// limit.

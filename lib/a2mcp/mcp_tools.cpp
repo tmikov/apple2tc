@@ -6,6 +6,7 @@
  */
 
 #include "mcp_tools.h"
+#include "mcp_machine.h"
 #include "mcp_server.h"
 
 namespace a2mcp {
@@ -103,7 +104,15 @@ nlohmann::json tool_schemas(void) {
 }
 
 nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
-  (void)args;
+  auto text_result = [](const nlohmann::json &value) {
+    return nlohmann::json{{"content", {{{"type", "text"}, {"text", value.dump(2)}}}}};
+  };
+  if (name == "boot") {
+    machine_boot(args);
+    return text_result(machine_status());
+  }
+  if (name == "status")
+    return text_result(machine_status());
   throw ToolError("unknown tool: " + name);
 }
 

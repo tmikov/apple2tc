@@ -97,6 +97,9 @@ static KeyPress *key_presses_ = NULL;
 static unsigned key_press_count_ = 0;
 /// Next key press to process.
 static unsigned next_key_press_ = 0;
+/// True when a front end schedules its own keys; see
+/// a2host_enable_scheduled_keys().
+static bool scheduled_keys_ = false;
 /// The very first frame is skipped rather than simulated, so that a front end
 /// pacing against a wall clock does not begin with a huge catch-up burst.
 static bool firstFrame_ = true;
@@ -512,6 +515,10 @@ void a2host_push_key_if_empty(uint8_t ch) {
   push_key_if_empty(ch);
 }
 
+void a2host_enable_scheduled_keys(void) {
+  scheduled_keys_ = true;
+}
+
 /// Everything needed to start the emulated program, with no graphics or audio.
 /// Shared by the windowed and headless front ends.
 void a2host_init_emulation(void) {
@@ -541,15 +548,15 @@ void a2host_init_emulation(void) {
   //
   // Only the command-line sources can be tested this early; buffered_keys_ is
   // registered by init_emulated() itself, so its case stays below.
-  if (kbd_file_ || key_presses_)
+  if (kbd_file_ || key_presses_ || scheduled_keys_)
     a2_io_push_key(&io_, '\r');
 
   init_emulated();
 
   // init_emulated() is where a program registers buffered keys, so this is the
   // first chance to see them.
-  if (kbd_file_ || key_presses_ || buffered_keys_) {
-    if (!kbd_file_ && !key_presses_)
+  if (kbd_file_ || key_presses_ || buffered_keys_ || scheduled_keys_) {
+    if (!kbd_file_ && !key_presses_ && !scheduled_keys_)
       a2_io_push_key(&io_, '\r');
     // Both command-line sources outrank buffered keys: a recording already
     // contains whatever the program would have typed for itself.
@@ -560,6 +567,22 @@ void a2host_init_emulation(void) {
     else
       drain_buffered_keys();
   }
+}
+
+/// Tear the emulated machine down and bring it back up, as if the process had
+/// just started. Frame and cycle counters restart at zero. Probe counters and
+/// any open report file deliberately survive, because a probe script's state is
+/// the run's, not the machine's.
+void a2host_reboot(void) {
+  shutdown_emulated();
+  a2_io_done(&io_);
+  frame_no_ = 0;
+  firstFrame_ = true;
+  engine_stopped_ = false;
+  step_debt_ = 0.0;
+  pending_elapsed_ = 0.0;
+  pending_keys_count_ = 0;
+  a2host_init_emulation();
 }
 
 /// A run that must be reproducible -- replay, hashing, tracing -- always gets
@@ -658,6 +681,11 @@ bool a2host_record_frame(void) {
     return true;
   }
   return false;
+}
+
+/// Frames simulated so far.
+unsigned a2host_frame_no(void) {
+  return frame_no_;
 }
 
 void a2host_shutdown(void) {
