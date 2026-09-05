@@ -159,6 +159,22 @@ tool for exactly the job `mono140` exists to do. `render` is accepted in
 every mode but only changes anything in HGR; TEXT and GR ignore it. An
 unrecognised value is a tool error, the same as an unrecognised `format`.
 
+`scale` is output pixels per colour cell — `1` or `2`, default `2` so nothing
+existing changes — and it means something only for `"color140"` and
+`"mono140"`, the two modes built out of colour-clock cells in the first
+place. `scale: 2` doubles each cell to the traditional 280x192, matching
+`"color"`. `scale: 1` emits the native 140x192 instead: half the payload of
+`scale: 2` for the exact same information, since the doubling only ever
+duplicated columns pixel-for-pixel — the sensible default for an agent
+reading a scene repeatedly. The honest cost: at `scale: 1` the image is
+horizontally compressed relative to how the machine displays it, so shapes
+read distorted (a circle comes out as an ellipse) even though relative
+positions are preserved — use `scale: 2` for anything judging shape rather
+than position. `scale` describes cell structure, so `"color"` has none for it
+to describe and TEXT/GR have no cells either; it is accepted and ignored
+there, the same precedent `render` already sets. A value that is neither `1`
+nor `2` is a tool error, the same as an unrecognised `render`.
+
 ### `keys`
 
 ```json

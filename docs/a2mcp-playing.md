@@ -158,6 +158,26 @@ visually is -- that is what makes it the tool for finding shapes, and why a
 truthful per-dot monochrome view is the wrong one for that job even though
 it sounds like it should be the simplest choice.
 
+## `scale`: read `color140`/`mono140` at their native width
+
+`color140` and `mono140` decode at 140-wide colour-clock resolution and then,
+by default, double each cell back out to 280x192 so the picture lines up with
+`color`. That doubling adds nothing to look at -- it is the same information
+twice -- and an image's token cost scales with its area, so the default
+`scale: 2` makes every one of these screenshots cost twice what it needs to.
+
+Pass `scale: 1` to get the 140x192 image instead. It is the sensible default
+for an agent reading a scene repeatedly: half the payload, with no
+information lost -- column *k* of the `scale: 1` image is exactly column
+*2k* (and *2k+1*) of the `scale: 2` image, not a resample or a crop.
+
+The cost is honest, not hidden: at `scale: 1` the image is horizontally
+compressed relative to how the machine actually displays it, so shapes read
+distorted -- a circle comes out as an ellipse -- even though relative
+positions are preserved. Reach for `scale: 2` (or leave it at its default)
+whenever the question is about a shape rather than a position; `scale: 1` is
+the right default when it isn't.
+
 ## Spacing keys is how you emulate holding one down
 
 `keys` schedules; `frames_between` sets the gap. There is no key-repeat and no
