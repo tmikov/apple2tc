@@ -61,12 +61,24 @@ int serve(std::istream &in, std::ostream &out) {
       continue;
     }
 
-    // No id means a notification: act on it, answer nothing. Replying to one is
-    // a protocol violation, not merely noise.
+    // `msg` need not be an object even when it parsed: a bare `42` or `[1]` is
+    // valid JSON. find()/value() on such a value either quietly returns "not
+    // found" (find) or throws type_error.306 (value) depending on which one
+    // is used below, so the method is pulled out with find()+is_string()
+    // rather than msg.value("method", ...): the latter would throw on this
+    // same non-object input, outside any try block, and take the process
+    // down before dispatch even begins.
     const bool notification = msg.find("id") == msg.end();
     const nlohmann::json id = notification ? nlohmann::json(nullptr) : msg["id"];
-    const std::string method = msg.value("method", std::string());
-    const nlohmann::json params = msg.value("params", nlohmann::json::object());
+    const auto method_it = msg.find("method");
+    const std::string method = (method_it != msg.end() && method_it->is_string())
+        ? method_it->get<std::string>()
+        : std::string();
+    // Safe for the same reason: msg.value("params", ...) would throw if msg
+    // is not an object, regardless of the requested type, because nlohmann's
+    // value() checks that before it ever looks at the key.
+    const nlohmann::json params =
+        msg.is_object() ? msg.value("params", nlohmann::json::object()) : nlohmann::json::object();
 
     nlohmann::json reply;
     if (method == "initialize") {
@@ -74,15 +86,39 @@ int serve(std::istream &in, std::ostream &out) {
     } else if (method == "tools/list") {
       reply = result_reply(id, nlohmann::json{{"tools", tool_schemas()}});
     } else if (method == "tools/call") {
-      const std::string name = params.value("name", std::string());
-      const nlohmann::json args = params.value("arguments", nlohmann::json::object());
+      // `name` is pulled out the same defensive way as `method` above, so it
+      // is available for the catch below even when `params` itself is
+      // malformed (not an object, or "name" not a string) -- the case that
+      // throws before call_tool() is ever reached.
+      std::string name;
+      if (const auto name_it = params.find("name"); name_it != params.end() && name_it->is_string())
+        name = name_it->get<std::string>();
       try {
+        const nlohmann::json args = params.is_object()
+            ? params.value("arguments", nlohmann::json::object())
+            : nlohmann::json::object();
         reply = result_reply(id, call_tool(name, args));
       } catch (const ToolError &e) {
         reply = result_reply(
             id,
             nlohmann::json{
                 {"content", {{{"type", "text"}, {"text", e.what()}}}}, {"isError", true}});
+      } catch (const nlohmann::json::exception &e) {
+        // Every typed accessor in every tool (args.value(...), it->get<T>(),
+        // etc.) throws nlohmann::json::type_error/out_of_range on a
+        // malformed argument -- e.g. `render: 42`, a number where a string
+        // is expected. Those are base-classed under nlohmann::json::exception
+        // and, unlike ToolError, are not raised on purpose, so there is no
+        // hand-written message to preserve: report the tool and the fact
+        // that its arguments were malformed, same isError shape as above,
+        // and keep serving.
+        reply = result_reply(
+            id,
+            nlohmann::json{
+                {"content",
+                 {{{"type", "text"},
+                   {"text", "tool \"" + name + "\": malformed arguments: " + e.what()}}}},
+                {"isError", true}});
       }
     } else if (method == "ping") {
       reply = result_reply(id, nlohmann::json::object());
