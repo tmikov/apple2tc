@@ -25,10 +25,17 @@ struct TextCtx {
 /// Screen codes to printable ASCII. Inverse and flashing render as the plain
 /// character: an agent reading the screen wants the text, and no game observed
 /// so far conveys anything by inverse alone that the words do not also say.
+///
+/// Only the low SIX bits (0x3F) identify the glyph; bit 6 is a video
+/// attribute (it distinguishes flashing from inverse) and carries no glyph
+/// identity of its own, so it must be masked away rather than kept. This has
+/// to match `draw_glyph_cb` in lib/a2io/a2io.c -- which indexes the font ROM
+/// with `ch & 0x3F` -- or the text and image renderings of the same screen
+/// would disagree with each other.
 void draw_glyph(void *ctx, uint8_t ch, unsigned x, unsigned y) {
   (void)y;
   auto *tc = static_cast<TextCtx *>(ctx);
-  uint8_t c = ch & 0x7F;
+  uint8_t c = ch & 0x3F;
   if (c < 0x20)
     c += 0x40;
   tc->out.push_back((char)c);
