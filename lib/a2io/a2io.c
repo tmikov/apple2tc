@@ -221,17 +221,16 @@ void apple2_render_hgr_screen_mode(
         }
       }
     } else {
-      // A2_HGR_COLOR140: decode at the true colour-clock resolution.
+      // A2_HGR_COLOR140 and A2_HGR_MONO140: both decode at the true
+      // colour-clock resolution rather than per-dot.
       //
       // The 7.16 MHz dot clock is exactly twice the 3.58 MHz NTSC
       // colourburst, so two adjacent dots make one colour clock and the
       // true colour resolution is 140, not 280. Expand the 40 bytes into
       // 280 dots first, remembering which byte -- and hence which palette
-      // bit -- produced each one; then decode colour cell k (0..139) from
-      // dots 2k and 2k+1: both set is white, neither is black, and exactly
-      // one set picks a colour by which of the two dots it is (the phase)
-      // and that dot's palette bit. Each cell is emitted as two pixels so
-      // the image stays 280x192.
+      // bit -- produced each one; the two modes then differ only in how
+      // they turn a dot pair into a cell colour. Each cell is emitted as
+      // two pixels so the image stays 280x192.
       bool dots[280];
       uint8_t hiBit[280];
       {
@@ -252,7 +251,14 @@ void apple2_render_hgr_screen_mode(
       for (unsigned k = 0; k != 140; ++k) {
         unsigned i0 = 2 * k, i1 = i0 + 1;
         a2_rgba8 c;
-        if (dots[i0] && dots[i1]) {
+        if (mode == A2_HGR_MONO140) {
+          // Ink coverage: a colour fill is physically an alternating dot
+          // pattern, so on real hardware a filled region sets exactly one
+          // dot per cell. Either dot set is enough to call the cell "ink" --
+          // this is the occupancy mask a shape-finding pass wants, with no
+          // comb and no colour to reason about.
+          c = (dots[i0] || dots[i1]) ? white : black;
+        } else if (dots[i0] && dots[i1]) {
           c = white;
         } else if (!dots[i0] && !dots[i1]) {
           c = black;

@@ -55,6 +55,10 @@ typedef enum {
   A2_HGR_COLOR, ///< Per-dot artifact approximation; what the GUI has always drawn.
   A2_HGR_MONO, ///< 1-bit white on black.
   A2_HGR_COLOR140, ///< Decoded at colour-clock resolution, doubled back to 280.
+  A2_HGR_MONO140, ///< Ink coverage at colour-clock resolution: a cell is white if
+                  ///< either of its two dots is set, else black. A colour fill is
+                  ///< an alternating dot pattern, so this is the occupancy mask
+                  ///< that renders as a solid region instead of A2_HGR_MONO's comb.
 } a2_hgr_mode_t;
 
 /// Render the hires graphics (GR) page pointed by pageStart into a RGB screen.
