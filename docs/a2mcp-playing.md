@@ -75,6 +75,18 @@ plain frames to deliver them (`frames_between` times the number of keys), and
 only then `run` with `until: "screen_update"` to land the shot. Doing it in two
 calls lands you on a picture of a half-executed intention.
 
+**Do not assume from the genre which detector will fire -- measure.** The
+reasonable guess is that a continuously scrolling action game never settles and
+that only double-buffered games are servable. Both halves of that guess were
+wrong on the games in this repo: a scrolling shooter settled on two thirds of
+sampled windows because its animation comes in bursts with idle gaps between
+them, while *neither* game here flips pages during play (the one that flips does
+so only in its menu). Expect settles to do the work and flips to be rare, and
+spend one cheap experiment finding out for your game: a handful of
+`run(frames=120, until="screen_update")` calls during play, counting how many
+stop early versus hit the cap. The worked example at the end of this document
+shows that measurement and its numbers.
+
 **The honest limitation:** a single-buffered game that redraws every single
 frame with no idle gap has no complete-frame boundary at frame resolution at
 all. `screen_update` cannot find what is not there — the call runs to its frame
