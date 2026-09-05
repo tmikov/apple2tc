@@ -1756,3 +1756,77 @@ full accounts of all of them.
   the backspace beside it. The routine says so above itself.
 - **`$66A6`**: `JMP $6655`, an alternate entry to the glyph blitter that skips
   the control-character filter. Nothing references it. Left unimplemented.
+
+---
+
+## a2mcp — a third front end (branch `mcp`, unrelated to Snake Byte above)
+
+Everything above this section is Snake Byte's own handoff and does not touch
+`a2mcp`. This one does; it is here because this file is where the project
+keeps its handoffs, not because the two efforts share any code.
+
+**What was built.** `lib/a2mcp/` is a third front end over `lib/a2host`,
+alongside `a2emu` (windowed) and `a2run` (console, `--frames`-bounded): an MCP
+server that reads JSON-RPC on stdin and drives the same headless engine one
+tool call at a time. Six tools — `boot`, `status`, `run`, `screen`, `keys`,
+`sound` — cover booting a disk or binary, advancing time by a frame count or
+until the screen changes, reading the screen as text/colour-grid/PNG,
+scheduling keystrokes, and reporting what the speaker did. `tools/a2mcp/` has
+no sources of its own, the same pattern `a2run` uses. `tests/mcp/*.jsonl` /
+`*.expected` are committed transcripts `tests/run-tests.sh` replays and diffs
+on every run; `docs/a2mcp.md` is the user-facing reference.
+
+**Two findings shaped the design, both from reusing existing plumbing rather
+than duplicating it:**
+
+- **The frame-hash oracle's hash could not be reused for `screen_change`.**
+  `hash_video_state()` — the function behind `--hash-frames=` — deliberately
+  hashes the text page and the hi-res page every frame regardless of the
+  current video mode, precisely so a divergence in a page a game is using as
+  a data structure (Snake Byte's never-displayed lo-res page, elsewhere in
+  this file) still shows up as a hash mismatch. Built on that hash, "has the
+  screen changed" would fire on the very first frame of any double-buffered
+  program and every frame after — useless as a stop condition. `run`'s
+  `until: "screen_change"` needed its own hash, `a2host_visible_hash()`, that
+  looks only at the mode bits and whichever page(s) the mode actually shows.
+  It is still not perfect — see `docs/a2mcp.md`'s limitations list for the
+  case where mixed HGR hides part of the very page it hashes.
+- **The dummy keypress had to learn about scheduled keys too, or a replay
+  diverges.** `a2host_init_emulation()` pushes one throwaway keystroke before
+  the emulated program starts whenever the session's input is one of the
+  reproducible sources (`--key-file=`, `--kbd-file=`) — for a program that
+  restores a saved machine state instead of computing one, that keystroke is
+  what a real boot would have already consumed, and its absence would be a
+  divergence the recording can't explain. `a2mcp`'s `keys` tool is a third
+  such source, and until `a2host_enable_scheduled_keys()` was added and
+  called before `a2host_init_emulation()`, an `a2mcp` session got no dummy
+  keypress while an `a2run --key-file=` replay of that same session's
+  `.keys` file did — one extra keystroke the original session never had.
+
+**The deliberate deviation from the spec:** scheduled keys live in their own
+list (`sched_keys_` in `lib/a2host/a2host.c`), not folded into the existing
+`key_presses_` array the way the initial plan assumed. `key_presses_`'s
+lifetime already means three different things to three different readers at
+once: `drain_key_presses()` frees the array once it is exhausted;
+`probe_deliver_keys()` reads from the same array but is required to *never*
+free it, because a probe-driven replay must survive an empty-but-not-over
+queue; and `a2host_key_replay_active()` reads `key_presses_ != NULL` as "a
+replay is still live," which `a2host_gui.c` uses for the whole run to decide
+whether to ignore real keyboard events. A `keys` session is not exhausted the
+way a `--key-file=` load is — more keys can be scheduled at any point, so
+"empty" cannot mean "replay over" — so growing the shared array would have
+had to change what `NULL`/non-`NULL` means for the other two readers as well.
+A private list sidesteps that entirely, at the cost of two near-identical
+drain loops (`drain_key_presses()` and `drain_scheduled_keys()`).
+
+**`Emu6502::unloadROM()` had to be added for `boot`'s reboot to work at all.**
+`loadROM()` asserts against a double load — a guard against a programming
+error in a process that was never expected to load a ROM twice — so
+`a2host_reboot()` needed a way to undo the first load before
+`a2host_init_emulation()` runs again. `unloadROM()` resets the ROM base and
+zeroes the cycle counter (the other half of `a2host_reboot()`'s promise that
+frame and cycle counters restart at zero), and is called from
+`shutdown_emulated()` in `lib/engine6502/engine6502.cpp`. Its blast radius is
+exactly `a2run`/`a2emu`/`a2mcp`: a decompiled build links the no-op
+`shutdown_emulated()` from `include/apple2tc/system-inc.h`, which never calls
+it and cannot reboot.

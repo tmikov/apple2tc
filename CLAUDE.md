@@ -70,15 +70,19 @@ Output format flags: `--simple-c`, `--ir`, `--irc1`, `--asm` (default)
 - **`a6502`** — 6502 two-pass symbolic assembler (produces bit-accurate ROM images)
 - **`id`** — Interactive disassembler for binary exploration
 - **`textemu`** — text-mode (ncurses) emulator, plus `disk_test`. Needs Curses; unrelated to the a2emu/a2run pair
+- **`a2mcp`** — an MCP server front end, driven by JSON-RPC on stdin/stdout instead of a frame limit. Reach for this one when an agent needs to drive the machine interactively — boot, look at the screen, type, look again — rather than replay a fixed recording. See `docs/a2mcp.md`
 
-`a2emu` and `a2run` are one program with two front ends. The machine, the
-command line, the keyboard and the probe engine are all `lib/a2host`; the
-6502 is `lib/engine6502`. Two executables rather than one flag because on
-Windows console-versus-GUI is a link-time subsystem property. So their
-options are identical, and `a2emu --headless --key-file=K --hash-frames=F`
-must produce byte-identical output to `a2run` — `tests/run-tests.sh` checks
-that. Beware `--help` on `a2run` listing `--headless`: it comes from the
-shared parser and is redundant, since `a2run` is never anything else.
+`a2emu`, `a2run` and `a2mcp` are one program with three front ends. The
+machine, the command line, the keyboard and the probe engine are all
+`lib/a2host`; the 6502 is `lib/engine6502`. Separate executables rather than
+one flag because on Windows console-versus-GUI is a link-time subsystem
+property. So `a2emu`'s and `a2run`'s options are identical, and `a2emu
+--headless --key-file=K --hash-frames=F` must produce byte-identical output
+to `a2run` — `tests/run-tests.sh` checks that. Beware `--help` on `a2run`
+listing `--headless`: it comes from the shared parser and is redundant, since
+`a2run` is never anything else. `a2mcp` shares the same headless engine but
+takes no `--frames`; time advances only while a client's `run` tool call is
+in flight.
 
 ### Decoded Examples (decoded/)
 
