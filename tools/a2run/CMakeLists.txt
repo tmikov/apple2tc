@@ -11,4 +11,5 @@
 # its own beyond the console main().
 add_executable(a2run
   $<TARGET_OBJECTS:a2host_console> $<TARGET_OBJECTS:engine6502>)
-target_link_libraries(a2run a2host engine6502)
+# engine6502 already carries a2host.
+target_link_libraries(a2run engine6502)

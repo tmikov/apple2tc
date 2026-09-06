@@ -17,8 +17,11 @@ function(add_a2_program name)
   add_library(${name}-obj OBJECT ${ARGN})
   target_link_libraries(${name}-obj PRIVATE a2host)
 
+  # a2host_gui carries a2host as a PUBLIC dependency; naming a2host here too
+  # would place it before the objects that need it and force the linker to see
+  # it twice.
   add_executable(${name} $<TARGET_OBJECTS:${name}-obj>)
-  target_link_libraries(${name} PRIVATE a2host a2host_gui)
+  target_link_libraries(${name} PRIVATE a2host_gui)
 
   add_executable(${name}-run
     $<TARGET_OBJECTS:${name}-obj> $<TARGET_OBJECTS:a2host_console>)

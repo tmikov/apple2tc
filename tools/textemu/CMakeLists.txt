@@ -6,7 +6,9 @@
 find_package(Curses REQUIRED)
 include_directories(${CURSES_INCLUDE_DIRS})
 
-link_libraries(d6502 cpuemu a2io support)
+# cpuemu already carries d6502, which already carries support. Naming them
+# ahead of cpuemu would only make the linker see them twice.
+link_libraries(cpuemu a2io)
 add_executable(textemu textemu.cpp)
 target_link_libraries(textemu ${CURSES_LIBRARIES})
 
