@@ -1,0 +1,45 @@
+# Watches Neptune steer, to show a key it does not recognise no longer wedges
+# the keyboard. Pair with stray-key.keys:
+#
+#   a2run --disk1=dsk/Neptune.dsk --headless --frames=2400 --no-sound \
+#         --key-file=decoded/neptune/testdata/stray-key.keys \
+#         --probe=decoded/neptune/testdata/stray-key.probe --probe-out=out.txt
+#
+# Neptune is not decompiled; this directory holds only what reproduces that
+# bug. The game steers with I/J/K/M from a handler at $1060:
+#
+#   1060: AD 00 C0  LDA $C000
+#   1063: 10 49     BPL $10AE     ; no key -- leave, strobe untouched
+#   1065: C9 CD     CMP #$CD      ; 'M'  -> $E3++
+#   1077: C9 C9     CMP #$C9      ; 'I'  -> $E3--
+#   1089: C9 CB     CMP #$CB      ; 'K'  -> $E4++
+#   109B: C9 CA     CMP #$CA      ; 'J'  -> $E4--
+#   109D: D0 0F     BNE $10AE     ; anything else -- leave, strobe untouched
+#   10AB: 8D 10 C0  STA $C010     ; reached on those four arms only
+#   10AE: 4C 80 11  JMP $1180
+#
+# So $1063 is the BPL right after the read, where A still holds whatever the
+# keyboard latch returned, and $E3/$E4 are the two steering variables those
+# four arms move. Two more sites read the keyboard the same way with their own
+# keys, 'A' at $138C and 'Z' at $1300.
+#
+# Every state change in the output, with the fix in place:
+#
+#   kv=4A e3=00 e4=00
+#   kv=CA e3=00 e4=00     'J' seen and acknowledged
+#   kv=4A e3=00 e4=FF     steered left
+#   kv=D1 e3=00 e4=FF     'Q', which the game leaves in the latch
+#   kv=CB e3=00 e4=FF     'K' arrives anyway, over the unacknowledged 'Q'
+#   kv=4B e3=00 e4=00     steered back
+#   kv=CB e3=00 e4=00
+#   kv=4B e3=00 e4=01
+#
+# Against a keyboard modelled as a queue drained only by KBDSTRB, kv=D1 is the
+# last state change in the run: both 'K' presses queue behind a key the game
+# will never take, and e4 never moves again.
+
+probe kb(kv = a, e3 = peek8($E3), e4 = peek8($E4)) {
+  printf("kv=%02X e3=%02X e4=%02X\n", kv, e3, e4)
+}
+
+install kb at $1063

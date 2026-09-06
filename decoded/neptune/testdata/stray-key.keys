@@ -1,0 +1,12 @@
+# Cycle-stamped for stray-key.probe; see its header for the run and what to
+# expect. Neptune offers keyboard and joystick control and takes whichever you
+# touch first, so the opening keypress both starts the game and chooses the
+# keyboard.
+25000000 74
+# J: steer left.
+30000000 74
+# Q: not one of I/J/K/M, so the game reads it and leaves the strobe set.
+31500000 81
+# K: steer right. Impossible while the latch stayed wedged.
+33000000 75
+34000000 75
