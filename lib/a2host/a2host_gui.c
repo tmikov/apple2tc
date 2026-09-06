@@ -265,22 +265,22 @@ static void event_cb(const sapp_event *ev) {
     else if (isalpha(k))
       k = toupper(k);
     if (k != toIgnore)
-      a2host_push_key_if_empty(k);
+      a2host_press_key(k);
   } else if (ev->type == SAPP_EVENTTYPE_KEY_DOWN) {
     switch (ev->key_code) {
     case SAPP_KEYCODE_DELETE:
     case SAPP_KEYCODE_BACKSPACE:
     case SAPP_KEYCODE_LEFT:
-      a2host_push_key_if_empty(ignoreNextCh_ = 8);
+      a2host_press_key(ignoreNextCh_ = 8);
       break;
     case SAPP_KEYCODE_RIGHT:
-      a2host_push_key_if_empty(ignoreNextCh_ = 21); // CTRL+U
+      a2host_press_key(ignoreNextCh_ = 21); // CTRL+U
       break;
     case SAPP_KEYCODE_ENTER:
-      a2host_push_key_if_empty(ignoreNextCh_ = 13);
+      a2host_press_key(ignoreNextCh_ = 13);
       break;
     case SAPP_KEYCODE_ESCAPE:
-      a2host_push_key_if_empty(ignoreNextCh_ = 27);
+      a2host_press_key(ignoreNextCh_ = 27);
       break;
     default:
       break;

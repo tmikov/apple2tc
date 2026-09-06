@@ -302,21 +302,28 @@ void a2_io_done(a2_iostate_t *io) {
   memset(io, 0, sizeof(*io));
 }
 
-/// \return number of available entries in the keyboard queue.
-static inline unsigned a2_io_kbd_space(a2_iostate_t *io) {
-  return A2_KBD_QUEUE_SIZE - io->keys_count;
+void a2_io_press_key(a2_iostate_t *io, uint8_t key) {
+  io->latch = key & 0x7F;
+  io->strobe = true;
 }
 
 bool a2_io_push_key(a2_iostate_t *io, uint8_t key) {
-  if (a2_io_kbd_space(io) == 0)
+  // Nothing is waiting to be read, so this character is what $C000 holds now.
+  if (!io->strobe) {
+    a2_io_press_key(io, key);
+    return true;
+  }
+  if (io->keys_count == A2_KBD_QUEUE_SIZE)
     return false;
   io->keys[(io->keys_head + io->keys_count++) % A2_KBD_QUEUE_SIZE] = key;
   return true;
 }
 
 bool a2_io_push_str(a2_iostate_t *io, const char *str) {
+  // All or nothing, so count the room first: the latch takes the first
+  // character when the strobe is clear, and the queue takes the rest.
   size_t len = strlen(str);
-  if (a2_io_kbd_space(io) < len)
+  if (len > (io->strobe ? 0u : 1u) + a2_io_keys_expect(io))
     return false;
   while (*str)
     a2_io_push_key(io, *str++);
@@ -324,12 +331,16 @@ bool a2_io_push_str(a2_iostate_t *io, const char *str) {
 }
 
 static uint8_t kbd(a2_iostate_t *io) {
-  return io->keys_count == 0 ? io->last_key : io->keys[io->keys_head] | 0x80;
+  return io->latch | (io->strobe ? 0x80 : 0);
 }
 
 static void kbdstrb(a2_iostate_t *io) {
+  io->strobe = false;
+  // The program has taken what was in the latch, so type-ahead may hand it the
+  // next character. A keypress never waits here -- see a2_io_press_key().
   if (io->keys_count) {
-    io->last_key = io->keys[io->keys_head] & 0x7F;
+    io->latch = io->keys[io->keys_head] & 0x7F;
+    io->strobe = true;
     io->keys_head = (io->keys_head + 1) % A2_KBD_QUEUE_SIZE;
     --io->keys_count;
   }

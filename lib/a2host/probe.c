@@ -141,8 +141,10 @@ static void probe_take_snapshot(uint16_t pc) {
       (int)a2_io_is_vidmode_mixed(io),
       (int)a2_io_get_vidpage_index(io) + 1);
   // The keyboard latch is state too: a key still sitting in it at the capture
-  // point would be read by whatever runs next.
-  fprintf(g, "kbd_last_key %02X\nkbd_queued %u\n", io->last_key, a2_io_keys_count(io));
+  // point would be read by whatever runs next. kbd_queued counts that key as
+  // well as any type-ahead staged behind it -- it is what the machine has yet
+  // to acknowledge, which is the number a rebased entry point has to recreate.
+  fprintf(g, "kbd_last_key %02X\nkbd_queued %u\n", io->latch, a2_io_keys_count(io));
   fclose(g);
 }
 

@@ -267,7 +267,13 @@ void error_handler(uint16_t pc) {
   exit(1);
 }
 
-static void push_key(uint8_t ch) {
+/// Every key source funnels through here. \p pressed says which door it uses:
+/// true for a keystroke that happened at a moment in time -- live typing, a
+/// cycle-stamped --key-file, a probe's `key` -- which lands in the latch over
+/// whatever was there, the way the hardware behaves; false for text being
+/// typed *into* the machine, which is staged so the program can take it one
+/// character at a time.
+static void key_arrives(uint8_t ch, bool pressed) {
   if (record_keys_file_) {
     // Held until the next `record`, not pushed now: see probe_record_keys.
     if (pending_keys_count_ == PENDING_KEYS_MAX) {
@@ -280,10 +286,13 @@ static void push_key(uint8_t ch) {
     pending_keys_[pending_keys_count_++] = ch;
     return;
   }
-  a2_io_push_key(&io_, ch);
+  if (pressed)
+    a2_io_press_key(&io_, ch);
+  else
+    a2_io_push_key(&io_, ch);
   // Every key source funnels through here -- live typing, --kbd-file, and
-  // (since drain_key_presses()/probe_deliver_keys() were routed through
-  // push_key() for the recording fix above) --key-file= as well -- so
+  // (since drain_key_presses()/probe_deliver_keys() were routed through this
+  // function for the recording fix above) --key-file= as well -- so
   // --trace-keys now dumps all of them, not just the first two. That is
   // correct for what the flag promises ("dump key presses with cycle
   // stamps"), but it has one hazard worth knowing: --trace-keys combined
@@ -295,11 +304,38 @@ static void push_key(uint8_t ch) {
     printf("%u %u\n", get_cycles(), ch);
 }
 
-static void push_key_if_empty(uint8_t ch) {
-  // Pending keys count as present, or a burst typed between two probe firings
-  // would collapse to its first key while recording and not while replaying.
-  if (a2_io_keys_count(&io_) == 0 && pending_keys_count_ == 0)
-    push_key(ch);
+/// Text typed into the machine: --kbd-file, a program's own startup keys.
+static void push_key(uint8_t ch) {
+  key_arrives(ch, false);
+}
+
+/// A keystroke, at the moment it happened.
+static void press_key(uint8_t ch) {
+  key_arrives(ch, true);
+}
+
+/// A live keystroke from the window.
+static void press_key_live(uint8_t ch) {
+  // While recording, at most one live key per `record` coordinate, and the
+  // latest one wins. Both halves matter. Keeping only one is what makes a
+  // burst typed between two probe firings replay as it recorded, since the
+  // replay delivers everything stamped on a coordinate at that coordinate;
+  // keeping the *latest* rather than the first is what the latch does, so the
+  // key that survives here is the key the machine would have been holding.
+  //
+  // Not recording there is no coordinate to collapse onto and no reason to
+  // drop anything: the key goes to the latch, over whatever the program has
+  // not acknowledged. Refusing it instead -- which is what this function did
+  // until the latch existed -- is what wedged the keyboard against a program
+  // that clears the strobe only for the keys it recognises.
+  // Nothing else can be holding pending_keys_ here: a2host_key_replay_active()
+  // makes the window ignore live keystrokes for the whole of a --key-file run,
+  // so the only pending key this can replace is an earlier live one.
+  if (record_keys_file_ && pending_keys_count_ != 0) {
+    pending_keys_[pending_keys_count_ - 1] = ch;
+    return;
+  }
+  press_key(ch);
 }
 
 /// Room left for one more key to enter the machine, from whichever queue a
@@ -377,14 +413,14 @@ static void drain_key_presses() {
   static unsigned last_cycles = 0;
   unsigned cycles = get_cycles();
 
-  // push_key(), not a2_io_push_key(): while recording, a cycle-stamped key
+  // press_key(), not a2_io_press_key(): while recording, a cycle-stamped key
   // from --key-file= must be diverted into pending_keys_ the same as one
   // typed live, so that `record` re-stamps it on the probe's coordinate
   // instead of it reaching the machine on the old cycle stamp. This is what
   // lets --key-file=<cycle-stamped> --record-keys= convert a recording from
   // one coordinate to the other.
   while (next_key_press_ != key_press_count_ && cycles >= key_presses_[next_key_press_].cycles) {
-    push_key(key_presses_[next_key_press_].ch);
+    press_key(key_presses_[next_key_press_].ch);
     ++next_key_press_;
   }
 
@@ -417,20 +453,25 @@ static void drain_key_presses() {
 /// whole run, and freeing here would flip that, and the kbd_file_ fallback in
 /// a2host_simulate_frame(), mid-run the moment the scripted keys run out.
 void probe_deliver_keys(uint32_t now) {
-  // push_key(), not a2_io_push_key() -- see drain_key_presses' comment; the
+  // press_key(), not a2_io_press_key() -- see drain_key_presses' comment; the
   // two share key_presses_ and must divert identically while recording.
   while (next_key_press_ != key_press_count_ && key_presses_[next_key_press_].cycles <= now) {
-    push_key(key_presses_[next_key_press_].ch);
+    press_key(key_presses_[next_key_press_].ch);
     ++next_key_press_;
   }
 }
 
 void probe_record_keys(uint32_t now) {
   for (unsigned i = 0; i != pending_keys_count_; ++i) {
+    // Released as type-ahead, not as presses, even though these were keys
+    // someone pressed: they all carry one coordinate now, and a press
+    // overwrites, so releasing them as presses would deliver only the last.
+    // Staging them keeps the whole burst, which is what the recording holds.
+    //
     // a2_io_push_key() can refuse: releasing up to PENDING_KEYS_MAX keys at
-    // once can outrun however much io_'s hardware queue has drained since the
-    // last `record`, unlike push_key()'s own pending-queue guard above, which
-    // bounds arrival but not release. Checked and made fatal rather than
+    // once can outrun however much io_'s staging queue has drained since the
+    // last `record`, unlike key_arrives()'s own pending-queue guard above,
+    // which bounds arrival but not release. Checked and made fatal rather than
     // ignored, to honor the same "a full queue drops the key loudly" promise
     // pending_keys_'s own comment makes -- and so a key that fails to land
     // is never written to the recording file as though it had.
@@ -508,8 +549,8 @@ static void load_key_file(const char *path) {
 void a2host_drain_kbd_file(void) {
   drain_kbd_file();
 }
-void a2host_push_key_if_empty(uint8_t ch) {
-  push_key_if_empty(ch);
+void a2host_press_key(uint8_t ch) {
+  press_key_live(ch);
 }
 
 /// Everything needed to start the emulated program, with no graphics or audio.

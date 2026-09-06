@@ -131,12 +131,33 @@ typedef struct {
 } a2_disk2_t;
 
 typedef struct {
-  // Input keyboard queue.
+  /// The keyboard latch: bits 0-6 of what $C000 reads. The Apple II keyboard
+  /// is one byte plus one flag and no queue -- the encoder writes each new
+  /// keycode straight into the byte and re-asserts the strobe, whether or not
+  /// the program acknowledged the previous key. That is what makes "read
+  /// $C000, act on the keys you recognise, clear the strobe only for those" a
+  /// working idiom rather than a way to wedge the keyboard, and games rely on
+  /// it.
+  uint8_t latch;
+  /// Bit 7 of what $C000 reads: set while the latch holds a key the program
+  /// has not acknowledged through KBDSTRB.
+  bool strobe;
+
+  /// Type-ahead staging, which is not hardware. It exists for text typed
+  /// *into* the machine -- --kbd-file, a program's own startup keys -- where
+  /// every character has to arrive however slowly the program reads, instead
+  /// of collapsing the way a burst of real keypresses does. Characters wait
+  /// here and enter the latch as the program frees it. A keypress
+  /// (a2_io_press_key) does not use it: a keypress happens at a moment in
+  /// time and goes straight to the latch.
+  ///
+  /// Invariant: keys_count is zero unless strobe is set. Nothing waits here
+  /// while the latch is free -- a2_io_push_key() latches instead of staging,
+  /// and KBDSTRB refills the latch as it clears the strobe -- which is what
+  /// makes a2_io_keys_count() a count of keys rather than of places.
   uint8_t keys[A2_KBD_QUEUE_SIZE];
   unsigned keys_head;
   unsigned keys_count;
-  /// The last key that was returned.
-  uint8_t last_key;
   /// Video control status.
   uint8_t vid_control;
   /// Callback when speaker is accessed.
@@ -157,21 +178,24 @@ static inline void a2_io_set_spkr_cb(
   io->spkr_cb_ctx = spkr_cb_ctx;
   io->spkr_cb = spkr_cb;
 }
-/// Return false if the keyboard queue was full.
+/// A key was pressed at this instant. It overwrites the latch and asserts the
+/// strobe, discarding whatever was there -- which is what the hardware does,
+/// and the only faithful model for a real keystroke or for a cycle-stamped
+/// replay of one. Use this for anything that happens at a moment in time, and
+/// a2_io_push_key() for text being typed in.
+void a2_io_press_key(a2_iostate_t *io, uint8_t key);
+/// Stage one character of type-ahead: into the latch if the program has
+/// acknowledged what was there, otherwise behind it. Return false if the
+/// staging queue was full.
 bool a2_io_push_key(a2_iostate_t *io, uint8_t key);
-/// Push a key only if the queue is empty. Return true if pushed.
-/// This method should ordinarily be used for interactive input, since we don't
-/// want to emulate a keyboard queue where the Apple II didn't have one.
-static inline bool a2_io_push_key_if_empty(a2_iostate_t *io, uint8_t key) {
-  return io->keys_count == 0 ? a2_io_push_key(io, key) : false;
-}
-/// Push either the entire string or nothing. Return true on success.
+/// Stage either the entire string or nothing. Return true on success.
 bool a2_io_push_str(a2_iostate_t *io, const char *str);
-/// Return the number of keys in the queue.
+/// Return the number of keys the machine has yet to acknowledge: the one in
+/// the latch, if the strobe is still set, plus anything staged behind it.
 static inline unsigned a2_io_keys_count(const a2_iostate_t *io) {
-  return io->keys_count;
+  return (io->strobe ? 1u : 0u) + io->keys_count;
 }
-/// Return the number of keys that can be pushed onto the keyboard queue.
+/// Return the number of characters that can still be staged as type-ahead.
 static inline unsigned a2_io_keys_expect(const a2_iostate_t *io) {
   return A2_KBD_QUEUE_SIZE - io->keys_count;
 }

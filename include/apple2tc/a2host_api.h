@@ -121,8 +121,10 @@ bool a2host_sound_enabled(void);
 bool a2host_key_replay_active(void);
 /// Top up the keyboard queue from `--kbd-file`, if one is open.
 void a2host_drain_kbd_file(void);
-/// Queue a key, but only if nothing is pending.
-void a2host_push_key_if_empty(uint8_t ch);
+/// A key was pressed in the window, just now. It lands in the keyboard latch
+/// over whatever the program has not acknowledged, which is what the hardware
+/// does.
+void a2host_press_key(uint8_t ch);
 
 /* --- Debug plumbing, called by generated programs -------------------------- */
 

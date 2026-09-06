@@ -163,9 +163,69 @@ static void test_kbdstrb(void) {
   a2_io_done(&io);
 }
 
+/// The Apple II keyboard is one byte plus one flag, not a queue. The encoder
+/// writes the new keycode into the byte and re-asserts the strobe on every
+/// keypress, whether or not the program acknowledged the previous one. That is
+/// what makes "read $C000, act on the keys you recognise, and clear the strobe
+/// only for those" a working idiom, and games use it: dsk/Neptune.dsk steers
+/// with I/J/K/M and its handler at $1060 reaches `STA $C010` on those four
+/// arms only, leaving anything else sitting in the latch.
+static void test_keyboard_latch(void) {
+  a2_iostate_t io;
+  a2_io_init(&io);
+
+  a2_io_press_key(&io, 'J');
+  check(a2_io_peek(&io, A2_KBD, 0) == ('J' | 0x80), "a pressed key reads with the strobe set");
+  a2_io_poke(&io, A2_KBDSTRB, 0, 10);
+  check(a2_io_peek(&io, A2_KBD, 20) == 'J', "and with it clear once acknowledged");
+
+  // Neptune's shape. The game recognises J and acknowledges it, does not
+  // recognise Q and leaves the strobe alone, and must still see the next J.
+  a2_io_press_key(&io, 'Q');
+  check(a2_io_peek(&io, A2_KBD, 30) == ('Q' | 0x80), "an unrecognised key is visible too");
+  a2_io_press_key(&io, 'J');
+  check(
+      a2_io_peek(&io, A2_KBD, 40) == ('J' | 0x80),
+      "and a press overwrites a key that was never acknowledged");
+
+  a2_io_done(&io);
+}
+
+/// The queue is not hardware. It is staging for text typed *into* the machine
+/// -- --kbd-file, a program's own startup keys -- where every character has to
+/// arrive however slowly the program reads, instead of collapsing the way a
+/// burst of real keypresses does.
+static void test_type_ahead(void) {
+  a2_iostate_t io;
+  a2_io_init(&io);
+
+  check(a2_io_push_str(&io, "HI"), "a string is staged whole");
+  check(a2_io_peek(&io, A2_KBD, 0) == ('H' | 0x80), "its first character is in the latch");
+  a2_io_poke(&io, A2_KBDSTRB, 0, 10);
+  check(
+      a2_io_peek(&io, A2_KBD, 20) == ('I' | 0x80),
+      "and the next arrives when the program takes the first");
+  a2_io_poke(&io, A2_KBDSTRB, 0, 30);
+  check(a2_io_peek(&io, A2_KBD, 40) == 'I', "with nothing behind it");
+
+  // A keypress is a hardware event: it lands in the latch now, over whatever
+  // staged text was there. The host keeps the two apart -- a2host_gui.c
+  // ignores live keystrokes while a key file is driving the run -- so this is
+  // the defined outcome of a case that should not arise, not a supported mix.
+  check(a2_io_push_str(&io, "XY"), "more text staged");
+  a2_io_press_key(&io, 'Z');
+  check(a2_io_peek(&io, A2_KBD, 50) == ('Z' | 0x80), "a press displaces staged text in the latch");
+  a2_io_poke(&io, A2_KBDSTRB, 0, 60);
+  check(a2_io_peek(&io, A2_KBD, 70) == ('Y' | 0x80), "and the rest of it follows");
+
+  a2_io_done(&io);
+}
+
 int main(void) {
   test_speaker();
   test_kbdstrb();
+  test_keyboard_latch();
+  test_type_ahead();
 
   if (failures) {
     printf("\n%d a2io check(s) failed\n", failures);

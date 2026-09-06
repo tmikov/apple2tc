@@ -352,7 +352,8 @@ runLoop(Debug6502 *emu, DisplayBackend *backend, unsigned maxFrames, bool suppre
         emu->reset();
         continue;
       }
-      a2_io_push_key(emu->io(), key);
+      // A keystroke, not text being typed in: it belongs in the latch.
+      a2_io_press_key(emu->io(), key);
     }
     if (quit)
       break;
