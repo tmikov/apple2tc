@@ -426,6 +426,21 @@ uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
     }
     break;
 
+  // Game I/O -- the three pushbuttons and the four paddle one-shots, plus the
+  // cassette input sharing the page. Not emulated, and deliberately quiet
+  // about it: a game polls these every frame, so falling through to the
+  // default arm below buried everything else on stderr. dsk/Neptune.dsk reads
+  // BUTN0 and BUTN1 sixty times a second.
+  //
+  // Zero is not a neutral answer, it is an answer. Bit 7 clear reads as no
+  // button held, and as a paddle one-shot that has already expired, so a
+  // PREAD-style timing loop exits on its first pass and the stick sits pinned
+  // at 0. A program that offers joystick control will believe it has one,
+  // centred nowhere and with nothing pressed. See dz issue 01a074d9.
+  case A2_TAPEIN:
+  case A2_PTRIG:
+    break;
+
   // Disk II soft switches: $C0E0-$C0EF.
   case 0xC0E0:
     return a2_disk2_peek(&io->disk2, addr & 0x0F, cycles);

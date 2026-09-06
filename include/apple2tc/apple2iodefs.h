@@ -70,6 +70,24 @@
 /// [R/W] SETAN3: * Set AN3: Toggle ON (+5VDC)
 #define A2_AN3ON 0xC05F
 
+/// TAPEIN =($C060)[R] Cassette Data In. Shares its page with the Game I/O
+/// connector's pushbutton and analog inputs below.
+#define A2_TAPEIN 0xC060
+/// BUTN0-BUTN2 =($C061-$C063)[R] Game I/O pushbuttons. Bit 7 is set while the
+/// button is held down.
+#define A2_BUTN0 0xC061
+#define A2_BUTN1 0xC062
+#define A2_BUTN2 0xC063
+/// PADDL0-PADDL3 =($C064-$C067)[R] Game I/O analog inputs. Bit 7 stays set
+/// until that paddle's one-shot times out, so a program reads a position by
+/// triggering PTRIG and counting how long bit 7 lasts.
+#define A2_PADDL0 0xC064
+#define A2_PADDL1 0xC065
+#define A2_PADDL2 0xC066
+#define A2_PADDL3 0xC067
+/// PTRIG =($C07X)[R] Starts all four paddle one-shots.
+#define A2_PTRIG 0xC070
+
 #define A2_CLOCK_FREQ 1023000
 
 /// TXTTAB Applesoft Start of Program Pointer (2B).

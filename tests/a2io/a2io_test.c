@@ -221,11 +221,56 @@ static void test_type_ahead(void) {
   a2_io_done(&io);
 }
 
+/// The game port is not emulated and says nothing about it. Reads there used to
+/// fall through a2_io_peek's default arm, which prints one line per access --
+/// and a program polls the buttons every frame, so a run of dsk/Neptune.dsk
+/// buried everything else on stderr under thousands of them.
+///
+/// This runs last and does not put stderr back: there is no portable way to
+/// undo freopen(), and nothing after it writes there.
+static void test_game_port(void) {
+  static const char kTmp[] = "a2io-stderr.tmp";
+  a2_iostate_t io;
+  a2_io_init(&io);
+
+  if (!freopen(kTmp, "w", stderr)) {
+    check(false, "stderr could be captured");
+    return;
+  }
+  bool all_zero = true;
+  for (unsigned addr = A2_TAPEIN; addr != A2_PTRIG + 0x10; ++addr)
+    if (a2_io_peek(&io, (uint16_t)addr, 0) != 0)
+      all_zero = false;
+  fflush(stderr);
+
+  // Read back whatever landed there, so a failure can show it.
+  char noise[256] = {0};
+  long len = -1;
+  FILE *f = fopen(kTmp, "rb");
+  if (f) {
+    fseek(f, 0, SEEK_END);
+    len = ftell(f);
+    rewind(f);
+    fread(noise, 1, sizeof(noise) - 1, f);
+    fclose(f);
+  }
+  remove(kTmp);
+
+  printf("  $C060-$C07F: %ld byte(s) on stderr\n", len);
+  if (len > 0)
+    printf("  first of it: %.60s\n", noise);
+  check(all_zero, "the game port reads as no button held and a paddle at rest");
+  check(len == 0, "and puts nothing on stderr");
+
+  a2_io_done(&io);
+}
+
 int main(void) {
   test_speaker();
   test_kbdstrb();
   test_keyboard_latch();
   test_type_ahead();
+  test_game_port();
 
   if (failures) {
     printf("\n%d a2io check(s) failed\n", failures);
