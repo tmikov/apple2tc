@@ -39,7 +39,11 @@ uint8_t s_status_not_z = 1;
 /// CARRY.
 uint8_t s_status_c = 0;
 
-uint8_t s_ram[0x10000];
+/// The initializer is not decoration: without one this is a tentative
+/// definition, which clang emits as a `.comm` with no alignment. ld64 then
+/// invents one from the size -- 2^15 for 64KB -- and warns that it exceeds the
+/// 16KB segment maximum. An initialized definition is ordinary zerofill.
+uint8_t s_ram[0x10000] = {0};
 
 unsigned s_cycles = 0;
 uint8_t g_debug = 0;
