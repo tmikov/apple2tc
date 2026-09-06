@@ -1,0 +1,176 @@
+/*
+ * Copyright (c) Tzvetan Mikov.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+/// \file
+/// The one test of a2io's soft switches.
+///
+/// It exists because of a bug that a call count would not have caught: for
+/// nearly five years `a2_io_poke()` performed *two* accesses per write, both
+/// stamped with the same cycle. Every soft switch a2io implements is
+/// idempotent except two, and both of those broke.
+///
+/// The speaker is the loud one. `a2_sound_spkr()` emits samples up to `cycle`
+/// at the current level and then inverts the level, so a second call at the
+/// same cycle emits nothing and inverts straight back: the level never moves,
+/// the output is a DC constant, and a program driving the speaker with
+/// `STA $C030` -- dsk/Neptune.dsk, for one -- is silent.
+///
+/// So the assertion here is on the *waveform*, not on how many callbacks fired.
+/// A read and a write to $C030 are the same soft-switch access, so they must
+/// produce the same samples; and those samples must be a square wave of the
+/// period the toggles asked for. Suppressing the second callback while leaving
+/// the level inverted would satisfy a call count and still fail this.
+
+#include "apple2tc/a2io.h"
+#include "apple2tc/apple2iodefs.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/// Apple II cycles per second, and the audio rate we render at.
+enum { CPU_FREQ = 1020484, AUDIO_RATE = 44100 };
+
+/// A 1 kHz square wave: 200 toggles, one every 510 cycles, the way a game
+/// spins a delay loop around `STA $C030`.
+enum { TOGGLES = 200, TOGGLE_CYCLES = 510, FIRST_CYCLE = 1000 };
+
+/// Samples we render and compare. 4096 samples is ~94.8k cycles, which is
+/// inside the ~102k cycles the toggles span, so the buffer is full of wave.
+enum { SAMPLES = 4096 };
+
+/// Cycles per audio sample; a half period of the wave is this many samples.
+#define SAMPLES_PER_TOGGLE ((double)TOGGLE_CYCLES * AUDIO_RATE / CPU_FREQ)
+
+static int failures;
+
+static void check(bool ok, const char *what) {
+  printf("%s: %s\n", ok ? "ok  " : "FAIL", what);
+  if (!ok)
+    ++failures;
+}
+
+static unsigned g_spkr_calls;
+
+static void spkr_cb(void *ctx, unsigned cycles) {
+  ++g_spkr_calls;
+  a2_sound_spkr((a2_sound_t *)ctx, CPU_FREQ, AUDIO_RATE, cycles);
+}
+
+/// The shape of a rendered waveform, which is what we actually assert on.
+typedef struct {
+  unsigned edges;       ///< Sign changes: one per speaker toggle that landed.
+  unsigned longest_run; ///< Longest stretch between two edges, in samples.
+  unsigned calls;       ///< Speaker callbacks, for the record.
+} waveform_t;
+
+/// Toggle the speaker \c TOGGLES times through \p addr, either by reading it
+/// (LDA $C030) or writing it (STA $C030), and render the result into \p buf.
+static waveform_t render(bool write, float *buf) {
+  a2_sound_t snd;
+  a2_sound_init(&snd);
+  // The sound engine only generates samples while the audio device is pulling
+  // them, so pretend one is live before we start.
+  float ignored[1];
+  a2_sound_cb(&snd, ignored, 0, 1);
+
+  a2_iostate_t io;
+  a2_io_init(&io);
+  a2_io_set_spkr_cb(&io, &snd, spkr_cb);
+
+  g_spkr_calls = 0;
+  unsigned cycles = FIRST_CYCLE;
+  for (unsigned i = 0; i != TOGGLES; ++i, cycles += TOGGLE_CYCLES) {
+    if (write)
+      a2_io_poke(&io, A2_SPKR, 0, cycles);
+    else
+      a2_io_peek(&io, A2_SPKR, cycles);
+  }
+  a2_sound_submit(&snd, CPU_FREQ, AUDIO_RATE, cycles);
+
+  memset(buf, 0, SAMPLES * sizeof(float));
+  a2_sound_cb(&snd, buf, SAMPLES, 1);
+
+  waveform_t w = {0, 0, g_spkr_calls};
+  unsigned run = 1;
+  for (unsigned i = 1; i != SAMPLES; ++i) {
+    if ((buf[i] > 0) != (buf[i - 1] > 0)) {
+      // The samples before the first edge are the lead-in -- the silence
+      // between when the audio device came up and the first toggle -- and are
+      // not part of the wave.
+      if (w.edges && run > w.longest_run)
+        w.longest_run = run;
+      ++w.edges;
+      run = 1;
+    } else {
+      ++run;
+    }
+  }
+
+  a2_io_done(&io);
+  a2_sound_done(&snd);
+  return w;
+}
+
+static void test_speaker(void) {
+  static float read_buf[SAMPLES];
+  static float write_buf[SAMPLES];
+
+  waveform_t r = render(false, read_buf);
+  waveform_t w = render(true, write_buf);
+  printf("  LDA $C030 x%u: callbacks=%u edges=%u longest run=%u samples\n",
+         TOGGLES, r.calls, r.edges, r.longest_run);
+  printf("  STA $C030 x%u: callbacks=%u edges=%u longest run=%u samples\n",
+         TOGGLES, w.calls, w.edges, w.longest_run);
+
+  // First establish that reading the switch produces the wave we asked for,
+  // so that the equality below is an equality of something real. Every sample
+  // in the buffer is inside the toggling, so the edge count is the buffer
+  // length divided by the half period, give or take one at each end.
+  const double expect_edges = SAMPLES / SAMPLES_PER_TOGGLE;
+  check(
+      r.edges + 2 >= (unsigned)expect_edges && r.edges <= (unsigned)expect_edges + 2,
+      "reading $C030 produces one waveform edge per toggle");
+  check(
+      r.longest_run <= (unsigned)(SAMPLES_PER_TOGGLE + 2),
+      "and holds each level for one half period, no longer");
+
+  // The assertion this file exists for. A write to a soft switch is one
+  // access, the same access a read makes, so it must produce the same samples.
+  check(w.edges == r.edges, "writing $C030 produces the same number of edges as reading it");
+  check(
+      memcmp(read_buf, write_buf, sizeof(read_buf)) == 0,
+      "and the same waveform, sample for sample");
+}
+
+static void test_kbdstrb(void) {
+  a2_iostate_t io;
+  a2_io_init(&io);
+
+  // Two keys of type-ahead, then one STA $C010. The doubled access popped
+  // both, so a burst of typing lost every second key.
+  a2_io_push_key(&io, 'A');
+  a2_io_push_key(&io, 'B');
+  a2_io_poke(&io, A2_KBDSTRB, 0, 100);
+  printf("  STA $C010 with 2 keys queued: %u left\n", a2_io_keys_count(&io));
+  check(a2_io_keys_count(&io) == 1, "writing $C010 consumes exactly one key");
+  check(a2_io_peek(&io, A2_KBD, 200) == ('B' | 0x80), "and the next key read is the second one");
+
+  a2_io_done(&io);
+}
+
+int main(void) {
+  test_speaker();
+  test_kbdstrb();
+
+  if (failures) {
+    printf("\n%d a2io check(s) failed\n", failures);
+    return 1;
+  }
+  printf("\na2io: all checks passed\n");
+  return 0;
+}

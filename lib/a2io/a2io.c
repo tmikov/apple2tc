@@ -432,7 +432,16 @@ void a2_io_poke(a2_iostate_t *io, uint16_t addr, uint8_t value, unsigned cycles)
     a2_disk2_poke(&io->disk2, addr & 0x0F, value, cycles);
     return;
   }
-  a2_io_peek(io, addr, cycles);
+  // One access per write. This used to peek twice, on the strength of "a write
+  // is preceeded by a read" from the Apple II Reference Manual, but that is
+  // about the addressing modes that perform a dummy read -- abs,X, abs,Y,
+  // (zp),Y and the read-modify-write instructions -- not about STA abs, which
+  // is what STA $C030 is. Two accesses at the same cycle cancelled every
+  // speaker toggle and popped two keys per KBDSTRB.
+  //
+  // Modelling the dummy read of those modes belongs in the CPU emulator, which
+  // is the only place that knows which cycle it lands on. Here both accesses
+  // carry the same stamp, and a zero-width pulse is worse than none.
   a2_io_peek(io, addr, cycles);
 }
 

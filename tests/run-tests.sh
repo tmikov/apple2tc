@@ -349,6 +349,18 @@ if ! "$bin/tests/pacing/pacing-test" > pacing-out.txt; then
 fi
 rm pacing-out.txt
 
+# a2io's soft switches had no direct test at all, which is how a write hitting
+# every switch twice survived from 2021 to 2026 -- silencing any program that
+# drives the speaker with STA $C030. a2io-test links a2io alone, with no CPU
+# and no window, and asserts the shape of the generated waveform.
+# See tests/a2io/a2io_test.c.
+if ! "$bin/tests/a2io/a2io-test" > a2io-out.txt; then
+  echo "FAIL: a2io soft switches" >&2
+  cat a2io-out.txt >&2
+  exit 1
+fi
+rm a2io-out.txt
+
 # --- Probes -----------------------------------------------------------------
 #
 # The probe compiler is tested through --probe-dump, which compiles a script,
