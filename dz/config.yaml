@@ -1,3 +1,4 @@
 name: apple2tc
 components:
+  - a2io
   - snake-byte
