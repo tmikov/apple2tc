@@ -1617,33 +1617,36 @@ if [ $? -ne 0 ]; then exit 1; fi
 # 20+20 frames (delivering 4 keys, then the rest), checks `status` after
 # each, then calls `boot` again -- which a2host_load_key_file() reloads the
 # recording into, cursor at zero, right after a2host_reboot() has restarted
-# the cycle counter at zero -- and repeats the same 20+20/status sequence to
-# confirm the reload replays the recording identically.
+# the cycle counter at zero and reset RAM to its power-on fill -- and repeats
+# the same 20+20/status sequence to confirm the reload replays the recording
+# identically.
 #
-# What "identically" means here is deliberately narrow: the guarantee is
-# that the same keys land at the same *frame* offsets, not that the machine's
-# video output matches. It does not, even for a plain ROM boot with no key
-# file involved at all -- a2host_reboot() does not clear RAM, so the ROM's
-# own warm-vs-cold check takes a different path the second time and the
-# displayed screen (and the exact cycle count) differs from a fresh start.
-# dz issue 01a07cd8 has the measurements, including a worse case (a disk
-# boot's second `boot` never redoing the boot sequence at all). So this test
-# asserts key-delivery timing, via `status`'s `replay` counter, and nothing
-# about pixels.
+# `boot` on an already-running machine is a power-on, not a warm restart
+# (dz issue 01a07cd8: measuring the difference is what found this gap), so
+# "identically" is checked two ways below: the keys land at the same *frame*
+# offsets (`status`'s `replay` counter), and the machine's video output is
+# byte-identical too (`--hash-frames=`), which is the stronger of the two and
+# subsumes it.
 mcp_transcript replay --key-file=mcp/replay.keys --hash-frames=mcp-tmp/replay-mcp-hash.txt
 
-# The test that matters for a single session: a2mcp replaying the recording
-# must be byte-identical to a2run replaying the same recording over the same
-# 40 frames -- the same oracle the plain `run.jsonl` block above holds
-# a2mcp's frame loop to. Only the first 40 lines of the hash file: those are
-# requests 4+6, before the `boot` at request 8 -- see the block comment above
-# for why nothing past that reboot is compared this way.
+# The video oracle: a2mcp replaying the recording must be byte-identical to
+# a2run replaying the same recording over the same 40 frames -- the same
+# oracle the plain `run.jsonl` block above holds a2mcp's frame loop to --
+# and the second 40-frame stretch (after the `boot` at request 8) must be
+# byte-identical to the first, since a `boot` on a running machine is now a
+# power-on and the recording replays from the top either way.
 $a2run --frames=40 --key-file=mcp/replay.keys --hash-frames=mcp-tmp/replay-a2run-hash.txt \
   > /dev/null
-head -n 40 mcp-tmp/replay-mcp-hash.txt > mcp-tmp/replay-mcp-hash-pre-reboot.txt
-if ! diff -q mcp-tmp/replay-mcp-hash-pre-reboot.txt mcp-tmp/replay-a2run-hash.txt; then
+head -n 40 mcp-tmp/replay-mcp-hash.txt > mcp-tmp/replay-mcp-hash-first.txt
+tail -n 40 mcp-tmp/replay-mcp-hash.txt > mcp-tmp/replay-mcp-hash-second.txt
+if ! diff -q mcp-tmp/replay-mcp-hash-first.txt mcp-tmp/replay-a2run-hash.txt; then
   echo "FAIL: a2mcp's --key-file= replay diverges from a2run's over the same recording" >&2
-  diff mcp-tmp/replay-mcp-hash-pre-reboot.txt mcp-tmp/replay-a2run-hash.txt | head -5 >&2
+  diff mcp-tmp/replay-mcp-hash-first.txt mcp-tmp/replay-a2run-hash.txt | head -5 >&2
+  exit 1
+fi
+if ! diff -q mcp-tmp/replay-mcp-hash-second.txt mcp-tmp/replay-a2run-hash.txt; then
+  echo "FAIL: a boot on a running a2mcp does not reproduce a fresh process byte-for-byte" >&2
+  diff mcp-tmp/replay-mcp-hash-second.txt mcp-tmp/replay-a2run-hash.txt | head -5 >&2
   exit 1
 fi
 
@@ -1677,15 +1680,49 @@ fi
 # the same delivered counts as requests 5 and 7 did at the same frame
 # offsets (20 and 40 frames into each boot) -- the same keys at the same
 # cycle stamps, replayed against a cycle counter that also restarted at
-# zero. This is the assertion that matters: it fails if the cursor-reset
-# math in a2host_load_key_file()/drain_key_presses() ever regresses, without
-# claiming anything about the screen.
+# zero. Subsumed by the video byte-identity check above, but kept as its own
+# assertion: it fails on exactly the cursor-reset math in
+# a2host_load_key_file()/drain_key_presses(), which is the one thing this
+# whole feature is about.
 if ! grep '"id":11' mcp-tmp/replay.txt | grep -q '\\"delivered\\": 4'; then
   echo "FAIL: status 20 frames after the reboot did not report 4 keys delivered, same as before it" >&2
   exit 1
 fi
 if ! grep '"id":13' mcp-tmp/replay.txt | grep -q '\\"delivered\\": 10'; then
   echo "FAIL: status 40 frames after the reboot did not report all 10 keys delivered, same as before it" >&2
+  exit 1
+fi
+
+# The realistic case: a game disk, not a bare ROM. `--root=..` here (instead
+# of the usual `.`) so `disk1: "dsk/Neptune.dsk"` resolves -- the fixture
+# lives at the repo root, not under tests/. 1400 frames is the reproduction
+# dz issue 01a07cd8 was measured with: enough for the disk to finish booting
+# and for the game to be well into its attract loop. Compares a fresh
+# process's first boot against the *second* boot of one process that
+# rebooted once, matching the "fresh process; boot; run N" versus "one
+# process; boot; run N; boot; run N" oracle the fix was built around, and
+# stronger than the bare-ROM check above: this booted state is a whole
+# DOS/RWTS load, not a handful of typed characters.
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"boot","arguments":{"disk1":"dsk/Neptune.dsk"}}}' \
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"run","arguments":{"frames":1400}}}' \
+  > mcp-tmp/reboot-disk-fresh.jsonl
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"boot","arguments":{"disk1":"dsk/Neptune.dsk"}}}' \
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"run","arguments":{"frames":1400}}}' \
+  '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"boot","arguments":{"disk1":"dsk/Neptune.dsk"}}}' \
+  '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"run","arguments":{"frames":1400}}}' \
+  > mcp-tmp/reboot-disk-twice.jsonl
+$a2mcp --root=.. --hash-frames=mcp-tmp/reboot-disk-fresh-hash.txt \
+  < mcp-tmp/reboot-disk-fresh.jsonl > /dev/null
+$a2mcp --root=.. --hash-frames=mcp-tmp/reboot-disk-twice-hash.txt \
+  < mcp-tmp/reboot-disk-twice.jsonl > /dev/null
+tail -n 1400 mcp-tmp/reboot-disk-twice-hash.txt > mcp-tmp/reboot-disk-twice-second.txt
+if ! diff -q mcp-tmp/reboot-disk-fresh-hash.txt mcp-tmp/reboot-disk-twice-second.txt; then
+  echo "FAIL: boot(disk1) on a running a2mcp does not reproduce a fresh process's boot byte-for-byte" >&2
+  diff mcp-tmp/reboot-disk-fresh-hash.txt mcp-tmp/reboot-disk-twice-second.txt | head -5 >&2
   exit 1
 fi
 
