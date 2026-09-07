@@ -264,7 +264,7 @@ A later controlled session verified the full input loop: space at frame 1400,
 `decoded/neptune/testdata/play2.keys`; reproduce it with:
 
 ```bash
-tools/a2run/a2run --headless --frames=3200 --disk1=dsk/Neptune.dsk --key-file=decoded/neptune/testdata/play2.keys --hash-frames=out.txt
+a2run --frames=3200 --disk1=dsk/Neptune.dsk --key-file=decoded/neptune/testdata/play2.keys --hash-frames=out.txt
 ```
 
 **The title screen carries the scoring table**, five enemy types worth **20, 50,
