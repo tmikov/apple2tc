@@ -113,7 +113,7 @@ void apple2_render_hgr_screen_mode(
 ///     into a whole-screen loop.
 ///
 /// This lives in the library, not a front end, because more than one front
-/// end (currently lib/a2mcp, soon a2emu) needs the exact same operation.
+/// end (lib/a2mcp and a2emu) needs the exact same operation.
 void apple2_widen_hgr_cells(a2_screen *screen, bool mixed);
 
 typedef struct {

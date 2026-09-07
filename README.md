@@ -61,6 +61,29 @@ The project consists of several components:
 - Source: https://github.com/tmikov/apple2tc/tree/master/tools/a2emu
 - Online version: https://tmikov.github.io/apple2tc/ . Use F1 and F2 to load and
   run example games.
+- Display options, switchable while the machine is running:
+  - **F3** cycles the hi-res render mode: `color` (the default per-dot
+    approximation) -> `color140` (true colour-clock resolution, renders solid
+    fills instead of stripes) -> `mono` (1-bit white on black) -> `mono140`
+    (occupancy mask, mostly a diagnostic view) -> back to `color`.
+
+    `color` stays the default deliberately, even though `color140` is easier to
+    read. Two adjacent hi-res dots make one NTSC colour clock, so `color140`
+    decodes at the resolution the colour information actually has and a fill
+    comes out solid. But an Apple II on a composite monitor *did* show the
+    fringing and the striping — those artifacts are the original look, not a
+    defect in the rendering, and several games are drawn to exploit them.
+    `color140` is cleaner than the hardware ever was. It is the better view for
+    reading a scene; `color` is the right default for an emulator.
+  - **F4** toggles phosphor persistence (default off): a lit pixel fades
+    instead of vanishing between frames, closer to how a CRT looked, which
+    softens heavy sprite flicker.
+  - **F5** / **F6** decrease / increase the persistence decay factor.
+  - The window title shows the current mode and persistence state once either
+    is changed.
+  - The same startup values can be set from the command line:
+    `--hgr-mode=color|color140|mono|mono140`, `--persist`,
+    `--persist-decay=<0..1>`.
 
 ![](images/a2emu-gr.png)
 ![](images/robo.jpg)

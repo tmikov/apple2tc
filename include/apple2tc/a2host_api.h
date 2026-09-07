@@ -202,6 +202,17 @@ void a2host_drain_kbd_file(void);
 /// does.
 void a2host_press_key(uint8_t ch);
 
+/// The `--hgr-mode=` a front end with a display should start in. Parsed here
+/// (so `a2run` accepts and ignores the flag rather than rejecting it) but only
+/// meaningful to a front end that renders, i.e. `a2host_gui`.
+a2_hgr_mode_t a2host_initial_hgr_mode(void);
+/// The `--persist` flag: whether the GUI's phosphor-persistence pass should
+/// start on. Off by default. Console-side, this is parsed and otherwise unused.
+bool a2host_initial_persist_enabled(void);
+/// The `--persist-decay=` value, in (0, 1). Meaningless unless
+/// a2host_initial_persist_enabled() is true.
+float a2host_initial_persist_decay(void);
+
 /* --- Debug plumbing, called by generated programs -------------------------- */
 
 void add_watch(uint16_t addr, uint8_t size);

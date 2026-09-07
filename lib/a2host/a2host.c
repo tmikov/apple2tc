@@ -116,6 +116,13 @@ static FILE *sched_keys_file_ = NULL;
 /// The very first frame is skipped rather than simulated, so that a front end
 /// pacing against a wall clock does not begin with a huge catch-up burst.
 static bool firstFrame_ = true;
+/// --hgr-mode=, --persist and --persist-decay=: startup values for the GUI's
+/// display options. Parsed here, alongside every other option, so `a2run`
+/// accepts and ignores them instead of failing on an unrecognised flag; only
+/// `a2host_gui` (a2emu) reads them back, and only it renders anything.
+static a2_hgr_mode_t initial_hgr_mode_ = A2_HGR_COLOR;
+static bool initial_persist_enabled_ = false;
+static float initial_persist_decay_ = 0.75f;
 
 static a2_iostate_t io_;
 
@@ -178,6 +185,15 @@ bool a2host_key_replay_active(void) {
 }
 bool a2host_engine_stopped(void) {
   return engine_stopped_;
+}
+a2_hgr_mode_t a2host_initial_hgr_mode(void) {
+  return initial_hgr_mode_;
+}
+bool a2host_initial_persist_enabled(void) {
+  return initial_persist_enabled_;
+}
+float a2host_initial_persist_decay(void) {
+  return initial_persist_decay_;
 }
 bool a2host_stop_requested(void) {
   return probe_stop_requested();
@@ -946,6 +962,15 @@ static void print_help(void) {
   printf(" --snapshot-at=a  Dump machine state the first time PC reaches a (hex)\n");
   printf(" --snapshot-out=p Where the snapshot goes; p and p.regs\n");
   printf(" --probe-dump     Print the compiled probe script and exit\n");
+  printf(
+      " --hgr-mode=m     Windowed only: initial hi-res render mode -- color "
+      "(default), color140, mono, mono140. Cycled at runtime with F3\n");
+  printf(
+      " --persist        Windowed only: start with phosphor persistence on "
+      "(default off). Toggled at runtime with F4\n");
+  printf(
+      " --persist-decay=f Windowed only: initial persistence decay, 0..1 "
+      "(default 0.75). Adjusted at runtime with F5/F6\n");
   engine_print_help();
 }
 
@@ -1062,6 +1087,36 @@ void a2host_parse_args(int argc, char *argv[]) {
     }
     if (strcmp(arg, "--probe-dump") == 0) {
       probe_dump_ = true;
+      continue;
+    }
+    if (strncmp(arg, "--hgr-mode=", 11) == 0) {
+      const char *m = arg + 11;
+      if (strcmp(m, "color") == 0)
+        initial_hgr_mode_ = A2_HGR_COLOR;
+      else if (strcmp(m, "color140") == 0)
+        initial_hgr_mode_ = A2_HGR_COLOR140;
+      else if (strcmp(m, "mono") == 0)
+        initial_hgr_mode_ = A2_HGR_MONO;
+      else if (strcmp(m, "mono140") == 0)
+        initial_hgr_mode_ = A2_HGR_MONO140;
+      else {
+        fprintf(stderr, "--hgr-mode: expected color/color140/mono/mono140, got \"%s\"\n", m);
+        exit(2);
+      }
+      continue;
+    }
+    if (strcmp(arg, "--persist") == 0) {
+      initial_persist_enabled_ = true;
+      continue;
+    }
+    if (strncmp(arg, "--persist-decay=", 16) == 0) {
+      char *end;
+      double v = strtod(arg + 16, &end);
+      if (*(arg + 16) == 0 || *end != 0 || v < 0.0 || v >= 1.0) {
+        fprintf(stderr, "--persist-decay: expected a number in [0, 1), got \"%s\"\n", arg + 16);
+        exit(2);
+      }
+      initial_persist_decay_ = (float)v;
       continue;
     }
 
