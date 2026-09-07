@@ -1503,6 +1503,53 @@ if [ "$tracecount" -ne 3 ]; then
   exit 1
 fi
 
+# --echo-keys is the human-readable counterpart of --trace-keys above: stderr,
+# not stdout, one line per key actually delivered, with a running (n/total)
+# count while a --key-file= replay is driving delivery. The `#` line checks
+# that a comment survives --key-file='s own parser, since that is the format
+# --record-keys= writes and this option is meant to watch a replay of it.
+printf '0 72\n0 73\n# a comment line, tolerated like --key-file= tolerates it\n0 32\n0 65\n0 33\n' \
+  > probe-tmp/echo.keys
+$a2run --frames=3 --echo-keys --key-file=probe-tmp/echo.keys \
+  > /dev/null 2> probe-tmp/echo.err
+echocount=$(grep -cE "^\[frame [0-9]+\] '.'  \([0-9]+/5\)\$" probe-tmp/echo.err || true)
+if [ "$echocount" -ne 5 ]; then
+  echo "FAIL: --echo-keys printed $echocount lines for a 5-key --key-file=, expected 5" >&2
+  cat probe-tmp/echo.err >&2
+  exit 1
+fi
+# Order and the running count both matter: a shuffled or off-by-one counter
+# would still pass the count-only check above.
+if ! grep -qE "^\[frame [0-9]+\] 'H'  \(1/5\)\$" probe-tmp/echo.err ||
+   ! grep -qE "^\[frame [0-9]+\] 'I'  \(2/5\)\$" probe-tmp/echo.err ||
+   ! grep -qE "^\[frame [0-9]+\] ' '  \(3/5\)\$" probe-tmp/echo.err ||
+   ! grep -qE "^\[frame [0-9]+\] 'A'  \(4/5\)\$" probe-tmp/echo.err ||
+   ! grep -qE "^\[frame [0-9]+\] '!'  \(5/5\)\$" probe-tmp/echo.err; then
+  echo "FAIL: --echo-keys did not report H,I,SPACE,A,! in order as 1/5..5/5" >&2
+  cat probe-tmp/echo.err >&2
+  exit 1
+fi
+if ! grep -E "^\[frame [0-9]+\] '.'  \([0-9]+/5\)\$" probe-tmp/echo.err | tail -1 |
+    grep -qE '\(5/5\)$'; then
+  echo "FAIL: --echo-keys' last echoed line for a 5-key replay did not read (5/5)" >&2
+  cat probe-tmp/echo.err >&2
+  exit 1
+fi
+
+# --echo-keys must be a pure diagnostic: it writes to stderr and must never
+# perturb the machine or its pacing (unlike --trace-keys, which deliberately
+# forces fixed-step timing -- see a2host_fixed_step()'s comment). Replaying
+# the same key file with and without --echo-keys must hash identically.
+$a2run --frames=40 --key-file=probe-tmp/echo.keys --hash-frames=probe-tmp/hash-noecho.txt \
+  > /dev/null
+$a2run --frames=40 --key-file=probe-tmp/echo.keys --echo-keys \
+  --hash-frames=probe-tmp/hash-echo.txt > /dev/null 2> /dev/null
+if ! diff -q probe-tmp/hash-noecho.txt probe-tmp/hash-echo.txt > /dev/null; then
+  echo "FAIL: --echo-keys changed the emulated frame hashes" >&2
+  diff probe-tmp/hash-noecho.txt probe-tmp/hash-echo.txt | head -5 >&2
+  exit 1
+fi
+
 # Replay of a counter-stamped file must be driven by `key`, not by the frame
 # drain. Counter stamps are small integers, so against get_cycles() they are
 # all already in the past and an unguarded drain delivers the whole file
