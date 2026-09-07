@@ -64,6 +64,11 @@ static const char *snapshot_out_ = NULL;
 static unsigned clock_freq_ = A2_CLOCK_FREQ;
 /// If true, dump key presses with cycle stamps.
 static bool trace_keys_ = false;
+/// If true, print a human-readable line to stderr for every key delivered to
+/// the machine. Unlike trace_keys_, this is a progress indicator, not a
+/// recording format: it must never be read by a2host_fixed_step() or
+/// anything else that affects emulation or pacing.
+static bool echo_keys_ = false;
 /// If set, path from --probe=, the script whose coordinate --record-keys
 /// stamps recorded keys with. Recorded separately from probe_loaded_ because
 /// the header comment below needs the path itself, not just whether one was
@@ -310,6 +315,30 @@ void error_handler(uint16_t pc) {
   exit(1);
 }
 
+/// Render \p ch the way --echo-keys prints it: printable ASCII quoted, and
+/// the handful of controls worth a name rather than an escape or a raw byte.
+/// Anything else falls back to a hex byte -- still readable, just nameless.
+static const char *echo_key_name(uint8_t ch, char buf[8]) {
+  switch (ch) {
+  case '\r':
+    return "CR";
+  case '\n':
+    return "LF";
+  case 0x1b:
+    return "ESC";
+  case '\t':
+    return "TAB";
+  case 0x7f:
+    return "DEL";
+  default:
+    if (ch >= 0x20 && ch < 0x7f)
+      snprintf(buf, 8, "'%c'", ch);
+    else
+      snprintf(buf, 8, "0x%02X", ch);
+    return buf;
+  }
+}
+
 /// Every key source funnels through here. \p pressed says which door it uses:
 /// true for a keystroke that happened at a moment in time -- live typing, a
 /// cycle-stamped --key-file, a probe's `key` -- which lands in the latch over
@@ -345,6 +374,39 @@ static void key_arrives(uint8_t ch, bool pressed) {
   // not for producing a new one.
   if (trace_keys_)
     printf("%u %u\n", get_cycles(), ch);
+  // --echo-keys shares this funnel with --trace-keys above, and for the same
+  // reason: it too must see every key actually handed to the machine, not
+  // just the ones a particular source delivers. Placed after the
+  // --record-keys early return above on purpose, not by oversight -- while
+  // recording, a key is only pending until the next `record`, and this line
+  // is never reached for it until it actually lands here as a real arrival,
+  // so echo-keys reports what the machine received, not what a probe script
+  // is still holding.
+  //
+  // The frame number is a2host_frame_no()'s value *before* this frame's
+  // engine step runs: a2host_simulate_frame() drains keys before it calls
+  // run_emulated(), so "[frame N]" names the frame the key is about to take
+  // effect in, not one already simulated.
+  //
+  // (n/total) is only meaningful while a --key-file replay is the one
+  // driving delivery: key_press_count_ is nonzero for exactly that. Inside
+  // drain_key_presses()/probe_deliver_keys(), next_key_press_ still indexes
+  // the key just delivered -- both increment it only after calling
+  // press_key() -- so next_key_press_ + 1 is the 1-based count of this key,
+  // and the last key of a recording reports (N/N) rather than (N-1/N).
+  if (echo_keys_) {
+    char buf[8];
+    if (key_press_count_ != 0)
+      fprintf(
+          stderr,
+          "[frame %u] %s  (%u/%u)\n",
+          a2host_frame_no(),
+          echo_key_name(ch, buf),
+          next_key_press_ + 1,
+          key_press_count_);
+    else
+      fprintf(stderr, "[frame %u] %s\n", a2host_frame_no(), echo_key_name(ch, buf));
+  }
 }
 
 /// Text typed into the machine: --kbd-file, a program's own startup keys.
@@ -951,7 +1013,8 @@ static void print_help(void) {
   printf(" --compat         Debug info compatible with the emulator\n");
   printf(" --trace          Dump state at branch targets\n");
   printf(" --trace-mem      Dump all memory writes\n");
-  printf(" --trace-keys     Dump key presses with cycle stamps\n");
+  printf(" --trace-keys     Dump key presses with cycle stamps, to stdout, for recording\n");
+  printf(" --echo-keys      Print each delivered key to stderr, for watching a replay\n");
   printf(" --record-keys=p  Record keys pressed, stamped at a probe's `record`\n");
   printf(" --hash-frames=p  Write per-frame video state hashes to the given file\n");
   printf(" --frames=n       Quit after simulating n frames\n");
@@ -1007,6 +1070,10 @@ void a2host_parse_args(int argc, char *argv[]) {
     }
     if (strcmp(arg, "--trace-keys") == 0) {
       trace_keys_ = true;
+      continue;
+    }
+    if (strcmp(arg, "--echo-keys") == 0) {
+      echo_keys_ = true;
       continue;
     }
     if (strncmp(arg, "--record-keys=", 14) == 0) {
