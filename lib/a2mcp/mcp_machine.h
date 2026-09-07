@@ -41,6 +41,21 @@ nlohmann::json machine_status(void);
 /// the completion event. If the frame cap is reached with fewer updates than
 /// asked for, the reply says so: the screen changed on every frame and no
 /// complete-frame boundary was ever found.
+///
+/// \p args["settle"] is a different policy over the plain "frames" run above,
+/// not a new detector: it paces first and lands clean only if that is cheap.
+/// After the \p args["frames"] frames run out with nothing else stopping them,
+/// up to \p args["settle"] more frames are simulated, stopping at the first
+/// one that leaves the displayed picture complete -- a page flip, or the
+/// visible hash unchanged across kSettleFrames consecutive frame boundaries.
+/// `stop_reason` is "settled" on that success or "unsettled" if the window ran
+/// out first (the capture may be torn). Unlike screen_update's own settle, this
+/// one drops the "prior activity" requirement on purpose: an already-static
+/// screen is exactly the good moment this path exists to recognize, not
+/// nothing. `settle` is only meaningful with the default `until: "frames"`;
+/// combined with "screen_change" or "screen_update" it throws ToolError rather
+/// than raced against a stop condition that already ends the run. Absent
+/// `settle`, a run still reports "limit" exactly as before.
 nlohmann::json machine_run(const nlohmann::json &args);
 
 /// Schedule the characters of \p args["text"] as keystrokes, spaced

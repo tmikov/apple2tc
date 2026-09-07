@@ -48,6 +48,77 @@ You are blind between screenshots. A 260-frame step means four seconds of game
 happened without you, so send the input for that whole window *before* the step,
 not after it.
 
+## The pacing primitive: `run(frames, settle)`
+
+Cadence matters more than any one screenshot being untorn. An agent that wants
+to look every ~100 ms of game time (`frames: 6`) needs that look to happen on
+schedule; whether the frame it lands on is torn is a secondary concern. `run`'s
+`settle` argument is built for exactly this: it advances `frames` frames on
+schedule no matter what, then spends up to `settle` more frames looking for a
+moment when the picture is complete before giving up and returning anyway.
+
+**Use `run(frames: 6, settle: 12)` as the play loop.** That is six frames of
+committed advance (100 ms of game time) plus up to twelve more spent trying to
+land clean — 300 ms worst case, but usually far less, since a page flip or a
+couple of quiet frames typically arrives well inside the grace window. The
+reply's `stop_reason` tells you which happened: `"settled"` means the
+screenshot you are about to take is a complete picture; `"unsettled"` means the
+window ran out first and the shot may be torn, which is still worth knowing
+before you look at it.
+
+This is the opposite priority from `until: "screen_update"` below, and the
+reason both exist. `screen_update` stops at the *first* complete picture,
+however many frames that takes — it optimises for cleanliness and cannot hold
+a cadence, because a game that redraws every fourth frame makes every call
+take four times as long as one that redraws every frame. `run(frames, settle)`
+holds the cadence and only takes cleanliness when it is cheap: it commits to
+`frames` regardless, and treats anything better as a bonus within a bounded
+budget. Reach for `screen_update` when landing one particular shot cleanly
+matters more than when it arrives (say, a screenshot you're about to reason
+about carefully); reach for `settle` for the steady perceive-act loop of
+actually playing.
+
+The same honest limitation applies as to `screen_update`, for the same
+reason: a game that redraws every single frame has no idle frame boundary to
+land on at frame resolution at all, so `settle` will report `"unsettled"` on
+every call. That is not a wasted call — the frame count still advanced on
+schedule, and the note that the shot may be torn is itself useful information
+about the game you're driving.
+
+**Spend your budget on `settle`, not on `frames`.** The two are not
+interchangeable: `frames` is a floor you pay on every look whether or not it buys
+anything, while `settle` is spent only when the screen is not yet clean. So the
+sum of the two sets how often you land untorn, and the split between them sets
+how long an average look takes. Measured on `dsk/Neptune.dsk` during play, thirty
+looks each, holding the ceiling at 18 frames:
+
+| `frames` + `settle` | landed untorn | cadence |
+|---|---|---|
+| 6 + 12 | 17 of 30 | ~218 ms |
+| 4 + 14 | 18 of 30 | ~194 ms |
+| 2 + 16 | 18 of 30 | ~183 ms |
+| 1 + 17 | 18 of 30 | ~178 ms |
+
+Shifting the same budget from the floor into the window improves both axes at
+once. And the ceiling is what governs cleanliness — at a ceiling of 12 the same
+game lands 9 of 30, at 10 it lands 5 of 30, whatever the split.
+
+So: **set `frames` to the smallest value that suits your input, and put
+everything else in `settle`.** The one thing `frames` must cover is key delivery,
+if you want your input applied before you look — a burst of `n` keys at
+`frames_between: k` takes `(n-1) * k` frames to arrive, and a run that lands
+clean before then returns a picture from before your move. With a three-key burst
+this never triggered in ninety looks, because a typical look outlasts the burst;
+with a long burst it certainly would.
+
+**Calibrate during play, not after boot.** An earlier version of this section
+reported that small windows land cleanly *essentially never*. Those measurements
+were real but were all taken in the first 2400 frames after boot, which for this
+game is title and attract animation — continuously redrawing, with no clean frame
+boundary anywhere in it. The identical call lands untorn 17 times in 30 during
+play and 0 times in 30 over the title screen. Skip past the intro before you
+calibrate, and re-check when the game changes mode.
+
 ## Landing on a finished picture: `screen_update`
 
 `screen_change` and `screen_update` answer different questions. `screen_change`

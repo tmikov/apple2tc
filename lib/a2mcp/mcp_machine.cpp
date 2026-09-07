@@ -162,6 +162,29 @@ nlohmann::json machine_run(const nlohmann::json &args) {
   if (until != "frames" && until != "screen_change" && until != "screen_update")
     throw ToolError("until must be \"frames\", \"screen_change\", or \"screen_update\"");
 
+  // `settle`: an extra grace window spent, after the `frames` frames above,
+  // looking for a moment when the displayed picture is complete -- see
+  // machine_run's doc comment for the full policy. Checked before extraction
+  // and range-checked the same way as `frames_between` above and `scale` in
+  // mcp_tools.cpp: a float, a string, or an out-of-range value must throw,
+  // never be silently truncated. Absent by default, which is what keeps a
+  // plain `run` reporting "limit" exactly as before.
+  bool has_settle = false;
+  uint64_t settle_frames = 0;
+  if (auto it = args.find("settle"); it != args.end()) {
+    if (!it->is_number_unsigned())
+      throw ToolError("settle must be a non-negative integer");
+    settle_frames = it->get<uint64_t>();
+    has_settle = true;
+  }
+  if (settle_frames > 600)
+    throw ToolError("settle must be between 0 and 600");
+  // A policy over "frames"'s own stop condition, not a new detector -- combined
+  // with either of the other two `until` values it would silently race against
+  // a stop condition that already ends the run, so it is rejected instead.
+  if (has_settle && until != "frames")
+    throw ToolError("settle is only meaningful with until: \"frames\"");
+
   // Checked before extraction, same shape as `scale`/`frames_between`:
   // args.value() would silently truncate a non-integer (`updates: 1.5`
   // becomes 1 via a plain static_cast, no throw) past the range check below.
@@ -260,6 +283,67 @@ nlohmann::json machine_run(const nlohmann::json &args) {
       reason = "frame_limit";
       break;
     }
+  }
+
+  // The grace window: only entered once the `frames` frames above ran to
+  // completion with nothing else stopping them -- an "engine", "probe", or
+  // (in principle) "frame_limit" stop from the loop above still wins, exactly
+  // as the engine and a probe's `stop` win over any `until`. Paces first,
+  // lands clean if it's cheap: keep simulating for up to `settle_frames` more
+  // frames, watching for the first one that leaves the displayed picture
+  // complete -- a page flip, or the visible hash holding across kSettleFrames
+  // consecutive frame boundaries. Deliberately not screen_update's detector
+  // reused: this path drops the "prior activity" requirement that makes an
+  // already-static screen count as nothing there, because here a screen that
+  // has been quiet for a couple of frames is exactly the good moment being
+  // asked for.
+  if (has_settle && reason == std::string("limit")) {
+    uint64_t prev_hash = a2host_visible_hash();
+    unsigned flips_seen = a2host_page_flips();
+    unsigned stable = 0;
+    bool landed = false;
+    for (uint64_t settled = 0; settled != settle_frames; ++settled) {
+      a2host_simulate_frame();
+      ++ran;
+      const bool at_limit = a2host_record_frame();
+      if (a2host_engine_stopped()) {
+        reason = "engine";
+        landed = true;
+        break;
+      }
+      if (a2host_stop_requested()) {
+        reason = "probe";
+        landed = true;
+        break;
+      }
+      const uint64_t hash = a2host_visible_hash();
+      const unsigned flips_now = a2host_page_flips();
+      if (flips_now != flips_seen) {
+        reason = "settled";
+        landed = true;
+        break;
+      }
+      if (hash == prev_hash) {
+        if (++stable >= kSettleFrames) {
+          reason = "settled";
+          landed = true;
+          break;
+        }
+      } else {
+        stable = 0;
+      }
+      prev_hash = hash;
+      flips_seen = flips_now;
+      // See the identical check above: a2mcp never sets a frame limit, so
+      // this cannot fire, but the loop mirrors a2run's in that respect too.
+      if (at_limit) {
+        reason = "frame_limit";
+        landed = true;
+        break;
+      }
+    }
+    if (!landed)
+      reason = "unsettled";
   }
 
   nlohmann::json out = {

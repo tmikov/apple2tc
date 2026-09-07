@@ -72,7 +72,17 @@ nlohmann::json tool_schemas(void) {
         "picture\". If the frame cap is hit first, the reply says the screen "
         "changed on every frame and no complete moment was found -- the honest "
         "signal that a screenshot now may be torn. A probe script's `stop`, and "
-        "the engine stopping itself, always end a run."},
+        "the engine stopping itself, always end a run. `settle` is a pacing "
+        "policy for the default `until: \"frames\"`, not another `until` value: "
+        "after the `frames` frames run out, up to `settle` more are simulated "
+        "looking for the first one that leaves the picture complete (a page "
+        "flip, or the visible hash unchanged for two consecutive frame "
+        "boundaries) -- landing clean if that is cheap, but advancing `frames` "
+        "on schedule either way. `stop_reason` is \"settled\" on that success "
+        "or \"unsettled\" if the window ran out first. Unlike screen_update's "
+        "settle, an already-static screen counts as a good moment here, not as "
+        "nothing. Combining `settle` with `until: \"screen_change\"` or "
+        "\"screen_update\" is rejected."},
        {"inputSchema",
         {{"type", "object"},
          {"required", {"frames"}},
@@ -85,7 +95,14 @@ nlohmann::json tool_schemas(void) {
              {"maximum", 1000},
              {"description",
               "only for until: \"screen_update\"; how many complete "
-              "moments to advance through (default 1)"}}}}}}}});
+              "moments to advance through (default 1)"}}},
+           {"settle",
+            {{"type", "integer"},
+             {"minimum", 0},
+             {"maximum", 600},
+             {"description",
+              "only for until: \"frames\" (the default); extra frames to spend "
+              "after `frames` looking for a complete picture before giving up"}}}}}}}});
 
   tools.push_back(
       {{"name", "screen"},

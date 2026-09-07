@@ -548,6 +548,87 @@ if ! grep '"id":4' mcp-tmp/settle.txt | grep -q 'no complete-frame boundary was 
   exit 1
 fi
 
+# `run`'s `settle` grace window: a stopping *policy* over the same detectors
+# above, not a new one. Advance `frames` frames exactly as a plain run does,
+# then spend up to `settle` more looking for a moment when the displayed
+# picture is complete (a flip, or the visible hash unchanged across two
+# consecutive frame boundaries -- the same K=2 as screen_update's settle, but
+# without screen_update's "requires prior activity" gate).
+#
+# Reusing settle.b33: request 3's frame cap (10) lands mid-draw, and the
+# settle window (20) must carry it all the way to the fixture's real
+# quiescence at frame 17 -- the same frame screen_update itself lands on
+# above, which is what proves this isn't firing on a coincidental early
+# plateau.
+$a6502 mcp/settle.s mcp-tmp/settle.b33
+mcp_transcript grace
+if ! grep '"id":3' mcp-tmp/grace.txt | grep -q 'stop_reason\\": \\"settled'; then
+  echo "FAIL: run(frames, settle) did not land on the fixture's quiescence" >&2
+  exit 1
+fi
+if ! grep '"id":3' mcp-tmp/grace.txt | grep -q 'frames_run\\": 17'; then
+  echo "FAIL: run(frames, settle) landed on the wrong frame" >&2
+  exit 1
+fi
+# Request 4 starts from that already-settled screen and asks again: unlike
+# screen_update (request 5, same starting state, runs all the way to its
+# frame cap with updates 0), a settle grace has no "prior activity" gate, so
+# an already-static screen is exactly the good moment it is looking for --
+# it must fire within the K=2 minimum, not wait out the window.
+if ! grep '"id":4' mcp-tmp/grace.txt | grep -q 'stop_reason\\": \\"settled'; then
+  echo "FAIL: settle did not recognize an already-static screen as a good moment" >&2
+  exit 1
+fi
+if ! grep '"id":4' mcp-tmp/grace.txt | grep -q 'frames_run\\": 7'; then
+  echo "FAIL: settle did not fire on the first possible frame of an already-static screen" >&2
+  exit 1
+fi
+if ! grep '"id":5' mcp-tmp/grace.txt | grep -q 'stop_reason\\": \\"limit'; then
+  echo "FAIL: screen_update fired on an already-static screen -- it should require prior activity" >&2
+  exit 1
+fi
+if ! grep '"id":5' mcp-tmp/grace.txt | grep -q 'updates\\": 0'; then
+  echo "FAIL: screen_update reported an update on an already-static screen" >&2
+  exit 1
+fi
+
+# visible-page.b33 redraws every single frame, so it never has an idle
+# frame-boundary pair: settle's grace window must run out honestly and say
+# so, rather than firing on a spurious "unchanged" reading.
+$a6502 mcp/visible-page.s mcp-tmp/visible-page.b33
+mcp_transcript grace-busy
+if ! grep '"id":3' mcp-tmp/grace-busy.txt | grep -q 'stop_reason\\": \\"unsettled'; then
+  echo "FAIL: settle did not give up honestly on a screen with no idle moment" >&2
+  exit 1
+fi
+if ! grep '"id":3' mcp-tmp/grace-busy.txt | grep -q 'frames_run\\": 25'; then
+  echo "FAIL: an unsettled stop did not run the full frames+settle window" >&2
+  exit 1
+fi
+# `settle` is a policy over `until: "frames"` only; combined with
+# "screen_change" (or "screen_update") it must reject rather than guess.
+if ! grep '"id":4' mcp-tmp/grace-busy.txt | grep -q '"isError":true'; then
+  echo "FAIL: settle combined with until: \"screen_change\" did not raise an error" >&2
+  exit 1
+fi
+# `settle` gets the same malformed-argument treatment as `updates` and
+# `frames_between`: a non-integer (5) and an in-type but out-of-range value
+# (6) must both raise isError without taking the process down, and request 7
+# -- an ordinary `status` right after -- must still answer in the same
+# session.
+if ! grep '"id":5' mcp-tmp/grace-busy.txt | grep -q '"isError":true'; then
+  echo "FAIL: a non-integer settle did not raise an error" >&2
+  exit 1
+fi
+if ! grep '"id":6' mcp-tmp/grace-busy.txt | grep -q '"isError":true'; then
+  echo "FAIL: an out-of-range settle did not raise an error" >&2
+  exit 1
+fi
+if ! grep -q '"id":7' mcp-tmp/grace-busy.txt; then
+  echo "FAIL: a2mcp died on a malformed settle instead of answering the next request" >&2
+  exit 1
+fi
+
 # `keys` schedules rather than injects, and the .keys file it can write is the
 # whole reason to prefer that: a session recorded through the tool must replay
 # bit-for-bit under a2run's own --key-file=.

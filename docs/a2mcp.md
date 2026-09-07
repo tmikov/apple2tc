@@ -129,8 +129,8 @@ when the call started. That is the way to advance to "the next thing worth
 looking at" without guessing a frame count. A probe script's `stop`, and the
 engine stopping itself, always end a run early regardless of `until`. The
 reply reports `frames_run`, `stop_reason` (`"limit"`, `"screen_change"`,
-`"screen_update"`, `"probe"`, or `"engine"`), and the frame/cycle counters
-after the run.
+`"screen_update"`, `"settled"`, `"unsettled"`, `"probe"`, or `"engine"`), and the
+frame/cycle counters after the run.
 
 `until: "screen_update"` is a different question from `screen_change`:
 `screen_change` answers "has anything happened at all", which fires
@@ -173,6 +173,36 @@ The loop itself (`machine_run()` in `lib/a2mcp/mcp_machine.cpp`) is a copy of
 advances the frame counter and writes `--hash-frames=`), then test the stop
 conditions, in that order. `tests/run-tests.sh` diffs 40 frames of `a2run`
 against 40 frames of `a2mcp` to hold the two to the same behaviour.
+
+`settle` is a different kind of thing from `until`: a pacing *policy* over the
+plain `until: "frames"` run above, built on the same detectors `screen_update`
+uses rather than a new one. An agent stepping through a game wants a steady
+cadence above all — a screenshot roughly every so many frames — with clean
+frames a secondary win taken only when it is cheap. `screen_update` inverts
+that: it stops at the *first* complete picture, however many frames that
+takes, which optimises cleanliness at the cost of cadence. `settle` paces
+first: advance `frames` frames exactly as a plain run does, then spend up to
+`settle` more frames (an integer, default absent, checked before extraction
+and bounded to 0-600 the same way `frames_between` is) looking for the first
+one that leaves the picture complete — a page flip, or the visible hash
+unchanged across two consecutive frame boundaries. `stop_reason` is
+`"settled"` on that success, or `"unsettled"` if the window ran out first, meaning
+the frame just captured may be torn — either way, the call has already
+advanced its `frames` frames, so the cadence is not lost. `"engine"` and
+`"probe"` still win over both, exactly as they win over every other `until`.
+`settle` is only meaningful with the default `until: "frames"`; combining it
+with `"screen_change"` or `"screen_update"` raises a `ToolError` rather than
+racing it against a stop condition that already ends the run.
+
+The deliberate difference from `screen_update`'s own settle, and the reason
+this is not just that detector reused: `screen_update`'s settle **requires
+prior activity**, so an already-static screen counts as nothing, which is
+right for "has something new finished." `settle` drops that requirement in
+this path only — a screen that has been quiet for a couple of frames is a
+perfectly untorn picture, whether or not anything about it just changed, and
+recognising that instantly is the entire point of the feature. `until:
+"screen_update"`'s own behaviour is unchanged; see `docs/a2mcp-playing.md` for
+`settle` as the play loop's pacing primitive.
 
 ### `screen`
 
