@@ -107,6 +107,8 @@ static bool scheduled_keys_ = false;
 /// is merely empty, and may grow again at any moment, does not fit those
 /// rules, and bending them would change behaviour for both existing front ends.
 static KeyPress *sched_keys_ = NULL;
+/// Per scheduled key: deliver as a keystroke (true) or as type-ahead (false).
+static bool *sched_keys_pressed_ = NULL;
 static unsigned sched_keys_count_ = 0;
 static unsigned sched_keys_capacity_ = 0;
 static unsigned next_sched_key_ = 0;
@@ -589,11 +591,13 @@ void a2host_open_scheduled_keys_file(const char *path) {
   }
 }
 
-void a2host_schedule_key(uint8_t ch, unsigned frames_ahead) {
+void a2host_schedule_key(uint8_t ch, unsigned frames_ahead, bool pressed) {
   if (sched_keys_count_ == sched_keys_capacity_) {
     sched_keys_capacity_ = sched_keys_capacity_ ? sched_keys_capacity_ * 2 : 64;
     sched_keys_ = realloc(sched_keys_, sched_keys_capacity_ * sizeof(*sched_keys_));
-    if (!sched_keys_) {
+    sched_keys_pressed_ =
+        realloc(sched_keys_pressed_, sched_keys_capacity_ * sizeof(*sched_keys_pressed_));
+    if (!sched_keys_ || !sched_keys_pressed_) {
       fprintf(stderr, "FATAL: out of memory scheduling keys\n");
       exit(2);
     }
@@ -601,6 +605,7 @@ void a2host_schedule_key(uint8_t ch, unsigned frames_ahead) {
   const unsigned at = get_cycles() + frames_ahead * a2host_frame_cycles();
   sched_keys_[sched_keys_count_].cycles = at;
   sched_keys_[sched_keys_count_].ch = ch;
+  sched_keys_pressed_[sched_keys_count_] = pressed;
   ++sched_keys_count_;
   if (sched_keys_file_)
     fprintf(sched_keys_file_, "%u %u\n", at, ch);
@@ -620,7 +625,18 @@ unsigned a2host_scheduled_keys_pending(void) {
 static void drain_scheduled_keys(void) {
   const unsigned cycles = get_cycles();
   while (next_sched_key_ != sched_keys_count_ && cycles >= sched_keys_[next_sched_key_].cycles) {
-    push_key(sched_keys_[next_sched_key_].ch);
+    // Which of the two deliveries the caller asked for. A keystroke overwrites
+    // the latch, exactly like --key-file= replay and like a live key from the
+    // window, and is what a game needs: type-ahead only reaches the latch while
+    // the strobe is clear, so against a program that polls $C000 without
+    // acknowledging through KBDSTRB every key after the first stages behind the
+    // strobe and never arrives. dsk/Neptune.dsk is such a program. Typing needs
+    // the opposite: a keystroke that overwrites a character BASIC has not read
+    // yet loses it, which a multi-line program typed a frame apart will do.
+    if (sched_keys_pressed_[next_sched_key_])
+      press_key(sched_keys_[next_sched_key_].ch);
+    else
+      push_key(sched_keys_[next_sched_key_].ch);
     ++next_sched_key_;
   }
 }

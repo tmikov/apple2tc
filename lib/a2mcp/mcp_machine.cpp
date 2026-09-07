@@ -298,6 +298,16 @@ nlohmann::json machine_keys(const nlohmann::json &args) {
   if (spacing > 600)
     throw ToolError("frames_between must be between 0 and 600");
 
+  // Default "press": a keystroke, which overwrites the keyboard latch exactly
+  // as a live key from the window does, and is what a game polling $C000 needs
+  // -- a program that never acknowledges the strobe never sees anything
+  // delivered as type-ahead. "type" is that type-ahead, for entering text,
+  // where a keystroke would overwrite a character the program has not read yet.
+  const std::string deliver = args.value("deliver", std::string("press"));
+  if (deliver != "press" && deliver != "type")
+    throw ToolError("deliver must be \"press\" or \"type\"");
+  const bool pressed = deliver == "press";
+
   // The stamp a2host_schedule_key() computes is `get_cycles() + frames_ahead *
   // frame_cycles` in 32-bit arithmetic, and the last key of this call is the
   // furthest ahead. Computed here in 64 bits and refused when it would not fit
@@ -329,7 +339,7 @@ nlohmann::json machine_keys(const nlohmann::json &args) {
       c = '\r';
     if ((unsigned char)c > 0x7F)
       throw ToolError("text must be ASCII");
-    a2host_schedule_key((uint8_t)c, (unsigned)(spacing * n));
+    a2host_schedule_key((uint8_t)c, (unsigned)(spacing * n), pressed);
     ++n;
   }
   return {

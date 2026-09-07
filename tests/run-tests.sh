@@ -1354,6 +1354,28 @@ if diff -q probe-tmp/replay-key.txt probe-tmp/replay-nokey.txt > /dev/null; then
 fi
 
 rm -rf probe-tmp
+# A scheduled key must arrive as a *keystroke*, not as type-ahead. kbd-latch.s
+# polls $C000 and never acknowledges through KBDSTRB, which is what a game that
+# reads the keyboard its own way does. Type-ahead only reaches the latch while
+# the strobe is clear, so under it every key after the first stages behind the
+# strobe and never arrives -- which is exactly how dsk/Neptune.dsk came to look
+# unresponsive to the keyboard while playing fine in a2emu, whose live keys
+# always overwrite the latch.
+$a6502 mcp/kbd-latch.s mcp-tmp/kbd-latch.b33 > /dev/null
+mcp_transcript kbd-latch
+python3 - mcp-tmp/kbd-latch.txt <<'EOF'
+import json, sys
+seen = {}
+for line in open(sys.argv[1]):
+    m = json.loads(line)
+    if m.get("id") in (6, 9):
+        seen[m["id"]] = m["result"]["content"][0]["text"][0]
+if seen.get(6) != "A" or seen.get(9) != "B":
+    print(f"FAIL: scheduled keys did not arrive as keystrokes: {seen}", file=sys.stderr)
+    sys.exit(1)
+EOF
+if [ $? -ne 0 ]; then exit 1; fi
+
 rm -rf mcp-tmp
 
 echo "Success!"

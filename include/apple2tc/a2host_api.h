@@ -69,7 +69,11 @@ void a2host_enable_scheduled_keys(void);
 ///
 /// Scheduled rather than pushed because the stamp is what makes a session
 /// replayable: the file this writes is read back by --key-file= unchanged.
-void a2host_schedule_key(uint8_t ch, unsigned frames_ahead);
+/// \p pressed selects the delivery: true is a keystroke, which overwrites the
+/// keyboard latch the way a live key or a --key-file= replay does and is what a
+/// game polling $C000 needs; false is type-ahead, which stages behind an
+/// unacknowledged strobe and is what typing text into a program needs.
+void a2host_schedule_key(uint8_t ch, unsigned frames_ahead, bool pressed);
 
 /// Cycles in one emulated frame -- the fixed step a2host_simulate_frame() runs
 /// and the unit a2host_schedule_key()'s \p frames_ahead is counted in. A front
