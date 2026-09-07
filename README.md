@@ -84,6 +84,15 @@ The project consists of several components:
   - The same startup values can be set from the command line:
     `--hgr-mode=color|color140|mono|mono140`, `--persist`,
     `--persist-decay=<0..1>`.
+- `--echo-keys` prints one human-readable line per key handed to the machine
+  (frame number, the key, and its position in the file while a `--key-file=`
+  replay is driving input) to stderr, so you can watch a replay's progress in
+  the window as it plays. It has no effect on emulation or timing. That makes
+  it the counterpart to `--trace-keys`, which writes machine-readable
+  `<cycles> <key>` lines to stdout for producing a `--key-file=` recording, and
+  forces fixed-step pacing to make that recording reproducible -- the two are
+  for opposite purposes, so use `--echo-keys` to watch and `--trace-keys` to
+  record.
 
 ![](images/a2emu-gr.png)
 ![](images/robo.jpg)
