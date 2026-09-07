@@ -610,10 +610,6 @@ void probe_record_keys(uint32_t now) {
 }
 
 static void load_key_file(const char *path) {
-  if (key_presses_) {
-    fprintf(stderr, "Key file already loaded\n");
-    exit(2);
-  }
   FILE *f;
   int res;
   if ((f = fopen(path, "rt")) == NULL) {
@@ -621,6 +617,12 @@ static void load_key_file(const char *path) {
     exit(2);
   }
 
+  // A front end may call this more than once -- a2mcp reloads the recording
+  // after a2host_reboot() so a second `boot` delivers it at the same cycle
+  // stamps as the first (a2host_load_key_file()'s comment). A list already
+  // here, consumed in full or in part, is simply replaced rather than
+  // treated as an error: free it and start counting from zero again.
+  free(key_presses_);
   unsigned capacity = 32;
   key_presses_ = (KeyPress *)malloc(sizeof(KeyPress) * capacity);
   if (!key_presses_)
@@ -665,6 +667,23 @@ static void load_key_file(const char *path) {
   fprintf(stderr, "Loaded %u keys\n", key_press_count_);
 
   fclose(f);
+}
+
+/// Public wrapper for the same load_key_file() --key-file= parsing calls at
+/// startup. Lets a front end (re)load a recording after the process has
+/// already started -- a2mcp calls this right after a2host_reboot() so that a
+/// second `boot` replays the recording's keys at the same cycle stamps as the
+/// first: the reboot already restarted the cycle counter at zero, and
+/// load_key_file() now resets next_key_press_ to zero too. That is the only
+/// thing this reproduces -- a reboot is a warm start, not a power-on, so
+/// nothing about the *displayed* machine is promised to match (RAM survives
+/// a reboot; see a2host_reboot()'s own comment and dz issue 01a07cd8).
+/// cmdline_key_source_ is set the same way the --key-file= option sets it,
+/// since as far as a2host_buffer_keys() is concerned this is that same
+/// command-line source, just re-armed.
+void a2host_load_key_file(const char *path) {
+  load_key_file(path);
+  cmdline_key_source_ = true;
 }
 
 void a2host_drain_kbd_file(void) {

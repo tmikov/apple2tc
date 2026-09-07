@@ -63,6 +63,19 @@ void a2host_init_emulation(void);
 /// keypress too, or the replay sees one keystroke the original did not.
 void a2host_enable_scheduled_keys(void);
 
+/// Load (or reload) a cycle-stamped .keys recording -- the same parsing
+/// --key-file= does at startup, exposed so a front end can call it again
+/// later. A list already loaded, whether fully delivered or still partway
+/// through, is replaced: the new one starts at cycle-stamp cursor zero.
+/// Combined with a2host_reboot(), which restarts the cycle counter at zero,
+/// calling this right after a reboot delivers the recording's keys at the
+/// same cycle stamps as a fresh process start would -- that is the only
+/// thing this reproduces. A reboot is a warm start, not a power-on: RAM
+/// survives it, so nothing about the *displayed* machine is promised to
+/// match (see a2host_reboot()'s own comment). Exits the process on a missing
+/// file or a malformed line, the same as --key-file= does.
+void a2host_load_key_file(const char *path);
+
 /// Schedule a key \p frames_ahead frames from now, stamped on the cycle
 /// counter exactly as --key-file= entries are, and written to the file opened
 /// by a2host_open_scheduled_keys_file() if there is one.
