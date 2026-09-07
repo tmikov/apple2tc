@@ -1610,6 +1610,57 @@ if seen.get(6) != "A" or seen.get(9) != "B":
 EOF
 if [ $? -ne 0 ]; then exit 1; fi
 
+# `a2mcp --key-file=` replaying a cycle-stamped .keys recording -- the read
+# half of the asymmetry --keys-out= already covers. mcp/replay.keys is a
+# synthetic 10-key recording (see its own header comment for the cycle math);
+# mcp/replay.jsonl boots, checks `status` before anything is delivered, runs
+# 20 frames (delivering the first 4 keys), checks `status` again, runs 20
+# more (delivering the rest), checks `status` a third time, then calls `boot`
+# again to exercise the reboot rule below.
+mcp_transcript replay --key-file=mcp/replay.keys --hash-frames=mcp-tmp/replay-mcp-hash.txt
+
+# The test that matters: a2mcp replaying the recording must be byte-identical
+# to a2run replaying the same recording over the same 40 frames -- the same
+# oracle the plain `run.jsonl` block above holds a2mcp's frame loop to.
+$a2run --frames=40 --key-file=mcp/replay.keys --hash-frames=mcp-tmp/replay-a2run-hash.txt \
+  > /dev/null
+if ! diff -q mcp-tmp/replay-mcp-hash.txt mcp-tmp/replay-a2run-hash.txt; then
+  echo "FAIL: a2mcp's --key-file= replay diverges from a2run's over the same recording" >&2
+  diff mcp-tmp/replay-mcp-hash.txt mcp-tmp/replay-a2run-hash.txt | head -5 >&2
+  exit 1
+fi
+
+# `status`'s `replay` field: absent zeros, a real partial count after the
+# first `run`, and delivered == total once the recording is exhausted.
+if ! grep '"id":3' mcp-tmp/replay.txt | grep -q '\\"delivered\\": 0' ||
+   ! grep '"id":3' mcp-tmp/replay.txt | grep -q '\\"total\\": 10'; then
+  echo "FAIL: status before any run did not report replay: {delivered: 0, total: 10}" >&2
+  exit 1
+fi
+if ! grep '"id":5' mcp-tmp/replay.txt | grep -q '\\"delivered\\": 4'; then
+  echo "FAIL: status after the first run did not report 4 keys delivered" >&2
+  exit 1
+fi
+if ! grep '"id":7' mcp-tmp/replay.txt | grep -q '\\"delivered\\": 10'; then
+  echo "FAIL: status after the recording finished did not report all 10 keys delivered" >&2
+  exit 1
+fi
+
+# The reboot rule: a2host_reboot() restarts the cycle counter at zero but
+# cannot rewind next_key_press_ (and, once the recording is exhausted,
+# key_presses_ is already freed) -- so a second `boot` cannot replay the
+# recording "exactly as it does on a fresh server start". Rather than
+# silently replay a wrong tail, request 8 above must come back as a loud
+# ToolError instead of a normal boot reply.
+if ! grep '"id":8' mcp-tmp/replay.txt | grep -q '"isError":true'; then
+  echo "FAIL: rebooting with a --key-file recording loaded was not refused" >&2
+  exit 1
+fi
+if ! grep '"id":8' mcp-tmp/replay.txt | grep -q 'cannot reboot'; then
+  echo "FAIL: the reboot refusal did not explain itself" >&2
+  exit 1
+fi
+
 rm -rf mcp-tmp
 
 echo "Success!"

@@ -1,0 +1,17 @@
+# Synthetic cycle-stamped recording for a2mcp's --key-file= replay tests
+# (tests/run-tests.sh's "replay" block). Types "PRINT 2+2\r" -- 10 keys --
+# spaced 60000 cycles apart, starting well past the ROM's boot sequence
+# (KEYIN is reached around cycle 141500) so every key lands at the BASIC
+# prompt rather than being swallowed by boot. At 17050 cycles/frame the last
+# key (stamp 640000) is due by frame 38, so a 20+20 frame run splits the
+# recording into two unequal halves for the status-progress check.
+100000 80
+160000 82
+220000 73
+280000 78
+340000 84
+400000 32
+460000 50
+520000 43
+580000 50
+640000 13
