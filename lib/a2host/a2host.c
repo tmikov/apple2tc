@@ -58,6 +58,11 @@ static const char *probe_out_path_ = NULL;
 static bool snapshot_armed_ = false;
 /// The address from --snapshot-at=.
 static uint16_t snapshot_at_ = 0;
+/// If set, --snapshot-frame= gave a frame to capture machine state at instead.
+static bool snapshot_frame_armed_ = false;
+/// The frame number from --snapshot-frame=, in the same coordinate
+/// --hash-frames= writes, so the two name the same moment.
+static unsigned snapshot_frame_ = 0;
 /// Path from --snapshot-out=. The RAM image goes here and the registers to
 /// the same name with ".regs" appended.
 static const char *snapshot_out_ = NULL;
@@ -1074,6 +1079,12 @@ unsigned a2host_page_flips(void) {
 /// Emit this frame's hash if requested and advance the frame counter.
 /// Returns true when the frame limit has been reached.
 bool a2host_record_frame(void) {
+  // Before ++frame_no_, and alongside the hash of the same name: the state
+  // captured here is exactly the state the hash line numbered snapshot_frame_
+  // describes. That shared coordinate is what lets a snapshot be checked
+  // against the run it came from.
+  if (snapshot_frame_armed_ && frame_no_ == snapshot_frame_)
+    probe_snapshot_now();
   if (hash_file_) {
     fprintf(hash_file_, "%u %u %016llx\n", frame_no_, get_cycles(),
             (unsigned long long)hash_video_state());
@@ -1111,7 +1122,14 @@ void a2host_shutdown(void) {
   // a run that wrote one and then had it deleted. Say so, and fail: the
   // address was wrong, or the run was too short to reach it.
   if (probe_snapshot_missed()) {
-    fprintf(stderr, "snapshot: $%04X was never reached; no snapshot written\n", snapshot_at_);
+    if (snapshot_frame_armed_)
+      fprintf(
+          stderr,
+          "snapshot: frame %u was never reached (%u simulated); no snapshot written\n",
+          snapshot_frame_,
+          frame_no_);
+    else
+      fprintf(stderr, "snapshot: $%04X was never reached; no snapshot written\n", snapshot_at_);
     exit(1);
   }
   probe_close_output();
@@ -1160,6 +1178,8 @@ static void print_help(void) {
   printf(" --probe=path     Load a probe script\n");
   printf(" --probe-out=p    Write probe output to the given file\n");
   printf(" --snapshot-at=a  Dump machine state the first time PC reaches a (hex)\n");
+  printf(" --snapshot-frame=n Dump machine state at frame n instead of at an address.\n");
+  printf("                  Same frame coordinate --hash-frames= writes\n");
   printf(" --snapshot-out=p Where the snapshot goes; p and p.regs\n");
   printf(" --probe-dump     Print the compiled probe script and exit\n");
   printf(
@@ -1295,6 +1315,18 @@ void a2host_parse_args(int argc, char *argv[]) {
       snapshot_armed_ = true;
       continue;
     }
+    if (strncmp(arg, "--snapshot-frame=", 17) == 0) {
+      const char *s = arg + 17;
+      char *end;
+      unsigned long v = strtoul(s, &end, 10);
+      if (*s == 0 || *end != 0 || v > UINT_MAX) {
+        fprintf(stderr, "--snapshot-frame: expected a frame number, got \"%s\"\n", arg + 17);
+        exit(2);
+      }
+      snapshot_frame_ = (unsigned)v;
+      snapshot_frame_armed_ = true;
+      continue;
+    }
     if (strncmp(arg, "--snapshot-out=", 15) == 0) {
       snapshot_out_ = arg + 15;
       continue;
@@ -1414,14 +1446,27 @@ void a2host_parse_args(int argc, char *argv[]) {
   // Each half of the snapshot is useless without the other, so neither is
   // allowed to be implied. An address with nowhere to write it would run the
   // whole program and silently produce nothing.
-  if (snapshot_armed_ != (snapshot_out_ != NULL))
-    probe_fatal("--snapshot-at and --snapshot-out must be given together");
-  if (snapshot_armed_) {
+  if (snapshot_armed_ && snapshot_frame_armed_)
+    probe_fatal("--snapshot-at and --snapshot-frame are two triggers for one capture");
+  if ((snapshot_armed_ || snapshot_frame_armed_) != (snapshot_out_ != NULL))
+    probe_fatal("--snapshot-at or --snapshot-frame, and --snapshot-out, must be given together");
+  // A frame trigger past the frame limit can never fire, and the run that
+  // would have told you so is the expensive part. Say it before running.
+  if (snapshot_frame_armed_ && frame_limit_ && snapshot_frame_ >= frame_limit_)
+    probe_fatal(
+        "--snapshot-frame=%u never happens: --frames=%u stops at frame %u",
+        snapshot_frame_,
+        frame_limit_,
+        frame_limit_ - 1);
+  if (snapshot_armed_ || snapshot_frame_armed_) {
     static char regs_path[1024];
     if ((size_t)snprintf(regs_path, sizeof(regs_path), "%s.regs", snapshot_out_) >=
         sizeof(regs_path))
       probe_fatal("--snapshot-out path is too long");
-    probe_snapshot_at(snapshot_at_, snapshot_out_, regs_path);
+    if (snapshot_armed_)
+      probe_snapshot_at(snapshot_at_, snapshot_out_, regs_path);
+    else
+      probe_snapshot_deferred(snapshot_out_, regs_path);
   }
 
   // Before opening --probe-out=: a dump exits immediately and never runs, so

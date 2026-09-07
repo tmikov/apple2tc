@@ -84,6 +84,21 @@ void probe_dispatch(uint16_t pc);
 /// the *first* arrival, before the program has been anywhere.
 void probe_snapshot_at(uint16_t addr, const char *ram_path, const char *regs_path);
 
+/// Arm the same one-shot capture, but with no trigger of its own: the caller
+/// decides when, by calling probe_snapshot_now().
+///
+/// This exists because the most useful capture point is not always an address.
+/// "The moment the game finishes loading" is a *frame*, and a frame boundary is
+/// the host's coordinate, not the program's -- the host owns the frame counter,
+/// so it fires this itself rather than expressing the moment as a PC it would
+/// have to know in advance.
+void probe_snapshot_deferred(const char *ram_path, const char *regs_path);
+
+/// Take a snapshot armed by probe_snapshot_deferred(), at the current PC.
+/// Does nothing if no snapshot is armed or one has already fired, so the
+/// caller may call it unconditionally at whatever moment it means.
+void probe_snapshot_now(void);
+
 /// True if a snapshot was armed and never fired -- the address was never
 /// reached. The caller reports it; a snapshot that silently did not happen
 /// would otherwise look like a successful run that wrote no file.

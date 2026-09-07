@@ -445,6 +445,40 @@ if ! diff -q frontend-run.txt frontend-emu.txt > /dev/null; then
 fi
 rm frontend-run.txt frontend-emu.txt
 
+# --snapshot-frame= names the same moment --hash-frames= does. That shared
+# coordinate is the whole point of the option -- a snapshot you cannot line up
+# against the run it came from cannot be checked against it -- so the test is
+# that the cycle stamp in the .regs sidecar equals the one on the hash line of
+# the same number. Booting the ROM is enough; no game data is needed.
+$a2run --frames=40 --hash-frames=snapframe-hashes.txt \
+  --snapshot-frame=25 --snapshot-out=snapframe.bin > /dev/null
+snap_cycles=$(sed -n 's/^cycles //p' snapframe.bin.regs)
+hash_cycles=$(awk '$1 == 25 { print $2 }' snapframe-hashes.txt)
+if [ -z "$snap_cycles" ] || [ "$snap_cycles" != "$hash_cycles" ]; then
+  echo "FAIL: --snapshot-frame=25 captured at cycle '$snap_cycles'," >&2
+  echo "      but --hash-frames says frame 25 is at cycle '$hash_cycles'" >&2
+  exit 1
+fi
+if [ "$(stat -c %s snapframe.bin)" != "65536" ]; then
+  echo "FAIL: --snapshot-frame did not write a 64KB RAM image" >&2
+  exit 1
+fi
+rm snapframe-hashes.txt snapframe.bin snapframe.bin.regs
+
+# The two triggers are alternatives, not a pair, and a frame past the frame
+# limit can never fire. Both are rejected before the run rather than after it.
+if $a2run --frames=40 --snapshot-at=FD1B --snapshot-frame=5 \
+     --snapshot-out=snapframe-bad.bin > /dev/null 2>&1; then
+  echo "FAIL: --snapshot-at and --snapshot-frame together were accepted" >&2
+  exit 1
+fi
+if $a2run --frames=40 --snapshot-frame=40 \
+     --snapshot-out=snapframe-bad.bin > /dev/null 2>&1; then
+  echo "FAIL: --snapshot-frame=40 with --frames=40 was accepted; it can never fire" >&2
+  exit 1
+fi
+rm -f snapframe-bad.bin snapframe-bad.bin.regs
+
 # --- a2mcp -------------------------------------------------------------------
 # The MCP server is driven entirely by stdin, so a transcript of requests and a
 # baseline of replies is the whole test. Deterministic because headless is

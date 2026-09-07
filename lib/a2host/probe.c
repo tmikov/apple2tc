@@ -81,6 +81,10 @@ const void *g_probe_sites = NULL;
 
 static bool s_snap_armed = false;
 static bool s_snap_fired = false;
+/// True when the trigger is a PC, false when the host fires it itself through
+/// probe_snapshot_now(). Separate from s_snap_armed because an address of
+/// $0000 is a legitimate trigger, so the address cannot double as the flag.
+static bool s_snap_pc_trigger = false;
 static uint16_t s_snap_addr = 0;
 static const char *s_snap_ram_path = NULL;
 static const char *s_snap_regs_path = NULL;
@@ -93,11 +97,21 @@ static const char *s_snap_regs_path = NULL;
 
 void probe_snapshot_at(uint16_t addr, const char *ram_path, const char *regs_path) {
   s_snap_armed = true;
+  s_snap_pc_trigger = true;
   s_snap_addr = addr;
   s_snap_ram_path = ram_path;
   s_snap_regs_path = regs_path;
   if (!g_probe_sites)
     g_probe_sites = SNAP_SENTINEL;
+}
+
+void probe_snapshot_deferred(const char *ram_path, const char *regs_path) {
+  s_snap_armed = true;
+  s_snap_pc_trigger = false;
+  s_snap_ram_path = ram_path;
+  s_snap_regs_path = regs_path;
+  // Deliberately no SNAP_SENTINEL: this trigger does not observe the PC, so it
+  // does not need the per-instruction callback the address trigger turns on.
 }
 
 bool probe_snapshot_missed(void) {
@@ -151,6 +165,11 @@ static void probe_take_snapshot(uint16_t pc) {
   // to acknowledge, which is the number a rebased entry point has to recreate.
   fprintf(g, "kbd_last_key %02X\nkbd_queued %u\n", io->latch, a2_io_keys_count(io));
   fclose(g);
+}
+
+void probe_snapshot_now(void) {
+  if (s_snap_armed && !s_snap_fired)
+    probe_take_snapshot(get_regs().pc);
 }
 
 static char *read_file(const char *path) {
@@ -645,7 +664,7 @@ void probe_dispatch(uint16_t pc) {
   // debugCB calls unconditionally.
   if (!g_probe_sites)
     return;
-  if (s_snap_armed && !s_snap_fired && pc == s_snap_addr)
+  if (s_snap_armed && s_snap_pc_trigger && !s_snap_fired && pc == s_snap_addr)
     probe_take_snapshot(pc);
   // Separate from the gate above: an armed snapshot turns that gate on with no
   // script behind it, and everything below dereferences s_script.
