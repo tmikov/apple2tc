@@ -197,6 +197,24 @@ earlier session in the same process.
 Take it as a rule: after `boot`, do not trust a screenshot until you have run
 enough frames for the new program to have drawn something.
 
+A second `boot` is a *warm* start, not a power-on, and the two are not the
+same machine: real hardware clears nothing about the ROM's boot logic either,
+but its RAM really is scrambled at power-on, so the ROM's warm-vs-cold check
+reliably takes the cold path. `a2host_reboot()` leaves RAM exactly as the
+previous session left it, so that same check can find a plausible warm-start
+signature and skip straight past the self-test and boot banner the first
+`boot` showed — this is the same root cause as the leftover-screen behaviour
+above, just showing up as a different code path taken instead of stale text
+left on screen. It has already produced one wrong conclusion: an earlier
+session driving Neptune saw a previous session's leftover state after a
+`boot` and wrote "the disk does not autoboot" into two documents before the
+mistake was caught (dz issue 01a07cd8 has the fuller writeup, including a
+worse case — a disk boot's second `boot` never redoing the boot sequence at
+all). Do not assume a screen, a cycle count, or anything else about *what the
+machine does* is reproducible across a `boot` in the same session; only what
+you explicitly reload (a `--key-file=` recording's delivery timing, a
+freshly-mounted disk's content) is.
+
 ## Replaying a recording, then taking over
 
 `a2mcp --key-file=<path>` loads a cycle-stamped `.keys` recording (the format
@@ -208,12 +226,12 @@ is to start the server with it loaded and just call `run` until `status`'s
 schedules new input exactly as it would in a session with no recording at all;
 the two lists are independent and both drain every frame.
 
-The one thing this cannot do is survive a reboot: `boot` on a server started
-with `--key-file=` is refused once the machine is already up, because a second
-boot cannot replay the recording from the top again (`docs/a2mcp.md`'s
-`--key-file=` entry has the reason). If a session needs a reboot partway
-through, plan the recording to end before the point that needs one, or restart
-the server instead of calling `boot` twice.
+Calling `boot` again reloads the recording too, cursor back at its first key,
+so the same keys land at the same cycle stamps as they did the first time —
+`replay` reads back to `{0, total}` right after the `boot` and climbs the same
+way it did before. What that does *not* promise is the screen: see "`boot`
+does not clear RAM" above for why a second boot's video is its own thing, not
+a repeat of the first.
 
 ## Finding the controls without guessing
 
