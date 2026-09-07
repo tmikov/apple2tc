@@ -161,17 +161,30 @@ The trap is attract mode: a demo that plays itself looks exactly like a game you
 are controlling, and you can spend a long time "playing" a movie. Do not judge
 from the picture — judge from the status line.
 
-For Neptune, the game showed `BO:20` (bombs) where the attract loop showed
-`BO:00`, and `SH` moved `00 → 04 → 03` across a firing burst and a hit. Counters
-that only a real game maintains are the cheap proof.
+A cautionary example, because this document previously got it wrong: Neptune
+shows `BO:20` in some phases and `BO:00` in others, and its `SH` counter moves
+while you press keys. That was recorded here as proof of a real game responding
+to input. It was not. A later controlled experiment — the same prefix run with
+and without each key — showed that **no key changes Neptune's execution at all**,
+because it waits on a joystick button this emulator does not implement. Every
+counter that appeared to react was the attract demo playing itself. See
+`docs/neptune.md`.
+
+The lesson is that a changing counter proves the program is *running*, not that
+it is *listening*. What actually proves listening is a controlled comparison:
+run an identical prefix with and without the keypress and diff the per-frame
+hashes (`--hash-frames`). On a deterministic machine any difference is caused by
+your input and nothing else. That experiment is cheap, and it is the only thing
+here that would have caught the mistake.
 
 **A full keyboard queue means the program stopped reading it.** `status` reports
 `keys_pending`, and the Apple II's hardware queue holds 32. If it sits at 32, the
 program is not consuming keys at all -- it has died, paused, entered a cutscene,
 or gone to a screen with its own input loop. That is a state change you would
-otherwise only infer from the picture, and it is how a mid-session death was
-spotted here: shields had been dropping, then input stopped being read entirely
-while the death animation played.
+otherwise only infer from the picture. Note what it cannot tell you on its own:
+for Neptune the count climbs from the first keystroke and never falls, which
+turned out to mean the program never reads the keyboard *at all*, not that it
+had briefly stopped.
 
 More generally, when you are unsure whether a keypress reached the program:
 press a key that should do something visible, step, and compare — with `screen`
@@ -266,40 +279,19 @@ one, and only pay for an image when the game is in hi-res.
 
 ## Worked example: Neptune (Gebelli Software)
 
-Verified in one session:
+Neptune has its own notebook, `docs/neptune.md`, because a deterministic machine
+makes per-game facts worth accumulating: they can be re-checked rather than
+believed.
 
-| | |
-|---|---|
-| boot | `boot(disk1:"dsk/Neptune.dsk")`, then `keys("PR#6\n")`, `run(1200)` |
-| title | full-screen HGR, page 2, animated — `screen_change` fires every frame |
-| start | space, from the title |
-| in game? | `BO:20` in a real game, `BO:00` in the attract loop |
-| controls | `J` left, `K` right, `I` up, `M` down, `A` fire (from the disk's own legend) |
+Read it before spending time on this game. Its headline is that **Neptune cannot
+currently be played here at all** — it polls joystick buttons at `$C061`/`$C062`
+that `lib/a2io` does not implement, so it never leaves its attract demo, and a
+sweep of all 97 printable keys against an identical prefix changed nothing. An
+earlier version of this section confidently described starting the game with
+space and steering with `J`/`K`/`I`/`M`/`A`. That was the demo playing itself.
 
-Measured while actually playing, which corrects two guesses in an earlier draft
-of this table:
-
-- **`SH` is a shield count that decreases as you are hit** -- observed `3 -> 2 ->
-  1` across one session. The earlier note here, that pressing `A` moved `SH` from
-  `00` to `04` and so could not be a fire button, was a misreading: that
-  transition was the game *starting* and granting shields, not the keypress.
-- **`screen_update` works on this game during real gameplay.** Across twelve
-  consecutive `run(frames=120, until="screen_update")` calls in live play, eight
-  landed on a completed picture -- most within 4 to 12 frames -- and four ran to
-  the cap with the `note`. So Neptune does have idle gaps between its animation
-  bursts, contradicting a reasonable prior guess that a continuously scrolling
-  game would never settle. Do not assume; measure the game in front of you.
-- **Neptune never flips pages during play**, so every update it produces is a
-  settle. Bolo does flip, but only in its attract and configuration menu, not in
-  gameplay. Between the two games in this repo, the page-flip detector currently
-  only ever fires on a menu.
-- **Your ship is a small compact white blob**; the orange-red starburst that
-  appears near the top left is an explosion, not you. Confirm with `mono140` if
-  in doubt -- as an occupancy mask it separates the two shapes immediately -- or
-  use the perturbation trick above.
-
-Still not established: what `BO` counts, and whether space is the only way to
-start.
+It is still a useful subject: a real HGR program that exercises the render modes
+and the stop conditions, with reproducible coordinates for all of it.
 
 ## If this needs to auto-load
 
