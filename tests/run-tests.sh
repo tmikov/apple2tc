@@ -1612,26 +1612,44 @@ if [ $? -ne 0 ]; then exit 1; fi
 
 # `a2mcp --key-file=` replaying a cycle-stamped .keys recording -- the read
 # half of the asymmetry --keys-out= already covers. mcp/replay.keys is a
-# synthetic 10-key recording (see its own header comment for the cycle math);
+# synthetic 10-key recording (see its own header comment for the cycle math).
 # mcp/replay.jsonl boots, checks `status` before anything is delivered, runs
-# 20 frames (delivering the first 4 keys), checks `status` again, runs 20
-# more (delivering the rest), checks `status` a third time, then calls `boot`
-# again to exercise the reboot rule below.
+# 20+20 frames (delivering 4 keys, then the rest), checks `status` after
+# each, then calls `boot` again -- which a2host_load_key_file() reloads the
+# recording into, cursor at zero, right after a2host_reboot() has restarted
+# the cycle counter at zero -- and repeats the same 20+20/status sequence to
+# confirm the reload replays the recording identically.
+#
+# What "identically" means here is deliberately narrow: the guarantee is
+# that the same keys land at the same *frame* offsets, not that the machine's
+# video output matches. It does not, even for a plain ROM boot with no key
+# file involved at all -- a2host_reboot() does not clear RAM, so the ROM's
+# own warm-vs-cold check takes a different path the second time and the
+# displayed screen (and the exact cycle count) differs from a fresh start.
+# dz issue 01a07cd8 has the measurements, including a worse case (a disk
+# boot's second `boot` never redoing the boot sequence at all). So this test
+# asserts key-delivery timing, via `status`'s `replay` counter, and nothing
+# about pixels.
 mcp_transcript replay --key-file=mcp/replay.keys --hash-frames=mcp-tmp/replay-mcp-hash.txt
 
-# The test that matters: a2mcp replaying the recording must be byte-identical
-# to a2run replaying the same recording over the same 40 frames -- the same
-# oracle the plain `run.jsonl` block above holds a2mcp's frame loop to.
+# The test that matters for a single session: a2mcp replaying the recording
+# must be byte-identical to a2run replaying the same recording over the same
+# 40 frames -- the same oracle the plain `run.jsonl` block above holds
+# a2mcp's frame loop to. Only the first 40 lines of the hash file: those are
+# requests 4+6, before the `boot` at request 8 -- see the block comment above
+# for why nothing past that reboot is compared this way.
 $a2run --frames=40 --key-file=mcp/replay.keys --hash-frames=mcp-tmp/replay-a2run-hash.txt \
   > /dev/null
-if ! diff -q mcp-tmp/replay-mcp-hash.txt mcp-tmp/replay-a2run-hash.txt; then
+head -n 40 mcp-tmp/replay-mcp-hash.txt > mcp-tmp/replay-mcp-hash-pre-reboot.txt
+if ! diff -q mcp-tmp/replay-mcp-hash-pre-reboot.txt mcp-tmp/replay-a2run-hash.txt; then
   echo "FAIL: a2mcp's --key-file= replay diverges from a2run's over the same recording" >&2
-  diff mcp-tmp/replay-mcp-hash.txt mcp-tmp/replay-a2run-hash.txt | head -5 >&2
+  diff mcp-tmp/replay-mcp-hash-pre-reboot.txt mcp-tmp/replay-a2run-hash.txt | head -5 >&2
   exit 1
 fi
 
-# `status`'s `replay` field: absent zeros, a real partial count after the
-# first `run`, and delivered == total once the recording is exhausted.
+# `status`'s `replay` field before the reboot: zero before any run, a real
+# partial count after the first `run`, and delivered == total once the
+# recording is exhausted.
 if ! grep '"id":3' mcp-tmp/replay.txt | grep -q '\\"delivered\\": 0' ||
    ! grep '"id":3' mcp-tmp/replay.txt | grep -q '\\"total\\": 10'; then
   echo "FAIL: status before any run did not report replay: {delivered: 0, total: 10}" >&2
@@ -1646,18 +1664,28 @@ if ! grep '"id":7' mcp-tmp/replay.txt | grep -q '\\"delivered\\": 10'; then
   exit 1
 fi
 
-# The reboot rule: a2host_reboot() restarts the cycle counter at zero but
-# cannot rewind next_key_press_ (and, once the recording is exhausted,
-# key_presses_ is already freed) -- so a second `boot` cannot replay the
-# recording "exactly as it does on a fresh server start". Rather than
-# silently replay a wrong tail, request 8 above must come back as a loud
-# ToolError instead of a normal boot reply.
-if ! grep '"id":8' mcp-tmp/replay.txt | grep -q '"isError":true'; then
-  echo "FAIL: rebooting with a --key-file recording loaded was not refused" >&2
+# The reboot itself (request 8) must reload the recording rather than refuse
+# or resume a stale cursor: request 9's status must read back to 0/10 --
+# exactly request 3's reply -- not a refusal and not a stale partial count.
+if ! grep '"id":9' mcp-tmp/replay.txt | grep -q '\\"delivered\\": 0' ||
+   ! grep '"id":9' mcp-tmp/replay.txt | grep -q '\\"total\\": 10'; then
+  echo "FAIL: status right after a reboot did not report replay: {delivered: 0, total: 10}" >&2
   exit 1
 fi
-if ! grep '"id":8' mcp-tmp/replay.txt | grep -q 'cannot reboot'; then
-  echo "FAIL: the reboot refusal did not explain itself" >&2
+
+# Key-delivery identity across the reboot: requests 11 and 13 must land on
+# the same delivered counts as requests 5 and 7 did at the same frame
+# offsets (20 and 40 frames into each boot) -- the same keys at the same
+# cycle stamps, replayed against a cycle counter that also restarted at
+# zero. This is the assertion that matters: it fails if the cursor-reset
+# math in a2host_load_key_file()/drain_key_presses() ever regresses, without
+# claiming anything about the screen.
+if ! grep '"id":11' mcp-tmp/replay.txt | grep -q '\\"delivered\\": 4'; then
+  echo "FAIL: status 20 frames after the reboot did not report 4 keys delivered, same as before it" >&2
+  exit 1
+fi
+if ! grep '"id":13' mcp-tmp/replay.txt | grep -q '\\"delivered\\": 10'; then
+  echo "FAIL: status 40 frames after the reboot did not report all 10 keys delivered, same as before it" >&2
   exit 1
 fi
 
