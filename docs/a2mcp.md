@@ -19,13 +19,19 @@ transcript for each against a committed baseline (`tests/mcp/*.jsonl` /
 --key-file=`, and that a symlink cannot be used to read or write outside
 `--root` -- one test for each direction, because the read and write halves of
 the jail resolve differently and only the read half used to be covered. A
-third block, `tests/mcp/malformed.jsonl` / `.expected`, sends a session five
+third block, `tests/mcp/malformed.jsonl` / `.expected`, sends a session nine
 wrong-typed or out-of-range arguments in a row (a truncating float `scale`, a
-wrong-typed `render`, a wrong-typed `scale`, a truncating float `updates`, an
-out-of-range `updates`) and checks that an ordinary `status` call right after
-still gets a correct reply in the same transcript -- the crash this guards
-against would otherwise just truncate the reply file, which a baseline diff
-alone would not distinguish from "the tool answered wrong."
+wrong-typed `render`, a wrong-typed `scale`, a truncating float `blend`, a
+too-small `blend`, a too-large `blend`, a wrong-typed `blend`, a truncating
+float `updates`, an out-of-range `updates`) and checks that an ordinary
+`status` call right after still gets a correct reply in the same transcript
+-- the crash this guards against would otherwise just truncate the reply
+file, which a baseline diff alone would not distinguish from "the tool
+answered wrong." A fourth and fifth block, `tests/mcp/blend.jsonl` /
+`.expected` and `blend-reset.jsonl` / `.expected`, cover `screen`'s `blend`
+argument: that a captured single frame can miss an object a blend of several
+cannot, that `blend` is a no-op outside HGR, and that the frame ring it draws
+on does not survive a `boot`.
 
 ## Launching it
 
@@ -248,6 +254,27 @@ than position. `scale` describes cell structure, so `"color"` has none for it
 to describe and TEXT/GR have no cells either; it is accepted and ignored
 there, the same precedent `render` already sets. A value that is neither `1`
 nor `2` is a tool error, the same as an unrecognised `render`.
+
+`blend` composites the last N captured frames' HGR page with a bitwise OR
+before rendering — an integer `1` to `8`, default `1` meaning no compositing,
+exactly today's behaviour. A single-buffered game draws by erasing and
+redrawing, so any one frame can be missing a sprite entirely; `blend: N` folds
+the last N frames together so a dot lit in any of them is lit in the result,
+the way persistence of vision reconstructs the picture for a human watching
+the real screen at 60 Hz. `run` captures the displayed HGR page after every
+frame it simulates into a small ring, reset on `boot` and whenever the video
+mode or the displayed page changes — combining frames across either would OR
+together bytes that no longer mean the same thing. `blend` is meaningful only
+for a bitmap, so it applies in HGR only and is accepted-and-ignored in TEXT
+and GR, the same precedent `render` and `scale` set. When `blend` actually
+composited something (HGR, and `blend > 1`), the reply carries a
+`blend_frames` field saying how many frames went into the image — which can
+be less than asked for right after a `boot` or a mode/page change, before
+that many frames have run since. Like `scale`, `blend` is checked before
+extraction and range-checked to 1-8; a float, a string, `0`, or `9` is a tool
+error, not a silently truncated or clamped value. See
+`docs/a2mcp-playing.md`'s screen-reading section for when to reach for it and
+what it costs.
 
 ### `keys`
 

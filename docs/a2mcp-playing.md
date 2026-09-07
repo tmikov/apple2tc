@@ -262,6 +262,42 @@ press a key that should do something visible, step, and compare — with `screen
 in `text` or GR mode if the game is in one of those, since a 40x24 grid diffs by
 eye far more reliably than a hi-res picture.
 
+## `blend`: a single frame can be missing an object entirely
+
+Single-buffered games draw by erasing and redrawing sprites, so at any given
+frame boundary part of the picture is simply missing. A human playing never
+notices: at 60 Hz the eye integrates across frames and sees a stable (if
+flickery) image. A model taking one snapshot does not integrate, and sees a
+hole. Measured on `dsk/Neptune.dsk` during play, across eight consecutive
+single frames and counting only the sky rows where sprites live: not one sky
+pixel survived all eight frames, and on one of the eight an entire enemy
+disappeared -- a screenshot of that frame shows no enemy at all, not a dim
+one. Roughly one snapshot in eight, on the game measured, is missing an
+object outright.
+
+`blend: 2` or `blend: 3` is what to reach for when reading a scene rather than
+stepping through one: it composites the last N frames' HGR page with a
+bitwise OR before rendering, so a dot lit in any of them is lit in the
+result -- reconstructing, in software, what a human's eye already does at
+60 Hz. `settle` (above) does not substitute for this: `settle` finds a moment
+when *drawing has paused*, which is the wrong question for a game that never
+stops redrawing its sprites every frame. Two consecutive settled frames from
+such a game are still two frames each missing part of the picture; blending
+them is what actually completes it. The two are complementary, not
+alternatives -- `settle` addresses a scene caught mid-scroll, `blend`
+addresses a scene missing an object, and a careful read of an animating scene
+may want both: settle to land on a clean frame boundary, then blend a few
+frames from there.
+
+The cost is real and worth keeping in view. A moving object smears across the
+N frames it appears in -- genuine motion blur, which helps read which way
+something is heading and hurts reading exactly where it is right now. And in
+`color140`, which decodes at colour-clock resolution, OR-ing two frames' bit
+patterns together can produce a colour neither frame actually displayed: the
+composite is a bitwise fact about the underlying dots, not a resample of
+either picture. Both costs grow with N, which is why `blend` tops out at 8
+and why 2 or 3 is the sensible range to reach for rather than the maximum.
+
 ## Reading a hi-res picture: pick the render mode
 
 `screen`'s default `render:"color"` is the per-dot artifact approximation the

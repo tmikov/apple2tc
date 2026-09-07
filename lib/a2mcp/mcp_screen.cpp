@@ -6,6 +6,7 @@
  */
 
 #include "mcp_screen.h"
+#include "mcp_machine.h"
 #include "mcp_server.h"
 
 // Each header brackets its own declarations in `extern "C"` under
@@ -138,13 +139,15 @@ void png_sink(void *ctx, void *data, int size) {
 
 } // namespace
 
-std::string screen_png(a2_hgr_mode_t hgr_mode, unsigned scale) {
+std::string
+screen_png(a2_hgr_mode_t hgr_mode, unsigned scale, unsigned blend, unsigned *out_frames_used) {
   const a2_iostate_t *io = a2host_io();
   const uint8_t *ram = get_ram();
   // Blink phase is a function of wall-clock time in the renderers, so a fixed
   // value is passed instead: a screenshot of a paused machine must not depend
   // on when it was taken.
   const uint64_t kBlinkMs = 0;
+  unsigned frames_used = 1;
 
   static a2_screen screen;
   const a2_vidmode_t vidmode = a2_io_get_vidmode(io);
@@ -156,9 +159,18 @@ std::string screen_png(a2_hgr_mode_t hgr_mode, unsigned scale) {
     apple2_render_gr_screen(
         ram + a2_io_get_text_page_offset(io), &screen, kBlinkMs, a2_io_is_vidmode_mixed(io));
     break;
-  case A2_VIDMODE_HGR:
+  case A2_VIDMODE_HGR: {
+    // `blend`'s composited page, kept alive past this switch case (the
+    // renderer call below reads through `hgr_page`) but only ever filled in
+    // -- and only ever pointed at -- when `blend` actually applies.
+    static uint8_t blended[kHgrPageBytes];
+    const uint8_t *hgr_page = ram + a2_io_get_hires_page_offset(io);
+    if (blend > 1) {
+      frames_used = screen_blend_composite(blend, blended);
+      hgr_page = blended;
+    }
     apple2_render_hgr_screen_mode(
-        ram + a2_io_get_hires_page_offset(io),
+        hgr_page,
         ram + a2_io_get_text_page_offset(io),
         &screen,
         kBlinkMs,
@@ -166,6 +178,9 @@ std::string screen_png(a2_hgr_mode_t hgr_mode, unsigned scale) {
         hgr_mode);
     break;
   }
+  }
+  if (out_frames_used)
+    *out_frames_used = frames_used;
 
   // `scale` only means anything for the two colour-clock HGR modes: the
   // renderer above fills just their first 140 columns per row (a2io.h's

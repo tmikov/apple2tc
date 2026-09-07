@@ -726,22 +726,27 @@ fi
 # so the "must be 1 or 2" check never saw the real value. Request 3 is that
 # truncation (scale: 1.5), 4 is a type mismatch serve() used to let escape
 # uncaught (render: 42, the reproduction named in review), 5 is a second
-# truncation shape (scale as a string). Requests 7 and 8 are `run`'s `updates`
-# hitting the identical shape of bug -- a float (7) and an in-type but
-# out-of-range value (8), so both the type check and the range check are
-# exercised. Request 9 -- an ordinary `status` in the same session -- is what
+# truncation shape (scale as a string). Requests 6-9 put `blend` through the
+# identical four shapes: a float (6), an in-type-but-zero value (7, below the
+# 1..8 range), an in-type-but-too-large value (8, above it), and a string (9)
+# -- the same class of bug this project has shipped before, so `blend` gets
+# the same coverage `scale` does rather than trusting that its is_number_
+# unsigned() check alone is enough. Requests 11 and 12 are `run`'s `updates`
+# hitting the identical shape of bug -- a float (11) and an in-type but
+# out-of-range value (12), so both the type check and the range check are
+# exercised. Request 13 -- an ordinary `status` in the same session -- is what
 # actually matters: mcp/malformed.expected pins its reply, so if any of
-# 3-5/7-8 crashed the process instead of answering with isError, request 9
+# 3-9/11-12 crashed the process instead of answering with isError, request 13
 # would be missing from the transcript and the diff below would fail on a
 # truncated file, not just a wrong one.
 mcp_transcript malformed
-for id in 3 4 5 7 8; do
+for id in 3 4 5 6 7 8 9 11 12; do
   if ! grep -q "\"id\":$id.*\"isError\":true" mcp-tmp/malformed.txt; then
     echo "FAIL: malformed request $id did not come back as isError" >&2
     exit 1
   fi
 done
-if ! grep -q '"id":9' mcp-tmp/malformed.txt; then
+if ! grep -q '"id":13' mcp-tmp/malformed.txt; then
   echo "FAIL: a2mcp died on a malformed argument instead of answering the next request" >&2
   exit 1
 fi
@@ -920,6 +925,81 @@ if ! grep '"id":12' mcp-tmp/hgr-render.txt | grep -q '"isError":true'; then
 fi
 if ! grep '"id":13' mcp-tmp/hgr-render.txt | grep -q '"isError":true'; then
   echo "FAIL: scale=0 was not rejected" >&2
+  exit 1
+fi
+
+# `blend`: composite the last N frames' HGR page with a bitwise OR. blend.s
+# draws a constant solid line at row 8 and flickers a second one at row 32 on
+# and off roughly every host frame -- a single-buffered game in miniature.
+# Request 3 catches it missing at blend:1; requests 5, 7, 9, 11, 13 (each
+# after one more frame) check that blend:3 shows both lines in every one of
+# five consecutive captures, which is the actual point of the feature -- a
+# single capture can miss the second line, a blended one cannot.
+$a6502 mcp/blend.s mcp-tmp/blend.b33
+mcp_transcript blend
+python3 mcp/check_hgr_png.py row mcp-tmp/blend-miss.png 32 black
+if [ $? -ne 0 ]; then
+  echo "FAIL: blend:1 did not miss the flickering line it was supposed to" >&2
+  exit 1
+fi
+python3 mcp/check_hgr_png.py row mcp-tmp/blend-miss.png 8 white
+if [ $? -ne 0 ]; then
+  echo "FAIL: blend:1's capture lost the constant line too" >&2
+  exit 1
+fi
+for k in 0 1 2 3 4; do
+  python3 mcp/check_hgr_png.py row mcp-tmp/blend-both-$k.png 8 white
+  if [ $? -ne 0 ]; then
+    echo "FAIL: blend:3 capture $k lost the constant line" >&2
+    exit 1
+  fi
+  python3 mcp/check_hgr_png.py row mcp-tmp/blend-both-$k.png 32 white
+  if [ $? -ne 0 ]; then
+    echo "FAIL: blend:3 capture $k missed the flickering line" >&2
+    exit 1
+  fi
+done
+# blend:1 (no compositing) never gets a blend_frames field -- see the reply
+# doc comment on why the field is conditional -- while every blend:3 capture
+# above must report exactly 3.
+if grep '"id":4' mcp-tmp/blend.txt | grep -q 'blend_frames'; then
+  echo "FAIL: blend:1 reported a blend_frames field that must not exist" >&2
+  exit 1
+fi
+for id in 6 8 10 12 14; do
+  if ! grep "\"id\":$id" mcp-tmp/blend.txt | grep -q 'blend_frames":3'; then
+    echo "FAIL: request $id did not report blend_frames:3" >&2
+    exit 1
+  fi
+done
+# `blend` is meaningless outside HGR and must be accepted-and-ignored there,
+# the same precedent `render`/`scale` set: requests 16 and 17, both taken in
+# TEXT mode right after a reboot, must be byte-for-byte identical PNGs even
+# though one asks for blend:1 and the other blend:4.
+if ! cmp -s mcp-tmp/text-blend1.png mcp-tmp/text-blend4.png; then
+  echo "FAIL: blend was not ignored in TEXT mode" >&2
+  exit 1
+fi
+if grep -E '"id":16|"id":17' mcp-tmp/blend.txt | grep -q 'blend_frames'; then
+  echo "FAIL: blend_frames leaked into a TEXT-mode reply" >&2
+  exit 1
+fi
+
+# The blend ring must not survive a boot: request 4, taken after 40 frames of
+# blend.s, blends a full ring (blend_frames:8). Request 5 reboots the same
+# program from scratch (frame/cycle counters back to 0) and request 7, taken
+# after only 11 of the new frames -- not enough for the ring to fill again --
+# must report fewer than 8, proving the ring holds only frames run since this
+# boot and not the previous session's leftovers. (Verified by temporarily
+# disabling the reset in blend_reset(): request 7 then wrongly reports
+# blend_frames:8, the stale full count from before the reboot.)
+mcp_transcript blend-reset
+if ! grep '"id":4' mcp-tmp/blend-reset.txt | grep -q 'blend_frames":8'; then
+  echo "FAIL: blend:8 after 40 frames did not fill the ring" >&2
+  exit 1
+fi
+if grep '"id":7' mcp-tmp/blend-reset.txt | grep -q 'blend_frames":8'; then
+  echo "FAIL: the blend ring survived a boot instead of resetting" >&2
   exit 1
 fi
 

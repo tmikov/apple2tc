@@ -19,12 +19,59 @@
 #include "apple2tc/a2io.h"
 
 #include <cstdio>
+#include <cstring>
 #include <vector>
 
 namespace a2mcp {
 namespace {
 
 bool s_booted = false;
+
+/// The blend ring `screen`'s `blend` reads -- see mcp_machine.h's
+/// screen_blend_available()/screen_blend_composite() for the contract. A
+/// fixed array of kBlendMaxFrames HGR pages (64 KB total) rather than
+/// anything fancier: a memcpy per frame is the entire cost.
+struct BlendRing {
+  uint8_t frames[kBlendMaxFrames][kHgrPageBytes];
+  unsigned count = 0; ///< valid frames captured since the last reset.
+  unsigned next = 0; ///< slot the next capture writes.
+  a2_vidmode_t last_mode = A2_VIDMODE_TEXT;
+  uint8_t last_page = 0xFF; ///< 0xFF: no page recorded yet, forces a reset.
+};
+
+BlendRing s_blend;
+
+void blend_reset(void) {
+  s_blend.count = 0;
+  s_blend.next = 0;
+  s_blend.last_page = 0xFF;
+}
+
+/// Called once per frame actually simulated by machine_run() -- its main
+/// loop and its `settle` grace window alike -- right after the frame is
+/// recorded. Resets the ring first whenever this frame's mode or displayed
+/// page differs from the last captured one (a change that makes every
+/// earlier frame in the ring meaningless to OR against this one), then
+/// captures the displayed HGR page. Outside HGR there is nothing to capture,
+/// so the ring is just kept empty.
+void blend_capture(void) {
+  const a2_iostate_t *io = a2host_io();
+  const a2_vidmode_t mode = a2_io_get_vidmode(io);
+  if (mode != A2_VIDMODE_HGR) {
+    blend_reset();
+    s_blend.last_mode = mode;
+    return;
+  }
+  const uint8_t page = a2_io_get_vidpage_index(io);
+  if (mode != s_blend.last_mode || page != s_blend.last_page)
+    blend_reset();
+  s_blend.last_mode = mode;
+  s_blend.last_page = page;
+  memcpy(s_blend.frames[s_blend.next], get_ram() + a2_io_get_hires_page_offset(io), kHgrPageBytes);
+  s_blend.next = (s_blend.next + 1) % kBlendMaxFrames;
+  if (s_blend.count < kBlendMaxFrames)
+    ++s_blend.count;
+}
 
 /// What a forwarded file has to be for the engine to accept it. Existence and
 /// being a regular file is what the jail checks; this is the second half,
@@ -129,6 +176,19 @@ void machine_boot(const nlohmann::json &args) {
   // a2host_reboot() -- calls a2_io_init(), which clears the speaker callback.
   // Installing any earlier would lose it on every boot and every reboot.
   sound_install();
+  // A fresh machine (or one just reset by a reboot) shares nothing with
+  // whatever the ring held before: combining a frame from the old session
+  // with one from the new would be exactly the meaningless OR blend_capture()
+  // otherwise guards against.
+  // Defensive, and deliberately not covered by a test, because it cannot be
+  // made to fail: a2_io_init() leaves the rebooted machine in TEXT, blend is
+  // HGR-only, so a screen{blend} issued before any frame runs is inert whatever
+  // the ring holds -- and the first frame that does run trips blend_capture()'s
+  // own mode-change reset. Removing this line changes no observable behaviour
+  // today. It stays because that masking is a property of a2_io_init(), not of
+  // this file, and a reboot that ever left the mode alone would leak a ring
+  // from the previous session into the next blend.
+  blend_reset();
 }
 
 nlohmann::json machine_status(void) {
@@ -238,6 +298,10 @@ nlohmann::json machine_run(const nlohmann::json &args) {
     a2host_simulate_frame();
     ++ran;
     const bool at_limit = a2host_record_frame();
+    // Not part of a2run's loop -- a capture step, not a restructuring of it --
+    // but must still run every frame, so it goes here rather than after any
+    // of the `break`s below.
+    blend_capture();
     if (a2host_engine_stopped()) {
       reason = "engine";
       break;
@@ -306,6 +370,9 @@ nlohmann::json machine_run(const nlohmann::json &args) {
       a2host_simulate_frame();
       ++ran;
       const bool at_limit = a2host_record_frame();
+      // Same reasoning as the main loop above: the grace window simulates
+      // frames too, and `blend` must see all of them.
+      blend_capture();
       if (a2host_engine_stopped()) {
         reason = "engine";
         landed = true;
@@ -430,6 +497,26 @@ nlohmann::json machine_keys(const nlohmann::json &args) {
       {"scheduled", n},
       {"pending", a2host_scheduled_keys_pending()},
       {"note", "keys are delivered during a later run"}};
+}
+
+unsigned screen_blend_available(void) {
+  return s_blend.count;
+}
+
+unsigned screen_blend_composite(unsigned n, uint8_t *dst) {
+  const unsigned use = n < s_blend.count ? n : s_blend.count;
+  memset(dst, 0, kHgrPageBytes);
+  // Walk backwards from the most recently written slot; which direction does
+  // not matter for an OR, but this is the natural order to stop early in
+  // once `use` frames have been folded in.
+  unsigned idx = (s_blend.next + kBlendMaxFrames - 1) % kBlendMaxFrames;
+  for (unsigned i = 0; i != use; ++i) {
+    const uint8_t *src = s_blend.frames[idx];
+    for (unsigned b = 0; b != kHgrPageBytes; ++b)
+      dst[b] |= src[b];
+    idx = (idx + kBlendMaxFrames - 1) % kBlendMaxFrames;
+  }
+  return use;
 }
 
 } // namespace a2mcp

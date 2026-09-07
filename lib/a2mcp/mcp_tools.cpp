@@ -130,13 +130,25 @@ nlohmann::json tool_schemas(void) {
         "preserved -- use scale 2 for anything judging shape rather than "
         "position. `scale` has no cells to describe outside \"color140\"/"
         "\"mono140\" and is accepted-and-ignored for \"color\" and for TEXT/GR, "
-        "the same as `render`."},
+        "the same as `render`. `blend` composites the last N frames' HGR page "
+        "(1-8, default 1 meaning no compositing) with a bitwise OR before "
+        "rendering: a single frame of a single-buffered game can be missing an "
+        "entire sprite, since these games draw by erasing and redrawing, and a "
+        "dot lit in any of the last N frames is lit in the blend, the way "
+        "persistence of vision reconstructs the picture for a human watching "
+        "the real screen at 60 Hz. OR is meaningful only for a bitmap, so "
+        "`blend` applies in HGR only and is accepted-and-ignored in TEXT and "
+        "GR, the same precedent `render` and `scale` set. The reply's "
+        "`blend_frames` says how many frames actually went into the image, "
+        "which can be less than asked for right after `boot` or a video mode "
+        "or page change, before that many frames have run."},
        {"inputSchema",
         {{"type", "object"},
          {"properties",
           {{"format", {{"type", "string"}, {"enum", {"text", "image", "both"}}}},
            {"render", {{"type", "string"}, {"enum", {"color", "color140", "mono140"}}}},
            {"scale", {{"type", "integer"}, {"enum", {1, 2}}}},
+           {"blend", {{"type", "integer"}, {"minimum", 1}, {"maximum", 8}}},
            {"save_to", {{"type", "string"}}}}}}}});
 
   tools.push_back(
@@ -222,6 +234,19 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
     }
     if (scale != 1 && scale != 2)
       throw ToolError("scale must be 1 or 2");
+    // Checked before extraction, the same way `scale` is above: args.value()
+    // would silently truncate a non-integer (`blend: 1.5` becomes 1) and the
+    // range check below would then never see the real value. is_number_unsigned()
+    // rejects a float and a negative number alike, so `0` reaches the range
+    // check below and is rejected there rather than by the type check here.
+    int blend = 1;
+    if (auto it = args.find("blend"); it != args.end()) {
+      if (!it->is_number_unsigned())
+        throw ToolError("blend must be a positive integer");
+      blend = it->get<int>();
+    }
+    if (blend < 1 || blend > (int)kBlendMaxFrames)
+      throw ToolError("blend must be between 1 and 8");
     // Only the PNG can be saved, so asking to save a text-mode reading is a
     // mistake worth naming: silently ignoring it leaves the agent believing a
     // file it will later fail to find was written.
@@ -239,8 +264,15 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
         text = "hi-res: no text rendering. Call screen with format \"image\".";
       content.push_back({{"type", "text"}, {"text", text}});
     }
+    // Only set when `blend` actually composited something, so that the field
+    // is absent -- not just unchanged -- exactly when it would have been
+    // before `blend` existed: outside HGR, or at the default `blend: 1`. That
+    // is what keeps every committed baseline byte-identical.
+    bool report_blend_frames = false;
+    unsigned blend_frames = 0;
     if (format == "image" || format == "both") {
-      const std::string png = screen_png(hgr_mode, (unsigned)scale);
+      unsigned frames_used = 1;
+      const std::string png = screen_png(hgr_mode, (unsigned)scale, (unsigned)blend, &frames_used);
       auto save = args.find("save_to");
       if (save != args.end()) {
         if (!save->is_string())
@@ -248,8 +280,15 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
         write_jailed_file(save->get<std::string>(), png);
       }
       content.push_back({{"type", "image"}, {"data", base64(png)}, {"mimeType", "image/png"}});
+      if (blend > 1 && a2_io_get_vidmode(a2host_io()) == A2_VIDMODE_HGR) {
+        report_blend_frames = true;
+        blend_frames = frames_used;
+      }
     }
-    return nlohmann::json{{"content", content}};
+    nlohmann::json result = {{"content", content}};
+    if (report_blend_frames)
+      result["blend_frames"] = blend_frames;
+    return result;
   }
   if (name == "sound") {
     std::string wav_path;

@@ -34,7 +34,21 @@ std::string screen_gr(void);
 ///     image doubled to match A2_HGR_COLOR (and everything else). Ignored
 ///     (but harmless to pass) for every other mode, and for TEXT and GR --
 ///     none of those have cells, so there is nothing for `scale` to mean.
-std::string screen_png(a2_hgr_mode_t hgr_mode, unsigned scale);
+/// \param blend - 1 (default) renders the live page exactly as before. In
+///     HGR only, 2 to kBlendMaxFrames instead composites the last `blend`
+///     frames machine_run() has captured into mcp_machine.h's blend ring
+///     with a bitwise OR and renders that -- a dot lit in any of them is lit
+///     in the result, which is what persistence of vision does for a human
+///     watching the real screen. OR is meaningful only for a bitmap, so
+///     outside HGR `blend` is accepted and ignored, the same precedent
+///     `render` and `scale` already set.
+/// \param out_frames_used - if non-null, set to how many frames the
+///     returned image actually represents: 1 whenever `blend` does not
+///     apply (outside HGR, or `blend <= 1`), otherwise
+///     screen_blend_composite()'s return -- `blend` itself, or fewer right
+///     after the ring was reset.
+std::string
+screen_png(a2_hgr_mode_t hgr_mode, unsigned scale, unsigned blend, unsigned *out_frames_used);
 
 /// Standard base64 encoding (RFC 4648), with '=' padding.
 std::string base64(const std::string &bytes);
