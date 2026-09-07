@@ -161,14 +161,14 @@ The trap is attract mode: a demo that plays itself looks exactly like a game you
 are controlling, and you can spend a long time "playing" a movie. Do not judge
 from the picture — judge from the status line.
 
-A cautionary example, because this document previously got it wrong: Neptune
-shows `BO:20` in some phases and `BO:00` in others, and its `SH` counter moves
-while you press keys. That was recorded here as proof of a real game responding
-to input. It was not. A later controlled experiment — the same prefix run with
-and without each key — showed that **no key changes Neptune's execution at all**,
-because it waits on a joystick button this emulator does not implement. Every
-counter that appeared to react was the attract demo playing itself. See
-`docs/neptune.md`.
+**First check you are delivering keystrokes and not type-ahead.** `keys`
+defaults to `deliver: "press"`, which overwrites the keyboard latch exactly as a
+live key in `a2emu` does. The other mode, `deliver: "type"`, stages behind an
+unread strobe — correct for typing text into BASIC, and invisible to a game that
+polls `$C000` without acknowledging through `KBDSTRB`. Getting this backwards
+made Neptune look completely unresponsive for an entire session, and produced a
+confident and wholly wrong writeup about the game waiting on a joystick button.
+See `docs/neptune.md`.
 
 The lesson is that a changing counter proves the program is *running*, not that
 it is *listening*. What actually proves listening is a controlled comparison:
@@ -281,17 +281,10 @@ one, and only pay for an image when the game is in hi-res.
 
 Neptune has its own notebook, `docs/neptune.md`, because a deterministic machine
 makes per-game facts worth accumulating: they can be re-checked rather than
-believed.
-
-Read it before spending time on this game. Its headline is that **Neptune cannot
-currently be played here at all** — it polls joystick buttons at `$C061`/`$C062`
-that `lib/a2io` does not implement, so it never leaves its attract demo, and a
-sweep of all 97 printable keys against an identical prefix changed nothing. An
-earlier version of this section confidently described starting the game with
-space and steering with `J`/`K`/`I`/`M`/`A`. That was the demo playing itself.
-
-It is still a useful subject: a real HGR program that exercises the render modes
-and the stop conditions, with reproducible coordinates for all of it.
+believed. It also records a mistake worth reading before you trust your own
+measurements — a controlled experiment that was rigorous, had a positive
+control, passed it, and still reached a false conclusion, because the control
+exercised a cooperative program and the case under test did not.
 
 ## If this needs to auto-load
 
