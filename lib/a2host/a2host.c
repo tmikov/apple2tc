@@ -102,6 +102,13 @@ static KeyPress *key_presses_ = NULL;
 static unsigned key_press_count_ = 0;
 /// Next key press to process.
 static unsigned next_key_press_ = 0;
+/// True only while drain_key_presses()/probe_deliver_keys() are inside their
+/// press_key() call for a key drawn from key_presses_ -- the only two sources
+/// next_key_press_/key_press_count_ describe. key_arrives() reads this, not
+/// key_press_count_ != 0, to decide whether the (n/total) suffix applies: a
+/// live key typed while a --key-file replay is still in progress must not be
+/// misreported as that replay's next entry.
+static bool key_from_replay_ = false;
 /// True when a front end schedules its own keys; see
 /// a2host_enable_scheduled_keys().
 static bool scheduled_keys_ = false;
@@ -374,29 +381,26 @@ static void key_arrives(uint8_t ch, bool pressed) {
   // not for producing a new one.
   if (trace_keys_)
     printf("%u %u\n", get_cycles(), ch);
-  // --echo-keys shares this funnel with --trace-keys above, and for the same
-  // reason: it too must see every key actually handed to the machine, not
-  // just the ones a particular source delivers. Placed after the
-  // --record-keys early return above on purpose, not by oversight -- while
-  // recording, a key is only pending until the next `record`, and this line
-  // is never reached for it until it actually lands here as a real arrival,
-  // so echo-keys reports what the machine received, not what a probe script
-  // is still holding.
+  // Placed after the --record-keys early return above on purpose, not by
+  // oversight -- while recording, a key is only pending until the next
+  // `record`, and this line is never reached for it until it actually lands
+  // here as a real arrival, so echo-keys reports what the machine received,
+  // not what a probe script is still holding.
   //
   // The frame number is a2host_frame_no()'s value *before* this frame's
   // engine step runs: a2host_simulate_frame() drains keys before it calls
   // run_emulated(), so "[frame N]" names the frame the key is about to take
   // effect in, not one already simulated.
   //
-  // (n/total) is only meaningful while a --key-file replay is the one
-  // driving delivery: key_press_count_ is nonzero for exactly that. Inside
-  // drain_key_presses()/probe_deliver_keys(), next_key_press_ still indexes
-  // the key just delivered -- both increment it only after calling
-  // press_key() -- so next_key_press_ + 1 is the 1-based count of this key,
-  // and the last key of a recording reports (N/N) rather than (N-1/N).
+  // (n/total) applies only when key_from_replay_ says this key came from
+  // key_presses_ itself. Inside drain_key_presses()/probe_deliver_keys(),
+  // next_key_press_ still indexes the key just delivered -- both increment it
+  // only after calling press_key() -- so next_key_press_ + 1 is the 1-based
+  // count of this key, and the last key of a recording reports (N/N) rather
+  // than (N-1/N).
   if (echo_keys_) {
     char buf[8];
-    if (key_press_count_ != 0)
+    if (key_from_replay_)
       fprintf(
           stderr,
           "[frame %u] %s  (%u/%u)\n",
@@ -525,7 +529,9 @@ static void drain_key_presses() {
   // lets --key-file=<cycle-stamped> --record-keys= convert a recording from
   // one coordinate to the other.
   while (next_key_press_ != key_press_count_ && cycles >= key_presses_[next_key_press_].cycles) {
+    key_from_replay_ = true;
     press_key(key_presses_[next_key_press_].ch);
+    key_from_replay_ = false;
     ++next_key_press_;
   }
 
@@ -561,7 +567,9 @@ void probe_deliver_keys(uint32_t now) {
   // press_key(), not a2_io_press_key() -- see drain_key_presses' comment; the
   // two share key_presses_ and must divert identically while recording.
   while (next_key_press_ != key_press_count_ && key_presses_[next_key_press_].cycles <= now) {
+    key_from_replay_ = true;
     press_key(key_presses_[next_key_press_].ch);
+    key_from_replay_ = false;
     ++next_key_press_;
   }
 }
