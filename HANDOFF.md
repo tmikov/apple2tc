@@ -1642,9 +1642,46 @@ any of this.
    `$3750` eight times a run) and what is wanted is the first arrival. It fails
    loudly if the address is never reached.
 
-   That is the measuring half. **The restoring half does not exist**: nothing
-   consumes a snapshot, and the generated engine still starts at the reset
+   That is the measuring half. **There is still no snapshot *format* and
+   nothing restores one**, and the generated engine still starts at the reset
    vector. That is what Phase 1b still needs.
+
+   **But the problem a snapshot format was wanted for has a cheaper answer, and
+   it is built** (2026-09-07). A capture can be turned into an ordinary `.b33`
+   instead of a new format: take the RAM verbatim as the payload, and prepend a
+   ~40-byte prologue that sets the soft switches and the registers — the half a
+   RAM image cannot carry — and jumps to the entry point. That needs no new
+   loader, no new flag and no new format, because a `.b33` already runs in
+   a2emu, a2run, a2mcp's `boot(binary:)` and apple2tc.
+
+   Worked end to end for Neptune in `decoded/neptune/scripts/make-b33.sh`, which
+   captures, builds and verifies in one pass; `docs/neptune.md` has the summary.
+   The mechanics that generalise:
+
+   - The payload is *all* of `$0000-$BFFF`, so nothing is copied at run time —
+     the loader's own memcpy places zero page and the stack. Neptune had 48,319
+     live bytes in that span, i.e. essentially all of it.
+   - The `.b33` loader sets `PC` to the load address, and the load address is
+     the lowest byte in the file, so entry is forced to `$0000`. Three bytes
+     there become a `JMP` to the real stub, which restores them before jumping
+     on.
+   - The stub lives in the stack page, which is free exactly when `SP=$FF`.
+     Choosing a capture point with an empty stack is therefore worth more than
+     it sounds: it costs nothing and it removes stack residue from the problem
+     entirely.
+   - **Capture at an address, not at a frame.** A frame boundary lands wherever
+     it lands — for Neptune, inside the ROM's `MON_WAIT`. An address can be
+     chosen to mean something.
+   - `--hash-frames` is *not* comparable between a b33 and the run it came from.
+     The 6502 cannot observe a frame boundary, so the instruction stream is
+     unaffected, but the screen is *sampled* on frame boundaries and the b33
+     enters at a different cycle phase. Verify the entry state instead, which is
+     what the script does. (Corroborated: a padded variant that entered exactly
+     on a frame boundary reproduced 1591 consecutive frame hashes byte for byte.)
+
+   This does not close Phase 1b — the generated engine still starts at reset,
+   and retargeting *that* is the actual item. It does mean "start the machine
+   from a captured state" is no longer blocked on designing a format.
 
    The soft switches are captured too, into the `.regs` sidecar, because they
    are the half of the machine a RAM image cannot carry — they are host IO

@@ -97,6 +97,98 @@ to have a second, worse symptom: a rebooted disk session landing in whatever
 the previous session left resident instead of redoing the boot at all. The
 account above is what actually happened at the time and is left as it was.)
 
+## Skipping the load: `decoded/neptune/testdata/neptune.b33`
+
+**You do not have to wait 21 seconds, and you do not need the disk.**
+`decoded/neptune/testdata/neptune.b33` is the machine captured at the end of
+its own load, wrapped as an ordinary DOS 3.3 binary, so it opens *on the title
+screen* in the time it takes to boot the ROM:
+
+```bash
+a2emu --hgr-mode=color140 decoded/neptune/testdata/neptune.b33   # to play
+a2run --frames=N decoded/neptune/testdata/neptune.b33
+```
+
+and in a2mcp, `boot(binary: "decoded/neptune/testdata/neptune.b33")` — no
+`disk1`. About 20 frames later the title is up, and space starts a game from
+there (`SH:3`).
+Everything in this file about controls, rendering and scoring applies
+unchanged; only the 21-second prologue is gone.
+
+Regenerate it with `decoded/neptune/scripts/make-b33.sh`, which captures,
+builds and verifies in one pass. The script's header carries the details; the
+two that matter when reading it:
+
+- **The capture point is `$3523`**, the top of the title screen's key-wait
+  loop — `STA KBDSTRB`, then 256 rounds of poll-and-delay, branching to `$3580`
+  on a key and falling through to the attract demo at `$3535` on a timeout. So
+  it is captured exactly where the game is willing to start. Capturing at the
+  main loop `$2000` instead (~27 s) lands *inside* the demo, where space does
+  nothing and the HUD reads `SH:00`.
+- **`--hash-frames` output is not comparable between the b33 and a disk boot.**
+  The 6502 cannot see a frame boundary — no interrupts, no raster register — so
+  the instruction stream is identical, but the *screen is sampled* on frame
+  boundaries and the b33 enters the game at a different cycle phase. Compare
+  b33 run against b33 run. This was measured, not assumed: a variant padded so
+  that entry landed exactly on a frame boundary reproduced 1591 consecutive
+  frame hashes of the disk run byte for byte.
+
+### DOS is not in memory, and the disk driver is dead code
+
+Worth knowing before reading the top of the image, because it looks like the
+opposite. There is disk-driver-shaped code at `$BC00-$BFA6` — IWM reads through
+`$C08C,X`, phase stepping, motor-on — plus language-card writes at `$BF12`+ and
+message text at `$BEC0` reading `"(BRUN HELL..."` and
+`"(DOS IN LANGUAGE CARD...)"`. None of it is a resident DOS and none of it runs.
+
+- **Not DOS.** The DOS 3.3 command table is absent — no `CATALOG`, `BLOAD`,
+  `INIT`, `MAXFILES` or `DISK VOLUME` anywhere in the 64KB image. `$03D0-$03D5`
+  holds `3A 3B 3C 3D 3E 3F`, an ascending table, where DOS puts its
+  `JMP $9DBF` vectors. `$9D00` is data.
+- **Not live.** Six probes across `$BC57-$BF67` fired **zero** times in a
+  3000-frame disk boot, with positive controls at `$2000` and `$3523` firing
+  630 and 2 times in the same run. Neptune loads through the `$C600` boot ROM
+  and its own loader.
+
+So the b33 carries those bytes as ballast, not as a dependency. Beware one
+false lead here: `xref $C0E0 $C0EF` in `id` finds no reference to the drive,
+but that proves nothing — a DOS-style driver reaches it as `$C08C,X` with
+`X=$60` and never names `$C0Ex`.
+
+**Where DOS went: nowhere. It was never on the disk.**
+
+- The boot sector is not DOS's. `dsk/Neptune.dsk` track 0 sector 0 begins
+  `01 A8 EE 06 08 AD 4E 08 ...`; DOS 3.3's boot0 begins
+  `01 A5 27 C9 09 D0 18 ...`. Neptune has its own loader.
+- No DOS exists anywhere on the surface. Across all 560 sectors there is no
+  command table and no message table — no `CATALOG`, `BLOAD`, `INIT`,
+  `MAXFILES`, `DISK VOLUME`, `SYNTAX ERROR` or `FILE NOT FOUND`. The only two
+  DOS-flavoured strings on the whole disk are `"(BRUN HELL)"` and
+  `"(DOS IN LANGUAGE CARD...)"`, and both live in a single sector, track 30
+  sector 6, embedded in binary.
+- **The loader is a raw image copy**, which is what makes the debris make
+  sense. Of the 184 pages in `$0800-$BFFF`, **160 are byte-identical to disk
+  sectors**; the only 24 that differ are all inside `$4100-$5FFF`, i.e. HGR
+  page 2, the screen the game has been drawing on since the load. The disk is
+  effectively a photograph of `$0800-$BFFF`.
+
+So whatever occupied those sectors when the master was cut got blitted into RAM
+along with the game, and nothing ever calls it. That is the whole story of the
+"resident DOS": stale sectors, faithfully copied.
+
+It is also why the b33 is so cheap to justify. It is not reconstructing a live
+operating system — it is carrying the same bulk image the loader would have
+copied, plus the small amount of state the loader and the title code set up.
+
+That control run also settles a smaller thing: `$3523` fires **twice** in 3000
+frames, so **the attract demo cycles back to the title** and space works again
+when it does.
+
+A caution for reading state across tools, learned here the hard way: **a2mcp
+numbers the hi-res pages from 0 and the `--snapshot-out` `.regs` sidecar numbers
+them from 1.** The `hgr` page 1 recorded above is a2mcp's; a snapshot of the
+same machine says `vidpage 2`. See dz issue `01a07d0d-34dc`.
+
 ## Controls
 
 From the disk's own key-map help screen, recovered with:
