@@ -74,8 +74,18 @@ byte-identical `--hash-frames` output across every frame.
 
 ## Booting
 
-The disk does not autoboot. `boot(disk1:"dsk/Neptune.dsk")` lands at a BASIC `]`
-prompt; `PR#6` boots the drive.
+**The disk autoboots. `PR#6` is not needed** — an earlier version of this file
+said the opposite, and every prefix here still types it because the recordings
+that exist were made that way. It is harmless: the game ignores the keyboard, so
+those five keystrokes change nothing. Measured, from `boot(disk1:...)` with no
+keys at all: still `text` at frame 300, `hgr` page 1 by frame 1200.
+
+The mistake was impatience. The original test ran 600 frames, saw a text screen —
+carrying the *previous* session's content, since `boot` does not clear RAM — and
+concluded there was a BASIC prompt waiting. A Disk II boot simply takes longer
+than that. Verified again by replaying a recorded session against a control run
+with no keys: the two are identical until frame 3503, which is where the space
+keypress lands, so the `PR#6` in the recording provably does nothing.
 
 ## Controls
 

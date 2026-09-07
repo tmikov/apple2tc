@@ -168,18 +168,24 @@ actually helps is a probe planted at the game's own draw-complete point in its
 code (`docs/probes.md`) — `screen_update` only ever sees frame boundaries, and a
 game with no idle frame boundary has nothing at that resolution to see.
 
-## Booting a disk: it does not autoboot
+## Booting a disk: wait longer than you think
 
-`boot(disk1: "...")` mounts the image and brings the machine up, and you land at
-a BASIC `]` prompt, not in the game. Type `PR#6` to boot the drive:
+A Disk II boot takes on the order of a thousand frames — fifteen-odd seconds of
+emulated time. `boot(disk1:...)` then `run(frames: 1200)` is enough for
+`dsk/Neptune.dsk`; measured, it is still in text mode at frame 300 and in hi-res
+by 1200.
 
-    keys("PR#6\n") ; run(1200)
+An earlier version of this section said the disk did *not* autoboot and that you
+had to type `PR#6`. That was wrong, and the way it was wrong is the useful part:
+the original test ran 600 frames, saw a text screen, and concluded a BASIC prompt
+was waiting. Two things conspired. The boot had not finished, and `boot` does not
+clear RAM, so what was on screen was the *previous* session's text — a
+convincing-looking prompt belonging to no one. Typing `PR#6` then appeared to
+work, because the disk was going to boot anyway.
 
-Observed with `dsk/Neptune.dsk`: still at the prompt after 600 frames, booted
-within 1200 of `PR#6`. **The cause is not established.** `reset_regs()` runs
-before `init_emulated()` loads the ROM in `a2host_init_emulation()`, which is
-worth looking at if this ever matters more than the one extra tool call — but
-nothing here confirms that is the reason.
+Check the video mode with `status` rather than reading the screen: a game that
+has booted has almost always switched out of text mode, and that is a fact about
+the machine rather than an interpretation of pixels.
 
 ## `boot` does not clear RAM
 
