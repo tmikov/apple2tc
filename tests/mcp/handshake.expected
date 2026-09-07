@@ -1,0 +1,3 @@
+{"id":1,"jsonrpc":"2.0","result":{"capabilities":{"tools":{}},"protocolVersion":"2025-06-18","serverInfo":{"name":"a2mcp","version":"1"}}}
+{"id":2,"jsonrpc":"2.0","result":{"content":[{"text":"unknown tool: nosuchtool","type":"text"}],"isError":true}}
+{"error":{"code":-32601,"message":"method not found: nosuchmethod"},"id":3,"jsonrpc":"2.0"}

@@ -39,6 +39,15 @@ extern "C" {
 
 /* --- Setup ---------------------------------------------------------------- */
 
+/// Send probe `printf` output to stderr rather than stdout, for a front end
+/// whose stdout carries a protocol. Call before a2host_parse_args(), which is
+/// what acts on an explicit --probe-out=; that option still wins.
+///
+/// At the sink rather than at each caller on purpose: a probe opcode that
+/// prints is free to be added later without rediscovering that a2mcp's stdout
+/// is not a report.
+void a2host_probe_output_to_stderr(void);
+
 /// Parse the options this library owns. Anything unrecognised is offered to the
 /// engine via `engine_parse_arg`, then rejected.
 void a2host_parse_args(int argc, char *argv[]);
@@ -46,6 +55,41 @@ void a2host_parse_args(int argc, char *argv[]);
 /// Bring up the emulated machine: IO, registers, and the engine's own
 /// initialisation. No graphics or audio.
 void a2host_init_emulation(void);
+
+/// Declare that this front end supplies keys programmatically, the way
+/// --key-file= does. Must be called before a2host_init_emulation(): it is part
+/// of the condition for the dummy keypress that init pushes, and a front end
+/// whose session is meant to be replayable with --key-file= must take that
+/// keypress too, or the replay sees one keystroke the original did not.
+void a2host_enable_scheduled_keys(void);
+
+/// Schedule a key \p frames_ahead frames from now, stamped on the cycle
+/// counter exactly as --key-file= entries are, and written to the file opened
+/// by a2host_open_scheduled_keys_file() if there is one.
+///
+/// Scheduled rather than pushed because the stamp is what makes a session
+/// replayable: the file this writes is read back by --key-file= unchanged.
+void a2host_schedule_key(uint8_t ch, unsigned frames_ahead);
+
+/// Cycles in one emulated frame -- the fixed step a2host_simulate_frame() runs
+/// and the unit a2host_schedule_key()'s \p frames_ahead is counted in. A front
+/// end that must know where a key will land (to bound it against the 32-bit
+/// cycle counter, say) needs this number rather than a guess at the clock.
+unsigned a2host_frame_cycles(void);
+
+/// Scheduled keys not yet handed to the machine.
+unsigned a2host_scheduled_keys_pending(void);
+
+/// Record every scheduled key to \p path, in the `<cycles> <key>` format
+/// --key-file= reads. Exits on failure to open, so a front end must call it
+/// before it starts serving.
+void a2host_open_scheduled_keys_file(const char *path);
+
+/// Tear the emulated machine down and bring it back up, as if the process had
+/// just started. Frame and cycle counters restart at zero. Probe counters and
+/// any open report file deliberately survive, because a probe script's state is
+/// the run's, not the machine's.
+void a2host_reboot(void);
 
 /// The IO state — video mode, keyboard queue, disk. Owned here because the host
 /// is what renders it, replays keys into it and hashes it.
@@ -92,9 +136,31 @@ unsigned a2host_begin_repaint(double elapsed_sec);
 /// when the frame limit is reached.
 bool a2host_record_frame(void);
 
+/// Frames simulated so far.
+unsigned a2host_frame_no(void);
+
+/// FNV-1a over what is currently *displayed*: the mode bits, and only the
+/// page(s) the mode shows.
+///
+/// Deliberately not the frame-hash oracle's hash_video_state(), which covers
+/// both text pages and both hires pages whatever the mode, so that a
+/// divergence in a page used as a data structure is still caught. Built on
+/// that, a "has the screen changed" test would fire on every frame of any
+/// double-buffered program.
+uint64_t a2host_visible_hash(void);
+
 /// True once the engine has asked to stop early — a breakpoint, or a collection
 /// limit.
 bool a2host_engine_stopped(void);
+
+/// True once a probe script's `stop` has fired. A front end driving its own
+/// frame loop must check this, as a2host_run_headless() does.
+bool a2host_stop_requested(void);
+
+/// Forget that a probe's `stop` fired, so the next run is not stopped by the
+/// last one. For a front end where a run is one call among many rather than
+/// the whole process -- a2run exits on a `stop`, so it never needs this.
+void a2host_clear_stop_request(void);
 
 /// Run to the frame limit with no window, hashing as it goes. Does not return.
 void a2host_run_headless(void);

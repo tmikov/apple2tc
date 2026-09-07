@@ -60,6 +60,15 @@ public:
 
   /// Load ROM data at the end of address space and mark it as read-only.
   void loadROM(const uint8_t *rom, unsigned size);
+  /// Undo loadROM() and zero the cycle counter, so a fresh loadROM() may
+  /// follow. Real hardware has no equivalent to either half of this: a ROM is
+  /// soldered in, and the cycle count is emulator bookkeeping, not machine
+  /// state. It exists solely for a front end that tears the emulated machine
+  /// down and brings it back up mid-process instead of exiting.
+  void unloadROM() {
+    romStart_ = 0x10000;
+    cycles_ = 0;
+  }
   /// Reset the CPU counter to the RESET vector.
   void reset();
   /// Run the CPU for at least this many cycles.

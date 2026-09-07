@@ -332,6 +332,13 @@ void shutdown_emulated(void) {
   // A run that ends on the frame limit rather than the collection limit still
   // has data worth keeping.
   finishCollecting();
+  // Undo the ROM load so a following init_emulated() (a2host_reboot(), the
+  // only caller that survives past this point) may load one again --
+  // loadROM() otherwise asserts against a double load, a guard meant to catch
+  // a programming error in a process that boots once. It also zeroes the
+  // cycle counter, which is the other half of a2host_reboot()'s promise that
+  // frame and cycle counters restart at zero.
+  s_emu.unloadROM();
 }
 
 a2_stop_reason_t engine_stop_reason(void) {

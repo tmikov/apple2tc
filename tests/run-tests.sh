@@ -19,8 +19,9 @@ apple2tc=$bin/tools/apple2tc/apple2tc
 id=$bin/tools/id/id
 a2run=$bin/tools/a2run/a2run
 a2emu=$bin/tools/a2emu/a2emu
+a2mcp=$bin/tools/a2mcp/a2mcp
 
-for tool in "$a6502" "$apple2tc" "$id" "$a2run" "$a2emu"; do
+for tool in "$a6502" "$apple2tc" "$id" "$a2run" "$a2emu" "$a2mcp"; do
   if [ ! -x "$tool" ]; then
     echo "Error: required binary not found: $tool" >&2
     exit 1
@@ -331,6 +332,271 @@ if ! diff -q frontend-run.txt frontend-emu.txt > /dev/null; then
   exit 1
 fi
 rm frontend-run.txt frontend-emu.txt
+
+# --- a2mcp -------------------------------------------------------------------
+# The MCP server is driven entirely by stdin, so a transcript of requests and a
+# baseline of replies is the whole test. Deterministic because headless is
+# fixed-step: the same requests run the same cycles every time.
+mkdir -p mcp-tmp
+
+mcp_transcript() {
+  # $1: base name under mcp/; $2...: extra a2mcp arguments
+  local base=$1; shift
+  if ! $a2mcp --root=. "$@" < "mcp/$base.jsonl" > "mcp-tmp/$base.txt" 2>"mcp-tmp/$base.err"; then
+    echo "FAIL: a2mcp exited non-zero on mcp/$base.jsonl" >&2
+    cat "mcp-tmp/$base.err" >&2
+    exit 1
+  fi
+  if ! diff -u "mcp/$base.expected" "mcp-tmp/$base.txt"; then
+    echo "FAIL: a2mcp transcript $base differs from its baseline" >&2
+    exit 1
+  fi
+}
+
+mcp_transcript handshake
+mcp_transcript boot
+mcp_transcript reboot
+mcp_transcript run
+
+# a2mcp's frame loop must be a2run's. Same 40 frames, same video state.
+$a2run --frames=40 --hash-frames=mcp-tmp/run-a2run.txt > /dev/null
+$a2mcp --root=. --hash-frames=mcp-tmp/run-a2mcp.txt < mcp/run.jsonl > /dev/null
+if ! diff -q mcp-tmp/run-a2run.txt mcp-tmp/run-a2mcp.txt; then
+  echo "FAIL: a2mcp's frame loop diverges from a2run's over the same 40 frames" >&2
+  exit 1
+fi
+
+mcp_transcript stop --probe=mcp/stop.probe --probe-out=mcp-tmp/stop-report.txt
+# The reply's content is a JSON object serialised into a JSON string, so its
+# quotes reach the transcript backslash-escaped.
+if ! grep -q 'stop_reason\\": \\"probe' mcp-tmp/stop.txt; then
+  echo "FAIL: a probe's stop did not end an a2mcp run" >&2
+  exit 1
+fi
+# ...and the *next* run must advance again. The probe's stop flag is sticky in
+# the library (a2run exits on it, so it never needs clearing); if a2mcp did not
+# clear it per run, request 4 would come back with frames_run 1 and
+# stop_reason "probe" forever, and no tool -- not even boot, which preserves
+# probe state on purpose -- could get the server moving again.
+if ! grep '"id":4' mcp-tmp/stop.txt | grep -q 'frames_run\\": 10'; then
+  echo "FAIL: a probe's stop wedged every later a2mcp run" >&2
+  exit 1
+fi
+
+# --probe= is forwarded to the library, and probe_out() defaults to *stdout* --
+# which here carries JSON-RPC. Without --probe-out=, the stop.probe script's
+# printf must still not land in the protocol stream. Every stdout line has to
+# be a JSON object; the report line goes to stderr instead.
+$a2mcp --root=. --probe=mcp/stop.probe < mcp/stop.jsonl \
+  > mcp-tmp/probe-stdout.txt 2> mcp-tmp/probe-stderr.txt
+if grep -qvE '^\{' mcp-tmp/probe-stdout.txt; then
+  echo "FAIL: a probe's printf wrote into a2mcp's JSON-RPC stream" >&2
+  grep -nvE '^\{' mcp-tmp/probe-stdout.txt >&2
+  exit 1
+fi
+if ! grep -q 'halt at FD0C' mcp-tmp/probe-stderr.txt; then
+  echo "FAIL: the probe report did not reach stderr either -- it went nowhere" >&2
+  exit 1
+fi
+
+mcp_transcript screen-text
+# The banner is plain text inside the reply, not JSON-escaped, so an
+# unadorned grep finds it -- and finding it independently of the diff means a
+# wrong-but-stable baseline (960 spaces, mojibake) cannot pass silently.
+if ! grep -q 'APPLE \]\[' mcp-tmp/screen-text.txt; then
+  echo "FAIL: a2mcp read the text screen but did not find the ROM banner on it" >&2
+  exit 1
+fi
+
+$a6502 mcp/visible-page.s mcp-tmp/visible-page.b33
+mcp_transcript change
+# visible-page.s stays in text mode while continuously scribbling on the text
+# page, which text mode does display, so a screen_change run must stop on it
+# almost immediately -- well short of the 600-frame cap.
+#
+# Scoped to request 4's own reply line: request 3 is a plain frame-limited
+# run and always reports stop_reason "limit" too, so a check against the
+# whole transcript would pass no matter what request 4 said.
+if ! grep '"id":4' mcp-tmp/change.txt | grep -q 'stop_reason\\": \\"screen_change'; then
+  echo "FAIL: screen_change did not fire on a write to the displayed page" >&2
+  exit 1
+fi
+
+$a6502 mcp/hidden-page.s mcp-tmp/hidden-page.b33
+mcp_transcript hidden
+# hidden-page.s is visible-page.s's sibling: identical but for which page it
+# scribbles on. It stays in text mode while continuously writing to hi-res
+# page 1, which text mode does not display. a2host_visible_hash() must not
+# see it: the mode-aware hash is the whole point, so a program scribbling on
+# a page the display is not showing must not look like a screen change, and
+# the run must go the full 300 frames. Unlike `change` above, this is the
+# test that actually discriminates a mode-aware hash from hash_video_state()
+# -- making a2host_visible_hash() an alias for hash_video_state() turns this
+# one red while leaving `change` green, since a mode-blind hash still notices
+# a write to the displayed page too.
+#
+# Scoped to request 4's own reply line for the same reason as `change` above:
+# request 3 always reports "limit" too.
+if ! grep '"id":4' mcp-tmp/hidden.txt | grep -q 'stop_reason\\": \\"limit'; then
+  echo "FAIL: screen_change fired on a page that is not displayed" >&2
+  exit 1
+fi
+
+$a6502 mcp/gr.s mcp-tmp/gr.b33
+mcp_transcript gr
+# The reply is a JSON object dumped into a JSON string, so its own quotes
+# reach the transcript backslash-escaped and on one line -- a line-anchored
+# `^1111111111` never matches for that reason, not because the grid is wrong.
+# A plain, unanchored substring search on the full 40-character run of `1`s
+# that gr.s paints across row 0 is specific enough that nothing else in the
+# transcript can satisfy it by accident.
+if ! grep -qF '1111111111111111111111111111111111111111' mcp-tmp/gr.txt; then
+  echo "FAIL: the lo-res grid does not show the colour-1 row the program painted" >&2
+  exit 1
+fi
+
+# `keys` schedules rather than injects, and the .keys file it can write is the
+# whole reason to prefer that: a session recorded through the tool must replay
+# bit-for-bit under a2run's own --key-file=.
+mcp_transcript keys --keys-out=mcp-tmp/session.keys --hash-frames=mcp-tmp/keys-mcp.txt
+# The reply is a JSON object dumped into a JSON string, so its own quotes reach
+# the transcript backslash-escaped and on one line -- grepping for `^]PRINT
+# 2+2` (bare prompt, line-anchored) never matches for that reason, not because
+# the assertion failed. An unanchored, unescaped substring search is what
+# proves the keystrokes actually reached BASIC; the exact evaluated answer is
+# already pinned by the transcript diff above, so it needs no grep of its own.
+if ! grep -qF 'PRINT 2+2' mcp-tmp/keys.txt; then
+  echo "FAIL: keys were scheduled but BASIC never ran them" >&2
+  exit 1
+fi
+
+# The reproducibility claim, and the reason the .keys file is the artifact: the
+# session must replay under a2run frame for frame. 300 = 120 + 180, the frames
+# the transcript runs.
+$a2run --frames=300 --key-file=mcp-tmp/session.keys \
+  --hash-frames=mcp-tmp/keys-a2run.txt > /dev/null
+if ! diff -u mcp-tmp/keys-mcp.txt mcp-tmp/keys-a2run.txt; then
+  echo "FAIL: a2run --key-file= does not reproduce the a2mcp session" >&2
+  exit 1
+fi
+
+# `sound`: beep.s toggles the speaker every ~1005 cycles (see beep.s for the
+# NMOS 6502 timing this comes from), 200 times, then goes silent forever.
+$a6502 mcp/beep.s mcp-tmp/beep.b33
+mcp_transcript sound
+# The exact frequency depends on the delay loop's real cycle count, so assert
+# the band the program can produce rather than a single number. The reply is
+# a JSON object dumped into a JSON string, so its own quotes reach the
+# transcript backslash-escaped, matching what mcp_tools.cpp's text_result()
+# actually writes -- see the "sound" case in mcp_tools.cpp -- not the
+# unescaped quotes a naive grep would expect.
+if ! grep -qE '\\"approx_frequency_hz\\": (4[5-9][0-9]|5[0-6][0-9])' mcp-tmp/sound.txt; then
+  echo "FAIL: sound did not report the ~510 Hz tone the program plays" >&2
+  exit 1
+fi
+if [ "$(head -c 4 mcp-tmp/beep.wav)" != "RIFF" ]; then
+  echo "FAIL: save_wav did not write a WAV" >&2
+  exit 1
+fi
+
+# realpath resolves symlinks, so a link pointing outside the root is the same
+# rejection as a "../" path -- but only if the jail resolves before it opens.
+ln -sf /etc/passwd mcp-tmp/escape.dsk
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"boot","arguments":{"disk1":"mcp-tmp/escape.dsk"}}}' \
+  > mcp-tmp/symlink.jsonl
+if ! $a2mcp --root=. < mcp-tmp/symlink.jsonl | grep -q '"isError":true'; then
+  echo "FAIL: a2mcp followed a symlink out of --root" >&2
+  exit 1
+fi
+
+# The four ways a tool call used to end badly, in one transcript. Each reply is
+# pinned by mcp/guard.expected; what the greps below add is that the failure is
+# the *intended* one and that the server is still there afterwards.
+#
+# The write side of the jail gets its own symlink, mirroring the read-side one
+# above: resolving only the parent directory and re-attaching the final
+# component writes straight through a link sitting at that component.
+# The link's target has to exist, or the rejection would be "cannot resolve"
+# rather than the escape this is about.
+escape_dir=$(mktemp -d)
+printf 'untouched' > "$escape_dir/target.png"
+ln -sf "$escape_dir/target.png" mcp-tmp/wescape.png
+mcp_transcript guard
+if [ "$(cat "$escape_dir/target.png")" != "untouched" ]; then
+  echo "FAIL: a2mcp wrote a screenshot through a symlink pointing out of --root" >&2
+  rm -rf "$escape_dir"
+  exit 1
+fi
+rm -rf "$escape_dir"
+# A regular file that is in the jail but is not a disk image reached
+# mountDisk(), which exit(2)s -- killing the server mid-call with the client
+# still waiting. Request 8 answering at all is the half that matters.
+if ! grep -q '"id":8' mcp-tmp/guard.txt; then
+  echo "FAIL: a2mcp died mid-session instead of returning a tool error" >&2
+  exit 1
+fi
+# A long text at a wide spacing overflows the 32-bit cycle stamp: the keys wrap
+# below the current cycle and all fire at once, and the .keys file comes out
+# non-monotonic. A refusal is the only honest answer.
+if ! grep '"id":5' mcp-tmp/guard.txt | grep -q '32-bit cycle counter'; then
+  echo "FAIL: a long keys call wrapped its cycle stamps instead of being refused" >&2
+  exit 1
+fi
+
+# `screen` as PNG. Base64 of a PNG is long, so the committed transcript covers
+# only the save_to success case and the root-escape rejection -- the inline
+# case below is checked directly instead of via a baseline.
+mcp_transcript image
+
+# A PNG starts with the eight-byte signature 89 50 4E 47 0D 0A 1A 0A.
+if [ ! -s mcp-tmp/shot.png ] || [ "$(head -c 8 mcp-tmp/shot.png | od -An -tx1 | tr -d ' ')" \
+     != "89504e470d0a1a0a" ]; then
+  echo "FAIL: save_to did not write a PNG" >&2
+  exit 1
+fi
+
+# The IHDR's colour-type byte is at offset 25 and must be 2, RGB.
+#
+# This is the check that names the failure. The transcript diff above would
+# also go red on a wrong encoding, but only until someone regenerates the
+# baseline -- which is exactly how this bug would come back, and how it got in.
+# What follows is what a perfectly valid, completely blank screenshot looked
+# like. a2_screen is "RGB encoding of the Apple2 screen"
+# and its fourth byte is padding that no renderer in a2io.c ever fills, so
+# encoding it as four-channel RGBA produced a 280x192 PNG in which every pixel
+# had alpha 0 -- correct signature, correct dimensions, byte-identical between
+# runs, and invisible in any viewer that honours alpha. Every structural
+# assertion passed. Only looking at a pixel found it.
+if [ "$(dd if=mcp-tmp/shot.png bs=1 skip=25 count=1 2>/dev/null | od -An -tu1 | tr -d ' ')" != "2" ]; then
+  echo "FAIL: the saved PNG is not RGB; an alpha channel here renders blank" >&2
+  exit 1
+fi
+
+# Base64 of that same signature starts iVBORw0KGgo -- confirms the inline
+# content block in image.expected actually carries a PNG rather than
+# something else that happened to pass the mimeType check.
+if ! grep -q 'iVBORw0KGgo' mcp/image.expected; then
+  echo "FAIL: screen format=image's save_to reply did not inline a PNG too" >&2
+  exit 1
+fi
+
+# The inline-PNG case (format "image" with no save_to) is not in the
+# committed transcript -- its base64 would dominate the baseline -- so it is
+# checked with a one-off invocation instead.
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"boot","arguments":{}}}' \
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"run","arguments":{"frames":120}}}' \
+  '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"screen","arguments":{"format":"image"}}}' \
+  > mcp-tmp/inline-image.jsonl
+$a2mcp --root=. < mcp-tmp/inline-image.jsonl > mcp-tmp/inline-image.txt
+if ! grep -q '"mimeType":"image/png"' mcp-tmp/inline-image.txt || \
+   ! grep -q 'iVBORw0KGgo' mcp-tmp/inline-image.txt; then
+  echo "FAIL: screen format=image did not return an inline PNG content block" >&2
+  exit 1
+fi
 
 # ...but that check, and every other check in this repo, runs the host in
 # *fixed-step* mode -- because reproducibility is what they all exist for. The
@@ -844,5 +1110,6 @@ if diff -q probe-tmp/replay-key.txt probe-tmp/replay-nokey.txt > /dev/null; then
 fi
 
 rm -rf probe-tmp
+rm -rf mcp-tmp
 
 echo "Success!"

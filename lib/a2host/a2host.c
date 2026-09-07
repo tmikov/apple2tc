@@ -97,6 +97,20 @@ static KeyPress *key_presses_ = NULL;
 static unsigned key_press_count_ = 0;
 /// Next key press to process.
 static unsigned next_key_press_ = 0;
+/// True when a front end schedules its own keys; see
+/// a2host_enable_scheduled_keys().
+static bool scheduled_keys_ = false;
+/// Keys scheduled by a front end, stamped on the cycle counter. A separate
+/// list from key_presses_ on purpose: that one's lifetime is read as "a replay
+/// is still live" (a2host_key_replay_active) and is freed on exhaustion by
+/// drain_key_presses but deliberately never by probe_deliver_keys. A list that
+/// is merely empty, and may grow again at any moment, does not fit those
+/// rules, and bending them would change behaviour for both existing front ends.
+static KeyPress *sched_keys_ = NULL;
+static unsigned sched_keys_count_ = 0;
+static unsigned sched_keys_capacity_ = 0;
+static unsigned next_sched_key_ = 0;
+static FILE *sched_keys_file_ = NULL;
 /// The very first frame is skipped rather than simulated, so that a front end
 /// pacing against a wall clock does not begin with a huge catch-up burst.
 static bool firstFrame_ = true;
@@ -162,6 +176,17 @@ bool a2host_key_replay_active(void) {
 }
 bool a2host_engine_stopped(void) {
   return engine_stopped_;
+}
+bool a2host_stop_requested(void) {
+  return probe_stop_requested();
+}
+
+void a2host_clear_stop_request(void) {
+  probe_clear_stop_request();
+}
+
+void a2host_probe_output_to_stderr(void) {
+  probe_set_output_stream(stderr);
 }
 
 uint8_t io_peek(uint16_t addr) {
@@ -553,6 +578,53 @@ void a2host_press_key(uint8_t ch) {
   press_key_live(ch);
 }
 
+void a2host_enable_scheduled_keys(void) {
+  scheduled_keys_ = true;
+}
+
+void a2host_open_scheduled_keys_file(const char *path) {
+  if ((sched_keys_file_ = fopen(path, "wt")) == NULL) {
+    fprintf(stderr, "FATAL: cannot open scheduled key file \"%s\"\n", path);
+    exit(2);
+  }
+}
+
+void a2host_schedule_key(uint8_t ch, unsigned frames_ahead) {
+  if (sched_keys_count_ == sched_keys_capacity_) {
+    sched_keys_capacity_ = sched_keys_capacity_ ? sched_keys_capacity_ * 2 : 64;
+    sched_keys_ = realloc(sched_keys_, sched_keys_capacity_ * sizeof(*sched_keys_));
+    if (!sched_keys_) {
+      fprintf(stderr, "FATAL: out of memory scheduling keys\n");
+      exit(2);
+    }
+  }
+  const unsigned at = get_cycles() + frames_ahead * a2host_frame_cycles();
+  sched_keys_[sched_keys_count_].cycles = at;
+  sched_keys_[sched_keys_count_].ch = ch;
+  ++sched_keys_count_;
+  if (sched_keys_file_)
+    fprintf(sched_keys_file_, "%u %u\n", at, ch);
+}
+
+unsigned a2host_frame_cycles(void) {
+  return (unsigned)((1.0 / 60.0) * clock_freq_);
+}
+
+unsigned a2host_scheduled_keys_pending(void) {
+  return sched_keys_count_ - next_sched_key_;
+}
+
+/// The scheduled-key counterpart of drain_key_presses(). Unlike that one it
+/// never frees the list: the front end may schedule more at any point, and an
+/// empty list is not an ended replay.
+static void drain_scheduled_keys(void) {
+  const unsigned cycles = get_cycles();
+  while (next_sched_key_ != sched_keys_count_ && cycles >= sched_keys_[next_sched_key_].cycles) {
+    push_key(sched_keys_[next_sched_key_].ch);
+    ++next_sched_key_;
+  }
+}
+
 /// Everything needed to start the emulated program, with no graphics or audio.
 /// Shared by the windowed and headless front ends.
 void a2host_init_emulation(void) {
@@ -582,15 +654,15 @@ void a2host_init_emulation(void) {
   //
   // Only the command-line sources can be tested this early; buffered_keys_ is
   // registered by init_emulated() itself, so its case stays below.
-  if (kbd_file_ || key_presses_)
+  if (kbd_file_ || key_presses_ || scheduled_keys_)
     a2_io_push_key(&io_, '\r');
 
   init_emulated();
 
   // init_emulated() is where a program registers buffered keys, so this is the
   // first chance to see them.
-  if (kbd_file_ || key_presses_ || buffered_keys_) {
-    if (!kbd_file_ && !key_presses_)
+  if (kbd_file_ || key_presses_ || buffered_keys_ || scheduled_keys_) {
+    if (!kbd_file_ && !key_presses_ && !scheduled_keys_)
       a2_io_push_key(&io_, '\r');
     // Both command-line sources outrank buffered keys: a recording already
     // contains whatever the program would have typed for itself.
@@ -601,6 +673,41 @@ void a2host_init_emulation(void) {
     else
       drain_buffered_keys();
   }
+}
+
+/// Tear the emulated machine down and bring it back up, as if the process had
+/// just started. Frame and cycle counters restart at zero. Probe counters and
+/// any open report file deliberately survive, because a probe script's state is
+/// the run's, not the machine's.
+void a2host_reboot(void) {
+  shutdown_emulated();
+  a2_io_done(&io_);
+  frame_no_ = 0;
+  firstFrame_ = true;
+  engine_stopped_ = false;
+  step_debt_ = 0.0;
+  pending_elapsed_ = 0.0;
+  pending_keys_count_ = 0;
+  // A reboot restarts the cycle counter at zero, so scheduled keys stamped
+  // against the previous run's counter would never fire; a session that
+  // reboots is still one session, so the recording file itself stays open.
+  sched_keys_count_ = 0;
+  next_sched_key_ = 0;
+  // ...which is exactly what makes an open recording unreplayable from here
+  // on: the entries already written are stamped against the old counter, and
+  // everything after this point starts from zero again. Say so in both places
+  // -- on stderr for whoever is driving, and in the file itself, where
+  // load_key_file()'s `#` handling means the note costs the reader nothing but
+  // is right there when the replay misbehaves.
+  if (sched_keys_file_) {
+    fprintf(
+        stderr,
+        "WARNING: rebooted with a scheduled-key recording open; the cycle "
+        "counter restarts at 0, so the file is no longer monotonic and will "
+        "not replay under --key-file=\n");
+    fprintf(sched_keys_file_, "# reboot: cycle counter restarts at 0 here\n");
+  }
+  a2host_init_emulation();
 }
 
 /// A run that must be reproducible -- replay, hashing, tracing -- always gets
@@ -622,6 +729,11 @@ void a2host_simulate_frame(void) {
   if (firstFrame_) {
     firstFrame_ = false;
   } else {
+    // Scheduled keys are an independent source, not an alternative to the
+    // chain below, so they are drained unconditionally rather than added to
+    // it as another else-if.
+    if (sched_keys_)
+      drain_scheduled_keys();
     // Both command-line sources outrank buffered keys: a recording already
     // contains whatever the program would have typed for itself.
     if (key_presses_)
@@ -683,6 +795,47 @@ static uint64_t hash_video_state(void) {
   return h;
 }
 
+/// FNV-1a over what is currently *displayed*: the mode bits, and only the
+/// page(s) the mode shows.
+///
+/// Deliberately not hash_video_state() above, which covers both text pages and
+/// both hires pages whatever the mode is, so that the frame-hash oracle still
+/// catches a divergence in a page a game uses as a data structure rather than
+/// a display -- Snake Byte's never-shown lo-res page is exactly that. Built on
+/// that hash, a "has the screen changed" test would fire on the first frame of
+/// any double-buffered program and every frame after, which is useless. This
+/// hash exists for that "did the screen change" question instead.
+uint64_t a2host_visible_hash(void) {
+  uint64_t h = 1469598103934665603ULL;
+  const uint8_t *ram = get_ram();
+  const a2_vidmode_t mode = a2_io_get_vidmode(&io_);
+  const bool mixed = a2_io_is_vidmode_mixed(&io_);
+
+  uint8_t header[2] = {(uint8_t)mode, (uint8_t)mixed};
+  for (unsigned i = 0; i < sizeof(header); ++i) {
+    h ^= header[i];
+    h *= 1099511628211ULL;
+  }
+
+  // The text page is displayed in TEXT, and in the bottom four lines of a
+  // mixed graphics mode. GR reads the same page as the text mode does.
+  if (mode != A2_VIDMODE_HGR || mixed) {
+    const uint8_t *text = ram + a2_io_get_text_page_offset(&io_);
+    for (unsigned i = 0; i < 0x400; ++i) {
+      h ^= text[i];
+      h *= 1099511628211ULL;
+    }
+  }
+  if (mode == A2_VIDMODE_HGR) {
+    const uint8_t *hires = ram + a2_io_get_hires_page_offset(&io_);
+    for (unsigned i = 0; i < 0x2000; ++i) {
+      h ^= hires[i];
+      h *= 1099511628211ULL;
+    }
+  }
+  return h;
+}
+
 /// Emit this frame's hash if requested and advance the frame counter.
 /// Returns true when the frame limit has been reached.
 bool a2host_record_frame(void) {
@@ -701,10 +854,19 @@ bool a2host_record_frame(void) {
   return false;
 }
 
+/// Frames simulated so far.
+unsigned a2host_frame_no(void) {
+  return frame_no_;
+}
+
 void a2host_shutdown(void) {
   if (hash_file_) {
     fclose(hash_file_);
     hash_file_ = NULL;
+  }
+  if (sched_keys_file_) {
+    fclose(sched_keys_file_);
+    sched_keys_file_ = NULL;
   }
   // Before probe_close_output(): once the report file is closed, hit counts
   // are the only record left of what ran, and stderr (never the report file

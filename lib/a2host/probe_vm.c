@@ -53,11 +53,13 @@ static uint16_t s_dispatch_pc;
 /// probe_vm_init_counters.
 static uint32_t s_counters[PROBE_MAX_COUNTERS];
 
-/// Set by OP_STOP, read by probe_stop_requested(). Never cleared: once a run
-/// asks to stop, nothing in this process runs another frame -- both
-/// a2host_run_headless and a2host_gui.c's frame_cb exit (the latter via
-/// sapp_request_quit()) the moment they observe it, so there is no "next run"
-/// in the same process for a stale true to leak into.
+/// Set by OP_STOP, read by probe_stop_requested(), cleared by
+/// probe_clear_stop_request(). For a2run and a2emu the flag never needs
+/// clearing: both exit the moment they observe it (the latter via
+/// sapp_request_quit()), so the run *is* the process and there is no next one.
+/// a2mcp is the front end where that is false -- a run there is one tool call
+/// among many, and a `stop` that could not be cleared would wedge the server
+/// for good -- so it clears the flag at the start of each run.
 static bool s_stop_requested;
 
 static void vm_push(uint32_t v) {
@@ -452,4 +454,8 @@ void probe_vm_init_counters(const script_t *sc) {
 
 bool probe_stop_requested(void) {
   return s_stop_requested;
+}
+
+void probe_clear_stop_request(void) {
+  s_stop_requested = false;
 }

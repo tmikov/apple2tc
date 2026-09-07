@@ -306,6 +306,12 @@ uint32_t probe_find_slot(const script_t *sc, uint16_t addr);
 /// `FILE *` and never reaches this.
 FILE *probe_out(void);
 
+/// Redirect probe `printf` output to \p f, which this module does not own and
+/// will not close. The default sink is stdout, which is right for a front end
+/// whose stdout is a report and wrong for one whose stdout is a protocol --
+/// see a2host_probe_output_to_stderr().
+void probe_set_output_stream(FILE *f);
+
 /// The mnemonic for \p op, or NULL if \p op is not one of the opcode_t
 /// enumerators (corrupt bytecode, not a missing table entry -- see the
 /// comment on this function's definition in probe.c). `static` there until
@@ -350,6 +356,10 @@ void probe_vm_init_counters(const script_t *sc);
 /// this is how it asks the host to stop driving frames once run_emulated()
 /// returns.
 bool probe_stop_requested(void);
+
+/// Clear what OP_STOP set. See s_stop_requested in probe_vm.c for who needs
+/// this and who does not.
+void probe_clear_stop_request(void);
 
 /// Deliver every pending key whose stamp is <= \p now. Defined in a2host.c,
 /// beside the key list it reads (key_presses_, next_key_press_,
