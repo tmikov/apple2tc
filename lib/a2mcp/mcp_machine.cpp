@@ -150,6 +150,25 @@ bool machine_booted(void) {
 }
 
 void machine_boot(const nlohmann::json &args) {
+  // A --key-file= recording is a one-shot per process. a2host_reboot()
+  // restarts the cycle counter at zero but has no way to rewind
+  // next_key_press_ back to the start of the array: once some keys have
+  // already been delivered, a plain reboot would replay only the tail of the
+  // recording, at the wrong cycles; once the recording is fully delivered,
+  // drain_key_presses() has already freed it and there is nothing left to
+  // replay at all. Either way a silent second boot would not reproduce the
+  // recording "exactly as it does on a fresh server start" -- and there is no
+  // clean fix that does not also touch what a2host_key_replay_active() means
+  // to a2host_gui.c's live-key lockout and to a2host_fixed_step()'s pacing
+  // choice, both of which are outside a2mcp's blast radius. So: refuse the
+  // reboot outright, loudly, rather than silently replay a wrong tail.
+  // Checked first, before any of the forwarding below, so a refusal never
+  // has a side effect to undo.
+  if (s_booted && !options().key_file.empty())
+    throw ToolError(
+        "cannot reboot: a --key-file recording only replays once per server "
+        "process; restart a2mcp to replay it again");
+
   forward_path(args, "rom", "--rom=", ImageKind::Rom);
   forward_path(args, "disk1", "--disk1=", ImageKind::Disk);
   forward_path(args, "disk2", "--disk2=", ImageKind::Disk);
@@ -196,7 +215,7 @@ nlohmann::json machine_status(void) {
   const char *mode = a2_io_get_vidmode(io) == A2_VIDMODE_TEXT ? "text"
       : a2_io_get_vidmode(io) == A2_VIDMODE_GR                ? "gr"
                                                               : "hgr";
-  return {
+  nlohmann::json out = {
       {"frame", a2host_frame_no()},
       {"cycles", get_cycles()},
       {"video",
@@ -206,6 +225,18 @@ nlohmann::json machine_status(void) {
       {"keys_pending", a2_io_keys_count(io)},
       {"keys_scheduled", a2host_scheduled_keys_pending()},
       {"stopped", a2host_engine_stopped()}};
+  // Omitted entirely, not reported as zeros, when no --key-file was given --
+  // see machine_run()'s "updates"/"note" for the same precedent of a
+  // conditional field. options().key_file is the source of truth for "is one
+  // loaded" (a2host_key_replay_progress() reads (0, 0) both before the first
+  // key is delivered and if no recording was ever loaded, and cannot tell the
+  // two apart on its own).
+  if (!options().key_file.empty()) {
+    unsigned delivered = 0, total = 0;
+    a2host_key_replay_progress(&delivered, &total);
+    out["replay"] = {{"delivered", delivered}, {"total", total}};
+  }
+  return out;
 }
 
 nlohmann::json machine_run(const nlohmann::json &args) {

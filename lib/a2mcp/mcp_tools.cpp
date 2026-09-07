@@ -37,7 +37,9 @@ nlohmann::json tool_schemas(void) {
         "binary; with no arguments the machine boots the built-in Apple ][+ ROM "
         "into BASIC. Paths are relative to the server's root directory. Returns "
         "with the machine initialised and zero frames run -- emulated time "
-        "advances only inside `run`."},
+        "advances only inside `run`. If the server was started with "
+        "--key-file=, calling `boot` a second time is refused: that recording "
+        "replays once per server process, not once per boot."},
        {"inputSchema",
         {{"type", "object"},
          {"properties",
@@ -51,7 +53,10 @@ nlohmann::json tool_schemas(void) {
       {{"name", "status"},
        {"description",
         "Current machine state: frame counter, cycle counter, video mode, keys "
-        "still pending delivery, and whether the engine or a probe has stopped."},
+        "still pending delivery, and whether the engine or a probe has stopped. "
+        "When the server was started with --key-file=, also `replay: "
+        "{delivered, total}` -- how far a loaded recording has been delivered "
+        "into the machine; absent when no recording is loaded."},
        {"inputSchema", {{"type", "object"}, {"properties", obj()}}}});
 
   tools.push_back(

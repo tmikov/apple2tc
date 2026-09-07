@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "mcp_paths.h"
 #include "mcp_server.h"
 
 #include "apple2tc/a2host_api.h"
@@ -25,7 +26,8 @@ void usage(void) {
       "  --probe=<path>      probe script, compiled once at startup\n"
       "  --probe-out=<path>  probe report\n"
       "  --keys-out=<path>   write a cycle-stamped .keys file of the session\n"
-      "  --hash-frames=<p>   per-frame video hashes, as a2run writes them\n");
+      "  --hash-frames=<p>   per-frame video hashes, as a2run writes them\n"
+      "  --key-file=<path>   replay a cycle-stamped .keys recording, under --root\n");
 }
 
 bool prefix(const char *arg, const char *p, std::string *out) {
@@ -49,7 +51,8 @@ int main(int argc, char *argv[]) {
     if (prefix(arg, "--root=", &opts.root) || prefix(arg, "--probe=", &opts.probe) ||
         prefix(arg, "--probe-out=", &opts.probe_out) ||
         prefix(arg, "--keys-out=", &opts.keys_out) ||
-        prefix(arg, "--hash-frames=", &opts.hash_frames))
+        prefix(arg, "--hash-frames=", &opts.hash_frames) ||
+        prefix(arg, "--key-file=", &opts.key_file))
       continue;
     fprintf(stderr, "a2mcp: unknown option \"%s\"\n", arg);
     usage();
@@ -80,6 +83,24 @@ int main(int argc, char *argv[]) {
   // a2mcp deliberately opens.
   a2host_probe_output_to_stderr();
 
+  // Unlike --probe=/--hash-frames=/--keys-out= above, which name a path on
+  // the host directly (whoever supplies --root= on this same command line
+  // supplies these too), --key-file= is resolved under --root the way an
+  // agent-supplied path is: a recording is session input, the same kind of
+  // thing disk1/binary are, and a path escaping the root is refused the same
+  // way theirs is (jail_existing_file(), mcp_paths.cpp). Resolved before the
+  // whitelist below, so the forwarded argument names the real path rather
+  // than one load_key_file() would have to re-resolve.
+  std::string key_file;
+  if (!opts.key_file.empty()) {
+    try {
+      key_file = a2mcp::jail_existing_file(opts.key_file);
+    } catch (const a2mcp::ToolError &e) {
+      fprintf(stderr, "a2mcp: %s\n", e.what());
+      return 2;
+    }
+  }
+
   std::vector<std::string> forwarded;
   forwarded.push_back("a2mcp");
   if (!opts.probe.empty())
@@ -88,6 +109,8 @@ int main(int argc, char *argv[]) {
     forwarded.push_back("--probe-out=" + opts.probe_out);
   if (!opts.hash_frames.empty())
     forwarded.push_back("--hash-frames=" + opts.hash_frames);
+  if (!key_file.empty())
+    forwarded.push_back("--key-file=" + key_file);
   std::vector<char *> argp;
   for (auto &s : forwarded)
     argp.push_back(const_cast<char *>(s.c_str()));

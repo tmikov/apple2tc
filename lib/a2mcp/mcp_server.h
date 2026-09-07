@@ -28,6 +28,7 @@ struct Options {
   std::string probe_out;
   std::string keys_out;
   std::string hash_frames;
+  std::string key_file;
 };
 
 const Options &options(void);
