@@ -85,12 +85,24 @@ nlohmann::json tool_schemas(void) {
         "use it to read a scene. \"mono140\" collapses the same colour-clock "
         "cells to white-if-any-ink/black-if-none, an occupancy mask with no "
         "colour to reason about -- use it to find shapes. `render` is accepted "
-        "in every mode but only affects HGR; it is ignored in TEXT and GR."},
+        "in every mode but only affects HGR; it is ignored in TEXT and GR. "
+        "`scale` is output pixels per colour cell for \"color140\"/\"mono140\": "
+        "2 (default) doubles each cell to match \"color\"'s 280x192; 1 emits "
+        "the native 140x192 instead, halving the image's payload with no loss "
+        "of information -- the sensible default for an agent reading a scene "
+        "repeatedly. The cost: at scale 1 the image is horizontally compressed "
+        "relative to how the machine displays it, so shapes are distorted (a "
+        "circle reads as an ellipse) even though relative positions are "
+        "preserved -- use scale 2 for anything judging shape rather than "
+        "position. `scale` has no cells to describe outside \"color140\"/"
+        "\"mono140\" and is accepted-and-ignored for \"color\" and for TEXT/GR, "
+        "the same as `render`."},
        {"inputSchema",
         {{"type", "object"},
          {"properties",
           {{"format", {{"type", "string"}, {"enum", {"text", "image", "both"}}}},
            {"render", {{"type", "string"}, {"enum", {"color", "color140", "mono140"}}}},
+           {"scale", {{"type", "integer"}, {"enum", {1, 2}}}},
            {"save_to", {{"type", "string"}}}}}}}});
 
   tools.push_back(
@@ -164,6 +176,9 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
       hgr_mode = A2_HGR_MONO140;
     else
       throw ToolError("unknown render \"" + render + "\"");
+    const int scale = args.value("scale", 2);
+    if (scale != 1 && scale != 2)
+      throw ToolError("scale must be 1 or 2");
     // Only the PNG can be saved, so asking to save a text-mode reading is a
     // mistake worth naming: silently ignoring it leaves the agent believing a
     // file it will later fail to find was written.
@@ -182,7 +197,7 @@ nlohmann::json call_tool(const std::string &name, const nlohmann::json &args) {
       content.push_back({{"type", "text"}, {"text", text}});
     }
     if (format == "image" || format == "both") {
-      const std::string png = screen_png(hgr_mode);
+      const std::string png = screen_png(hgr_mode, (unsigned)scale);
       auto save = args.find("save_to");
       if (save != args.end()) {
         if (!save->is_string())

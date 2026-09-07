@@ -668,6 +668,60 @@ if ! grep '"id":8' mcp-tmp/hgr-render.txt | grep -q '"isError":true'; then
   exit 1
 fi
 
+# `scale`: output pixels per colour cell for the two colour-clock HGR modes.
+# Request 9 asks for color140 at scale:1, request 10 for mono140 at scale:1,
+# request 11 for color140 at scale:2 (the default, spelled out explicitly),
+# and requests 12/13 for the out-of-range values 3 and 0.
+
+# Dimensions: scale:1 is 140x192; the default (request 6, no `scale` at all)
+# and an explicit scale:2 (request 11) are both 280x192.
+python3 mcp/check_hgr_png.py dims mcp-tmp/hgr-bars-140.png 140 192
+if [ $? -ne 0 ]; then
+  echo "FAIL: render=color140 scale=1 was not 140x192" >&2
+  exit 1
+fi
+python3 mcp/check_hgr_png.py dims mcp-tmp/hgr-bars.png 280 192
+if [ $? -ne 0 ]; then
+  echo "FAIL: render=color140 with no scale (default) was not 280x192" >&2
+  exit 1
+fi
+python3 mcp/check_hgr_png.py dims mcp-tmp/hgr-bars-scale2.png 280 192
+if [ $? -ne 0 ]; then
+  echo "FAIL: render=color140 scale=2 was not 280x192" >&2
+  exit 1
+fi
+python3 mcp/check_hgr_png.py dims mcp-tmp/hgr-mono140-140.png 140 192
+if [ $? -ne 0 ]; then
+  echo "FAIL: render=mono140 scale=1 was not 140x192" >&2
+  exit 1
+fi
+
+# The check that matters: scale:1 is exactly the un-doubled form of scale:2,
+# not a resample, a crop, or a different decode -- column k of the 140-wide
+# image must equal columns 2k and 2k+1 of the 280-wide image, for every row.
+python3 mcp/check_hgr_png.py downsample mcp-tmp/hgr-bars-140.png mcp-tmp/hgr-bars.png
+if [ $? -ne 0 ]; then
+  echo "FAIL: render=color140 scale=1 lost information relative to scale=2" >&2
+  exit 1
+fi
+
+# mono140 at scale:1 is still pure black/white -- scale changes width, not
+# the mono decode.
+python3 mcp/check_hgr_png.py mono mcp-tmp/hgr-mono140-140.png
+if [ $? -ne 0 ]; then
+  echo "FAIL: render=mono140 scale=1 produced a pixel that is not pure black or white" >&2
+  exit 1
+fi
+
+if ! grep '"id":12' mcp-tmp/hgr-render.txt | grep -q '"isError":true'; then
+  echo "FAIL: scale=3 was not rejected" >&2
+  exit 1
+fi
+if ! grep '"id":13' mcp-tmp/hgr-render.txt | grep -q '"isError":true'; then
+  echo "FAIL: scale=0 was not rejected" >&2
+  exit 1
+fi
+
 # ...but that check, and every other check in this repo, runs the host in
 # *fixed-step* mode -- because reproducibility is what they all exist for. The
 # wall-clock mode a person plays on had no coverage at all, and was totally

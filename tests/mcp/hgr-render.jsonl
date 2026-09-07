@@ -6,3 +6,8 @@
 {"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"screen","arguments":{"format":"image","render":"color140","save_to":"mcp-tmp/hgr-bars.png"}}}
 {"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"screen","arguments":{"format":"image","render":"mono140","save_to":"mcp-tmp/hgr-mono140.png"}}}
 {"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"screen","arguments":{"format":"image","render":"bogus"}}}
+{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"screen","arguments":{"format":"image","render":"color140","scale":1,"save_to":"mcp-tmp/hgr-bars-140.png"}}}
+{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"screen","arguments":{"format":"image","render":"mono140","scale":1,"save_to":"mcp-tmp/hgr-mono140-140.png"}}}
+{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"screen","arguments":{"format":"image","render":"color140","scale":2,"save_to":"mcp-tmp/hgr-bars-scale2.png"}}}
+{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"screen","arguments":{"format":"image","render":"color140","scale":3}}}
+{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"screen","arguments":{"format":"image","render":"color140","scale":0}}}

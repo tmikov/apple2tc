@@ -13,6 +13,14 @@ Usage:
     check_hgr_png.py pairs <path.png>         -- columns 2k and 2k+1 are identical
     check_hgr_png.py row <path.png> <y> <white|black>
                                                -- row y is solid white/black
+    check_hgr_png.py dims <path.png> <width> <height>
+                                               -- IHDR reports exactly this size
+    check_hgr_png.py downsample <path140.png> <path280.png>
+                                               -- column k of the 140-wide image equals
+                                                  columns 2k and 2k+1 of the 280-wide one,
+                                                  for every row -- scale:1 is losslessly
+                                                  the un-doubled form of scale:2, not a
+                                                  resample, a crop, or a different decode.
 """
 import struct
 import sys
@@ -127,6 +135,33 @@ def check_pairs(path):
     sys.exit(0 if bad == 0 else 1)
 
 
+def check_dims(path, want_w, want_h):
+    w, h, _rows = read_png(path)
+    print("dims: got %dx%d want %dx%d" % (w, h, want_w, want_h))
+    sys.exit(0 if (w, h) == (want_w, want_h) else 1)
+
+
+def check_downsample(path140, path280):
+    w140, h140, rows140 = read_png(path140)
+    w280, h280, rows280 = read_png(path280)
+    if w280 != w140 * 2 or h280 != h140:
+        print(
+            "shape mismatch: %dx%d (scale 1) vs %dx%d (scale 2)"
+            % (w140, h140, w280, h280)
+        )
+        sys.exit(1)
+    bad = 0
+    for y in range(h140):
+        for k in range(w140):
+            a = rows140[y][k]
+            b0 = rows280[y][2 * k]
+            b1 = rows280[y][2 * k + 1]
+            if not (a == b0 == b1):
+                bad += 1
+    print("cells where scale:1 disagrees with scale:2's pair: %d" % bad)
+    sys.exit(0 if bad == 0 else 1)
+
+
 def check_row(path, y, expect):
     _w, _h, rows = read_png(path)
     row = rows[y]
@@ -154,6 +189,18 @@ def main(argv):
             print("usage: check_hgr_png.py row <path.png> <y> <white|black>", file=sys.stderr)
             return 2
         check_row(argv[2], int(argv[3]), argv[4])
+        return 0
+    if mode == "dims":
+        if len(argv) != 5:
+            print("usage: check_hgr_png.py dims <path.png> <width> <height>", file=sys.stderr)
+            return 2
+        check_dims(argv[2], int(argv[3]), int(argv[4]))
+        return 0
+    if mode == "downsample":
+        if len(argv) != 4:
+            print("usage: check_hgr_png.py downsample <path140.png> <path280.png>", file=sys.stderr)
+            return 2
+        check_downsample(argv[2], argv[3])
         return 0
     if len(argv) != 3:
         print("usage: check_hgr_png.py {bars|mono|pairs} <path.png>", file=sys.stderr)

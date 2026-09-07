@@ -229,8 +229,13 @@ void apple2_render_hgr_screen_mode(
       // true colour resolution is 140, not 280. Expand the 40 bytes into
       // 280 dots first, remembering which byte -- and hence which palette
       // bit -- produced each one; the two modes then differ only in how
-      // they turn a dot pair into a cell colour. Each cell is emitted as
-      // two pixels so the image stays 280x192.
+      // they turn a dot pair into a cell colour. Each cell is emitted as a
+      // single pixel, so only the row's first 140 columns are written here
+      // -- columns 140-279 are left whatever they were before. A caller
+      // that wants the traditional 280-wide image doubles each column back
+      // out itself (lib/a2mcp/mcp_screen.cpp's screen_png() does this for
+      // `scale: 2`); that keeps the doubling, which carries no information
+      // the 140-wide form does not, out of this renderer.
       bool dots[280];
       uint8_t hiBit[280];
       {
@@ -280,8 +285,7 @@ void apple2_render_hgr_screen_mode(
           unsigned seti = dots[i0] ? i0 : i1;
           c = s_hgr_artifact_colors[hiBit[seti] | (seti & 1)];
         }
-        d[i0] = c;
-        d[i1] = c;
+        d[k] = c;
       }
     }
   }
