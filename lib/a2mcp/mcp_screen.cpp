@@ -148,6 +148,7 @@ screen_png(a2_hgr_mode_t hgr_mode, unsigned scale, unsigned blend, unsigned *out
   // on when it was taken.
   const uint64_t kBlinkMs = 0;
   unsigned frames_used = 1;
+  const bool mixed = a2_io_is_vidmode_mixed(io);
 
   static a2_screen screen;
   const a2_vidmode_t vidmode = a2_io_get_vidmode(io);
@@ -156,8 +157,7 @@ screen_png(a2_hgr_mode_t hgr_mode, unsigned scale, unsigned blend, unsigned *out
     apple2_render_text_screen(ram + a2_io_get_text_page_offset(io), &screen, kBlinkMs);
     break;
   case A2_VIDMODE_GR:
-    apple2_render_gr_screen(
-        ram + a2_io_get_text_page_offset(io), &screen, kBlinkMs, a2_io_is_vidmode_mixed(io));
+    apple2_render_gr_screen(ram + a2_io_get_text_page_offset(io), &screen, kBlinkMs, mixed);
     break;
   case A2_VIDMODE_HGR: {
     // `blend`'s composited page, kept alive past this switch case (the
@@ -170,12 +170,7 @@ screen_png(a2_hgr_mode_t hgr_mode, unsigned scale, unsigned blend, unsigned *out
       hgr_page = blended;
     }
     apple2_render_hgr_screen_mode(
-        hgr_page,
-        ram + a2_io_get_text_page_offset(io),
-        &screen,
-        kBlinkMs,
-        a2_io_is_vidmode_mixed(io),
-        hgr_mode);
+        hgr_page, ram + a2_io_get_text_page_offset(io), &screen, kBlinkMs, mixed, hgr_mode);
     break;
   }
   }
@@ -191,11 +186,31 @@ screen_png(a2_hgr_mode_t hgr_mode, unsigned scale, unsigned blend, unsigned *out
   const bool cellMode =
       vidmode == A2_VIDMODE_HGR && (hgr_mode == A2_HGR_COLOR140 || hgr_mode == A2_HGR_MONO140);
   const unsigned width = (cellMode && scale == 1) ? 140 : A2_SCREEN_W;
-  // How many destination columns share one source column: 2 when widening a
-  // cell-mode render back to 280 for `scale: 2`, 1 (a straight copy)
-  // otherwise -- including `scale: 1`, where the renderer already produced
-  // exactly `width` columns natively.
-  const unsigned widen = (cellMode && scale == 2) ? 2 : 1;
+
+  if (cellMode && scale == 2) {
+    // Widen the cell-resolution graphics rows back to 280 in place. In mixed
+    // mode this deliberately stops short of the text window (rows 160-191):
+    // apple2_widen_hgr_cells() leaves it alone because draw_glyph_cb() above
+    // already drew it at full 280-column resolution, so after this call every
+    // row of `screen` -- graphics and, in mixed mode, text alike -- is
+    // natively 280 wide and the packing loop below needs no further
+    // widening.
+    apple2_widen_hgr_cells(&screen, mixed);
+  }
+
+  // In mixed mode the last four rows (160-191) are always the text window,
+  // drawn by draw_glyph_cb() at full 280-column resolution regardless of
+  // `hgr_mode` -- unlike the graphics rows above them, it is never natively
+  // 140 wide. That only matters for `scale: 1`: those rows still have to
+  // shrink to `width` (140), but by sampling every second source pixel
+  // instead of taking the first 140 columns, or the text would be cropped to
+  // its left half. (`scale: 2`'s case is handled above -- the text rows are
+  // already 280 wide, same as the graphics rows apple2_widen_hgr_cells() just
+  // produced.) The unavoidable cost: mixed-mode text is not legible at
+  // `scale: 1` -- reading it back with `screen` `format: text` or `format:
+  // gr`, or asking for `scale: 2`, is the way to see it, not `scale: 1`'s
+  // image.
+  const unsigned text_row_start = mixed ? 160 : A2_SCREEN_H;
 
   // Three channels, not four. a2_screen is "RGB encoding of the Apple2 screen"
   // (a2io.h) and its fourth byte is padding: every renderer in a2io.c builds
@@ -209,8 +224,9 @@ screen_png(a2_hgr_mode_t hgr_mode, unsigned scale, unsigned blend, unsigned *out
   for (unsigned y = 0; y != A2_SCREEN_H; ++y) {
     const a2_rgba8 *src = screen.data + (size_t)y * A2_SCREEN_W_POT;
     uint8_t *dst = rgb.data() + (size_t)y * width * 3;
+    const unsigned stride = (cellMode && scale == 1 && y >= text_row_start) ? 2 : 1;
     for (unsigned x = 0; x != width; ++x) {
-      const a2_rgba8 &px = src[x / widen];
+      const a2_rgba8 &px = src[x * stride];
       *dst++ = px.r;
       *dst++ = px.g;
       *dst++ = px.b;

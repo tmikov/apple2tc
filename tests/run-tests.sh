@@ -928,6 +928,32 @@ if ! grep '"id":13' mcp-tmp/hgr-render.txt | grep -q '"isError":true'; then
   exit 1
 fi
 
+# Mixed-mode HGR: the text window (screen lines 20-23) is drawn by the same
+# draw_glyph_cb() no matter which a2_hgr_mode_t rendered the rest of the
+# screen, so rows 160-191 of a "color" render and of a "color140" render at
+# scale:2 must be pixel-identical -- the exact-oracle regression test for the
+# widening bug that used to stretch that already-full-width text to double
+# width via `x / widen` applied to every row instead of just the graphics
+# ones. hgr-mixed140.s also puts an alternating-dot comb in the graphics area
+# (rows 0-159), where "color" (per-dot artifact) and "color140" (colour-clock
+# average) are expected to disagree -- checked below too, so a screen that
+# happened to be blank could not pass the first assertion by accident.
+$a6502 mcp/hgr-mixed140.s mcp-tmp/hgr-mixed140.b33
+mcp_transcript hgr-mixed140
+
+python3 mcp/check_hgr_png.py rows-equal \
+  mcp-tmp/hgr-mixed140-color.png mcp-tmp/hgr-mixed140-color140.png 160 191
+if [ $? -ne 0 ]; then
+  echo "FAIL: mixed-mode text window differs between render=color and render=color140 scale=2" >&2
+  exit 1
+fi
+python3 mcp/check_hgr_png.py rows-differ \
+  mcp-tmp/hgr-mixed140-color.png mcp-tmp/hgr-mixed140-color140.png 0 159
+if [ $? -ne 0 ]; then
+  echo "FAIL: render=color and render=color140 did not disagree anywhere in the graphics area" >&2
+  exit 1
+fi
+
 # `blend`: composite the last N frames' HGR page with a bitwise OR. blend.s
 # draws a constant solid line at row 8 and flickers a second one at row 32 on
 # and off roughly every host frame -- a single-buffered game in miniature.

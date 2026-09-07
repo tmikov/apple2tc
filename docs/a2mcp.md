@@ -255,6 +255,17 @@ to describe and TEXT/GR have no cells either; it is accepted and ignored
 there, the same precedent `render` already sets. A value that is neither `1`
 nor `2` is a tool error, the same as an unrecognised `render`.
 
+In mixed mode the bottom four screen lines are a text window that the
+renderer always draws at full 280-column resolution, regardless of `scale`
+or which HGR `render` mode is in play — it is not built out of colour-clock
+cells the way the graphics area above it is. At `scale: 2` that costs
+nothing: the graphics rows get doubled up to 280 to match, so the text comes
+through exactly as `"color"` would show it. At `scale: 1` the text is not
+legible — the whole image is 140 wide, so those already-280-wide rows are
+downsampled (every second source pixel) to fit, which reads as noise rather
+than characters. Use `scale: 2` whenever the text window matters, or read it
+back directly with `format: "text"` or `format: "gr"` instead of an image.
+
 `blend` composites the last N captured frames' HGR page with a bitwise OR
 before rendering — an integer `1` to `8`, default `1` meaning no compositing,
 exactly today's behaviour. A single-buffered game draws by erasing and

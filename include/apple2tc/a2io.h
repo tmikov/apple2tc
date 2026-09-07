@@ -97,6 +97,25 @@ void apple2_render_hgr_screen_mode(
     bool mixed,
     a2_hgr_mode_t mode);
 
+/// Expand a cell-resolution render (A2_HGR_COLOR140 / A2_HGR_MONO140), which
+/// filled only the first 140 columns of each row, back out to the
+/// traditional 280-wide image by doubling each column. Works in place, right
+/// to left within a row, so a column is not overwritten before it is read.
+///
+/// \param mixed - must match the `mixed` passed to the
+///     apple2_render_hgr_screen_mode() call that produced \p screen. In
+///     mixed mode that renderer only fills the graphics area at cell
+///     resolution up to its own `end_line` (160, not 192) -- rows 160-191
+///     are the 4-line text window, already drawn at full 280-column
+///     resolution by draw_glyph_cb(). This function must stop at that same
+///     boundary: doubling the text rows too would stretch them to twice
+///     their width and show only their left half. Do not "simplify" this
+///     into a whole-screen loop.
+///
+/// This lives in the library, not a front end, because more than one front
+/// end (currently lib/a2mcp, soon a2emu) needs the exact same operation.
+void apple2_widen_hgr_cells(a2_screen *screen, bool mixed);
+
 typedef struct {
   /// Queue of float sound samples. Filled by the main thread, read by the
   /// sound callback.

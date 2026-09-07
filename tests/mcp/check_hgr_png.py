@@ -21,6 +21,12 @@ Usage:
                                                   for every row -- scale:1 is losslessly
                                                   the un-doubled form of scale:2, not a
                                                   resample, a crop, or a different decode.
+    check_hgr_png.py rows-equal <pathA.png> <pathB.png> <y0> <y1>
+                                               -- rows y0..y1 (inclusive) are pixel-identical
+                                                  between the two same-size images.
+    check_hgr_png.py rows-differ <pathA.png> <pathB.png> <y0> <y1>
+                                               -- rows y0..y1 (inclusive) have at least one
+                                                  differing pixel between the two images.
 """
 import struct
 import sys
@@ -162,6 +168,31 @@ def check_downsample(path140, path280):
     sys.exit(0 if bad == 0 else 1)
 
 
+def check_rows(mode, path_a, path_b, y0, y1):
+    """Compare two same-size PNGs over screen rows y0..y1 inclusive.
+
+    "rows-equal" wants every pixel in that band identical between the two
+    images -- the mixed-mode text window, which the renderer draws the same
+    way (draw_glyph_cb) no matter which a2_hgr_mode_t produced the rest of
+    the screen. "rows-differ" wants at least one mismatch -- used on the
+    graphics rows above the text window, to confirm the two renders actually
+    decode the bitmap differently rather than the band under test happening
+    to be blank in both.
+    """
+    wa, ha, rows_a = read_png(path_a)
+    wb, hb, rows_b = read_png(path_b)
+    if (wa, ha) != (wb, hb):
+        print("shape mismatch: %dx%d vs %dx%d" % (wa, ha, wb, hb))
+        sys.exit(1)
+    bad = sum(1 for y in range(y0, y1 + 1) for x in range(wa) if rows_a[y][x] != rows_b[y][x])
+    print(
+        "rows %d-%d: %d differing pixels out of %d (want %s)"
+        % (y0, y1, bad, wa * (y1 - y0 + 1), "0" if mode == "rows-equal" else ">0")
+    )
+    ok = bad == 0 if mode == "rows-equal" else bad > 0
+    sys.exit(0 if ok else 1)
+
+
 def check_row(path, y, expect):
     _w, _h, rows = read_png(path)
     row = rows[y]
@@ -201,6 +232,15 @@ def main(argv):
             print("usage: check_hgr_png.py downsample <path140.png> <path280.png>", file=sys.stderr)
             return 2
         check_downsample(argv[2], argv[3])
+        return 0
+    if mode in ("rows-equal", "rows-differ"):
+        if len(argv) != 6:
+            print(
+                "usage: check_hgr_png.py %s <pathA> <pathB> <y0> <y1>" % mode,
+                file=sys.stderr,
+            )
+            return 2
+        check_rows(mode, argv[2], argv[3], int(argv[4]), int(argv[5]))
         return 0
     if len(argv) != 3:
         print("usage: check_hgr_png.py {bars|mono|pairs} <path.png>", file=sys.stderr)

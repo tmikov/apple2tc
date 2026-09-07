@@ -301,6 +301,26 @@ void apple2_render_hgr_screen_mode(
   }
 }
 
+void apple2_widen_hgr_cells(a2_screen *screen, bool mixed) {
+  // Only the graphics rows: apple2_render_hgr_screen_mode() above fills the
+  // cell-resolution modes up to its own `end_line` (mixed ? 160 : 192) and
+  // leaves the rest of the row buffer alone. In mixed mode, rows 160-191 are
+  // the 4-line text window, drawn separately (also above) by draw_glyph_cb()
+  // at full 280-column resolution -- doubling those rows here too would
+  // stretch already-full-width text to twice its width and show only its
+  // left half. Stopping at `end_line` is therefore load-bearing, not an
+  // optimisation: do not "simplify" this into a whole-screen loop.
+  unsigned end_line = mixed ? 160 : A2_SCREEN_H;
+  for (unsigned y = 0; y != end_line; ++y) {
+    a2_rgba8 *row = screen->data + y * A2_SCREEN_W_POT;
+    // Right to left, so writing columns 2k/2k+1 never clobbers a smaller
+    // column before it has been read as a source.
+    for (unsigned k = 140; k-- != 0;) {
+      row[2 * k] = row[2 * k + 1] = row[k];
+    }
+  }
+}
+
 void a2_sound_init(a2_sound_t *sound) {
   sound_queue_init(&sound->sq, sizeof(float) * 8192, sizeof(float));
   atomic_store_explicit(&sound->cb_running, false, memory_order_relaxed);
