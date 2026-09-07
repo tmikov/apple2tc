@@ -56,16 +56,14 @@ what was stopping the keyboard.
 ```json
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"n","version":"1"}}}
 {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"boot","arguments":{"disk1":"dsk/Neptune.dsk"}}}
-{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"run","arguments":{"frames":600}}}
-{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"keys","arguments":{"text":"PR#6\n","deliver":"type"}}}
-{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"run","arguments":{"frames":1500}}}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"run","arguments":{"frames":1400}}}
 ```
 
 Feed it on stdin: `a2mcp --root=. < prefix.jsonl`. Add `--hash-frames=out.txt`
-to compare two runs. Note `deliver:"type"` on the `PR#6` line: that is text for
-BASIC, not a game keystroke.
+to compare two runs. The disk is already in its title/attract sequence by
+frame 1400; no BASIC command is needed.
 
-At the end of Prefix A: frame 2100, `hgr` page 1, full screen.
+At the end of Prefix A: frame 1400, `hgr` page 1, full screen.
 
 ## Determinism: the control
 
@@ -75,17 +73,18 @@ byte-identical `--hash-frames` output across every frame.
 ## Booting
 
 **The disk autoboots. `PR#6` is not needed** — an earlier version of this file
-said the opposite, and every prefix here still types it because the recordings
-that exist were made that way. It is harmless: the game ignores the keyboard, so
-those five keystrokes change nothing. Measured, from `boot(disk1:...)` with no
-keys at all: still `text` at frame 300, `hgr` page 1 by frame 1200.
+said the opposite. It is harmless when present: the game ignores the keyboard
+during boot, so those five keystrokes change nothing, but neither Prefix A above
+nor `decoded/neptune/testdata/play2.keys` types it any more. Measured, from
+`boot(disk1:...)` with no keys at all: still `text` at frame 300, `hgr` page 1
+by frame 1200.
 
 The mistake was impatience. The original test ran 600 frames, saw a text screen —
 carrying the *previous* session's content, since `boot` does not clear RAM — and
 concluded there was a BASIC prompt waiting. A Disk II boot simply takes longer
-than that. Verified again by replaying a recorded session against a control run
-with no keys: the two are identical until frame 3503, which is where the space
-keypress lands, so the `PR#6` in the recording provably does nothing.
+than that. Verified again by replaying `decoded/neptune/testdata/play2.keys`
+against a control run with no keys: the two are identical through frame 1399
+and first diverge at frame 1400, exactly where the space keypress lands.
 
 ## Controls
 
@@ -164,8 +163,9 @@ complementary and `blend` is the one that matters more here.
 
 ## Starting a game
 
-The attract demo runs first. **Wait about 23 seconds, then press space.** From
-Prefix A that is roughly `run(frames: 1400)` after `PR#6`, then `keys(" ")`.
+The disk autoboots into the title/attract sequence. **Run about 1400 frames,
+then press space.** That is roughly 23 seconds from `boot(disk1:...)`; the
+title screen is visible at this point. Then run a short step and check the HUD.
 
 `SH` tells you whether it worked: a live game shows `SH:3`, the demo shows
 `SH:00` and has no player ship. Pressing space too early does nothing. Reported
@@ -189,11 +189,11 @@ screen(format: "image", render: "color140", scale: 2, blend: 3)
 - `blend: 3` is not optional here, for the reason above.
 
 **Clean-landing rates are phase-dependent, so calibrate where you are playing.**
-With an 18-frame ceiling: 0 of 30 looks landed clean in the first ~2400 frames
-after `PR#6` (title and attract animation, continuously redrawing), 18 of 30 in a
-later stretch of play, and 2 of 14 in a different stretch again. The same call,
-the same game. Re-check when the game changes mode rather than trusting a number
-measured elsewhere.
+With an 18-frame ceiling: 0 of 30 looks landed clean in the title-and-attract
+phase — the ~1400 frames from `boot(disk1:...)` up to the space keypress that
+starts a game, continuously redrawing — 18 of 30 in a later stretch of play, and
+2 of 14 in a different stretch again. The same call, the same game. Re-check
+when the game changes mode rather than trusting a number measured elsewhere.
 
 **Scoring happens.** `SC` reached `00020` during a session of firing with `A`, so
 `A` does damage something. `SH` has been observed going all the way to `00`.
@@ -245,8 +245,8 @@ scored `340` and was still alive past 60 s with one shield left.
 
 ## A played game, end to end
 
-First game actually played rather than watched, recorded so the next attempt
-starts further along:
+The first session that was actually controlled rather than watched was
+recorded so it could be replayed:
 
 - Started with space after ~23 s; `SH:3`.
 - Held station high on the left, above the terrain, firing periodically.
@@ -256,6 +256,16 @@ starts further along:
   minute.
 - Death returns to the Gebelli title screen, which displays `SC` and `HI` at the
   bottom — a convenient place to read a final score.
+
+A later controlled session verified the full input loop: space at frame 1400,
+`K` moved the ship right, repeated `A` bursts produced explosions, and short
+`M`/`I` steps brought the ship down to enemy altitude. That run reached
+`SC:00180` while still showing a live shield count. Its cycle-stamped replay is
+`decoded/neptune/testdata/play2.keys`; reproduce it with:
+
+```bash
+tools/a2run/a2run --headless --frames=3200 --disk1=dsk/Neptune.dsk --key-file=decoded/neptune/testdata/play2.keys --hash-frames=out.txt
+```
 
 **The title screen carries the scoring table**, five enemy types worth **20, 50,
 80, 10 and 500**. The 500 is the long magenta creature. That is the game telling
