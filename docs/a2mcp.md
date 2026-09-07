@@ -18,7 +18,13 @@ transcript for each against a committed baseline (`tests/mcp/*.jsonl` /
 `a2run`'s bit for bit, that a `keys`-recorded session replays under `a2run
 --key-file=`, and that a symlink cannot be used to read or write outside
 `--root` -- one test for each direction, because the read and write halves of
-the jail resolve differently and only the read half used to be covered.
+the jail resolve differently and only the read half used to be covered. A
+third block, `tests/mcp/malformed.jsonl` / `.expected`, sends a session three
+wrong-typed arguments in a row (a truncating float `scale`, a wrong-typed
+`render`, a wrong-typed `scale`) and checks that an ordinary `status` call
+right after still gets a correct reply in the same transcript -- the crash
+this guards against would otherwise just truncate the reply file, which a
+baseline diff alone would not distinguish from "the tool answered wrong."
 
 ## Launching it
 
@@ -302,6 +308,25 @@ paths, which are not so careful: `init_emulated` reads through
 oversized ROM. So `boot` jails every path, confirms it is a regular file, and
 checks its size and header against the kind it was passed as, before the
 engine sees it; and every numeric argument is bounded before it is used.
+
+A second, cheaper failure never reaches a per-argument check at all: a
+well-formed request whose argument has the wrong JSON type — `render: 42`, a
+number where the schema says string. Every typed accessor in
+`mcp_tools.cpp`/`mcp_machine.cpp` (`args.value(...)`, `it->get<T>()`) throws
+`nlohmann::json::type_error` on that, and no individual tool catches it.
+`serve()`'s `tools/call` dispatch does, in one place, alongside `ToolError`:
+`catch (const nlohmann::json::exception &e)` turns it into the same
+`isError` result, naming the tool and saying its arguments were malformed.
+The same dispatch also pulls the top-level `method`/`params.name` fields out
+without `.value()`, since a bare non-object message (`42` instead of `{...}`)
+makes `.value()` throw regardless of the key it's asked for — a request that
+malformed gets a JSON-RPC error, not a crash, for the same reason. This is
+also why a numeric argument is checked for the right JSON subtype *before*
+extraction (`scale`, `frames_between`) rather than only range-checked after:
+nlohmann's own number conversion does not throw when the JSON value is the
+wrong number subtype — a `number_float` narrowed to `int` is a silent
+`static_cast`, not an error — so `scale: 1.5` truncated to `1` would sail
+past both the exception path and the range check if extracted first.
 
 **The library beneath the tool layer can still exit, in these cases**, all of
 them known and none of them reachable through a well-formed call:
