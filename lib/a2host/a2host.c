@@ -673,12 +673,11 @@ static void load_key_file(const char *path) {
 /// startup. Lets a front end (re)load a recording after the process has
 /// already started -- a2mcp calls this right after a2host_reboot() so that a
 /// second `boot` replays the recording's keys at the same cycle stamps as the
-/// first: the reboot already restarted the cycle counter at zero, and
-/// load_key_file() now resets next_key_press_ to zero too. That is the only
-/// thing this reproduces -- a reboot is a warm start, not a power-on, so
-/// nothing about the *displayed* machine is promised to match (RAM survives
-/// a reboot; see a2host_reboot()'s own comment and dz issue 01a07cd8).
-/// cmdline_key_source_ is set the same way the --key-file= option sets it,
+/// first: the reboot already restarted the cycle counter at zero (and, since
+/// a2host_reboot() now clears RAM too, reproduces a fresh process start in
+/// full, not just in its counters), and load_key_file() resets
+/// next_key_press_ to zero to match. cmdline_key_source_ is set the same way
+/// the --key-file= option sets it,
 /// since as far as a2host_buffer_keys() is concerned this is that same
 /// command-line source, just re-armed.
 void a2host_load_key_file(const char *path) {
@@ -804,13 +803,39 @@ void a2host_init_emulation(void) {
   }
 }
 
-/// Tear the emulated machine down and bring it back up, as if the process had
-/// just started. Frame and cycle counters restart at zero. Probe counters and
-/// any open report file deliberately survive, because a probe script's state is
-/// the run's, not the machine's.
+/// Tear the emulated machine down and bring it back up, byte-identical to a
+/// freshly started process: frame and cycle counters restart at zero, and
+/// every byte of RAM is reset to its power-on fill value (see the loop
+/// below). Probe counters and any open report file deliberately survive,
+/// because a probe script's state is the run's, not the machine's.
 void a2host_reboot(void) {
   shutdown_emulated();
   a2_io_done(&io_);
+  // Real hardware powers on with RAM in an indeterminate state, but this
+  // repo's whole premise is that frame N is byte-identical across processes
+  // -- a random fill would break that, so a deterministic fill is the only
+  // choice that keeps the promise this function's own doc comment makes.
+  // 0xFF, not 0: Emu6502::Emu6502() already fills a fresh process's RAM with
+  // 0xFF as its own stand-in for power-on garbage (lib/cpuemu/emu6502.cpp),
+  // so 0xFF is the value a freshly started process actually has -- matching
+  // it is what "byte-identical to a freshly started process" requires.
+  // Filling with 0 was tried first and measured wrong: the two still
+  // diverged from frame 0, before either had run a single cycle, because a
+  // fresh process's RAM was never 0 to begin with (dz issue 01a07cd8).
+  // Looped through ram_poke(), the byte-at-a-time a2engine.h contract every
+  // engine already implements, rather than reaching into engine6502's own
+  // RAM buffer: this file is shared by every engine, even though today
+  // engine6502 is the only one that ever calls this function (a2emu, a2run
+  // and the decompiled builds never reboot). Placed before
+  // a2host_init_emulation() below on purpose: engine_parse_arg() only ever
+  // records --rom=/--disk1=/--disk2=/a binary path as strings, and every
+  // actual write into RAM -- loadROM(), mountDisk()'s boot-ROM stub, a
+  // --preload binary, or (a2mcp's own case) a later onWarmRestart() callback
+  // during a `run` -- happens no earlier than inside or after
+  // a2host_init_emulation(), so nothing loaded by this same `boot` call can
+  // be wiped out by the fill.
+  for (unsigned addr = 0; addr <= 0xFFFF; ++addr)
+    ram_poke((uint16_t)addr, 0xFF);
   frame_no_ = 0;
   firstFrame_ = true;
   engine_stopped_ = false;

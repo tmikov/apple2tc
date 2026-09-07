@@ -339,6 +339,15 @@ void shutdown_emulated(void) {
   // cycle counter, which is the other half of a2host_reboot()'s promise that
   // frame and cycle counters restart at zero.
   s_emu.unloadROM();
+  // The other half of that same promise: s_cycleDebt is this adapter's own
+  // leftover state, not Emu6502's, and unloadROM() has no reason to know
+  // about it. A fresh process starts at 0; left non-zero across a reboot, the
+  // very first run_emulated() of the new session runs a few cycles more or
+  // fewer than a fresh process would -- easily enough to diverge which
+  // instruction is mid-flight at a frame boundary, and so which byte lands on
+  // screen. Found by a2host_reboot() failing to reproduce a fresh boot
+  // byte-for-byte even after it started clearing RAM (dz issue 01a07cd8).
+  s_cycleDebt = 0;
 }
 
 a2_stop_reason_t engine_stop_reason(void) {
