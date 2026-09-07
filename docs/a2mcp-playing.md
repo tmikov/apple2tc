@@ -121,6 +121,43 @@ press a key that should do something visible, step, and compare — with `screen
 in `text` or GR mode if the game is in one of those, since a 40x24 grid diffs by
 eye far more reliably than a hi-res picture.
 
+## Reading a hi-res picture: pick the render mode
+
+`screen`'s default `render:"color"` is the per-dot artifact approximation the
+GUI has always drawn, and it is the wrong choice for looking *at* the picture:
+an isolated white feature can render violet in one column and green in the
+next, purely from which column it happens to fall on. Two modes fix that for
+different purposes:
+
+- `render:"color140"` decodes at the Apple II's true colour-clock resolution,
+  so a feature comes out in one consistent colour instead of a dotted
+  necklace. Use it when you need to read what a hi-res scene actually shows.
+- `render:"mono140"` collapses those same colour-clock cells to
+  white-if-either-dot-is-set, black-if-neither -- an ink/no-ink occupancy
+  mask with no colour to reason about. Use it for finding shapes (a sprite,
+  a wall, a bullet), the same job you might expect a plain 1-bit rendering
+  to do.
+
+Reach for `mono140` when the question is "where is it", and `color140` when
+the question is "what does it look like".
+
+There is no `render:"mono"` here, and that is deliberate rather than an
+omission. A colour fill on this hardware *is physically* an alternating dot
+pattern -- HCOLOR green, for instance, is every other dot lit, not a solid
+run of dots that happens to look green. A faithful bit-for-bit monochrome
+rendering of that is therefore not a solid region at all; it is a
+one-pixel-pitch comb. Measured across a solid-green terrain row:
+
+    per-dot:      . # . # . # . # . # . # . # . # . # . #
+    colour-clock: # # # # # # # # # # # # # # # # # # # #
+
+Run a connected-components pass over the left row and a single landmass
+turns into 140 one-pixel slivers. `mono140` is built at colour-clock
+resolution specifically so a colour fill lands as the solid region it
+visually is -- that is what makes it the tool for finding shapes, and why a
+truthful per-dot monochrome view is the wrong one for that job even though
+it sounds like it should be the simplest choice.
+
 ## Spacing keys is how you emulate holding one down
 
 `keys` schedules; `frames_between` sets the gap. There is no key-repeat and no

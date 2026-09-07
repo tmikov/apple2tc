@@ -138,7 +138,7 @@ void png_sink(void *ctx, void *data, int size) {
 
 } // namespace
 
-std::string screen_png(void) {
+std::string screen_png(a2_hgr_mode_t hgr_mode) {
   const a2_iostate_t *io = a2host_io();
   const uint8_t *ram = get_ram();
   // Blink phase is a function of wall-clock time in the renderers, so a fixed
@@ -156,13 +156,13 @@ std::string screen_png(void) {
         ram + a2_io_get_text_page_offset(io), &screen, kBlinkMs, a2_io_is_vidmode_mixed(io));
     break;
   case A2_VIDMODE_HGR:
-    apple2_render_hgr_screen(
+    apple2_render_hgr_screen_mode(
         ram + a2_io_get_hires_page_offset(io),
         ram + a2_io_get_text_page_offset(io),
         &screen,
         kBlinkMs,
         a2_io_is_vidmode_mixed(io),
-        false);
+        hgr_mode);
     break;
   }
 

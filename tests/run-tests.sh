@@ -598,6 +598,76 @@ if ! grep -q '"mimeType":"image/png"' mcp-tmp/inline-image.txt || \
   exit 1
 fi
 
+# `screen`'s `render` parameter -- the colour-clock HGR decoders.
+#
+# Applesoft's HCOLOR values are documented (1=green, 2=violet, 3=white,
+# 5=orange, 6=blue), so a BASIC program that draws one bar per colour is
+# ground truth the emulator itself can generate, rather than a bit pattern
+# hand-verified against prose. mcp/hgr-render.jsonl types that program in,
+# lets it run, then reads it back: "color140" (decode at true colour-clock
+# resolution so each bar comes out in one consistent colour), "mono140" (the
+# same colour-clock cells collapsed to an ink/no-ink occupancy mask), and a
+# bogus render value that must be rejected the same way an unknown `format`
+# is.
+mcp_transcript hgr-render
+
+python3 mcp/check_hgr_png.py bars mcp-tmp/hgr-bars.png
+if [ $? -ne 0 ]; then
+  echo "FAIL: render=color140 did not decode the HCOLOR bars to the documented colours" >&2
+  exit 1
+fi
+
+# The structural check that doubling actually happened -- that COLOR140 is
+# genuinely decoding at 140-pixel resolution and not just relabelling the
+# per-dot COLOR renderer's output: every colour cell must land on two equal
+# adjacent pixels.
+python3 mcp/check_hgr_png.py pairs mcp-tmp/hgr-bars.png
+if [ $? -ne 0 ]; then
+  echo "FAIL: render=color140's output pixels are not paired at 140 resolution" >&2
+  exit 1
+fi
+
+python3 mcp/check_hgr_png.py mono mcp-tmp/hgr-mono140.png
+if [ $? -ne 0 ]; then
+  echo "FAIL: render=mono140 produced a pixel that is not pure black or white" >&2
+  exit 1
+fi
+
+# The discriminator mono140 exists for: HCOLOR=1 (row 10) is drawn as
+# alternating dots -- a naive per-dot rendering of that row would come out
+# roughly half black, a one-pixel-pitch comb, because that IS what a colour
+# fill physically is on this hardware. mono140 must instead read the row as
+# solid ink: zero black pixels across the full 280-pixel width.
+python3 mcp/check_hgr_png.py row mcp-tmp/hgr-mono140.png 10 white
+if [ $? -ne 0 ]; then
+  echo "FAIL: render=mono140 did not read the alternating-dot green bar as solid ink" >&2
+  exit 1
+fi
+
+# Control 1: HCOLOR=3 (row 130) sets both dots of every cell, so it must also
+# read solid in mono140 -- showing the previous assertion's solidity comes
+# from mono140 correctly calling a colour fill "ink", not from mono140
+# blanket-filling every row white regardless of content.
+python3 mcp/check_hgr_png.py row mcp-tmp/hgr-mono140.png 130 white
+if [ $? -ne 0 ]; then
+  echo "FAIL: render=mono140 did not read the white bar as solid ink" >&2
+  exit 1
+fi
+
+# Control 2: row 9, immediately above the green bar, has no HPLOT output at
+# all and must read solid black -- showing mono140 is filling cells that have
+# ink, not blanket-filling the image white.
+python3 mcp/check_hgr_png.py row mcp-tmp/hgr-mono140.png 9 black
+if [ $? -ne 0 ]; then
+  echo "FAIL: render=mono140 painted a row with no HPLOT output" >&2
+  exit 1
+fi
+
+if ! grep '"id":8' mcp-tmp/hgr-render.txt | grep -q '"isError":true'; then
+  echo "FAIL: an unknown screen render value was not rejected" >&2
+  exit 1
+fi
+
 # ...but that check, and every other check in this repo, runs the host in
 # *fixed-step* mode -- because reproducibility is what they all exist for. The
 # wall-clock mode a person plays on had no coverage at all, and was totally

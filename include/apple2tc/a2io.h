@@ -48,10 +48,26 @@ void apple2_render_text_screen(const uint8_t *pageStart, a2_screen *screen, uint
 ///     blink phase. Only needed if mixed == true.
 void apple2_render_gr_screen(const uint8_t *pageStart, a2_screen *screen, uint64_t ms, bool mixed);
 
+/// How a hi-res (HGR) page is turned into pixels. The Apple II's 7.16 MHz dot
+/// clock is exactly twice the 3.58 MHz NTSC colourburst, so two adjacent dots
+/// make one colour clock and the true colour resolution is 140, not 280.
+typedef enum {
+  A2_HGR_COLOR, ///< Per-dot artifact approximation; what the GUI has always drawn.
+  A2_HGR_MONO, ///< 1-bit white on black.
+  A2_HGR_COLOR140, ///< Decoded at colour-clock resolution, doubled back to 280.
+  A2_HGR_MONO140, ///< Ink coverage at colour-clock resolution: a cell is white if
+                  ///< either of its two dots is set, else black. A colour fill is
+                  ///< an alternating dot pattern, so this is the occupancy mask
+                  ///< that renders as a solid region instead of A2_HGR_MONO's comb.
+} a2_hgr_mode_t;
+
 /// Render the hires graphics (GR) page pointed by pageStart into a RGB screen.
 /// \param textPageStart - the start of the text page. Only used if mixed == true.
 /// \param ms - millisecond since hardware reset. This is used to determine the
 ///     blink phase. Only needed if mixed == true.
+/// \param mono - if true, render 1-bit white-on-black instead of colour. A thin
+///     wrapper around apple2_render_hgr_screen_mode(), kept so existing callers
+///     (lib/a2host/a2host_gui.c, lib/a2mcp) do not have to change.
 void apple2_render_hgr_screen(
     const uint8_t *grPageStart,
     const uint8_t *textPageStart,
@@ -59,6 +75,19 @@ void apple2_render_hgr_screen(
     uint64_t ms,
     bool mixed,
     bool mono);
+
+/// Render the hires graphics (HGR) page pointed by pageStart into a RGB
+/// screen, selecting one of the a2_hgr_mode_t render modes.
+/// \param textPageStart - the start of the text page. Only used if mixed == true.
+/// \param ms - millisecond since hardware reset. This is used to determine the
+///     blink phase. Only needed if mixed == true.
+void apple2_render_hgr_screen_mode(
+    const uint8_t *grPageStart,
+    const uint8_t *textPageStart,
+    a2_screen *screen,
+    uint64_t ms,
+    bool mixed,
+    a2_hgr_mode_t mode);
 
 typedef struct {
   /// Queue of float sound samples. Filled by the main thread, read by the
