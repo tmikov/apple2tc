@@ -16,9 +16,12 @@ same code the other two front ends run.
 transcript for each against a committed baseline (`tests/mcp/*.jsonl` /
 `*.expected`) and separately checks that `a2mcp`'s own frame loop tracks
 `a2run`'s bit for bit, that a `keys`-recorded session replays under `a2run
---key-file=`, and that a symlink cannot be used to read or write outside
-`--root` -- one test for each direction, because the read and write halves of
-the jail resolve differently and only the read half used to be covered. A
+--key-file=`, that the reverse holds too -- `a2mcp --key-file=` replaying a
+recording tracks `a2run --key-file=` replaying the same one, over
+`tests/mcp/replay.keys` -- and that a symlink cannot be used to read or write
+outside `--root` -- one test for each direction, because the read and write
+halves of the jail resolve differently and only the read half used to be
+covered. A
 third block, `tests/mcp/malformed.jsonl` / `.expected`, sends a session nine
 wrong-typed or out-of-range arguments in a row (a truncating float `scale`, a
 wrong-typed `render`, a wrong-typed `scale`, a truncating float `blend`, a
@@ -60,8 +63,9 @@ Options (`lib/a2mcp/mcp_main.cpp`):
 | `--probe-out=<path>` | Where the probe's `printf` output goes. Requires `--probe=`. Without it, a probe's `printf` goes to **stderr** — `a2host_probe_output_to_stderr()`, called before `a2host_parse_args`. The library's own default is stdout, which is right for `a2run` (whose stdout is a report) and would put script output into the middle of the JSON-RPC stream here. Fixed at the sink rather than by requiring this option, so a probe opcode that prints can be added later without rediscovering the problem. |
 | `--keys-out=<path>` | Opened before the server starts serving, so the first key any `keys` call schedules lands in the file. Every scheduled key is appended as a `<cycles> <key>` line — the same format `a2run --key-file=` reads — turning the whole session into a replayable recording. |
 | `--hash-frames=<path>` | Per-frame video-state hashes, written exactly as `a2run --hash-frames=` writes them. This is what lets `run` be diffed frame-for-frame against a plain `a2run` session — it is the test `tests/run-tests.sh` runs to prove the two frame loops agree. |
+| `--key-file=<path>` | Replay a cycle-stamped `.keys` recording — the same format `--keys-out=` writes and `a2run --key-file=` reads — so a session can start from a recorded run instead of (or before) an agent takes over live. Unlike `--probe=`/`--hash-frames=`/`--keys-out=`, which name a path on the host directly, this one is resolved under `--root` the way `boot`'s `disk1`/`disk2`/`rom`/`binary` are (`jail_existing_file()`): a path escaping the root is refused at startup. Keys already scheduled through the `keys` tool and a loaded `--key-file=` recording are independent lists and both drain every frame, so an agent can let a recording play out and then keep typing past the point where it ends. **A loaded recording replays once per server process.** `a2host_reboot()` restarts the cycle counter at zero but cannot rewind the recording's own delivery cursor back to its start (and once the recording is exhausted, the engine has already freed it), so a second `boot` cannot reproduce the recording "exactly as it does on a fresh server start" — see `boot` below, which refuses that call outright rather than silently replaying a wrong tail. `status`'s `replay: {delivered, total}` reports progress through it. |
 
-`--help` lists the same five; `--trace`, `--trace-keys`, `--probe-dump` and
+`--help` lists the same six; `--trace`, `--trace-keys`, `--probe-dump` and
 any other `a2host` option that writes to stdout is deliberately not forwarded
 (`mcp_main.cpp`'s comment on the whitelist) — stdout carries JSON-RPC and
 nothing else, so an option that could put other text there is simply not on
@@ -110,7 +114,11 @@ Boots the machine. With no arguments: the built-in Apple ][+ ROM, into BASIC.
 Calling `boot` again on an already-running machine reboots it —
 `a2host_reboot()` tears the engine down (including unloading the ROM,
 `Emu6502::unloadROM()`) and brings it back up with frame and cycle counters
-at zero. Returns the same object `status` does.
+at zero. Returns the same object `status` does. **Exception:** if the server
+was started with `--key-file=`, a second `boot` is refused with a `ToolError`
+instead — see that option's entry above for why a reboot cannot replay the
+recording correctly, and `tests/mcp/replay.jsonl`/`.expected` for the
+refusal pinned in a transcript.
 
 ### `status`
 
@@ -118,7 +126,10 @@ No arguments. Frame counter, cycle counter, video mode (`text`/`gr`/`hgr`,
 plus whether it's mixed and which page is active), keys still waiting in the
 hardware queue (`keys_pending`) versus keys scheduled but not yet drained
 into it (`keys_scheduled`), and whether the engine or a probe's `stop` has
-ended the run.
+ended the run. When the server was started with `--key-file=`, also
+`replay: {delivered, total}` — how many of the recording's keys have reached
+the machine so far; the field is absent entirely (not reported as zeros)
+when no recording is loaded.
 
 ### `run`
 

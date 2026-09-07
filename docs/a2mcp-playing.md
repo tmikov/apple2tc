@@ -197,6 +197,24 @@ earlier session in the same process.
 Take it as a rule: after `boot`, do not trust a screenshot until you have run
 enough frames for the new program to have drawn something.
 
+## Replaying a recording, then taking over
+
+`a2mcp --key-file=<path>` loads a cycle-stamped `.keys` recording (the format
+`--keys-out=` writes) at startup. It replays underneath `run` exactly like any
+other session input, with no tool call needed to arm it, so the way to skip
+known setup — a boot, a menu, a title screen someone already recorded once —
+is to start the server with it loaded and just call `run` until `status`'s
+`replay: {delivered, total}` shows `delivered == total`. From there, `keys`
+schedules new input exactly as it would in a session with no recording at all;
+the two lists are independent and both drain every frame.
+
+The one thing this cannot do is survive a reboot: `boot` on a server started
+with `--key-file=` is refused once the machine is already up, because a second
+boot cannot replay the recording from the top again (`docs/a2mcp.md`'s
+`--key-file=` entry has the reason). If a session needs a reboot partway
+through, plan the recording to end before the point that needs one, or restart
+the server instead of calling `boot` twice.
+
 ## Finding the controls without guessing
 
 Games of this era print their key map on a help screen, so the text is sitting
