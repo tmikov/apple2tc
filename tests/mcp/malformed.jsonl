@@ -4,3 +4,6 @@
 {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"screen","arguments":{"render":42}}}
 {"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"screen","arguments":{"format":"image","scale":"1"}}}
 {"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"status","arguments":{}}}
+{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"run","arguments":{"frames":60,"until":"screen_update","updates":1.5}}}
+{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"run","arguments":{"frames":60,"until":"screen_update","updates":5000}}}
+{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"status","arguments":{}}}

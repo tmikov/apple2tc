@@ -1,0 +1,5 @@
+{"id":1,"jsonrpc":"2.0","result":{"capabilities":{"tools":{}},"protocolVersion":"2025-06-18","serverInfo":{"name":"a2mcp","version":"1"}}}
+{"id":2,"jsonrpc":"2.0","result":{"content":[{"text":"{\n  \"cycles\": 0,\n  \"frame\": 0,\n  \"keys_pending\": 1,\n  \"keys_scheduled\": 0,\n  \"stopped\": false,\n  \"video\": {\n    \"mixed\": false,\n    \"mode\": \"text\",\n    \"page\": 0\n  }\n}","type":"text"}]}}
+{"id":3,"jsonrpc":"2.0","result":{"content":[{"text":"{\n  \"cycles\": 204601,\n  \"frame\": 13,\n  \"frames_run\": 13,\n  \"stop_reason\": \"screen_update\",\n  \"updates\": 2\n}","type":"text"}]}}
+{"id":4,"jsonrpc":"2.0","result":{"content":[{"text":"{\n  \"cycles\": 238702,\n  \"frame\": 15,\n  \"frames_run\": 2,\n  \"stop_reason\": \"screen_update\",\n  \"updates\": 2\n}","type":"text"}]}}
+{"id":5,"jsonrpc":"2.0","result":{"content":[{"text":"{\n  \"cycles\": 579700,\n  \"frame\": 35,\n  \"frames_run\": 20,\n  \"note\": \"the visible page changed on every frame; no complete-frame boundary was found\",\n  \"stop_reason\": \"limit\",\n  \"updates\": 0\n}","type":"text"}]}}

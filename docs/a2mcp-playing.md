@@ -48,6 +48,35 @@ You are blind between screenshots. A 260-frame step means four seconds of game
 happened without you, so send the input for that whole window *before* the step,
 not after it.
 
+## Landing on a finished picture: `screen_update`
+
+`screen_change` and `screen_update` answer different questions. `screen_change`
+answers "has anything happened at all" — useful for *noticing*, and exactly the
+wrong tool once a game is animating, per the previous section. `screen_update`
+answers a narrower question: "has a complete picture been reached" — useful for
+*landing a screenshot cleanly* rather than catching a frame half-drawn. Reach for
+`screen_change` to know something happened; reach for `screen_update` right
+before you take the screenshot you actually intend to look at.
+
+It works by counting two things as the same "update": a page flip (a
+double-buffered game presenting a finished frame — this can never be torn, since
+the picture is only visible once it is entirely drawn) and a settle (the screen
+changed, then held identical for a couple of frames — a single-buffered game's
+idle gap between draws, if it has one). An already-static screen at the start
+never counts, so a `screen_update` call always means "advance to the next
+completed picture," not "return instantly because nothing is animating right
+now" — that instant-return case is what `screen_change` already covers.
+
+**The honest limitation:** a single-buffered game that redraws every single
+frame with no idle gap has no complete-frame boundary at frame resolution at
+all. `screen_update` cannot find what is not there — the call runs to its frame
+cap and says so in the reply (`updates` short of what was asked, plus a `note`).
+That is not a wasted call: the note itself is the answer, and it means a
+screenshot taken right now may be torn. For a game like that, the tool that
+actually helps is a probe planted at the game's own draw-complete point in its
+code (`docs/probes.md`) — `screen_update` only ever sees frame boundaries, and a
+game with no idle frame boundary has nothing at that resolution to see.
+
 ## Booting a disk: it does not autoboot
 
 `boot(disk1: "...")` mounts the image and brings the machine up, and you land at

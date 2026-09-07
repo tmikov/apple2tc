@@ -19,12 +19,13 @@ transcript for each against a committed baseline (`tests/mcp/*.jsonl` /
 --key-file=`, and that a symlink cannot be used to read or write outside
 `--root` -- one test for each direction, because the read and write halves of
 the jail resolve differently and only the read half used to be covered. A
-third block, `tests/mcp/malformed.jsonl` / `.expected`, sends a session three
-wrong-typed arguments in a row (a truncating float `scale`, a wrong-typed
-`render`, a wrong-typed `scale`) and checks that an ordinary `status` call
-right after still gets a correct reply in the same transcript -- the crash
-this guards against would otherwise just truncate the reply file, which a
-baseline diff alone would not distinguish from "the tool answered wrong."
+third block, `tests/mcp/malformed.jsonl` / `.expected`, sends a session five
+wrong-typed or out-of-range arguments in a row (a truncating float `scale`, a
+wrong-typed `render`, a wrong-typed `scale`, a truncating float `updates`, an
+out-of-range `updates`) and checks that an ordinary `status` call right after
+still gets a correct reply in the same transcript -- the crash this guards
+against would otherwise just truncate the reply file, which a baseline diff
+alone would not distinguish from "the tool answered wrong."
 
 ## Launching it
 
@@ -128,7 +129,44 @@ when the call started. That is the way to advance to "the next thing worth
 looking at" without guessing a frame count. A probe script's `stop`, and the
 engine stopping itself, always end a run early regardless of `until`. The
 reply reports `frames_run`, `stop_reason` (`"limit"`, `"screen_change"`,
-`"probe"`, or `"engine"`), and the frame/cycle counters after the run.
+`"screen_update"`, `"probe"`, or `"engine"`), and the frame/cycle counters
+after the run.
+
+`until: "screen_update"` is a different question from `screen_change`:
+`screen_change` answers "has anything happened at all", which fires
+instantly and uselessly on anything that animates every frame.
+`screen_update` answers "has a complete picture been reached" — the way to
+land a screenshot on a finished frame rather than one caught mid-draw. An
+**update** is one such moment, and the run stops on the `updates`-th one
+(an integer, default 1, checked before extraction and bounded to 1-1000 the
+same way `scale` and `frames_between` are). Two things count as an update,
+counted the same way because they mean the same thing to the caller:
+
+  - **A page flip.** `A2_VC_PAGE2` actually changed value during the frame —
+    a double-buffered program just presented a finished frame. This is the
+    reliable case: a program that flips never has a torn visible page to
+    begin with, so a flip is unambiguously a complete picture.
+  - **A settle.** The visible hash changed at some point during the run,
+    then held identical across two consecutive frame boundaries — the
+    single-buffered program's stand-in for a page flip, catching the idle
+    gap after it finishes a draw and before it starts the next one. A settle
+    **requires prior activity**: an already-static screen counts as nothing,
+    so the call always means "advance to the next completed picture," never
+    "return immediately because nothing is animating" — `screen_change`
+    already answers that question. When both a flip and a hash change land
+    on the same frame, only the flip is counted and the settle state is
+    reset; a flip already *is* the completion event, and counting both would
+    double-count one presentation.
+
+If the frame cap is reached with fewer than `updates` found, the reply's
+`updates` count is whatever it honestly reached (possibly 0) and a `note`
+says the visible page changed on every frame, so no complete-frame boundary
+was found — the signal that a screenshot taken right now may be torn. A
+single-buffered program that redraws every frame with no idle gap has no
+complete-frame boundary at frame resolution at all; `screen_update` cannot
+help there; see `docs/a2mcp-playing.md`. `updates` and `note` appear in the
+reply only when `until == "screen_update"`, so every existing baseline that
+never passes it is untouched.
 
 The loop itself (`machine_run()` in `lib/a2mcp/mcp_machine.cpp`) is a copy of
 `a2host_run_headless()`'s: simulate, then record the frame (which is what
