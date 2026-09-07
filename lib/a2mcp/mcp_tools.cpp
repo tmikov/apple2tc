@@ -37,11 +37,12 @@ nlohmann::json tool_schemas(void) {
         "binary; with no arguments the machine boots the built-in Apple ][+ ROM "
         "into BASIC. Paths are relative to the server's root directory. Returns "
         "with the machine initialised and zero frames run -- emulated time "
-        "advances only inside `run`. If the server was started with "
-        "--key-file=, calling `boot` again reloads the recording too, so its "
-        "keys land at the same cycle stamps as they did the first time -- "
-        "though not necessarily on the same screen, since a reboot does not "
-        "clear RAM and is a warm start, not a power-on."},
+        "advances only inside `run`. Calling `boot` again on an already-running "
+        "machine is a power-on, not a warm restart: RAM is reset to its "
+        "power-on state, so the result is byte-identical to a fresh server "
+        "making the same call. If the server was started with --key-file=, "
+        "the recording reloads too, so its keys land at the same cycle "
+        "stamps as they did the first time."},
        {"inputSchema",
         {{"type", "object"},
          {"properties",

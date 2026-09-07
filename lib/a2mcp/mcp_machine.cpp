@@ -167,15 +167,12 @@ void machine_boot(const nlohmann::json &args) {
 
   if (s_booted) {
     a2host_reboot();
-    // a2host_reboot() already restarted the cycle counter at zero; reloading
-    // the recording here resets its own delivery cursor to zero too, so the
-    // same keys land at the same cycle stamps as they did the first time --
-    // rather than resuming a stale cursor against a counter that just
+    // a2host_reboot() already restarted the cycle counter at zero (and, since
+    // it now clears RAM too, reproduces a fresh process start in full);
+    // reloading the recording here resets its own delivery cursor to zero to
+    // match, rather than resuming a stale cursor against a counter that just
     // restarted, or (once the recording had already finished) finding
-    // nothing left at all. That is the only thing this guarantees: a reboot
-    // is a warm start, not a power-on (a2host_reboot() does not clear RAM),
-    // so the screen a second boot produces is not promised to match the
-    // first even though the same keys arrive at the same moments.
+    // nothing left at all.
     if (!options().key_file.empty())
       a2host_load_key_file(options().key_file.c_str());
   } else {
