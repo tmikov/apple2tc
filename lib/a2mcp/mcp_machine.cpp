@@ -150,25 +150,6 @@ bool machine_booted(void) {
 }
 
 void machine_boot(const nlohmann::json &args) {
-  // A --key-file= recording is a one-shot per process. a2host_reboot()
-  // restarts the cycle counter at zero but has no way to rewind
-  // next_key_press_ back to the start of the array: once some keys have
-  // already been delivered, a plain reboot would replay only the tail of the
-  // recording, at the wrong cycles; once the recording is fully delivered,
-  // drain_key_presses() has already freed it and there is nothing left to
-  // replay at all. Either way a silent second boot would not reproduce the
-  // recording "exactly as it does on a fresh server start" -- and there is no
-  // clean fix that does not also touch what a2host_key_replay_active() means
-  // to a2host_gui.c's live-key lockout and to a2host_fixed_step()'s pacing
-  // choice, both of which are outside a2mcp's blast radius. So: refuse the
-  // reboot outright, loudly, rather than silently replay a wrong tail.
-  // Checked first, before any of the forwarding below, so a refusal never
-  // has a side effect to undo.
-  if (s_booted && !options().key_file.empty())
-    throw ToolError(
-        "cannot reboot: a --key-file recording only replays once per server "
-        "process; restart a2mcp to replay it again");
-
   forward_path(args, "rom", "--rom=", ImageKind::Rom);
   forward_path(args, "disk1", "--disk1=", ImageKind::Disk);
   forward_path(args, "disk2", "--disk2=", ImageKind::Disk);
@@ -186,6 +167,17 @@ void machine_boot(const nlohmann::json &args) {
 
   if (s_booted) {
     a2host_reboot();
+    // a2host_reboot() already restarted the cycle counter at zero; reloading
+    // the recording here resets its own delivery cursor to zero too, so the
+    // same keys land at the same cycle stamps as they did the first time --
+    // rather than resuming a stale cursor against a counter that just
+    // restarted, or (once the recording had already finished) finding
+    // nothing left at all. That is the only thing this guarantees: a reboot
+    // is a warm start, not a power-on (a2host_reboot() does not clear RAM),
+    // so the screen a second boot produces is not promised to match the
+    // first even though the same keys arrive at the same moments.
+    if (!options().key_file.empty())
+      a2host_load_key_file(options().key_file.c_str());
   } else {
     a2host_enable_scheduled_keys();
     a2host_init_emulation();

@@ -38,8 +38,10 @@ nlohmann::json tool_schemas(void) {
         "into BASIC. Paths are relative to the server's root directory. Returns "
         "with the machine initialised and zero frames run -- emulated time "
         "advances only inside `run`. If the server was started with "
-        "--key-file=, calling `boot` a second time is refused: that recording "
-        "replays once per server process, not once per boot."},
+        "--key-file=, calling `boot` again reloads the recording too, so its "
+        "keys land at the same cycle stamps as they did the first time -- "
+        "though not necessarily on the same screen, since a reboot does not "
+        "clear RAM and is a warm start, not a power-on."},
        {"inputSchema",
         {{"type", "object"},
          {"properties",
