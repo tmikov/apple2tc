@@ -369,9 +369,90 @@ static void frame_cb(void) {
   sg_commit();
 }
 
+/// Display-only function keys: F3 (hi-res render mode), F4 (persistence
+/// toggle) and F5/F6 (persistence decay). None of them ever calls
+/// a2host_press_key() -- they only change how this front end draws the
+/// screen, and the emulated machine has no way to observe that a screen is
+/// drawn one way or another. So unlike every other key event_cb() handles,
+/// these run ahead of its a2host_key_replay_active() guard: a replay drives
+/// the machine's input, and a key that never reaches the machine cannot
+/// perturb it, so there is nothing here for the guard to protect against.
+/// ignoreNextCh_ is untouched on purpose -- these keys are no part of that
+/// mechanism, so leaving it alone here leaves it correct for whatever key
+/// comes next.
+///
+/// F1/F2 are already a2emu's bundled-game keys, handled even earlier by
+/// event_hook_ in event_cb(); this front end owns everything else here.
+///
+/// Returns whether \p ev was one of these keys, so event_cb() knows to stop
+/// processing it.
+static bool handle_display_key(const sapp_event *ev) {
+  if (ev->type != SAPP_EVENTTYPE_KEY_DOWN)
+    return false;
+
+  switch (ev->key_code) {
+  case SAPP_KEYCODE_F3:
+    // Cycle the hi-res render mode: color -> color140 -> mono -> mono140 ->
+    // color. Stated explicitly, not as hgrMode_ + 1: a2_hgr_mode_t's
+    // declaration order (color, mono, color140, mono140) is not this
+    // presentation order -- color and color140 are the pair this feature
+    // exists to A/B, so they must be adjacent here regardless of how the
+    // enum is declared. Do not derive this from the enum again.
+    switch (hgrMode_) {
+    case A2_HGR_COLOR:
+      hgrMode_ = A2_HGR_COLOR140;
+      break;
+    case A2_HGR_COLOR140:
+      hgrMode_ = A2_HGR_MONO;
+      break;
+    case A2_HGR_MONO:
+      hgrMode_ = A2_HGR_MONO140;
+      break;
+    case A2_HGR_MONO140:
+    default:
+      hgrMode_ = A2_HGR_COLOR;
+      break;
+    }
+    report_display_state();
+    return true;
+  case SAPP_KEYCODE_F4:
+    // Toggle phosphor persistence. Reset the buffer on the way to "on" so
+    // stale content from a previous on-period does not flash back in.
+    persistEnabled_ = !persistEnabled_;
+    if (persistEnabled_)
+      memset(&persistBuf_, 0, sizeof(persistBuf_));
+    report_display_state();
+    return true;
+  case SAPP_KEYCODE_F5:
+    // Less persistence (faster fade).
+    if (persistDecay_ > 0.05f)
+      persistDecay_ -= 0.05f;
+    else
+      persistDecay_ = 0.0f;
+    report_display_state();
+    return true;
+  case SAPP_KEYCODE_F6:
+    // More persistence (slower fade). Kept below 1: at or above it the
+    // buffer would never fade, which is a stuck screen, not a CRT.
+    if (persistDecay_ < 0.90f)
+      persistDecay_ += 0.05f;
+    else
+      persistDecay_ = 0.95f;
+    report_display_state();
+    return true;
+  default:
+    return false;
+  }
+}
+
 static void event_cb(const sapp_event *ev) {
   // The front end gets first refusal, so it can add keys of its own.
   if (event_hook_ && event_hook_(ev))
+    return;
+
+  // See handle_display_key() for why these run ahead of the replay guard
+  // below.
+  if (handle_display_key(ev))
     return;
 
   int toIgnore = ignoreNextCh_;
@@ -409,59 +490,6 @@ static void event_cb(const sapp_event *ev) {
       break;
     case SAPP_KEYCODE_ESCAPE:
       a2host_press_key(ignoreNextCh_ = 27);
-      break;
-    // Display options -- not part of the emulated machine, so function keys
-    // rather than anything printable, which the machine would see instead.
-    // F1/F2 are already a2emu's bundled-game keys (see event_hook_ above);
-    // this front end owns everything else.
-    case SAPP_KEYCODE_F3:
-      // Cycle the hi-res render mode: color -> color140 -> mono -> mono140 ->
-      // color. Stated explicitly, not as hgrMode_ + 1: a2_hgr_mode_t's
-      // declaration order (color, mono, color140, mono140) is not this
-      // presentation order -- color and color140 are the pair this feature
-      // exists to A/B, so they must be adjacent here regardless of how the
-      // enum is declared. Do not derive this from the enum again.
-      switch (hgrMode_) {
-      case A2_HGR_COLOR:
-        hgrMode_ = A2_HGR_COLOR140;
-        break;
-      case A2_HGR_COLOR140:
-        hgrMode_ = A2_HGR_MONO;
-        break;
-      case A2_HGR_MONO:
-        hgrMode_ = A2_HGR_MONO140;
-        break;
-      case A2_HGR_MONO140:
-      default:
-        hgrMode_ = A2_HGR_COLOR;
-        break;
-      }
-      report_display_state();
-      break;
-    case SAPP_KEYCODE_F4:
-      // Toggle phosphor persistence. Reset the buffer on the way to "on" so
-      // stale content from a previous on-period does not flash back in.
-      persistEnabled_ = !persistEnabled_;
-      if (persistEnabled_)
-        memset(&persistBuf_, 0, sizeof(persistBuf_));
-      report_display_state();
-      break;
-    case SAPP_KEYCODE_F5:
-      // Less persistence (faster fade).
-      if (persistDecay_ > 0.05f)
-        persistDecay_ -= 0.05f;
-      else
-        persistDecay_ = 0.0f;
-      report_display_state();
-      break;
-    case SAPP_KEYCODE_F6:
-      // More persistence (slower fade). Kept below 1: at or above it the
-      // buffer would never fade, which is a stuck screen, not a CRT.
-      if (persistDecay_ < 0.90f)
-        persistDecay_ += 0.05f;
-      else
-        persistDecay_ = 0.95f;
-      report_display_state();
       break;
     default:
       break;
