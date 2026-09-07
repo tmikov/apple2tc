@@ -18,10 +18,12 @@ transcript for each against a committed baseline (`tests/mcp/*.jsonl` /
 `a2run`'s bit for bit, that a `keys`-recorded session replays under `a2run
 --key-file=`, that the reverse holds too -- `a2mcp --key-file=` replaying a
 recording tracks `a2run --key-file=` replaying the same one, over
-`tests/mcp/replay.keys` -- and that a symlink cannot be used to read or write
-outside `--root` -- one test for each direction, because the read and write
-halves of the jail resolve differently and only the read half used to be
-covered. A
+`tests/mcp/replay.keys` -- that a `boot` on a running server reproduces a
+fresh process byte-for-byte, checked with `--hash-frames=` for both a bare
+ROM boot and a real disk (`dsk/Neptune.dsk`) -- and that a symlink cannot be
+used to read or write outside `--root` -- one test for each direction,
+because the read and write halves of the jail resolve differently and only
+the read half used to be covered. A
 third block, `tests/mcp/malformed.jsonl` / `.expected`, sends a session nine
 wrong-typed or out-of-range arguments in a row (a truncating float `scale`, a
 wrong-typed `render`, a wrong-typed `scale`, a truncating float `blend`, a
@@ -63,7 +65,7 @@ Options (`lib/a2mcp/mcp_main.cpp`):
 | `--probe-out=<path>` | Where the probe's `printf` output goes. Requires `--probe=`. Without it, a probe's `printf` goes to **stderr** — `a2host_probe_output_to_stderr()`, called before `a2host_parse_args`. The library's own default is stdout, which is right for `a2run` (whose stdout is a report) and would put script output into the middle of the JSON-RPC stream here. Fixed at the sink rather than by requiring this option, so a probe opcode that prints can be added later without rediscovering the problem. |
 | `--keys-out=<path>` | Opened before the server starts serving, so the first key any `keys` call schedules lands in the file. Every scheduled key is appended as a `<cycles> <key>` line — the same format `a2run --key-file=` reads — turning the whole session into a replayable recording. |
 | `--hash-frames=<path>` | Per-frame video-state hashes, written exactly as `a2run --hash-frames=` writes them. This is what lets `run` be diffed frame-for-frame against a plain `a2run` session — it is the test `tests/run-tests.sh` runs to prove the two frame loops agree. |
-| `--key-file=<path>` | Replay a cycle-stamped `.keys` recording — the same format `--keys-out=` writes and `a2run --key-file=` reads — so a session can start from a recorded run instead of (or before) an agent takes over live. A path on the host directly, exactly like `--probe=`/`--probe-out=`/`--keys-out=`/`--hash-frames=` above: whoever writes `--root=` on this same command line writes this too, and an agent driving the session over JSON-RPC has no way to set it, so unlike `disk1`/`disk2`/`rom`/`binary` (which an agent *does* supply, and which are jailed under `--root`) there is nothing here for a jail to protect. Keys already scheduled through the `keys` tool and a loaded `--key-file=` recording are independent lists and both drain every frame, so an agent can let a recording play out and then keep typing past the point where it ends. Calling `boot` again reloads the recording (`a2host_load_key_file()`), cursor back at its first key, right after `a2host_reboot()` has restarted the cycle counter at zero — so the same keys land at the same cycle stamps as they did the first time. That is the only thing guaranteed to match: the *displayed screen* is not, even on a plain ROM boot with no key file at all, because `a2host_reboot()` does not clear RAM and the ROM's own warm-vs-cold check then takes a different path the second time (dz issue 01a07cd8). `status`'s `replay: {delivered, total}` reports progress through the recording, and returns to `{0, total}` right after a reboot. |
+| `--key-file=<path>` | Replay a cycle-stamped `.keys` recording — the same format `--keys-out=` writes and `a2run --key-file=` reads — so a session can start from a recorded run instead of (or before) an agent takes over live. A path on the host directly, exactly like `--probe=`/`--probe-out=`/`--keys-out=`/`--hash-frames=` above: whoever writes `--root=` on this same command line writes this too, and an agent driving the session over JSON-RPC has no way to set it, so unlike `disk1`/`disk2`/`rom`/`binary` (which an agent *does* supply, and which are jailed under `--root`) there is nothing here for a jail to protect. Keys already scheduled through the `keys` tool and a loaded `--key-file=` recording are independent lists and both drain every frame, so an agent can let a recording play out and then keep typing past the point where it ends. Calling `boot` again reloads the recording (`a2host_load_key_file()`), cursor back at its first key, right after `a2host_reboot()` has restarted the cycle counter at zero and reset RAM to its power-on fill — so the same keys land at the same cycle stamps as they did the first time, on the same screen too, since `boot` on a running machine is a power-on (see `boot` below). `status`'s `replay: {delivered, total}` reports progress through the recording, and returns to `{0, total}` right after a reboot. |
 
 `--help` lists the same six; `--trace`, `--trace-keys`, `--probe-dump` and
 any other `a2host` option that writes to stdout is deliberately not forwarded
@@ -111,17 +113,20 @@ content at all.
 Boots the machine. With no arguments: the built-in Apple ][+ ROM, into BASIC.
 `disk1` / `disk2` mount disk images; `rom` loads a different ROM image;
 `binary` loads and runs a DOS 3.3 binary. All four are paths under `--root`.
-Calling `boot` again on an already-running machine reboots it —
-`a2host_reboot()` tears the engine down (including unloading the ROM,
-`Emu6502::unloadROM()`) and brings it back up with frame and cycle counters
-at zero. If the server was started with `--key-file=`, the recording is also
+Calling `boot` again on an already-running machine reboots it, and a reboot is
+a power-on: `a2host_reboot()` tears the engine down (including unloading the
+ROM, `Emu6502::unloadROM()`), resets RAM to its power-on fill value, and
+brings the machine back up with frame and cycle counters at zero, so the
+result is byte-identical to a fresh server making the same sequence of calls
+(`tests/mcp/replay.jsonl`/`.expected` and the Neptune disk block in
+`tests/run-tests.sh` check this with `--hash-frames=`). That was not always
+true -- a reboot used to leave RAM as the previous session left it, which is
+what dz issue 01a07cd8 tracks, including a worse symptom (a disk boot's
+second `boot` never redoing the boot sequence at all) that came from the same
+gap. If the server was started with `--key-file=`, the recording is also
 reloaded (`a2host_load_key_file()`), cursor back at the start, so it replays
-from the top exactly as it did the first time — see that option's entry
-above, and note the guarantee is about key timing, not the screen: a reboot
-is a warm start, not a power-on (`docs/a2mcp-playing.md`'s "`boot` does not
-clear RAM", dz issue 01a07cd8), so the video a second boot produces need not
-match the first even when the same keys land at the same cycle stamps.
-Returns the same object `status` does.
+from the top exactly as it did the first time. Returns the same object
+`status` does.
 
 ### `status`
 

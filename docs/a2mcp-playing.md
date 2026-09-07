@@ -178,42 +178,38 @@ by 1200.
 An earlier version of this section said the disk did *not* autoboot and that you
 had to type `PR#6`. That was wrong, and the way it was wrong is the useful part:
 the original test ran 600 frames, saw a text screen, and concluded a BASIC prompt
-was waiting. Two things conspired. The boot had not finished, and `boot` does not
-clear RAM, so what was on screen was the *previous* session's text — a
-convincing-looking prompt belonging to no one. Typing `PR#6` then appeared to
-work, because the disk was going to boot anyway.
+was waiting. Two things conspired. The boot had not finished, and (at the time)
+`boot` did not clear RAM on a reboot, so what was on screen was the *previous*
+session's text — a convincing-looking prompt belonging to no one. Typing `PR#6`
+then appeared to work, because the disk was going to boot anyway. `boot` has
+since been fixed to clear RAM (see the next section), so a stale prompt like
+this one can no longer appear -- but "wait for the video mode to actually
+change" below is still the right instinct regardless of what fixed it.
 
 Check the video mode with `status` rather than reading the screen: a game that
 has booted has almost always switched out of text mode, and that is a fact about
 the machine rather than an interpretation of pixels.
 
-## `boot` does not clear RAM
+## `boot` on a running machine is a power-on
 
-Rebooting re-initialises IO and the engine; it does not zero memory. In a
-long-lived server the first `screen` after a `boot` can show the *previous*
-session's screen. Neptune's boot showed a BASIC listing left over from an
-earlier session in the same process.
+Calling `boot` again on an already-running server reproduces a fresh process's
+boot byte-for-byte: RAM is reset to its power-on fill value before the ROM (or
+whatever `binary`/`disk1`/`disk2` this call names) loads, so a rebooted
+session's `--hash-frames=` is identical to a fresh server's for the same
+sequence of calls. That was not always true. It used to be a *warm* start, not
+a power-on: `a2host_reboot()` left RAM exactly as the previous session left it,
+so the ROM's own warm-vs-cold boot check could find a plausible warm-start
+signature there and skip the self-test and boot banner the first `boot`
+showed -- or, worse, land in whatever the previous session's own program had
+installed as its soft-reset handler instead of redoing a disk boot at all. It
+had already produced one wrong conclusion (the previous section's "does not
+autoboot" mistake) before the second, worse symptom was measured and the gap
+was closed; dz issue 01a07cd8 has both measurements.
 
-Take it as a rule: after `boot`, do not trust a screenshot until you have run
-enough frames for the new program to have drawn something.
-
-A second `boot` is a *warm* start, not a power-on, and the two are not the
-same machine: real hardware clears nothing about the ROM's boot logic either,
-but its RAM really is scrambled at power-on, so the ROM's warm-vs-cold check
-reliably takes the cold path. `a2host_reboot()` leaves RAM exactly as the
-previous session left it, so that same check can find a plausible warm-start
-signature and skip straight past the self-test and boot banner the first
-`boot` showed — this is the same root cause as the leftover-screen behaviour
-above, just showing up as a different code path taken instead of stale text
-left on screen. It has already produced one wrong conclusion: an earlier
-session driving Neptune saw a previous session's leftover state after a
-`boot` and wrote "the disk does not autoboot" into two documents before the
-mistake was caught (dz issue 01a07cd8 has the fuller writeup, including a
-worse case — a disk boot's second `boot` never redoing the boot sequence at
-all). Do not assume a screen, a cycle count, or anything else about *what the
-machine does* is reproducible across a `boot` in the same session; only what
-you explicitly reload (a `--key-file=` recording's delivery timing, a
-freshly-mounted disk's content) is.
+Nothing about this changes what a *fresh* server's first `boot` looks like --
+RAM is whatever a new process starts with either way. It only matters once a
+session calls `boot` more than once: that call is now exactly as clean as
+starting a new server.
 
 ## Replaying a recording, then taking over
 
@@ -227,11 +223,11 @@ schedules new input exactly as it would in a session with no recording at all;
 the two lists are independent and both drain every frame.
 
 Calling `boot` again reloads the recording too, cursor back at its first key,
-so the same keys land at the same cycle stamps as they did the first time —
+so the same keys land at the same cycle stamps as they did the first time --
 `replay` reads back to `{0, total}` right after the `boot` and climbs the same
-way it did before. What that does *not* promise is the screen: see "`boot`
-does not clear RAM" above for why a second boot's video is its own thing, not
-a repeat of the first.
+way it did before. Since `boot` is now a power-on (previous section), that
+reload reproduces the whole session from the top, screen included, not just
+the key timing.
 
 ## Finding the controls without guessing
 

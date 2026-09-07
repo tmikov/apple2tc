@@ -80,11 +80,19 @@ nor `decoded/neptune/testdata/play2.keys` types it any more. Measured, from
 by frame 1200.
 
 The mistake was impatience. The original test ran 600 frames, saw a text screen —
-carrying the *previous* session's content, since `boot` does not clear RAM — and
-concluded there was a BASIC prompt waiting. A Disk II boot simply takes longer
-than that. Verified again by replaying `decoded/neptune/testdata/play2.keys`
-against a control run with no keys: the two are identical through frame 1399
-and first diverge at frame 1400, exactly where the space keypress lands.
+carrying the *previous* session's content, since at the time `boot` did not
+clear RAM on a reboot — and concluded there was a BASIC prompt waiting. A Disk
+II boot simply takes longer than that. Verified again by replaying
+`decoded/neptune/testdata/play2.keys` against a control run with no keys: the
+two are identical through frame 1399 and first diverge at frame 1400, exactly
+where the space keypress lands.
+
+(That "does not clear RAM" behaviour has since changed: `boot` on an
+already-running `a2mcp` is now a power-on, byte-identical to a fresh process
+— see dz issue 01a07cd8, filed after this same leftover-RAM effect turned out
+to have a second, worse symptom: a rebooted disk session landing in whatever
+the previous session left resident instead of redoing the boot at all. The
+account above is what actually happened at the time and is left as it was.)
 
 ## Controls
 
