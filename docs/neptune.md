@@ -97,23 +97,171 @@ EOF
 ```
 
 It prints `LEFT J---- ----K RIGHT` and `I A -- -- -FIRE M` — an I/J/K/M diamond
-with `A` to fire. `A`, `J` and `K` are confirmed to affect the run; the exact
-effect of each, and of `I`/`M`, is not yet pinned to a coordinate here.
+with `A` to fire.
+
+**There is no "hold" — movement is a state, and the opposite key stops it.**
+From the repo's owner, who has played it, and confirmed here by pressing `K`,
+watching the ship travel right, then pressing `J` twice and watching it come
+back:
+
+| state | `K` | `J` |
+|---|---|---|
+| stopped | moves right | moves left |
+| moving right | — | stops |
+| moving left | stops | — |
+
+So **reversing direction takes two presses**: the opposite key stops you, and
+the same key again starts you the other way. `I` and `M` are up and down and
+behave the same way by the disk's own diagram, though that has not been
+separately confirmed here.
+
+This matters more than it sounds. Sending a burst like `KKA` — the natural
+"hold right and fire" a hold-to-move game would want — reads here as *start
+right, keep going right, fire*, and a burst like `KJA` cancels itself. An
+earlier session sent doubled direction keys throughout and concluded from the
+resulting stillness that the ship was not responding at all.
+
+## It never shows a whole picture
+
+Neptune is single-buffered and draws by erasing and redrawing, so at a given
+frame boundary part of the image is simply absent. Measured during play, eight
+consecutive single frames, counting only the sky rows where sprites live and the
+scrolling terrain does not:
+
+```
+ink per frame:  122  94  128  128  128   33  128  134
+union of all 8: 215        pixels present in ALL 8: 0
+objects/frame:   2    2    2    2    2    1    2    2
+```
+
+**Not one sky pixel survives all eight frames**, and on frame 5 an entire object
+is missing — two connected components collapse to one. A single snapshot of that
+frame shows no enemy, not a faint one. Roughly one capture in eight loses an
+object outright.
+
+A human never notices, because at 60 Hz the eye integrates across frames. A model
+taking one snapshot does not. So **read this game with `blend: 3`**: it ORs the
+last three frames' page bits, which reconstructs what the eye does. With blending
+the same eight frames all show both objects.
+
+Note what this means for `settle` and `until:"screen_update"`: frames 2, 3 and 4
+above are byte-identical, so both features call them clean, and they still carry
+only 59% of the ink seen across the window. Those features find moments when
+*drawing has paused*, which is not the same as a moment when the picture is
+*whole* — on this game there is no such moment. `settle` still earns its place
+against a half-scrolled terrain; it cannot fix a missing sprite. The two are
+complementary and `blend` is the one that matters more here.
+
+## Starting a game
+
+The attract demo runs first. **Wait about 23 seconds, then press space.** From
+Prefix A that is roughly `run(frames: 1400)` after `PR#6`, then `keys(" ")`.
+
+`SH` tells you whether it worked: a live game shows `SH:3`, the demo shows
+`SH:00` and has no player ship. Pressing space too early does nothing. Reported
+by the repo's owner, who has played the game, and confirmed here — every session
+before this one that "looked like gameplay" was the demo.
+
+## Playing it
+
+The loop that works, with every argument load-bearing:
+
+```
+keys(text: "KKA", frames_between: 2)            # deliver defaults to "press"
+run(frames: 4, settle: 14)                      # pace, land clean if cheap
+screen(format: "image", render: "color140", scale: 2, blend: 3)
+```
+
+- `deliver` must stay `"press"`. Type-ahead never reaches this game.
+- `frames` only needs to cover key delivery — `(n-1) * frames_between` — and
+  everything else belongs in `settle`, which is spent only when the screen is not
+  already clean.
+- `blend: 3` is not optional here, for the reason above.
+
+**Clean-landing rates are phase-dependent, so calibrate where you are playing.**
+With an 18-frame ceiling: 0 of 30 looks landed clean in the first ~2400 frames
+after `PR#6` (title and attract animation, continuously redrawing), 18 of 30 in a
+later stretch of play, and 2 of 14 in a different stretch again. The same call,
+the same game. Re-check when the game changes mode rather than trusting a number
+measured elsewhere.
+
+**Scoring happens.** `SC` reached `00020` during a session of firing with `A`, so
+`A` does damage something. `SH` has been observed going all the way to `00`.
 
 ## The screen
 
 - Render with `color140`; the per-dot `color` mode shreds the terrain into
   stripes. The terrain is **solid green**, not dithered.
-- The ship is a small compact white blob. A persistent orange-red shape sits
-  near the top left. `mono140` separates shapes from colour when in doubt.
+- **Your ship is the orange craft**, normally in the upper part of the screen.
+  This file previously said the ship was "a small compact white blob" and that
+  the orange shape was an explosion. Both were wrong. Confirmed by the only test
+  that settles it: press `K`, run 30 frames, and watch which object moves right;
+  then reverse and watch it come back. The white blobs on the terrain are
+  something else and have never been identified.
+- A large orange starburst that appears and fades *is* an explosion. It is much
+  bigger than the ship and does not persist. Size and persistence tell them
+  apart.
+- `A` fires **horizontally to the right**; the shots are visible as magenta
+  dashes travelling across the upper screen.
 - Enemies render magenta.
 - HUD: `FUEL`, `SC` (score), `HI`, `LV` (level), `SH`, `BO`. `SH` is a shield
   count that decreases as you are hit — observed `3 → 2` across a play session.
 - Never flips pages, so every completed frame it produces is a settle, never a
   flip.
-- `until:"screen_update"` works well: across twelve consecutive
-  `run(frames=120, until="screen_update")` calls, eight landed on a completed
-  picture, most within 4–12 frames.
+- `until:"screen_update"` finds clean moments in some phases: across twelve
+  consecutive `run(frames=120, until="screen_update")` calls, eight landed on a
+  completed picture, most within 4–12 frames. That was one stretch of play; see
+  the phase-dependence note under Playing it before relying on the figure.
+
+## How to actually score
+
+`Z` drops a bomb and `BO` is the bomb count — confirmed: two presses took it from
+`20` to `18`. Reported by the repo's owner; the bomb key is not on the disk's own
+help screen, which lists only I/J/K/M and `A`.
+
+**The gun fires horizontally, and enemies fly below the ship's spawn height.** So
+the loop that scores is: press `M` to descend, `I` to level off at enemy
+altitude, then fire. Sitting at spawn height and firing — which is what an
+earlier session did for a whole game — shoots over everything and scores nothing.
+
+That is the game's trade, and it is sharp. A run played this way went
+`0 → 20 → 40 → 160 → 240 → 280 → 340` while shields went `3 → 2 → 1`. Every
+shield was lost low. After a hit you respawn back at spawn height, so you must
+descend again to resume scoring.
+
+For comparison: a session spent hovering safely at spawn height and firing
+scored `40` and died in about 45 s. A session descending to enemy altitude
+scored `340` and was still alive past 60 s with one shield left.
+
+## A played game, end to end
+
+First game actually played rather than watched, recorded so the next attempt
+starts further along:
+
+- Started with space after ~23 s; `SH:3`.
+- Held station high on the left, above the terrain, firing periodically.
+- Lost a shield somewhere in the first 25 s while stationary — **standing still
+  is not safe**; the scrolling brings enemies to you.
+- Died at roughly 45 s with `SC:00040`, which became `HI:00040`. Short of a
+  minute.
+- Death returns to the Gebelli title screen, which displays `SC` and `HI` at the
+  bottom — a convenient place to read a final score.
+
+**The title screen carries the scoring table**, five enemy types worth **20, 50,
+80, 10 and 500**. The 500 is the long magenta creature. That is the game telling
+you what to prioritise, and it is legible in `color140` where the older per-dot
+render made it mush.
+
+**The gun fires horizontally**, so an enemy below your altitude cannot be hit
+from where you are. Most enemies encountered so far sit below the ship's
+default height, which means scoring requires descending toward the terrain and
+therefore trading safety for points. That tension is probably the game.
+
+Unverified but strongly suggested by the HUD: `FUEL` visibly depletes during
+play, and the white blobs sitting on the terrain may be fuel or bomb targets —
+which would make this a Scramble-style game where you must dive to refuel. `BO`
+has never moved from `20`, so if it is bombs, the bomb key is not one of the
+five keys tried.
 
 ## Sound
 
@@ -123,8 +271,10 @@ after boot, which can read as "no sound" if you only listen briefly.
 
 ## Open questions
 
-- What each of `A`, `J`, `K`, `I`, `M` actually does on screen, pinned to
-  coordinates.
-- What `BO` counts.
-- How a game is started from the attract demo, if it must be.
+- Whether `FUEL` running out kills you, and how to replenish it. It visibly
+  depletes; nothing tried so far has refilled it.
+- What bombs are *for*: `Z` decrements `BO`, but no bombed ground target has yet
+  been seen to score or to refuel.
+- What the white blobs sitting on the terrain are: targets, scenery, or fuel.
+- What `FUEL` depletion does, and whether it can be replenished.
 - Where the ship's coordinates, `SH`, `BO` and the score live in RAM.
