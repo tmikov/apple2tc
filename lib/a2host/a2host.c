@@ -195,6 +195,12 @@ bool a2host_sound_enabled(void) {
 bool a2host_key_replay_active(void) {
   return key_presses_ != NULL;
 }
+void a2host_key_replay_progress(unsigned *delivered, unsigned *total) {
+  if (delivered)
+    *delivered = next_key_press_;
+  if (total)
+    *total = key_press_count_;
+}
 bool a2host_engine_stopped(void) {
   return engine_stopped_;
 }
@@ -538,10 +544,12 @@ static void drain_key_presses() {
   if (next_key_press_ != key_press_count_)
     return;
 
+  // next_key_press_ and key_press_count_ are deliberately left as they are --
+  // both now equal the total -- rather than reset to zero: see
+  // a2host_key_replay_progress()'s comment. Only the pointer that
+  // a2host_key_replay_active() and a2host_fixed_step() key off of is cleared.
   free(key_presses_);
   key_presses_ = 0;
-  next_key_press_ = 0;
-  key_press_count_ = 0;
 }
 
 /// OP_KEY's other half: probe_vm.c has no access to key_presses_,

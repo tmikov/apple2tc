@@ -195,6 +195,15 @@ bool a2host_sound_enabled(void);
 /// True while a cycle-stamped key recording is driving input, in which case the
 /// front end must ignore real keyboard events.
 bool a2host_key_replay_active(void);
+/// Progress through a --key-file= replay: \p delivered keys handed to the
+/// machine so far, of \p total loaded. Both are 0 if no --key-file was ever
+/// given. Unlike a2host_key_replay_active(), which goes false the moment the
+/// last key is delivered (drain_key_presses() frees the list right then), the
+/// two counts here are left alone at that point rather than reset to zero, so
+/// a front end can still report a finished replay's final tally -- delivered
+/// == total -- instead of it collapsing to indistinguishable-from-"never
+/// loaded" zeros.
+void a2host_key_replay_progress(unsigned *delivered, unsigned *total);
 /// Top up the keyboard queue from `--kbd-file`, if one is open.
 void a2host_drain_kbd_file(void);
 /// A key was pressed in the window, just now. It lands in the keyboard latch
