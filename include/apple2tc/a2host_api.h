@@ -122,6 +122,29 @@ typedef enum {
   A2HOST_JOYBTN_COUNT
 } a2host_joybtn_t;
 
+/// Press or release a direction key on the virtual joystick. PADDL0 is
+/// derived from right/left and PADDL1 from down/up; only those two axes are
+/// reachable from the keyboard.
+void a2host_joy_set_dir(a2host_joydir_t dir, bool down);
+
+/// Press or release a host button. Which pushbutton it drives is the
+/// --joy-buttons= mapping, and two host buttons may share one.
+void a2host_joy_set_button(a2host_joybtn_t btn, bool down);
+
+/// Release every direction key and every button, and push the resulting
+/// centred, unpressed state to the machine.
+///
+/// Not a convenience. It is the fix for every stuck-stick case -- focus lost
+/// mid-hold, joystick mode switched off mid-hold, machine rebooted -- and in
+/// particular for the fact that a key released outside the window never
+/// delivers a KEY_UP at all.
+void a2host_joy_release_all(void);
+
+/// Whether --joystick asked the front end to start in joystick mode. Only a
+/// front end with a keyboard acts on it; a2run and a2mcp accept and ignore
+/// the option rather than rejecting one their GUI twin understands.
+bool a2host_joystick_at_start(void);
+
 /* --- Driving the machine -------------------------------------------------- */
 
 /// Run one frame: feed pending keys, run the engine for a frame's worth of
