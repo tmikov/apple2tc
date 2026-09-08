@@ -1118,6 +1118,15 @@ if ! "$bin/tests/a2io/a2io-test" > a2io-out.txt; then
 fi
 rm a2io-out.txt
 
+# The virtual joystick's policy -- rails, centring, and the pushbutton OR that
+# two host buttons on one PB depend on. See tests/a2host/joystick_test.c.
+if ! "$bin/tests/a2host/joystick-test" > joystick-out.txt; then
+  echo "FAIL: virtual joystick policy" >&2
+  cat joystick-out.txt >&2
+  exit 1
+fi
+rm joystick-out.txt
+
 # --- Probes -----------------------------------------------------------------
 #
 # The probe compiler is tested through --probe-dump, which compiles a script,
