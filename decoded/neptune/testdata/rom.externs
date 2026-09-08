@@ -1,0 +1,12 @@
+# Routines whose bodies are hand-written rather than generated. apple2tc emits
+# a declaration for each, rewrites every call site to it, and deletes the
+# blocks only that routine reached. The definitions live in reference/rom.c,
+# stitched into one translation unit by reference/neptune-ext.c.
+#
+# There is one line, and step 1's boundary measurement is why: of 4080
+# disassembled instructions, 4032 are Neptune's own and the game calls exactly
+# one ROM entry point. Snake Byte needed nine, and pulled in around 1,430 ROM
+# blocks behind them.
+
+# Apple II ROM entry points -- reference/rom.c
+FCA8 rom_mon_wait

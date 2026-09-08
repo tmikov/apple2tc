@@ -220,3 +220,68 @@ seconds at a prompt.
 The one static stretch worth naming is `play` frames 594–677, 84 frames of
 frozen screen. Rendering that moment shows the terrain and one enemy with **no
 player ship**, so it is a death-and-respawn pause rather than a hang.
+
+## Step 4: cut the library boundary
+
+### 4a. Externalize the entry points
+
+One line in `testdata/rom.externs`, because step 1 found one entry point:
+
+```
+FCA8 rom_mon_wait
+```
+
+`reference/rom.c` supplies it by hand; `reference/neptune-ext.c` stitches it
+into the generated code's translation unit, which is necessary because
+`system2-inc.h` *defines* the machine with internal linkage. Built as
+`neptunec1-ext`.
+
+| | blocks | distinct ROM addresses |
+| --- | --- | --- |
+| generated | 1904 | 46 |
+| `--extern-routines` + `--prune-returns` | **1853** | **22** |
+
+`--prune-returns` is not optional here and the playbook says why: externalizing
+a routine erases the `JSR`s that called it, but an `RTS` carries its whole
+observed return set as successors, so the ROM stays reachable through returns
+nothing can produce any more.
+
+**The 22 ROM addresses that remain are `$FA40-$FA56` and `$FF4C-$FF58` — the
+BRK/interrupt path, entirely.** So externalizing `$FCA8` removes every piece of
+ROM the game actually calls, and what is left is the tracing artifact from
+dz `01a07f1a-09bb`, not a dependency.
+
+`rom_mon_wait` keeps the 6502's loop structure rather than computing the delay
+in closed form, and that is deliberate: `CYCLES` yields to the host when the
+budget runs out, so *when* cycles are charged decides where a frame boundary
+falls. Charging 20,000 at once would move every subsequent frame hash.
+
+`verify.sh` now gates both builds against the same traces, which is what proves
+the hand-written replacement is equivalent — cycle counts included, since those
+are on every line. Both pass all 3129 frames. Mutating one `CYCLES` value in
+`rom.c` from 4 to 5 is caught at **frame 1**, with the reference build still
+passing.
+
+### 4b. Retarget the entry point — already done
+
+This is the step Snake Byte found expensive, and Neptune arrived with it
+finished: `neptune.b33` is a snapshot taken at `$3523` *from the disk boot's own
+arrival there*, soft switches included, which is exactly what 4b prescribes. See
+`scripts/make-b33.sh`.
+
+The playbook lists three traps in that step. One of them applies here and
+resolves in Neptune's favour:
+
+> "The host injects state the boot used to hide. `a2host` pushes a dummy
+> keystroke whenever a key source is present... A cold-started program reads it
+> as the player's first keypress."
+
+Snake Byte's cold build ingested that dummy and diverged immediately. Neptune
+does not, and the reason is the capture point: **`$3523` is `STA KBDSTRB`**, so
+the game's very first instruction clears the latch the host just filled.
+Checked rather than assumed — replaying `attract` with an empty key file
+present, which is enough to trigger the injection, produces a byte-identical
+trace.
+
+That was luck. `$3523` was chosen because it is where space starts a game, not
+for this.

@@ -58,9 +58,11 @@ lst=$here/../as-generated/neptune.lst
 cov=$here/../testdata/coverage.txt
 simplec=$here/../as-generated/neptune-simple-c.c
 c1=$here/../as-generated/neptunec1.c
+c1ext=$here/../reference/neptunec1-ext.c
+externs=$here/../testdata/rom.externs
 
 [ -x "$apple2tc" ] || { echo "$0: no apple2tc at $apple2tc" >&2; exit 1; }
-for f in "$b33" "$rundata" "$knowndata" "$codeat"; do
+for f in "$b33" "$rundata" "$knowndata" "$codeat" "$externs"; do
   [ -r "$f" ] || { echo "$0: missing $f -- run make-b33.sh and collect.sh first" >&2; exit 1; }
 done
 mkdir -p "$(dirname "$lst")"
@@ -128,9 +130,23 @@ fi
 "$apple2tc" "$b33" --run-data="$rundata" --code-at="$codeat" \
   -O3 --irc1 --ret-addr -v1 > "$c1" 2>/dev/null
 
+# The extern variant: $FCA8 is supplied by reference/rom.c instead of being
+# decompiled. --prune-returns goes with it and is not optional -- externalizing
+# a routine erases the JSRs that called it, but an RTS carries its whole
+# observed return set as successors, so without pruning those edges the ROM
+# stays reachable through returns nothing can produce any more. Measured here:
+# the pair takes the build from 1904 blocks to 1853 and from 46 distinct ROM
+# addresses to 22, and the 22 that remain are the BRK/interrupt path from
+# dz 01a07f1a-09bb rather than anything the game calls.
+mkdir -p "$(dirname "$c1ext")"
+"$apple2tc" "$b33" --run-data="$rundata" --code-at="$codeat" \
+  --extern-routines="$externs" --prune-returns \
+  -O3 --irc1 --ret-addr -v1 > "$c1ext" 2>/dev/null
+
 echo "wrote $lst"
 echo "wrote $simplec"
 echo "wrote $c1"
+echo "wrote $c1ext"
 echo "wrote $cov"
 sed -n '/^range /,/unknown nonzero/p' "$cov"
 echo "$warnings 'invalid instruction' warnings (6 expected; see the header)"

@@ -81,9 +81,21 @@ else
 fi
 cd "$here"
 
-# The console build. It links no graphics or audio, which is what verification
-# wants: there is nothing here for a display to affect.
+# The console builds. They link no graphics or audio, which is what
+# verification wants: there is nothing here for a display to affect.
+#
+#   neptunec1      the reference build -- self-contained generated C, with the
+#                  Apple II ROM decompiled alongside the game. Both traces are
+#                  recorded from this one.
+#   neptunec1-ext  the same game with $FCA8 (MON_WAIT) replaced by the
+#                  hand-written reference/rom.c.
+#
+# Both matching the same trace is what proves the hand-written replacement
+# behaves identically to the decompiled original, cycle counts included -- and
+# cycle counts are on every line of the trace precisely so that a delay loop
+# rewritten by hand cannot pass while being subtly wrong.
 ref="$bin/decoded/neptune/neptunec1-run"
+ext="$bin/decoded/neptune/neptunec1-ext-run"
 a2run="$bin/tools/a2run/a2run"
 entry=3523
 
@@ -188,6 +200,23 @@ if [ -n "$coverage" ]; then
 fi
 
 status=0
+check() {
+  # $1 scenario, $2 build label, $3 executable, $4 keys, $5 frames, $6 trace
+  if [ ! -x "$3" ]; then
+    echo "FAIL [$1/$2]: $3 not built" >&2
+    status=1
+    return
+  fi
+  run "$3" "$4" "$5" "$tmp/check-$1-$2.frames"
+  if diff -u "$6" "$tmp/check-$1-$2.frames" > "$tmp/diff-$1-$2.txt"; then
+    echo "PASS [$1/$2]: $(wc -l < "$6") frames match"
+  else
+    echo "FAIL [$1/$2]: first divergence:" >&2
+    head -10 "$tmp/diff-$1-$2.txt" >&2
+    status=1
+  fi
+}
+
 for s in "${scenarios[@]}"; do
   IFS=: read -r name keys frames trace <<<"$s"
   if [ ! -r "$trace" ]; then
@@ -195,14 +224,8 @@ for s in "${scenarios[@]}"; do
     status=1
     continue
   fi
-  run "$ref" "$keys" "$frames" "$tmp/check-$name.frames"
-  if diff -u "$trace" "$tmp/check-$name.frames" > "$tmp/diff-$name.txt"; then
-    echo "PASS [$name]: $(wc -l < "$trace") frames match"
-  else
-    echo "FAIL [$name]: first divergence:" >&2
-    head -10 "$tmp/diff-$name.txt" >&2
-    status=1
-  fi
+  check "$name" ref "$ref" "$keys" "$frames" "$trace"
+  check "$name" ext "$ext" "$keys" "$frames" "$trace"
 done
 
 exit $status
