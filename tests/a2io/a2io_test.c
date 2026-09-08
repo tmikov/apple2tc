@@ -304,13 +304,27 @@ static void test_clock_extension(void) {
   a2_io_peek(&io2, A2_KBD, 1510);
   check(io2.clock == 1510, "and a later peek advances it again");
 
-  // a2_io_poke() tail-calls a2_io_peek() with the same stamp, so the clock
-  // must land on that stamp exactly once -- landing on it twice would mean
-  // the advance ran twice, which is the double-count this task guards against.
+  // a2_io_poke() tail-calls a2_io_peek() with the same stamp. That second
+  // call is a structural no-op -- advance_clock() sets clock_last to cycles
+  // on the first call, so the second computes a zero delta -- which is why
+  // the tail-call is harmless rather than a double count; this assertion
+  // does not distinguish one call from two, only that the stamp was reached.
   a2_io_poke(&io2, A2_KBD, 0, 1600);
-  check(io2.clock == 1600, "and a poke advances it to its stamp exactly once");
+  check(io2.clock == 1600, "and a poke through a2_io_peek() reaches its stamp");
 
   a2_io_done(&io2);
+
+  // A2_KBD above never isolates a2_io_poke()'s own advance_clock() call: it
+  // falls through to the tail-call peek, which reaches the same stamp on its
+  // own. A Disk II soft switch returns before that tail call, so only its
+  // own advance_clock() can move the clock here.
+  a2_iostate_t io3;
+  a2_io_init(&io3);
+
+  a2_io_poke(&io3, 0xC0E0, 0, 1700);
+  check(io3.clock == 1700, "and a poke to a Disk II soft switch reaches its stamp too");
+
+  a2_io_done(&io3);
 }
 
 int main(void) {
