@@ -321,13 +321,41 @@ That is a judgement per site, not a pattern match.
 | | |
 | --- | --- |
 | live `bb_N:` labels across 84 functions | **727** |
-| cases in the `run_emulated` dispatch switch | **1,853** |
+| cases in the `run_emulated` dispatch switch | **1,853** (1,620 distinct addresses) |
 | functions with 16+ labels | 21, led by `func_1490` at 123 |
 
-The switch is the bulk, and shrinking it means recovering the eight routines
-step 2 rejected — the ones that do not cleanly return, because control runs
-past their `RTS` into the four main loops' indirect dispatch. That is hand
-work, and it is what the rest of this step is.
+### The switch is not what it looks like
+
+The obvious reading is that the switch holds the code no routine was recovered
+for. Measured, that is only a third of it:
+
+| | |
+| --- | --- |
+| addresses **also** inside a recovered function | **1,006** (62%) |
+| addresses only in the switch | 614 (38%) |
+| duplicate cases, same address more than once | 231 |
+
+`$1000` is an accepted routine, is emitted as `func_1000`, **and** has all 15
+of its blocks emitted again as switch cases. Every recovered routine is in
+there twice.
+
+The reason is dynamic dispatch. `func_t001` — the switch — is a fallback
+interpreter, and 147 sites in the program compute their next block through
+`find_block_id_func_t001()`. **134 of those are `RTS`**: a return whose address
+is not statically known has to be able to land anywhere, so the address-to-block
+map must cover every block, including the ones already extracted into functions.
+
+That changes what the remaining work buys. Recovering the eight rejected
+routines removes the 614 switch-only addresses — the smaller half, and the
+ones concentrated in `$0E00-$1Bxx` and `$2000-$21xx`, which is exactly those
+routines and the four main loops. **The larger half goes when `RTS` becomes a
+real C `return`**, because then the map has nothing to look up: the only
+remaining computed jumps are the six indirect ones, and step 2 established
+that all six resolve to fixed addresses.
+
+So the two halves of step 5 are not independent, and relooping pays twice —
+once in the function it structures, and again in the duplicate copy of that
+function it lets the switch drop.
 
 ### `testdata/labels.txt`
 
