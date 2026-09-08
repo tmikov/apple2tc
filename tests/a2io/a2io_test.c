@@ -290,6 +290,27 @@ static void test_clock_extension(void) {
   check(expected > 0x100000000ull, "and the walk really did pass a wrap");
 
   a2_io_done(&io);
+
+  // a2_io_tick() is the fallback for a program that touches no soft switch;
+  // the soft-switch handlers themselves are the primary feeder of the clock,
+  // and nothing above exercises that path. A fresh state, so this does not
+  // interact with the wrap walk above.
+  a2_iostate_t io2;
+  a2_io_init(&io2);
+
+  a2_io_peek(&io2, A2_KBD, 1000);
+  check(io2.clock == 1000, "a peek at a soft switch advances the clock to its stamp");
+
+  a2_io_peek(&io2, A2_KBD, 1510);
+  check(io2.clock == 1510, "and a later peek advances it again");
+
+  // a2_io_poke() tail-calls a2_io_peek() with the same stamp, so the clock
+  // must land on that stamp exactly once -- landing on it twice would mean
+  // the advance ran twice, which is the double-count this task guards against.
+  a2_io_poke(&io2, A2_KBD, 0, 1600);
+  check(io2.clock == 1600, "and a poke advances it to its stamp exactly once");
+
+  a2_io_done(&io2);
 }
 
 int main(void) {
