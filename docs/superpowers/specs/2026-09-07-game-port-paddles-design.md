@@ -327,10 +327,14 @@ rebooted — and is called from all of them.
 
 All three are parsed by `a2host`, because that is where `parse_args` lives.
 Only `a2host_gui` acts on `--joystick`: a front end with no keyboard has no
-mode to be in, so `a2run` and `a2mcp` accept and ignore it rather than
-rejecting an option their GUI twin understands. `--paddle=` sets a starting
-position only; anything that writes that paddle afterwards — an arrow key, a
-future gamepad — overrides it.
+mode to be in, so `a2run` accepts and ignores it rather than rejecting an
+option its GUI twin understands. `a2mcp` never gets that far: `mcp_main.cpp`
+filters argv against its own hardcoded whitelist (`--root=`, `--probe=`,
+`--probe-out=`, `--keys-out=`, `--hash-frames=`, `--help`) before
+`a2host_parse_args()` is ever reached, so `--joystick` is rejected there —
+the same pre-existing treatment it gives `--fast` and `--hgr-mode=`.
+`--paddle=` sets a starting position only; anything that writes that paddle
+afterwards — an arrow key, a future gamepad — overrides it.
 
 `--joy-buttons=` resolves *names*, which is why `a2host_joybtn_t` is named
 rather than numbered: `a2host` maps `"space"` to a slot, and `a2host_gui`
