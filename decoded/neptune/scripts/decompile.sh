@@ -53,12 +53,14 @@ apple2tc=$bin/tools/apple2tc/apple2tc
 b33=$here/../testdata/neptune.b33
 rundata=$here/../testdata/neptune.json
 knowndata=$here/../testdata/known-data.txt
+codeat=$here/../testdata/code-at.txt
 lst=$here/../as-generated/neptune.lst
 cov=$here/../testdata/coverage.txt
 simplec=$here/../as-generated/neptune-simple-c.c
+c1=$here/../as-generated/neptunec1.c
 
 [ -x "$apple2tc" ] || { echo "$0: no apple2tc at $apple2tc" >&2; exit 1; }
-for f in "$b33" "$rundata" "$knowndata"; do
+for f in "$b33" "$rundata" "$knowndata" "$codeat"; do
   [ -r "$f" ] || { echo "$0: missing $f -- run make-b33.sh and collect.sh first" >&2; exit 1; }
 done
 mkdir -p "$(dirname "$lst")"
@@ -113,8 +115,22 @@ else
   exit 1
 fi
 
+# The -O3 --irc1 build, self-contained: it decompiles the Apple II ROM
+# alongside the game so it links on its own. This is the artifact the
+# decompiling playbook operates on, and its entry condition is that this builds
+# and runs.
+#
+# --code-at supplies the one edge the recording cannot: the b33 is entered at
+# $0000 and jumps to the stub at $0100, but --collect only starts recording as
+# the b33 is loaded, so the run data holds nothing below $0200. Without the
+# edge the block at $0100 is decompiled but never becomes a *dynamic* block,
+# and the build stops at once with "Unknown address $0100".
+"$apple2tc" "$b33" --run-data="$rundata" --code-at="$codeat" \
+  -O3 --irc1 --ret-addr -v1 > "$c1" 2>/dev/null
+
 echo "wrote $lst"
 echo "wrote $simplec"
+echo "wrote $c1"
 echo "wrote $cov"
 sed -n '/^range /,/unknown nonzero/p' "$cov"
 echo "$warnings 'invalid instruction' warnings (6 expected; see the header)"

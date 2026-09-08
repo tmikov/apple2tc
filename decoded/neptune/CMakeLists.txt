@@ -10,3 +10,11 @@
 add_a2_program(neptune-as-generated
   as-generated/neptune-simple-c.c ${A2TC_INC}/system.h ${A2TC_INC}/system-inc.h
   )
+
+# The -O3 --irc1 decompilation, self-contained: it decompiles the Apple II ROM
+# alongside the game, so it links on its own. This is the artifact the
+# decompiling playbook operates on -- it exists first of all to answer whether
+# it builds and runs, which is that document's entry condition.
+add_a2_program(neptunec1
+  as-generated/neptunec1.c ${A2TC_INC}/system.h ${A2TC_INC}/system2.h
+  )

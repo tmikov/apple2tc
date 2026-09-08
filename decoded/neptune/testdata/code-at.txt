@@ -1,0 +1,31 @@
+# Extra dynamic control-flow edges for apple2tc's --code-at.
+#
+# Format: "ORIGIN TARGET", hexadecimal, '$' optional, '#' starts a comment.
+# Each line asserts that the branch at ORIGIN can transfer control to TARGET.
+#
+# These edges are *asserted by hand*, not observed. That is exactly why they
+# live here and not in neptune.json: the JSON is a recording of what actually
+# happened during a play session, and editing it to claim reachability the run
+# never saw would destroy its value as evidence. Every line below must carry
+# the argument for why the edge is real.
+
+# --------------------------------------------------------------------------
+# $0000 -> $0100: the b33's entry trampoline.
+#
+# neptune.b33 is entered at its load address, which the .b33 loader forces to
+# be the lowest byte in the file, so the entry is $0000 and the three bytes
+# there are `JMP $0100`. The stub at $0100 restores those three bytes, sets the
+# soft switches and the registers, and jumps to $3523. See scripts/make-b33.sh.
+#
+# The edge is not observed for a mechanical reason rather than an interesting
+# one: --collect starts recording at the moment the b33 is loaded, and the
+# recorded BranchTargets contain nothing below $0200, so the $0000 -> $0100
+# transfer is absent from the run data. The block at $0100 is therefore
+# disassembled -- it is in the listing, and in the generated C -- but it never
+# becomes a *dynamic* block, so the generated address-to-block map has no entry
+# for it and the c1 build stops at once with `Unknown address $0100`.
+#
+# This is as certain as an asserted edge gets. The three bytes at $0000 are
+# `4C 00 01`, this file generated them, and both the interpreter and the
+# --simple-c build execute the transfer on every run.
+0000 0100
