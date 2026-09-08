@@ -55,6 +55,30 @@
 0D00 tbl_hgr_row_lo
 3876 erase_sprite_row         # reads the row tables, EOR #$FF / AND / STA
 
+# --- the player's gun ------------------------------------------------------
+# $1380 is the fire control, and $138C inside it is one of the three sites
+# poll_input_select_mode patches. Read straight off the disassembly: it compares
+# the key against #$C1, which is 'A' with bit 7 set, and 'A' is the fire key on
+# the disk's own help screen.
+#
+# On a press it seeds a shot -- sets the active flag, builds a screen pointer
+# from tbl_hgr_row_hi/lo indexed by $E0+6, and zeroes the spacing counter $CC.
+# There are three shot slots, and $CC spaces them: $13B8 increments it and arms
+# the second at 8 and the third at $10.
+#
+#   slot 1  $C0 active, $C1/$C2 screen pointer, $C3 column, $BD row index
+#   slot 2  $C4 active, $C5/$C6 pointer,        $C7 column, $BE
+#   slot 3  $C8 active, $C9/$CA pointer,        $CB column, $BF
+#
+# $1400 then draws and erases them: EOR #$FF / AND ($C1),Y against a mask at
+# $1350,Y, stepping the column to #$28 -- 40 bytes, the width of the screen.
+# That is the "magenta dashes travelling across the upper screen" in
+# docs/neptune.md, and it is why the gun fires horizontally.
+1380 fire_control
+13B8 shot_advance_slots
+1400 shots_draw
+1350 tbl_shot_mask
+
 # --- ROM -------------------------------------------------------------------
 # The only ROM entry point the game calls; see testdata/rom.externs.
 FCA8 rom_mon_wait

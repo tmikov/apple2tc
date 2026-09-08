@@ -431,3 +431,25 @@ choosing the game's input device once at the title screen. That is the
 self-modification the collector reports as 21 generations. See the *Why it
 reads the joystick buttons* section of `docs/neptune.md`, including the one
 part of it that does not yet add up.
+
+### A lead worth checking before the hand work starts
+
+The 90-entry map may be larger than it needs to be. A `JSR` from a switch block
+to a recovered function is emitted with a **static** continuation:
+
+```c
+case 409:  // $141B
+  func_1490(0x141d);
+  branchTarget = true; block_id = 410;   // static, not a map lookup
+```
+
+and yet `$141E` — block 410 — still has a map entry. Nothing in that sequence
+needs one. The map looks to be built from every *observed* return site rather
+than from the sites that actually require dynamic lookup, in which case some of
+the 90 are removable without any hand conversion at all, and the switch cases
+they keep alive go with them.
+
+Worth measuring before starting the five routines, because if it is true it is
+a decompiler change that does part of the job mechanically, and the playbook's
+own advice applies: "deleting unreachable text cannot move a frame hash, a
+memory sample or a trace, so every oracle must stay exactly where it was."
