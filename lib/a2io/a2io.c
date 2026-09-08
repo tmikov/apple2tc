@@ -398,7 +398,26 @@ void a2_sound_cb(a2_sound_t *sound, float *buffer, unsigned num_frames, unsigned
 void a2_io_init(a2_iostate_t *io) {
   memset(io, 0, sizeof(*io));
   io->vid_control = A2_VC_TEXT;
+  // Explicitly, because memset leaves them at 0 -- hard left and hard up.
+  // A machine nobody is touching must read as a centred stick, not as one
+  // shoved into a corner. See dz 01a074d9.
+  for (unsigned n = 0; n < 4; ++n)
+    io->gameport.paddle[n] = A2_PADDLE_CENTER;
   a2_disk2_init(&io->disk2);
+}
+
+void a2_io_set_paddle(a2_iostate_t *io, unsigned n, uint8_t value) {
+  if (n < 4)
+    io->gameport.paddle[n] = value;
+}
+
+void a2_io_set_button(a2_iostate_t *io, unsigned n, bool down) {
+  if (n >= 3)
+    return;
+  if (down)
+    io->gameport.buttons |= (uint8_t)(1u << n);
+  else
+    io->gameport.buttons &= (uint8_t)~(1u << n);
 }
 
 void a2_io_done(a2_iostate_t *io) {
@@ -553,19 +572,35 @@ uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
     }
     break;
 
-  // Game I/O -- the three pushbuttons and the four paddle one-shots, plus the
-  // cassette input sharing the page. Not emulated, and deliberately quiet
-  // about it: a game polls these every frame, so falling through to the
-  // default arm below buried everything else on stderr. dsk/Neptune.dsk reads
-  // BUTN0 and BUTN1 sixty times a second.
+  // Game I/O. The switch above dispatches on addr & 0xCFF0, so this arm is
+  // the whole of $C060-$C06F; the 74LS251 behind it decodes only A0-A2, which
+  // is why $C068-$C06F mirror $C060-$C067.
   //
-  // Zero is not a neutral answer, it is an answer. Bit 7 clear reads as no
-  // button held, and as a paddle one-shot that has already expired, so a
-  // PREAD-style timing loop exits on its first pass and the stick sits pinned
-  // at 0. A program that offers joystick control will believe it has one,
-  // centred nowhere and with nothing pressed. See dz issue 01a074d9.
+  // The low seven bits read as 0. Real hardware floats the bus there; a
+  // deterministic zero is a deliberate divergence, because a2emu --headless
+  // and a2run are required to be byte-identical and an emulated open bus
+  // would put a house on sand.
   case A2_TAPEIN:
+    switch (addr & 7) {
+    case 0:
+      // Cassette input, which shares the page and is not emulated.
+      break;
+    case 1:
+    case 2:
+    case 3:
+      return (io->gameport.buttons >> ((addr & 7) - 1)) & 1 ? 0x80 : 0x00;
+    default:
+      return io->clock < io->gameport.expiry[(addr & 7) - 4] ? 0x80 : 0x00;
+    }
+    break;
+
+  // PTRIG: any access in $C070-$C07F fires all four one-shots. a2_io_poke()
+  // tail-calls this function, so a write triggers too -- which is correct,
+  // the hardware triggers on any access.
   case A2_PTRIG:
+    for (unsigned n = 0; n < 4; ++n)
+      io->gameport.expiry[n] = io->clock +
+          (uint64_t)A2_PADDLE_CYCLES_PER_COUNT * io->gameport.paddle[n] + A2_PADDLE_OFFSET;
     break;
 
   // Disk II soft switches: $C0E0-$C0EF.

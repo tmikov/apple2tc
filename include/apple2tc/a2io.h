@@ -151,6 +151,24 @@ enum {
   A2_DEBUG_IO1 = 1,
   A2_DEBUG_IO2 = 2,
 
+  /// A paddle's centre position, and what a2_io_init() sets. This is the
+  /// hardware centre, not a value tuned to any one game's deadband.
+  A2_PADDLE_CENTER = 127,
+  /// Cycles the one-shot stays high per unit of position. The figure the
+  /// ROM's PREAD loop is calibrated against: LDA abs,X 4, BPL not taken 2,
+  /// INY 2, BNE taken 3. Neptune's hand-rolled loop at $36B0 matches it.
+  A2_PADDLE_CYCLES_PER_COUNT = 11,
+  /// The gap between the trigger and a reader's first sample.
+  ///
+  /// PREAD samples at trigger + 10 and then every 11 cycles, so every value
+  /// in 0-10 makes it return exactly the position that was set, and 11
+  /// already fails at position 0. Calibration therefore fixes an interval,
+  /// not a number, and this is its midpoint: a program that rolls its own
+  /// loop samples at a different phase -- Neptune's prologue is 9 cycles
+  /// where PREAD's is 6 -- and the midpoint is what leaves those the most
+  /// margin.
+  A2_PADDLE_OFFSET = 5,
+
   /// When set, text, otherwise graphics (default set).
   A2_VC_TEXT = 1,
   /// When set, mixed graphics with 4-lines of text below (default clr).
@@ -185,6 +203,18 @@ typedef struct {
   int phase_position;         ///< Half-track 0-69.
   a2_disk2_drive_t drive[2];
 } a2_disk2_t;
+
+/// The game port: three pushbuttons and four paddle one-shots.
+typedef struct {
+  /// True analog positions, 0-255. a2_io_init() sets these to
+  /// A2_PADDLE_CENTER, because a zeroed struct is hard left and hard up.
+  uint8_t paddle[4];
+  /// Bit n set while PBn is held (n = 0..2).
+  uint8_t buttons;
+  /// Clock value at which each one-shot drops bit 7, against a2_iostate_t's
+  /// extended clock. Zero means "never armed", which is also "expired".
+  uint64_t expiry[4];
+} a2_gameport_t;
 
 typedef struct {
   /// The keyboard latch: bits 0-6 of what $C000 reads. The Apple II keyboard
@@ -240,6 +270,8 @@ typedef struct {
   uint64_t clock;
   /// The last 32-bit stamp seen, which is what `clock` is extended from.
   unsigned clock_last;
+  /// Game port state; see a2_gameport_t.
+  a2_gameport_t gameport;
   /// Disk II controller state.
   a2_disk2_t disk2;
 } a2_iostate_t;
@@ -274,6 +306,12 @@ static inline unsigned a2_io_keys_count(const a2_iostate_t *io) {
 static inline unsigned a2_io_keys_expect(const a2_iostate_t *io) {
   return A2_KBD_QUEUE_SIZE - io->keys_count;
 }
+/// Set paddle \p n (0-3) to an absolute position, 0-255. Takes effect at the
+/// next trigger: a one-shot already in flight keeps the position it was armed
+/// with, which is what the hardware does.
+void a2_io_set_paddle(a2_iostate_t *io, unsigned n, uint8_t value);
+/// Press or release pushbutton \p n (0-2).
+void a2_io_set_button(a2_iostate_t *io, unsigned n, bool down);
 uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles);
 void a2_io_poke(a2_iostate_t *io, uint16_t addr, uint8_t value, unsigned cycles);
 
