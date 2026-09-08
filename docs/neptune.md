@@ -292,13 +292,26 @@ never be taken, so an entire input mode is unreachable — not merely a control
 scheme nobody chose, but a branch of the program no recording can ever cover.
 The gate confirms it: `$3700` has zero hits across both scenarios.
 
-**One thing here is not yet explained**, and is recorded as a question rather
-than dressed up: across the `play` scenario `$3584` runs 93 times and the
-"nothing pressed" exit at `$3599` runs 92, yet neither patch arm (`$359A`,
-`$3700`) nor the "input seen" target (`$3580`) is reached at all — even though
-that scenario demonstrably starts a game. So the path by which a keypress
-actually starts play is not the one the title loop's `BMI` suggests, and
-somewhere there is a caller of `$3584` this reading has not accounted for.
+The counts bear the reading out exactly. Instrumenting every `CYCLES()` site
+and replaying both scenarios:
+
+| | `$3584` | `$3599` nothing | `$359A` patch kbd | `$3580` start | `$3700` patch joy |
+| --- | --- | --- | --- | --- | --- |
+| play | 93 | 92 | **1** | **1** | 0 |
+| attract | 256 | 256 | 0 | 0 | 0 |
+
+92 polls found nothing, the 93rd found the space key, patched the keyboard arm
+and branched to `$3580` to start the game. `attract`, with no input at all,
+runs the full 256-round timeout and falls through to the demo. And `$3700` is
+zero in both, which is the joystick arm being unreachable rather than merely
+unchosen.
+
+*An earlier version of this section reported those as an unexplained anomaly —
+`$3580` and `$359A` apparently never reached in a scenario that demonstrably
+starts a game. That was a measurement error, not a mystery: the probe list had
+been built from the dispatch switch's case labels, which contain no address
+inside a generated function, so three of the five addresses above were never
+instrumented at all. An uninstalled probe reads exactly like a covered one.*
 
 ### DOS is not in memory, and the disk driver is dead code
 

@@ -191,12 +191,20 @@ below are measured rather than assumed.
 
 | scenario | frames | distinct states | blocks reached |
 | --- | --- | --- | --- |
-| attract | 1200 | 956 (80%) | 286 of 1653 (17%) |
-| play | 1929 | 1730 (90%) | 414 of 1653 (25%) |
-| union | | | **416 of 1653 (25%)** |
+| attract | 1200 | 956 (80%) | 314 of 1085 (29%) |
+| play | 1929 | 1730 (90%) | 465 of 1085 (43%) |
+| union | | | **467 of 1085 (43%)** |
 
 At function level, **40 of the 83** generated functions have their entry block
 reached.
+
+*(These figures were wrong when first measured, and the way they were wrong is
+the point of `--coverage` now taking its sites from `CYCLES()` calls. The first
+attempt listed the dispatch switch's `case N: // $XXXX` labels, which excludes
+every block inside the 84 functions — so those addresses reported zero hits
+while executing, and "never runs" got concluded about code that runs. A probe
+that was never installed cannot fail, and an uninstalled probe reads exactly
+like a covered one.)*
 
 Two things that surprise and are worth stating rather than hiding:
 
@@ -204,7 +212,7 @@ Two things that surprise and are worth stating rather than hiding:
   value is not coverage: it is the only scenario that needs no key file, so it
   keeps working if the key coordinate ever breaks — which, given cycle stamps
   do not survive a change of engine, is a live risk rather than a hypothetical.
-- **75% of the decompiled blocks are never executed by the gate.** The
+- **57% of the decompiled blocks are never executed by the gate.** The
   unreached functions cluster in `$2200-$3800` and `$AC00-$B9A0`. Every
   later step has to be read in that light: a change to code in those ranges is
   transcription that the oracle cannot check, and the playbook's rule for that

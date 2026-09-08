@@ -175,12 +175,27 @@ if [ -n "$coverage" ]; then
   # says the frames matched, not that the code ran. Every block head in the
   # generated C gets a probe and we count which ones fire.
   #
-  # The block list comes from the C rather than the listing, so it is the set
-  # of blocks that actually exist in the artifact being gated. The
-  # four-hex-digit filter drops the synthesised interrupt block reported as
-  # $10100, which is not a real address and which the probe loader rejects.
-  grep -oE '// \$[0-9A-F]+$' as-generated/neptunec1.c |
-    grep -oE '[0-9A-F]+$' | awk 'length($0) == 4' | sort -u > "$tmp/blocks.txt"
+  # The sites are taken from the CYCLES() calls, because CYCLES is what
+  # dispatches a probe -- a block that does not call it cannot be observed no
+  # matter what is installed. This was got wrong once, by listing the dispatch
+  # switch's `case N: // $XXXX` labels instead: that set excludes every block
+  # inside the 84 functions, so addresses in them reported zero hits while
+  # being executed, and "never runs" was concluded about code that runs.
+  # Addresses above $FFFF are dropped -- the synthesised interrupt entry is
+  # reported as $10100 and the probe loader rejects it.
+  grep -oE 'CYCLES\(0x[0-9a-f]{1,5},' as-generated/neptunec1.c |
+    grep -oE '0x[0-9a-f]+' |
+    sed 's/^0x//' |
+    awk 'function hex(s,   i, d, v) {
+           v = 0; s = toupper(s)
+           for (i = 1; i <= length(s); i++) {
+             d = index("0123456789ABCDEF", substr(s, i, 1)) - 1
+             if (d >= 0) v = v * 16 + d
+           }
+           return v
+         }
+         { v = hex($0); if (v <= 65535) printf "%04X\n", v }' |
+    sort -u > "$tmp/blocks.txt"
   total=$(wc -l < "$tmp/blocks.txt")
   printf 'probe hit(site = pc) { printf("%%04X\\n", site) }\ninstall hit at @"blocks.txt"\n' \
     > "$tmp/cov.probe"
