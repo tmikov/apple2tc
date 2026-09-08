@@ -250,6 +250,46 @@ inline auto CPURegLiveness::instGenKill(Instruction *inst) const -> std::pair<Se
   }
 }
 
+/// Whether an indirect transfer's destinations are unknown, so that every
+/// register has to be assumed live after it.
+///
+/// They usually are known. GenIR records the addresses the recording actually
+/// saw a JMP ($xx) or an RTS transfer to and pushes them on as operands --
+/// addBranchTargets() -- which makes them ordinary CFG successors, so
+/// updateBlockLiveInOut() unions their liveIn like any other edge. Forcing kAll
+/// on top of that discards the whole union and reports that everything the
+/// block could touch is still needed.
+///
+/// That target list is not advisory. IRC1::scanForDynamicBlocks() reads the
+/// same operands, from the same indices, to build the address-to-block map the
+/// generated C dispatches through; an address missing from it reaches
+/// error_handler() at run time. So an incomplete list already breaks the
+/// generated program loudly at the transfer itself, and trusting it here adds
+/// no failure mode that was not already there.
+///
+/// JSRInd is deliberately left conservative. Its operand 1 is the *return*
+/// continuation rather than a recorded target, so it always has a BasicBlock
+/// operand -- a "does it have successors" test would silently always say yes,
+/// which is the opposite of careful. It is also rare: three occurrences in
+/// Bolo and none in the other three corpora, so nothing is bought by it.
+static bool hasUnknownTargets(Instruction *term) {
+  unsigned first;
+  switch (term->getKind()) {
+  case ValueKind::RTS:
+  case ValueKind::JmpInd:
+    // Operand 0 is the dummy U8 and the computed address respectively; the
+    // recorded targets follow it. Kept in step with IRC1's opIndex.
+    first = 1;
+    break;
+  default:
+    return true;
+  }
+  for (unsigned i = first, e = term->getNumOperands(); i != e; ++i)
+    if (isa<BasicBlock>(term->getOperand(i)))
+      return false;
+  return true;
+}
+
 void CPURegLiveness::initBB(BasicBlock *bb) {
   LivenessSets bbs{};
 
@@ -260,7 +300,7 @@ void CPURegLiveness::initBB(BasicBlock *bb) {
   }
   auto *term = bb->getTerminator();
   assert(term && "Every basic block must have a terminator");
-  if (term->isIndirectBranch())
+  if (term->isIndirectBranch() && hasUnknownTargets(term))
     bbs.liveOut = LivenessSets::kAll;
   else if (term->getKind() == ValueKind::Exit)
     bbs.liveOut = getFuncData(bb->getFunction()).sets.liveOut;
@@ -273,7 +313,7 @@ void CPURegLiveness::resetBB(BasicBlock *bb) {
   bbs.liveIn = LivenessSets::kInvalidSet;
 
   auto *term = bb->getTerminator();
-  if (term->isIndirectBranch())
+  if (term->isIndirectBranch() && hasUnknownTargets(term))
     bbs.liveOut = LivenessSets::kAll;
   else if (term->getKind() == ValueKind::Exit)
     bbs.liveOut = getFuncData(bb->getFunction()).sets.liveOut;
@@ -580,8 +620,10 @@ void dumpRegLiveness(ir::Module *mod, CPURegLiveness *lv, FILE *os) {
   fprintf(os, "#   P  EncodeFlags (PHP, BRK): reads C,Z,I,D,V,N in one instruction\n");
   fprintf(os, "#   L  PLP or RTI: writes C,Z,I,D,V,N in one instruction. Recognised as a\n");
   fprintf(os, "#      DecodeFlag over a Pop8, since decimal ADC/SBC also use DecodeFlag\n");
-  fprintf(os, "#   J  JmpInd or JSRInd: the block's liveOut is forced to all-ones\n");
-  fprintf(os, "#   R  a raw RTS terminator: also an IndirectBranch, same forcing\n");
+  fprintf(os, "#   J  JmpInd or JSRInd. JSRInd always forces the block's liveOut to\n");
+  fprintf(os, "#      all-ones; a JmpInd does so only with no recorded targets\n");
+  fprintf(os, "#   R  a raw RTS terminator, which forces the same all-ones -- again only\n");
+  fprintf(os, "#      when the recording left it with no return targets\n");
   fprintf(os, "#   X  calls an external routine, whose gen and modified are all-ones\n");
   fprintf(os, "#   U  no known callers, so live-out was never narrowed below modified|gen\n");
   fprintf(os, "#   K  called from a block whose liveOut is all-ones (see J and R): that call\n");
@@ -601,16 +643,18 @@ void dumpRegLiveness(ir::Module *mod, CPURegLiveness *lv, FILE *os) {
       "lvl",
       "name");
 
-  // A call inside a block whose terminator is an IndirectBranch sits under the
-  // liveOut initBB() forced to kAll, so it tells its callee nothing. These are
-  // the call sites that keep the whole analysis conservative, and they are
+  // A call inside a block whose liveOut initBB() had to force to kAll -- an
+  // indirect transfer with no recorded targets -- tells its callee nothing.
+  // These are the call sites that keep the analysis conservative, and they are
   // concentrated in whichever functions routine identification could not
-  // extract -- see the 'R' rows.
+  // extract, see the 'R' rows. Same test as initBB(), or the column would
+  // count blocks whose targets are in fact known.
   std::unordered_set<const Function *> blindCallees;
   unsigned callSites = 0, blindCallSites = 0;
   for (auto &func : mod->functions()) {
     for (auto &bb : func.basicBlocks()) {
-      bool blind = bb.getTerminator()->isIndirectBranch();
+      auto *term = bb.getTerminator();
+      bool blind = term->isIndirectBranch() && hasUnknownTargets(term);
       for (auto &inst : bb.instructions()) {
         if (!inst.isCall())
           continue;

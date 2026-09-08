@@ -28,8 +28,10 @@
 #   P  EncodeFlags (PHP, BRK): reads C,Z,I,D,V,N in one instruction
 #   L  PLP or RTI: writes C,Z,I,D,V,N in one instruction. Recognised as a
 #      DecodeFlag over a Pop8, since decimal ADC/SBC also use DecodeFlag
-#   J  JmpInd or JSRInd: the block's liveOut is forced to all-ones
-#   R  a raw RTS terminator: also an IndirectBranch, same forcing
+#   J  JmpInd or JSRInd. JSRInd always forces the block's liveOut to
+#      all-ones; a JmpInd does so only with no recorded targets
+#   R  a raw RTS terminator, which forces the same all-ones -- again only
+#      when the recording left it with no return targets
 #   X  calls an external routine, whose gen and modified are all-ones
 #   U  no known callers, so live-out was never narrowed below modified|gen
 #   K  called from a block whose liveOut is all-ones (see J and R): that call

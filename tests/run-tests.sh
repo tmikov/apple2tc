@@ -110,6 +110,25 @@ $a6502 codeat.s codeat.b33 && $apple2tc codeat.b33 --code-at=codeat.txt -O3 --ir
 diff -q codeat.ir codeat-test.ir
 $apple2tc codeat.b33 -O3 --ir > codeat-noedges-test.ir
 diff -q codeat-noedges.ir codeat-noedges-test.ir
+# The same pair pins the liveness rule for indirect transfers, which is why it
+# is asserted here rather than in a fixture of its own -- codeat.s is the only
+# one with a computed RTS whose target is known.
+#
+# With the edge, the RTS at $0306 carries its target as an operand, and the
+# target's liveIn is what is live after it. Nothing downstream reads a register,
+# so the entry-state stores are dead and go. Without the edge the same RTS has
+# no target at all, every register has to be assumed live, and all ten survive.
+# Getting this backwards in either direction is a bug: one way loses stores that
+# are needed, the other keeps the analysis as blind as it was.
+if grep -q 'StoreR8' codeat-test.ir; then
+  echo "FAIL: an RTS with a known target still forced every register live" >&2
+  grep -c 'StoreR8' codeat-test.ir >&2
+  exit 1
+fi
+if ! grep -q 'StoreR8       STATUS_C, 0x00' codeat-noedges-test.ir; then
+  echo "FAIL: an RTS with no known target must still assume everything is live" >&2
+  exit 1
+fi
 rm codeat-test.ir codeat-noedges-test.ir
 
 # --inline-str: routines taking a NUL-terminated string after the JSR. Two
