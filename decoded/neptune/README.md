@@ -357,6 +357,56 @@ So the two halves of step 5 are not independent, and relooping pays twice —
 once in the function it structures, and again in the duplicate copy of that
 function it lets the switch drop.
 
+### What actually holds the switch up: 90 addresses
+
+`find_block_id_func_t001()` is the address-to-block map, and it has **90
+entries**. Those are the only addresses control can enter the switch at from
+outside; every other case is reached by chaining (`block_id = N; break;`) from
+one of them. They are `JSR` return sites — `$352B` follows
+`JSR poll_input_select_mode` at `$3528`, `$3532` follows `JSR delay_one_tick`
+at `$352F`.
+
+| | |
+| --- | --- |
+| entry points inside a recovered function | 45 |
+| entry points outside any function | **45** |
+| of those, in the four main loops `$2000-$2186` | **24** |
+
+That is the whole remaining problem stated in one number. It is not "reloop 84
+functions" — those are already real C. It is: **make 45 return sites static**,
+and the map has nothing to look up, and the switch collapses the way Snake
+Byte's did (23,634 lines → 4,206, with zero cases and zero `find_block_id`).
+
+### The order it has to be done in, and the cycle in it
+
+The four main loops are short and readable. `$2080` is a per-frame update that
+runs two ticks and a slower counter:
+
+```
+2080: JSR $0E00 / JSR $1100 / DEC $D4 ... STA SPKR / JSR $1380
+20A4: JSR $1100 / DEC $D4 ... STA SPKR / JSR $1380      <- second tick
+20C2: DEC $20 ... JSR $1B80 / JSR $1738                 <- every other frame
+20D4: JMP ($38)                                         -> itself
+```
+
+But they cannot be written as C until their callees are C functions, and five
+of those — `$0E00`, `$1100`, `$1300`, `$1380`, `$1B80` — are exactly the ones
+step 2 rejected. That is the cycle: the callees are rejected *because* control
+runs past their `RTS` into the loops' indirect dispatch, and the loops cannot
+be converted while the callees are switch blocks.
+
+Breaking it means hand-recovering those five, which is the playbook's "recover
+the remaining procedures by hand, rewriting idiom-based ones" and the reason
+that sentence comes before "reloop each function". They are not simple
+transcription: `$1380` branches *forward past its own `RTS`* at `$13B7` into
+shared tails, so deciding what its C signature even is — does it return, or
+does it transfer? — is the work.
+
+**So the remaining sequence is:** recover the five rejected callees by hand →
+convert the four main loops → the 24 top-level entry points go → repeat for the
+remaining 21 outside-function entry points → the map empties and the switch
+goes with it.
+
 ### `testdata/labels.txt`
 
 The names earned so far, each with its evidence, following the playbook's rule
