@@ -453,3 +453,25 @@ Worth measuring before starting the five routines, because if it is true it is
 a decompiler change that does part of the job mechanically, and the playbook's
 own advice applies: "deleting unreachable text cannot move a frame hash, a
 memory sample or a trace, so every oracle must stay exactly where it was."
+
+**Measured.** Logging every `addr_to_block_id()` lookup in the artifact and
+replaying both scenarios: **12 of the 90 entries are ever used**, from 7,528
+lookups. And they are almost all one thing:
+
+| entry | lookups | what |
+| --- | --- | --- |
+| `$2000` `$2003` `$2006` `$201B` `$2021` | ~1,200 each | `main_loop_via_36` and its per-frame call returns |
+| `$1132` | 1,218 | a return inside `$1100` |
+| `$10AE` | 424 | a return inside `$1060` |
+| `$132F` `$13B7` | ~200 each | the `RTS` of `$1300` and of `$1380`, the gun |
+| `$0100` `$1D00` `$1F6E` | 1–2 | one-offs, including the b33 stub's entry |
+
+So the live dynamic dispatch is **one main loop and the four rejected routines
+it calls**. Converting `$2000` plus `$1060`, `$1100`, `$1300` and `$1380`
+removes 9 of the 12. The other three main loops never execute under the gate at
+all — they are other game states.
+
+That does not mean the remaining 78 entries are dead: the gate reaches 43% of
+blocks, and the unused entries are presumably the other states' returns. It
+means the conversion has an order that traffic, not structure, chose — and the
+first five things to convert are now named rather than estimated.
