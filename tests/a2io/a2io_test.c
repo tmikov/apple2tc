@@ -242,12 +242,13 @@ static void test_paddle_centred_at_init(void) {
   uint64_t centre = paddle_expiry_for(A2_PADDLE_CENTER);
   uint64_t zero = paddle_expiry_for(0);
 
-  check(paddle_high(&io, 0, (unsigned)zero + 1),
+  check(
+      paddle_high(&io, 0, (unsigned)zero + 1),
       "a freshly initialised paddle is not at the zero rail");
-  check(paddle_high(&io, 0, (unsigned)centre - 1),
+  check(
+      paddle_high(&io, 0, (unsigned)centre - 1),
       "it is still high one cycle before the centre position expires");
-  check(!paddle_high(&io, 0, (unsigned)centre),
-      "and low at it");
+  check(!paddle_high(&io, 0, (unsigned)centre), "and low at it");
 
   a2_io_done(&io);
 }
@@ -281,8 +282,7 @@ static void test_paddle_boundaries(void) {
 static void test_paddle_never_triggered(void) {
   a2_iostate_t io;
   a2_io_init(&io);
-  check(!paddle_high(&io, 0, 0x80000000u),
-      "a paddle never triggered reads low at 2^31");
+  check(!paddle_high(&io, 0, 0x80000000u), "a paddle never triggered reads low at 2^31");
   a2_io_done(&io);
 }
 
@@ -295,7 +295,8 @@ static void test_paddle_stays_expired(void) {
   a2_io_init(&io);
   a2_io_set_paddle(&io, 0, A2_PADDLE_CENTER);
   a2_io_peek(&io, A2_PTRIG, 1000);
-  check(!paddle_high(&io, 0, 1000u + 0x80000000u),
+  check(
+      !paddle_high(&io, 0, 1000u + 0x80000000u),
       "an expired paddle is still expired 2^31 cycles later");
   a2_io_done(&io);
 
@@ -310,7 +311,8 @@ static void test_paddle_stays_expired(void) {
     stamp += FRAME_CYCLES;
     a2_io_tick(&io, stamp);
   }
-  check(!paddle_high(&io, 0, 1000),
+  check(
+      !paddle_high(&io, 0, 1000),
       "and still expired when the 32-bit stamp comes all the way round");
   a2_io_done(&io);
 }
@@ -324,9 +326,11 @@ static void test_paddle_rearm(void) {
   uint64_t span = paddle_expiry_for(A2_PADDLE_CENTER);
   a2_io_peek(&io, A2_PTRIG, 0);
   a2_io_peek(&io, A2_PTRIG, 100);
-  check(paddle_high(&io, 0, (unsigned)span + 99),
+  check(
+      paddle_high(&io, 0, (unsigned)span + 99),
       "re-arming restarts the one-shot from the new trigger");
-  check(!paddle_high(&io, 0, (unsigned)span + 100),
+  check(
+      !paddle_high(&io, 0, (unsigned)span + 100),
       "and it expires a span after that trigger, not the first one");
 
   a2_io_done(&io);
@@ -338,7 +342,6 @@ static void test_buttons_and_mirroring(void) {
   a2_iostate_t io;
   a2_io_init(&io);
 
-  check((a2_io_peek(&io, A2_BUTN0, 0) & 0x80) == 0, "PB0 reads low when up");
   a2_io_set_button(&io, 0, true);
   check((a2_io_peek(&io, A2_BUTN0, 0) & 0x80) != 0, "PB0 reads high when held");
   check((a2_io_peek(&io, A2_BUTN1, 0) & 0x80) == 0, "and PB1 is unaffected");
@@ -358,9 +361,11 @@ static void test_buttons_and_mirroring(void) {
   a2_io_done(&io);
 }
 
-/// The game port is not emulated and says nothing about it. Reads there used to
-/// fall through a2_io_peek's default arm, which prints one line per access --
-/// and a program polls the buttons every frame, so a run of dsk/Neptune.dsk
+/// A machine nobody has touched reads as no button held and no paddle
+/// one-shot running, and the sweep that checks it must stay silent on
+/// stderr. It exists because before the port was emulated, reads here fell
+/// through a2_io_peek's default arm, which prints one line per access -- and
+/// a program polls the buttons every frame, so a run of dsk/Neptune.dsk
 /// buried everything else on stderr under thousands of them.
 ///
 /// This runs last and does not put stderr back: there is no portable way to
