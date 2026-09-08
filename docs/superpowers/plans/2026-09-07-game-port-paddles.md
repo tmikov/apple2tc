@@ -1294,12 +1294,8 @@ static bool handle_joystick_key(const sapp_event *ev) {
   // that flag is cleared at the top of every event, and the KEY_UP handling
   // below -- plus sokol's own synthetic KEY_UP for Super-modified keys on
   // macOS -- can land between the KEY_DOWN and the CHAR.
-  if (ev->type == SAPP_EVENTTYPE_CHAR) {
-    a2host_joybtn_t btn;
-    if (ev->char_code == ' ' && joy_btn_of_key(SAPP_KEYCODE_SPACE, &btn))
-      return true;
-    return false;
-  }
+  if (ev->type == SAPP_EVENTTYPE_CHAR)
+    return ev->char_code == ' ';
 
   if (ev->type == SAPP_EVENTTYPE_KEY_DOWN || ev->type == SAPP_EVENTTYPE_KEY_UP) {
     bool down = ev->type == SAPP_EVENTTYPE_KEY_DOWN;
@@ -1377,9 +1373,18 @@ Create `tests/gameport/pread.s`:
 ; PREAD takes the paddle index in X, returns the count in Y, and leaves X
 ; alone -- it reads $C064,X -- so X doubles as the store index.
 ;
-; The capture address is fixed with a second `org` so the acceptance script
-; can name it to --snapshot-at= without parsing a listing. The first block is
-; 17 bytes ($300..$310), comfortably clear of $320.
+; One `org`, and the capture address is counted rather than forced with a
+; second one: a forward org leaves a gap in the emitted image, and the
+; acceptance script would then depend on how a6502 fills it. The bytes are
+;
+;   $300 ldx #0      2      $306 sta $1F00,x  3      $30C bne loop  2
+;   $302 jsr $FB1E   3      $309 inx          1      $30E again     3
+;   $305 tya         1      $30A cpx #4       2
+;
+; so `again` is at $30E, which is what --snapshot-at= names. The snapshot
+; fires on the FIRST time the address is reached (probe.c's s_snap_fired), so
+; the capture point must be one the program reaches only after all four
+; stores -- which is why it is the halt and not the entry.
 
         org     $300
 
@@ -1390,10 +1395,7 @@ loop:   jsr     $FB1E
         inx
         cpx     #4
         bne     loop
-        jmp     $320
-
-        org     $320
-done:   jmp     done
+again:  jmp     again
 ```
 
 - [ ] **Step 2: Write the acceptance script**
@@ -1427,7 +1429,7 @@ trap 'rm -rf "$tmp"' EXIT
 # Four positions in one run: the rails, one either side of centre.
 "$a2run" "$tmp/pread.b33" --headless --frames=200 --no-sound \
     --paddle=0:0 --paddle=1:1 --paddle=2:127 --paddle=3:255 \
-    --snapshot-at=320 --snapshot-out="$tmp/out.ram" > /dev/null
+    --snapshot-at=30E --snapshot-out="$tmp/out.ram" > /dev/null
 
 got="$(od -An -tu1 -j 0x1F00 -N 4 "$tmp/out.ram" | tr -s ' ' | sed 's/^ //')"
 want="0 1 127 255"
@@ -1439,7 +1441,7 @@ fi
 # The other end of the range, in a second run so 128 and 254 are covered too.
 "$a2run" "$tmp/pread.b33" --headless --frames=200 --no-sound \
     --paddle=0:128 --paddle=1:254 --paddle=2:64 --paddle=3:192 \
-    --snapshot-at=320 --snapshot-out="$tmp/out2.ram" > /dev/null
+    --snapshot-at=30E --snapshot-out="$tmp/out2.ram" > /dev/null
 
 got2="$(od -An -tu1 -j 0x1F00 -N 4 "$tmp/out2.ram" | tr -s ' ' | sed 's/^ //')"
 want2="128 254 64 192"
