@@ -23,6 +23,7 @@
 #include "apple2tc/probe.h"
 #include "apple2tc/system.h"
 
+#include "joystick.h"
 #include "probe_internal.h"
 
 #include <ctype.h>
@@ -135,11 +136,47 @@ static bool firstFrame_ = true;
 static a2_hgr_mode_t initial_hgr_mode_ = A2_HGR_COLOR;
 static bool initial_persist_enabled_ = false;
 static float initial_persist_decay_ = 0.75f;
+/// --paddle= positions, applied once the machine exists. -1 is "not given".
+static int pendingPaddle_[4] = {-1, -1, -1, -1};
 
 static a2_iostate_t io_;
 
+/// The virtual joystick. One per process, like everything else here.
+static a2host_joy_t joy_;
+/// Whether --joystick was given.
+static bool joystickAtStart_ = false;
+
 a2_iostate_t *a2host_io(void) {
   return &io_;
+}
+
+/// Push the policy's current opinion to the device. Called after every change
+/// rather than polled, so the machine sees a keypress at the cycle it landed.
+static void joy_push(void) {
+  for (unsigned axis = 0; axis < 2; ++axis)
+    a2_io_set_paddle(&io_, axis, a2host_joy_paddle(&joy_, axis));
+  uint8_t mask = a2host_joy_pbmask(&joy_);
+  for (unsigned n = 0; n < 3; ++n)
+    a2_io_set_button(&io_, n, (mask >> n) & 1);
+}
+
+void a2host_joy_set_dir(a2host_joydir_t dir, bool down) {
+  a2host_joy_dir(&joy_, dir, down);
+  joy_push();
+}
+
+void a2host_joy_set_button(a2host_joybtn_t btn, bool down) {
+  a2host_joy_button(&joy_, btn, down);
+  joy_push();
+}
+
+void a2host_joy_release_all(void) {
+  a2host_joy_reset(&joy_);
+  joy_push();
+}
+
+bool a2host_joystick_at_start(void) {
+  return joystickAtStart_;
 }
 
 /// Set by a front end with a real display; see a2host_set_wall_clock_pacing().
@@ -801,6 +838,10 @@ void a2host_init_emulation(void) {
     else
       drain_buffered_keys();
   }
+
+  for (unsigned n = 0; n < 4; ++n)
+    if (pendingPaddle_[n] >= 0)
+      a2_io_set_paddle(&io_, n, (uint8_t)pendingPaddle_[n]);
 }
 
 /// Tear the emulated machine down and bring it back up, byte-identical to a
@@ -861,6 +902,10 @@ void a2host_reboot(void) {
         "not replay under --key-file=\n");
     fprintf(sched_keys_file_, "# reboot: cycle counter restarts at 0 here\n");
   }
+  // The machine is about to be rebuilt with a centred stick, so the policy's
+  // idea of what is held has to go with it -- otherwise a key held across the
+  // reboot leaves the two disagreeing until it is next pressed.
+  a2host_joy_reset(&joy_);
   a2host_init_emulation();
 }
 
@@ -905,6 +950,10 @@ void a2host_simulate_frame(void) {
       runCycles = (unsigned)((elapsed < 0.200 ? elapsed : 0.200) * clock_freq_);
     }
     run_emulated(runCycles);
+    // Keep a2io's extended clock honest even across a frame in which the
+    // program touched no soft switch: its 32-bit source wraps every ~71
+    // minutes, and a missed wrap would revive an expired paddle one-shot.
+    a2_io_tick(&io_, get_cycles());
     if (engine_stop_reason() == A2_STOP_REQUESTED)
       engine_stopped_ = true;
     if (frame_done_fn_)
@@ -1094,6 +1143,10 @@ static void print_help(void) {
   printf(
       " --persist-decay=f Windowed only: initial persistence decay, 0..1 "
       "(default 0.75). Adjusted at runtime with F5/F6\n");
+  printf(" --joystick       Start in joystick mode (windowed front end only)\n");
+  printf(" --joy-buttons=M  Which pushbutton each host button drives, e.g.\n");
+  printf("                  space:1,alt:0 -- Neptune's fire is PB1, not PB0\n");
+  printf(" --paddle=N:V     Start paddle N (0-3) at position V (0-255)\n");
   engine_print_help();
 }
 
@@ -1105,6 +1158,10 @@ void a2host_parse_args(int argc, char *argv[]) {
       --e;
     s_argv0 = e;
   }
+
+  // Before the option loop, so --joy-buttons= overrides these defaults rather
+  // than the other way around.
+  a2host_joy_init(&joy_);
 
   for (int i = 1; i < argc; ++i) {
     const char *arg = argv[i];
@@ -1244,6 +1301,39 @@ void a2host_parse_args(int argc, char *argv[]) {
         exit(2);
       }
       initial_persist_decay_ = (float)v;
+      continue;
+    }
+    if (strcmp(arg, "--joystick") == 0) {
+      joystickAtStart_ = true;
+      continue;
+    }
+    if (strncmp(arg, "--joy-buttons=", 14) == 0) {
+      if (!a2host_joy_parse_buttons(&joy_, arg + 14)) {
+        fprintf(
+            stderr,
+            "--joy-buttons: expected a list like \"space:1,alt:0\" over "
+            "space/alt/ctrl and pushbuttons 0-2, got \"%s\"\n",
+            arg + 14);
+        exit(1);
+      }
+      continue;
+    }
+    if (strncmp(arg, "--paddle=", 9) == 0) {
+      // <n>:<value>. A starting position only: anything that writes that
+      // paddle afterwards overrides it.
+      char *end = NULL;
+      unsigned long n = strtoul(arg + 9, &end, 10);
+      if (end == arg + 9 || *end != ':' || n > 3) {
+        fprintf(stderr, "--paddle: expected <0-3>:<0-255>, got \"%s\"\n", arg + 9);
+        exit(1);
+      }
+      char *vend = NULL;
+      unsigned long v = strtoul(end + 1, &vend, 10);
+      if (vend == end + 1 || *vend != 0 || v > 255) {
+        fprintf(stderr, "--paddle: expected <0-3>:<0-255>, got \"%s\"\n", arg + 9);
+        exit(1);
+      }
+      pendingPaddle_[n] = (int)v;
       continue;
     }
 
