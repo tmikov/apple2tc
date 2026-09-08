@@ -10,10 +10,13 @@
 /// pushbutton a host button drives.
 ///
 /// A plain struct with pure functions over it, deliberately: no statics, no
-/// a2io, no sokol. The device is analog and lives in a2io; the decision that
-/// an arrow key means "rail" is here; the decision that the Left arrow key is
-/// the one that does it belongs to a front end. Keeping this layer free of
-/// the other two is what lets it be tested at all.
+/// sokol, and no *calls* into a2io -- it borrows one constant
+/// (A2_PADDLE_CENTER) from `apple2tc/a2io.h` for its centred reading, but
+/// never touches the device itself. The device is analog and lives in a2io;
+/// the decision that an arrow key means "rail" is here; the decision that
+/// the Left arrow key is the one that does it belongs to a front end.
+/// Keeping this layer free of the other two is what lets it be tested at
+/// all.
 
 #pragma once
 

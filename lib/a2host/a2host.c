@@ -142,7 +142,14 @@ static int pendingPaddle_[4] = {-1, -1, -1, -1};
 static a2_iostate_t io_;
 
 /// The virtual joystick. One per process, like everything else here.
-static a2host_joy_t joy_;
+///
+/// Given a designated initialiser for btnPB so the conventional
+/// space/alt/ctrl -> PB0/PB1/PB2 mapping does not depend on
+/// a2host_parse_args() having run a2host_joy_init() first -- a zeroed struct
+/// alone would map every host button to PB0. a2host_joy_init() is still
+/// called below; it is what resets held state on repeated parses and what
+/// --joy-buttons= then overrides.
+static a2host_joy_t joy_ = {.btnPB = {0, 1, 2}};
 /// Whether --joystick was given.
 static bool joystickAtStart_ = false;
 
@@ -160,12 +167,33 @@ static void joy_push(void) {
     a2_io_set_button(&io_, n, (mask >> n) & 1);
 }
 
+/// One-shot, not per event: a game polls the joystick constantly, so warning
+/// on every press/release would flood stderr. `--record-keys=` stamps only
+/// keyboard input, so a session driven by the stick is not reproducible from
+/// that file -- the design's deliberate position (see the design doc's
+/// "Replay" section) is that this should be plainly visible rather than
+/// silently divergent on playback, the same reasoning a2host_reboot() acts on
+/// for its own recording hazard.
+static void warn_joy_not_recorded(void) {
+  static bool warned = false;
+  if (warned || !sched_keys_file_)
+    return;
+  warned = true;
+  fprintf(
+      stderr,
+      "WARNING: joystick input arrived with a scheduled-key recording open; "
+      "joystick state is not recorded, so the file will not reproduce this "
+      "session\n");
+}
+
 void a2host_joy_set_dir(a2host_joydir_t dir, bool down) {
+  warn_joy_not_recorded();
   a2host_joy_dir(&joy_, dir, down);
   joy_push();
 }
 
 void a2host_joy_set_button(a2host_joybtn_t btn, bool down) {
+  warn_joy_not_recorded();
   a2host_joy_button(&joy_, btn, down);
   joy_push();
 }
@@ -1146,7 +1174,9 @@ static void print_help(void) {
   printf(" --joystick       Start in joystick mode (windowed front end only)\n");
   printf(" --joy-buttons=M  Which pushbutton each host button drives, e.g.\n");
   printf("                  space:1,alt:0 -- Neptune's fire is PB1, not PB0\n");
-  printf(" --paddle=N:V     Start paddle N (0-3) at position V (0-255)\n");
+  printf(
+      " --paddle=N:V     Starting position V (0-255) for paddle N (0-3); anything that\n"
+      "                  writes that paddle later overrides it\n");
   engine_print_help();
 }
 

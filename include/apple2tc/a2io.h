@@ -167,6 +167,18 @@ enum {
   /// loop samples at a different phase -- Neptune's prologue is 9 cycles
   /// where PREAD's is 6 -- and the midpoint is what leaves those the most
   /// margin.
+  ///
+  /// `tests/gameport/pread-acceptance.sh` only pins the upper end of that
+  /// interval, because it calibrates against the ROM's PREAD: everything
+  /// from 0 to 10 passes it. The lower bound comes from programs that roll
+  /// their own loop instead of calling PREAD. Neptune's is one: its loop at
+  /// $36B0 has a longer prologue and takes its first sample at trigger + 13,
+  /// then every 11 cycles after that, so it needs OFFSET >= 3 -- an offset
+  /// of 0, 1 or 2 would still pass the acceptance test while giving Neptune
+  /// a wrong reading. 5 sits clear of both bounds. This is the most fragile
+  /// constant on the branch precisely because no single test sees both ends
+  /// of the interval it has to sit inside -- which is the whole reason for
+  /// picking the midpoint rather than either extreme.
   A2_PADDLE_OFFSET = 5,
 
   /// When set, text, otherwise graphics (default set).
@@ -308,7 +320,12 @@ static inline unsigned a2_io_keys_expect(const a2_iostate_t *io) {
 }
 /// Set paddle \p n (0-3) to an absolute position, 0-255. Takes effect at the
 /// next trigger: a one-shot already in flight keeps the position it was armed
-/// with, which is what the hardware does.
+/// with. That is a simplification, not hardware fidelity -- a real 558 charges
+/// its timing capacitor through the pot for the whole pulse, so moving the pot
+/// mid-pulse changes the remaining time. Latching at trigger is unobservable
+/// today because the only writer (a2host's joystick policy) runs between
+/// frames, never mid-pulse; a future caller that moves a paddle while a
+/// one-shot is in flight would need this revisited.
 void a2_io_set_paddle(a2_iostate_t *io, unsigned n, uint8_t value);
 /// Press or release pushbutton \p n (0-2).
 void a2_io_set_button(a2_iostate_t *io, unsigned n, bool down);
@@ -325,7 +342,10 @@ void a2_io_poke(a2_iostate_t *io, uint16_t addr, uint8_t value, unsigned cycles)
 ///
 /// Soft-switch accesses advance it on their own. This exists so a host can
 /// guarantee the bound for a program that touches no soft switch for a long
-/// time: a2host calls it once per frame, and a frame is ~17,000 cycles.
+/// time: a2host calls it once per frame. A fixed-step frame is ~17,000
+/// cycles; the wall-clock path caps a slice at 0.200 s, ~204,600 cycles at
+/// the 1.023 MHz clock. Either way the call is orders of magnitude inside
+/// the 2^32 bound this exists to guarantee.
 void a2_io_tick(a2_iostate_t *io, unsigned cycles);
 
 /// Initialize disk2 controller state.

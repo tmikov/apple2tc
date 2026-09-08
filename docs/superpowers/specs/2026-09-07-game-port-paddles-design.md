@@ -304,8 +304,13 @@ is held, then rails *left* when Right is released. Mode toggles and reboots
 break the same way. One owner, one reset.
 
 It also removes the question of how a reboot reaches front-end state:
-`a2host_reboot()` calls `a2host_joy_release_all()` directly, with no callback
-into the GUI.
+`a2host_reboot()` calls the internal `a2host_joy_reset(&joy_)` directly on the
+module's own instance, not the public `a2host_joy_release_all()` wrapper --
+that wrapper also pushes the centred, unpressed state to the device via
+`joy_push()`, and by the time `a2host_reboot()` reaches this point
+`a2_io_done(&io_)` has already torn the device down, so pushing to it would
+reach state that no longer exists. `a2host_init_emulation()`, called right
+after, brings the device back up already centred.
 
 The mapping is digital and self-centring: `-1` → 0, `0` → 127, `+1` → 255.
 Only PADDL0 and PADDL1 are reachable this way. PADDL2 and PADDL3 exist in the
@@ -317,9 +322,14 @@ since the emulation is deterministic rather than noisy there is no jitter to
 absorb. Tuning the emulator's idea of "centre" to one game's asymmetric
 deadband would be the wrong trade.
 
-`a2host_joy_release_all()` is not a convenience. It is the fix for every
-stuck-stick case — focus lost mid-hold, mode switched off mid-hold, machine
-rebooted — and is called from all of them.
+`a2host_joy_release_all()` is not a convenience. It is the fix for the
+front end's own stuck-stick cases — focus lost mid-hold, mode switched off
+mid-hold — and is called from both. A reboot needs the same reset but cannot
+call this wrapper: by the time `a2host_reboot()` gets there, `a2_io_done()`
+has already torn the device down, so pushing to it would reach state that no
+longer exists. It calls the internal `a2host_joy_reset(&joy_)` directly
+instead, and lets the reinitialisation that follows bring the device back up
+already centred.
 
 ### Options
 
