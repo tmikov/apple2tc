@@ -136,6 +136,19 @@ static void test_button_remap_rejects_junk(void) {
   check(!a2host_joy_parse_buttons(&j, "mouse:1"), "an unknown button name is rejected");
   check(!a2host_joy_parse_buttons(&j, "space"), "a missing colon is rejected");
   check(!a2host_joy_parse_buttons(&j, ""), "an empty mapping is rejected");
+  check(!a2host_joy_parse_buttons(&j, ",space:1"), "a leading comma is rejected");
+  check(!a2host_joy_parse_buttons(&j, "space:1,,alt:0"), "a doubled comma is rejected");
+  check(!a2host_joy_parse_buttons(&j, "space:1,"), "a trailing comma is rejected too");
+
+  // The first entry of "alt:0,space:9" is well formed on its own; only the
+  // second fails. This is what the copy-then-commit design in
+  // a2host_joy_parse_buttons() exists for -- prove it through the mapping's
+  // effect (pbmask), not by reading the struct field directly, or a version
+  // that writes straight into btnPB as it parses would pass just as well.
+  check(!a2host_joy_parse_buttons(&j, "alt:0,space:9"), "a good first entry, bad second, rejects");
+  a2host_joy_button(&j, A2HOST_JOYBTN_ALT, true);
+  check(a2host_joy_pbmask(&j) == 0x2, "and alt is still on its default of PB1, not PB0");
+  a2host_joy_button(&j, A2HOST_JOYBTN_ALT, false);
 
   a2host_joy_button(&j, A2HOST_JOYBTN_SPACE, true);
   check(a2host_joy_pbmask(&j) == 0x1, "and a rejected mapping left the defaults alone");

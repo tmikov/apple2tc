@@ -58,6 +58,8 @@ bool a2host_joy_parse_buttons(a2host_joy_t *j, const char *spec) {
     if (*end != ',')
       return false;
     p = end + 1;
+    if (*p == 0)
+      return false; // a trailing comma has no entry after it to be lenient about
   }
 
   memcpy(j->btnPB, parsed, sizeof(parsed));
