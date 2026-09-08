@@ -155,3 +155,68 @@ would make the fall-through live again — which needs predecessor information
 the tracer does not have until after the padding is already decoded. Step 4
 removes that ROM anyway. Snake Byte has zero such pairs, so nothing there is
 affected either way.
+
+## Step 3: the oracle
+
+`scripts/verify.sh` is the gate. Everything after this point is trusted because
+it still passes.
+
+```
+./scripts/verify.sh              check the build against the golden traces
+./scripts/verify.sh --record     re-record them (refuses unless two runs agree)
+./scripts/verify.sh --coverage   report what the scenarios actually reach
+```
+
+It compares per-frame hashes of video *memory* — mode bits plus the text and
+hi-res pages — not rendered pixels: memory hashing is more sensitive, needs no
+graphics context so it runs headless, and is reproducible where rendering is
+not (blink phase comes from wall-clock time). Each line also carries the cycle
+count, so the trace is a timing check and any restructuring that changes a
+`CYCLES()` total is caught here.
+
+### It can fail, which was checked three ways
+
+| mutation | result |
+| --- | --- |
+| one hash corrupted in `play.frames` | **FAIL**, naming the frame |
+| `s_y = 0x30` → `0x31` at `$133D`, a block the recording executes | **FAIL** at frame 1527 |
+| `s_a = 0x40` → `0x41` at `$28E6` | **PASS** — and correctly so |
+
+The third is the useful one. `$28E6` is never executed: nothing in
+`$2800-$2A00` appears in the recording at all. A green result there is the
+oracle telling the truth about its own reach, which is why the coverage numbers
+below are measured rather than assumed.
+
+### What it covers
+
+| scenario | frames | distinct states | blocks reached |
+| --- | --- | --- | --- |
+| attract | 1200 | 956 (80%) | 286 of 1653 (17%) |
+| play | 1929 | 1730 (90%) | 414 of 1653 (25%) |
+| union | | | **416 of 1653 (25%)** |
+
+At function level, **40 of the 83** generated functions have their entry block
+reached.
+
+Two things that surprise and are worth stating rather than hiding:
+
+- **`attract` adds only 2 blocks over `play`.** It is almost a subset. Its
+  value is not coverage: it is the only scenario that needs no key file, so it
+  keeps working if the key coordinate ever breaks — which, given cycle stamps
+  do not survive a change of engine, is a live risk rather than a hypothetical.
+- **75% of the decompiled blocks are never executed by the gate.** The
+  unreached functions cluster in `$2200-$3800` and `$AC00-$B9A0`. Every
+  later step has to be read in that light: a change to code in those ranges is
+  transcription that the oracle cannot check, and the playbook's rule for that
+  is to decode by hand and validate against a *scratch* run-data rather than
+  edit the committed recording.
+
+The traces are dense by Snake Byte's standards — its 1,300-frame trace has few
+distinct hashes, dominated by BASIC-prompt keystrokes and title plateaus, where
+Neptune's are 80% and 90% distinct with the tail still moving in both. That is
+the b33 again: the trace starts inside the game instead of spending its first
+seconds at a prompt.
+
+The one static stretch worth naming is `play` frames 594–677, 84 frames of
+frozen screen. Rendering that moment shows the terrain and one enemy with **no
+player ship**, so it is a death-and-respawn pause rather than a hang.
