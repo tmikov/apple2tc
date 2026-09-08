@@ -142,7 +142,6 @@ void func_1000(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1000*/ CYCLES(0x1000, 3);
             s_x = ram_peek(0x0004);
 bb_1:
@@ -158,7 +157,6 @@ bb_2:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_4;
-bb_3:
   /*$1011*/ CYCLES_EDGE(0x1011, 1);
             branchTarget = true;
             goto bb_9;
@@ -170,22 +168,19 @@ bb_4:
   /*$1018*/ tmp3_U16 = ((tmp1_U8 ^ 0xff) & tmp2_U8) << 0x01;
             s_status_c = (uint8_t)(tmp3_U16 >> 8);
             branchTarget = true;
-            if (!((uint8_t)tmp3_U16))
-              goto bb_6;
-bb_5:
-  /*$1019*/ CYCLES_EDGE(0x1019, 1);
-  /*$105C*/ CYCLES(0x105c, 15);
-            tmp1_U8 = pop8();
-  /*$105D*/ ram_poke(0x0008, (uint8_t)(ram_peek(0x0008) + 0x01));
-  /*$105F*/ if (ret_addr) pop16(); return;
-bb_6:
+            if (((uint8_t)tmp3_U16)) {
+    /*$1019*/ CYCLES_EDGE(0x1019, 1);
+    /*$105C*/ CYCLES(0x105c, 15);
+              tmp1_U8 = pop8();
+    /*$105D*/ ram_poke(0x0008, (uint8_t)(ram_peek(0x0008) + 0x01));
+    /*$105F*/ if (ret_addr) pop16(); return;
+            }
   /*$101B*/ CYCLES(0x101b, 8);
             tmp1_U8 = pop8();
             s_a = tmp1_U8;
             branchTarget = true;
             if (!(s_y >= 0x28))
               goto bb_8;
-bb_7:
   /*$101E*/ CYCLES_EDGE(0x101e, 1);
             branchTarget = true;
             goto bb_9;
@@ -200,7 +195,6 @@ bb_9:
             branchTarget = true;
             if ((tmp1_U8 >= ram_peek(0x0007)))
               goto bb_11;
-bb_10:
   /*$1028*/ CYCLES_EDGE(0x1028, 1);
             branchTarget = true;
             goto bb_2;
@@ -213,7 +207,6 @@ bb_11:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_13;
-bb_12:
   /*$102D*/ CYCLES_EDGE(0x102d, 1);
             branchTarget = true;
             goto bb_1;
@@ -231,7 +224,6 @@ void func_1030(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1030*/ CYCLES(0x1030, 3);
             s_x = ram_peek(0x0004);
 bb_1:
@@ -247,7 +239,6 @@ bb_2:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_4;
-bb_3:
   /*$1041*/ CYCLES_EDGE(0x1041, 1);
             branchTarget = true;
             goto bb_7;
@@ -257,7 +248,6 @@ bb_4:
             branchTarget = true;
             if (!(s_y >= 0x28))
               goto bb_6;
-bb_5:
   /*$1047*/ CYCLES_EDGE(0x1047, 1);
             branchTarget = true;
             goto bb_7;
@@ -276,7 +266,6 @@ bb_7:
             branchTarget = true;
             if ((tmp1_U8 >= ram_peek(0x0007)))
               goto bb_9;
-bb_8:
   /*$1053*/ CYCLES_EDGE(0x1053, 1);
             branchTarget = true;
             goto bb_2;
@@ -289,7 +278,6 @@ bb_9:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_11;
-bb_10:
   /*$1058*/ CYCLES_EDGE(0x1058, 1);
             branchTarget = true;
             goto bb_1;
@@ -309,14 +297,12 @@ void func_1240(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1240*/ CYCLES(0x1240, 56);
   /*$1246*/ ram_poke(0x103f, ram_peek((0x1230 + (uint8_t)(ram_peek(0x00d0) - 0x01))));
   /*$1249*/ s_a = ram_peek(0x00d3);
   /*$124B*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_2;
-bb_1:
   /*$124C*/ s_a = (uint8_t)((s_a + 0x0070) + s_status_c);
             goto bb_3;
 bb_2:
@@ -329,7 +315,6 @@ bb_3:
   /*$1255*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_5;
-bb_4:
   /*$1256*/ s_a = (uint8_t)((s_a + 0x0009) + s_status_c);
             goto bb_6;
 bb_5:
@@ -342,7 +327,6 @@ bb_6:
   /*$125E*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_8;
-bb_7:
   /*$125F*/ s_a = (uint8_t)((s_a + 0x0003) + s_status_c);
             goto bb_9;
 bb_8:
@@ -357,7 +341,6 @@ bb_9:
             branchTarget = true;
             if ((tmp1_U8 >= 0x10))
               goto bb_11;
-bb_10:
   /*$126C*/ CYCLES_EDGE(0x126c, 1);
             branchTarget = true;
             goto bb_12;
@@ -372,7 +355,6 @@ bb_12:
   /*$1276*/ s_status_c = 0x01;
             if (s_status_d)
               goto bb_14;
-bb_13:
   /*$1277*/ tmp1_U8 = (uint8_t)((s_a - ram_peek((0x1200 + s_x))) - (uint8_t)(0x01 - s_status_c));
             s_status_n = (tmp1_U8 & 0x80);
             s_a = tmp1_U8;
@@ -385,7 +367,6 @@ bb_15:
             branchTarget = true;
             if (s_status_n)
               goto bb_17;
-bb_16:
   /*$127A*/ CYCLES_EDGE(0x127a, 1);
             branchTarget = true;
             goto bb_21;
@@ -395,7 +376,6 @@ bb_17:
   /*$1280*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_19;
-bb_18:
   /*$1281*/ s_a = (uint8_t)((s_a + 0x0007) + s_status_c);
             goto bb_20;
 bb_19:
@@ -408,7 +388,6 @@ bb_21:
   /*$1287*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_23;
-bb_22:
   /*$1288*/ tmp2_U16 = s_a;
             tmp3_U16 = ram_peek((0x1210 + s_x));
             tmp4_U16 = (tmp2_U16 + tmp3_U16) + s_status_c;
@@ -425,7 +404,6 @@ bb_24:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_26;
-bb_25:
   /*$128D*/ CYCLES_EDGE(0x128d, 1);
   /*$1294*/ CYCLES(0x1294, 59);
             ram_poke(0x00d1, s_a);
@@ -454,7 +432,6 @@ bb_29:
   /*$12A8*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_31;
-bb_30:
   /*$12A9*/ s_a = (uint8_t)((s_a + 0x0009) + s_status_c);
             goto bb_32;
 bb_31:
@@ -467,7 +444,6 @@ bb_32:
   /*$12B1*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_34;
-bb_33:
   /*$12B2*/ tmp4_U16 = s_a;
             tmp3_U16 = (tmp4_U16 + 0x0003) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0x0003);
@@ -485,7 +461,6 @@ bb_35:
             branchTarget = true;
             if (ram_peek(0x0008))
               goto bb_37;
-bb_36:
   /*$12BF*/ CYCLES_EDGE(0x12bf, 1);
   /*$1330*/ CYCLES(0x1330, 20);
   /*$1332*/ tmp1_U8 = (uint8_t)(ram_peek(0x00d0) - 0x01);
@@ -505,7 +480,6 @@ bb_37:
   /*$12D1*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_39;
-bb_38:
   /*$12D2*/ tmp3_U16 = s_a;
             tmp4_U16 = (tmp3_U16 + 0x0070) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0x0070);
@@ -544,7 +518,6 @@ bb_42:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_44;
-bb_43:
   /*$1340*/ CYCLES_EDGE(0x1340, 1);
             branchTarget = true;
             goto bb_42;
@@ -559,7 +532,6 @@ bb_45:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_47;
-bb_46:
   /*$1348*/ CYCLES_EDGE(0x1348, 1);
             branchTarget = true;
             goto bb_45;
@@ -571,7 +543,6 @@ bb_47:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_49;
-bb_48:
   /*$134E*/ CYCLES_EDGE(0x134e, 1);
             branchTarget = true;
             goto bb_41;
@@ -591,7 +562,6 @@ bb_51:
             branchTarget = true;
             if (!(tmp1_U8 != 0x01))
               goto bb_53;
-bb_52:
   /*$1866*/ CYCLES_EDGE(0x1866, 1);
             branchTarget = true;
             goto bb_54;
@@ -609,7 +579,6 @@ bb_55:
             branchTarget = true;
             if ((tmp1_U8 & 0x01))
               goto bb_57;
-bb_56:
   /*$188D*/ CYCLES_EDGE(0x188d, 1);
             branchTarget = true;
             goto bb_81;
@@ -622,7 +591,6 @@ bb_57:
             branchTarget = true;
             if (!(tmp1_U8 >= ram_peek(0x0005)))
               goto bb_59;
-bb_58:
   /*$1894*/ CYCLES_EDGE(0x1894, 1);
             branchTarget = true;
             goto bb_81;
@@ -631,7 +599,6 @@ bb_59:
             s_status_c = 0x00;
             if (s_status_d)
               goto bb_61;
-bb_60:
   /*$1897*/ s_a = (uint8_t)((s_a + 0x000c) + s_status_c);
             goto bb_62;
 bb_61:
@@ -640,7 +607,6 @@ bb_62:
             branchTarget = true;
             if ((s_a >= ram_peek(0x0005)))
               goto bb_64;
-bb_63:
   /*$189B*/ CYCLES_EDGE(0x189b, 1);
             branchTarget = true;
             goto bb_81;
@@ -651,7 +617,6 @@ bb_64:
             branchTarget = true;
             if (!(tmp1_U8 >= ram_peek(0x0007)))
               goto bb_66;
-bb_65:
   /*$18A2*/ CYCLES_EDGE(0x18a2, 1);
             branchTarget = true;
             goto bb_81;
@@ -660,7 +625,6 @@ bb_66:
             s_status_c = 0x00;
             if (s_status_d)
               goto bb_68;
-bb_67:
   /*$18A5*/ s_a = (uint8_t)((s_a + 0x0003) + s_status_c);
             goto bb_69;
 bb_68:
@@ -669,7 +633,6 @@ bb_69:
             branchTarget = true;
             if ((s_a >= ram_peek(0x0007)))
               goto bb_71;
-bb_70:
   /*$18A9*/ CYCLES_EDGE(0x18a9, 1);
             branchTarget = true;
             goto bb_81;
@@ -683,7 +646,6 @@ bb_71:
   /*$18B6*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_73;
-bb_72:
   /*$18B7*/ s_a = (uint8_t)((s_a + 0x000c) + s_status_c);
             goto bb_74;
 bb_73:
@@ -698,7 +660,6 @@ bb_74:
   /*$18C0*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_76;
-bb_75:
   /*$18C1*/ s_a = (uint8_t)((s_a + 0x0002) + s_status_c);
             goto bb_77;
 bb_76:
@@ -710,7 +671,6 @@ bb_77:
   /*$18C8*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_79;
-bb_78:
   /*$18C9*/ s_a = (uint8_t)((s_a + 0x0067) + s_status_c);
             goto bb_80;
 bb_79:
@@ -732,7 +692,6 @@ bb_81:
   /*$18DB*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_83;
-bb_82:
   /*$18DC*/ tmp4_U16 = s_a;
             tmp3_U16 = (tmp4_U16 + 0x0004) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp4_U16, (uint8_t)0x0004);
@@ -748,7 +707,6 @@ bb_84:
             branchTarget = true;
             if ((tmp1_U8 >= 0x10))
               goto bb_86;
-bb_85:
   /*$18E2*/ CYCLES_EDGE(0x18e2, 1);
             branchTarget = true;
             goto bb_55;
@@ -767,7 +725,6 @@ void func_1490(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1490*/ CYCLES(0x1490, 10);
             tmp1_U8 = s_y;
             ram_poke(0x0007, tmp1_U8);
@@ -776,7 +733,6 @@ bb_0:
             branchTarget = true;
             if (!(tmp1_U8 != ram_peek(0x00c3)))
               goto bb_2;
-bb_1:
   /*$1495*/ CYCLES_EDGE(0x1495, 1);
   /*$149C*/ CYCLES(0x149c, 5);
             branchTarget = true;
@@ -808,7 +764,6 @@ bb_5:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_7;
-bb_6:
   /*$14AF*/ CYCLES_EDGE(0x14af, 1);
   /*$14B4*/ CYCLES(0x14b4, 4);
             tmp1_U8 = s_a;
@@ -846,7 +801,6 @@ bb_11:
   /*$17E8*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_13;
-bb_12:
   /*$17E9*/ s_a = (uint8_t)((s_a + 0x0008) + s_status_c);
             goto bb_14;
 bb_13:
@@ -855,7 +809,6 @@ bb_14:
             branchTarget = true;
             if (!(s_a != ram_peek(0x0005)))
               goto bb_16;
-bb_15:
   /*$17ED*/ CYCLES_EDGE(0x17ed, 1);
             branchTarget = true;
             goto bb_24;
@@ -866,7 +819,6 @@ bb_16:
             branchTarget = true;
             if (!(tmp1_U8 >= ram_peek(0x0007)))
               goto bb_18;
-bb_17:
   /*$17F3*/ CYCLES_EDGE(0x17f3, 1);
             branchTarget = true;
             goto bb_24;
@@ -875,7 +827,6 @@ bb_18:
             s_status_c = 0x00;
             if (s_status_d)
               goto bb_20;
-bb_19:
   /*$17F6*/ s_a = (uint8_t)((s_a + 0x0008) + s_status_c);
             goto bb_21;
 bb_20:
@@ -884,7 +835,6 @@ bb_21:
             branchTarget = true;
             if ((s_a >= ram_peek(0x0007)))
               goto bb_23;
-bb_22:
   /*$17FA*/ CYCLES_EDGE(0x17fa, 1);
             branchTarget = true;
             goto bb_24;
@@ -920,7 +870,6 @@ bb_27:
             branchTarget = true;
             if (s_status_c)
               goto bb_29;
-bb_28:
   /*$1945*/ CYCLES_EDGE(0x1945, 1);
             branchTarget = true;
             goto bb_30;
@@ -938,7 +887,6 @@ bb_31:
             branchTarget = true;
             if ((tmp1_U8 & 0x01))
               goto bb_33;
-bb_32:
   /*$195D*/ CYCLES_EDGE(0x195d, 1);
             branchTarget = true;
             goto bb_57;
@@ -951,7 +899,6 @@ bb_33:
             branchTarget = true;
             if (!(tmp1_U8 >= ram_peek(0x0005)))
               goto bb_35;
-bb_34:
   /*$1964*/ CYCLES_EDGE(0x1964, 1);
             branchTarget = true;
             goto bb_57;
@@ -960,7 +907,6 @@ bb_35:
             s_status_c = 0x00;
             if (s_status_d)
               goto bb_37;
-bb_36:
   /*$1967*/ s_a = (uint8_t)((s_a + 0x000c) + s_status_c);
             goto bb_38;
 bb_37:
@@ -969,7 +915,6 @@ bb_38:
             branchTarget = true;
             if ((s_a >= ram_peek(0x0005)))
               goto bb_40;
-bb_39:
   /*$196B*/ CYCLES_EDGE(0x196b, 1);
             branchTarget = true;
             goto bb_57;
@@ -980,7 +925,6 @@ bb_40:
             branchTarget = true;
             if (!(tmp1_U8 >= ram_peek(0x0007)))
               goto bb_42;
-bb_41:
   /*$1972*/ CYCLES_EDGE(0x1972, 1);
             branchTarget = true;
             goto bb_57;
@@ -989,7 +933,6 @@ bb_42:
             s_status_c = 0x00;
             if (s_status_d)
               goto bb_44;
-bb_43:
   /*$1975*/ s_a = (uint8_t)((s_a + 0x0003) + s_status_c);
             goto bb_45;
 bb_44:
@@ -998,7 +941,6 @@ bb_45:
             branchTarget = true;
             if ((s_a >= ram_peek(0x0007)))
               goto bb_47;
-bb_46:
   /*$1979*/ CYCLES_EDGE(0x1979, 1);
             branchTarget = true;
             goto bb_57;
@@ -1012,7 +954,6 @@ bb_47:
   /*$1986*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_49;
-bb_48:
   /*$1987*/ s_a = (uint8_t)((s_a + 0x000c) + s_status_c);
             goto bb_50;
 bb_49:
@@ -1027,7 +968,6 @@ bb_50:
   /*$1990*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_52;
-bb_51:
   /*$1991*/ s_a = (uint8_t)((s_a + 0x0002) + s_status_c);
             goto bb_53;
 bb_52:
@@ -1039,7 +979,6 @@ bb_53:
   /*$1998*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_55;
-bb_54:
   /*$1999*/ s_a = (uint8_t)((s_a + 0x0067) + s_status_c);
             goto bb_56;
 bb_55:
@@ -1061,7 +1000,6 @@ bb_57:
   /*$19AB*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_59;
-bb_58:
   /*$19AC*/ tmp2_U16 = s_a;
             tmp3_U16 = (tmp2_U16 + 0x0004) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp2_U16, (uint8_t)0x0004);
@@ -1077,7 +1015,6 @@ bb_60:
             branchTarget = true;
             if ((tmp1_U8 >= 0x10))
               goto bb_62;
-bb_61:
   /*$19B2*/ CYCLES_EDGE(0x19b2, 1);
             branchTarget = true;
             goto bb_31;
@@ -1092,7 +1029,6 @@ bb_62:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_64;
-bb_63:
   /*$19C1*/ CYCLES_EDGE(0x19c1, 1);
             branchTarget = true;
             goto bb_88;
@@ -1107,7 +1043,6 @@ bb_64:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_66;
-bb_65:
   /*$19C8*/ CYCLES_EDGE(0x19c8, 1);
             branchTarget = true;
             goto bb_88;
@@ -1116,7 +1051,6 @@ bb_66:
             s_status_c = 0x00;
             if (s_status_d)
               goto bb_68;
-bb_67:
   /*$19CB*/ tmp3_U16 = s_a;
             tmp2_U16 = (tmp3_U16 + 0x000f) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp2_U16, (uint8_t)tmp3_U16, (uint8_t)0x000f);
@@ -1132,7 +1066,6 @@ bb_69:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_71;
-bb_70:
   /*$19CF*/ CYCLES_EDGE(0x19cf, 1);
             branchTarget = true;
             goto bb_88;
@@ -1147,7 +1080,6 @@ bb_71:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_73;
-bb_72:
   /*$19D6*/ CYCLES_EDGE(0x19d6, 1);
             branchTarget = true;
             goto bb_88;
@@ -1156,7 +1088,6 @@ bb_73:
             s_status_c = 0x00;
             if (s_status_d)
               goto bb_75;
-bb_74:
   /*$19D9*/ tmp2_U16 = s_a;
             tmp3_U16 = (tmp2_U16 + 0x0005) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp2_U16, (uint8_t)0x0005);
@@ -1172,7 +1103,6 @@ bb_76:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_78;
-bb_77:
   /*$19DD*/ CYCLES_EDGE(0x19dd, 1);
             branchTarget = true;
             goto bb_88;
@@ -1186,7 +1116,6 @@ bb_78:
   /*$19EA*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_80;
-bb_79:
   /*$19EB*/ s_a = (uint8_t)((s_a + 0x000f) + s_status_c);
             goto bb_81;
 bb_80:
@@ -1201,7 +1130,6 @@ bb_81:
   /*$19F4*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_83;
-bb_82:
   /*$19F5*/ s_a = (uint8_t)((s_a + 0x0004) + s_status_c);
             goto bb_84;
 bb_83:
@@ -1215,7 +1143,6 @@ bb_84:
   /*$19FC*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_86;
-bb_85:
   /*$19FD*/ s_a = (uint8_t)((s_a + 0x0070) + s_status_c);
             goto bb_87;
 bb_86:
@@ -1237,7 +1164,6 @@ bb_88:
             branchTarget = true;
             if (ram_peek(0x007d))
               goto bb_90;
-bb_89:
   /*$1A0F*/ CYCLES_EDGE(0x1a0f, 1);
   /*$1A18*/ CYCLES(0x1a18, 6);
             if (ret_addr) pop16(); return;
@@ -1253,7 +1179,6 @@ bb_91:
             branchTarget = true;
             if ((tmp1_U8 & 0x01))
               goto bb_93;
-bb_92:
   /*$1C5D*/ CYCLES_EDGE(0x1c5d, 1);
             branchTarget = true;
             goto bb_117;
@@ -1266,7 +1191,6 @@ bb_93:
             branchTarget = true;
             if (!(tmp1_U8 >= ram_peek(0x0005)))
               goto bb_95;
-bb_94:
   /*$1C64*/ CYCLES_EDGE(0x1c64, 1);
             branchTarget = true;
             goto bb_117;
@@ -1275,7 +1199,6 @@ bb_95:
             s_status_c = 0x00;
             if (s_status_d)
               goto bb_97;
-bb_96:
   /*$1C67*/ s_a = (uint8_t)((s_a + 0x000c) + s_status_c);
             goto bb_98;
 bb_97:
@@ -1284,7 +1207,6 @@ bb_98:
             branchTarget = true;
             if ((s_a >= ram_peek(0x0005)))
               goto bb_100;
-bb_99:
   /*$1C6B*/ CYCLES_EDGE(0x1c6b, 1);
             branchTarget = true;
             goto bb_117;
@@ -1297,7 +1219,6 @@ bb_100:
             branchTarget = true;
             if (!(tmp1_U8 >= ram_peek(0x0007)))
               goto bb_102;
-bb_101:
   /*$1C72*/ CYCLES_EDGE(0x1c72, 1);
             branchTarget = true;
             goto bb_117;
@@ -1306,7 +1227,6 @@ bb_102:
             s_status_c = 0x00;
             if (s_status_d)
               goto bb_104;
-bb_103:
   /*$1C75*/ s_a = (uint8_t)((s_a + 0x0003) + s_status_c);
             goto bb_105;
 bb_104:
@@ -1315,7 +1235,6 @@ bb_105:
             branchTarget = true;
             if ((s_a >= ram_peek(0x0007)))
               goto bb_107;
-bb_106:
   /*$1C79*/ CYCLES_EDGE(0x1c79, 1);
             branchTarget = true;
             goto bb_117;
@@ -1329,7 +1248,6 @@ bb_107:
   /*$1C86*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_109;
-bb_108:
   /*$1C87*/ s_a = (uint8_t)((s_a + 0x000a) + s_status_c);
             goto bb_110;
 bb_109:
@@ -1344,7 +1262,6 @@ bb_110:
   /*$1C90*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_112;
-bb_111:
   /*$1C91*/ s_a = (uint8_t)((s_a + 0x0004) + s_status_c);
             goto bb_113;
 bb_112:
@@ -1356,7 +1273,6 @@ bb_113:
   /*$1C98*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_115;
-bb_114:
   /*$1C99*/ s_a = (uint8_t)((s_a + 0x0067) + s_status_c);
             goto bb_116;
 bb_115:
@@ -1378,7 +1294,6 @@ bb_117:
   /*$1CAB*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_119;
-bb_118:
   /*$1CAC*/ tmp2_U16 = s_a;
             tmp3_U16 = (tmp2_U16 + 0x0008) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp2_U16, (uint8_t)0x0008);
@@ -1396,7 +1311,6 @@ bb_120:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_122;
-bb_121:
   /*$1CB2*/ CYCLES_EDGE(0x1cb2, 1);
             branchTarget = true;
             goto bb_91;
@@ -1413,7 +1327,6 @@ void func_1500(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1500*/ CYCLES(0x1500, 3);
             s_x = ram_peek(0x0004);
 bb_1:
@@ -1429,7 +1342,6 @@ bb_2:
             branchTarget = true;
             if (!(s_y >= 0x28))
               goto bb_4;
-bb_3:
   /*$1510*/ CYCLES_EDGE(0x1510, 1);
             branchTarget = true;
             goto bb_7;
@@ -1440,7 +1352,6 @@ bb_4:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_6;
-bb_5:
   /*$1515*/ CYCLES_EDGE(0x1515, 1);
             branchTarget = true;
             goto bb_7;
@@ -1455,7 +1366,6 @@ bb_7:
             branchTarget = true;
             if (!(tmp1_U8 != ram_peek(0x0007)))
               goto bb_9;
-bb_8:
   /*$151F*/ CYCLES_EDGE(0x151f, 1);
             branchTarget = true;
             goto bb_2;
@@ -1468,7 +1378,6 @@ bb_9:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_11;
-bb_10:
   /*$1524*/ CYCLES_EDGE(0x1524, 1);
             branchTarget = true;
             goto bb_1;
@@ -1485,7 +1394,6 @@ void func_1530(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1530*/ CYCLES(0x1530, 3);
             s_x = ram_peek(0x0004);
 bb_1:
@@ -1499,7 +1407,6 @@ bb_2:
             branchTarget = true;
             if (!(s_y >= 0x28))
               goto bb_4;
-bb_3:
   /*$1540*/ CYCLES_EDGE(0x1540, 1);
             branchTarget = true;
             goto bb_7;
@@ -1509,7 +1416,6 @@ bb_4:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_6;
-bb_5:
   /*$1545*/ CYCLES_EDGE(0x1545, 1);
             branchTarget = true;
             goto bb_7;
@@ -1524,7 +1430,6 @@ bb_7:
             branchTarget = true;
             if (!(tmp1_U8 != ram_peek(0x0007)))
               goto bb_9;
-bb_8:
   /*$1551*/ CYCLES_EDGE(0x1551, 1);
             branchTarget = true;
             goto bb_2;
@@ -1535,7 +1440,6 @@ bb_9:
             branchTarget = true;
             if ((tmp1_U8 >= ram_peek(0x0005)))
               goto bb_11;
-bb_10:
   /*$1556*/ CYCLES_EDGE(0x1556, 1);
             branchTarget = true;
             goto bb_1;
@@ -1553,7 +1457,6 @@ void func_1560(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1560*/ CYCLES(0x1560, 13);
   /*$1562*/ ram_poke(0x0008, 0x00);
   /*$1564*/ ram_poke(0x000a, 0x00);
@@ -1567,7 +1470,6 @@ bb_1:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_3;
-bb_2:
   /*$156E*/ CYCLES_EDGE(0x156e, 1);
             branchTarget = true;
             goto bb_39;
@@ -1578,7 +1480,6 @@ bb_3:
             branchTarget = true;
             if (!(tmp1_U8 & 0x01))
               goto bb_5;
-bb_4:
   /*$1571*/ CYCLES_EDGE(0x1571, 1);
   /*$1582*/ CYCLES(0x1582, 64);
             push8(s_a);
@@ -1613,7 +1514,6 @@ bb_8:
   /*$1592*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_10;
-bb_9:
   /*$1593*/ s_a = (uint8_t)((s_a + 0x0002) + s_status_c);
             goto bb_11;
 bb_10:
@@ -1625,7 +1525,6 @@ bb_11:
   /*$159A*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_13;
-bb_12:
   /*$159B*/ s_a = (uint8_t)((s_a + 0x0067) + s_status_c);
             goto bb_14;
 bb_13:
@@ -1639,7 +1538,6 @@ bb_14:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_16;
-bb_15:
   /*$15A9*/ CYCLES_EDGE(0x15a9, 1);
   /*$15AE*/ CYCLES(0x15ae, 14);
             s_a = ram_peek(0x0004);
@@ -1668,7 +1566,6 @@ bb_19:
             branchTarget = true;
             if (!(tmp1_U8 >= 0xf0))
               goto bb_21;
-bb_20:
   /*$15B7*/ CYCLES_EDGE(0x15b7, 1);
             branchTarget = true;
             goto bb_38;
@@ -1678,7 +1575,6 @@ bb_21:
   /*$15BE*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_23;
-bb_22:
   /*$15BF*/ s_a = (uint8_t)((s_a + 0x000c) + s_status_c);
             goto bb_24;
 bb_23:
@@ -1693,7 +1589,6 @@ bb_25:
   /*$15C7*/ s_status_c = 0x01;
             if (s_status_d)
               goto bb_27;
-bb_26:
   /*$15C8*/ tmp1_U8 = (uint8_t)((s_a - 0x0004) - (uint8_t)(0x01 - s_status_c));
             s_status_n = (tmp1_U8 & 0x80);
             s_a = tmp1_U8;
@@ -1706,7 +1601,6 @@ bb_28:
             branchTarget = true;
             if (s_status_n)
               goto bb_30;
-bb_29:
   /*$15CA*/ CYCLES_EDGE(0x15ca, 1);
             branchTarget = true;
             goto bb_43;
@@ -1715,7 +1609,6 @@ bb_30:
             s_status_c = 0x00;
             if (s_status_d)
               goto bb_32;
-bb_31:
   /*$15CD*/ s_a = (uint8_t)((s_a + 0x0007) + s_status_c);
             goto bb_33;
 bb_32:
@@ -1730,7 +1623,6 @@ bb_33:
   /*$15D4*/ s_status_c = 0x01;
             if (s_status_d)
               goto bb_35;
-bb_34:
   /*$15D5*/ s_a = (uint8_t)((s_a - 0x0001) - (uint8_t)(0x01 - s_status_c));
             goto bb_36;
 bb_35:
@@ -1739,7 +1631,6 @@ bb_36:
             branchTarget = true;
             if ((s_a >= 0xfc))
               goto bb_38;
-bb_37:
   /*$15D9*/ CYCLES_EDGE(0x15d9, 1);
             branchTarget = true;
             goto bb_42;
@@ -1754,7 +1645,6 @@ bb_39:
             branchTarget = true;
             if (s_status_not_z)
               goto bb_41;
-bb_40:
   /*$15E1*/ CYCLES_EDGE(0x15e1, 1);
             branchTarget = true;
             goto bb_47;
@@ -1776,7 +1666,6 @@ bb_43:
   /*$15F3*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_45;
-bb_44:
   /*$15F4*/ s_a = (uint8_t)((s_a + 0x0067) + s_status_c);
             goto bb_46;
 bb_45:
@@ -1792,7 +1681,6 @@ bb_47:
   /*$1603*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_49;
-bb_48:
   /*$1604*/ s_a = (uint8_t)((s_a + 0x0008) + s_status_c);
             goto bb_50;
 bb_49:
@@ -1803,7 +1691,6 @@ bb_50:
             branchTarget = true;
             if (!(tmp1_U8 >= 0x10))
               goto bb_52;
-bb_51:
   /*$160A*/ CYCLES_EDGE(0x160a, 1);
   /*$160F*/ CYCLES(0x160f, 7);
             tmp1_U8 = (uint8_t)(ram_peek(0x00fe) - 0x01);
@@ -1828,7 +1715,6 @@ bb_54:
   /*$161A*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_56;
-bb_55:
   /*$161B*/ s_a = (uint8_t)((s_a + ram_peek(0x00ff)) + s_status_c);
             goto bb_57;
 bb_56:
@@ -1844,7 +1730,6 @@ bb_57:
             branchTarget = true;
             if (!(ram_peek((0x0300 + (tmp2_U16 & 0x00ff))) != 0x01))
               goto bb_59;
-bb_58:
   /*$162F*/ CYCLES_EDGE(0x162f, 1);
             branchTarget = true;
             goto bb_60;
@@ -1869,7 +1754,6 @@ bb_64:
             branchTarget = true;
             if ((s_a >= tmp1_U8))
               goto bb_66;
-bb_65:
   /*$16C9*/ CYCLES_EDGE(0x16c9, 1);
             branchTarget = true;
             goto bb_67;
@@ -1885,7 +1769,6 @@ bb_67:
   /*$16D3*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_69;
-bb_68:
   /*$16D4*/ s_a = (uint8_t)((s_a + 0x000c) + s_status_c);
             goto bb_70;
 bb_69:
@@ -1904,7 +1787,6 @@ void func_1640(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1640*/ CYCLES(0x1640, 48);
             tmp1_U8 = (uint8_t)(s_y + 0x01);
             s_y = tmp1_U8;
@@ -1913,7 +1795,6 @@ bb_0:
   /*$1643*/ s_status_c = 0x01;
             if (s_status_d)
               goto bb_2;
-bb_1:
   /*$1644*/ s_a = (uint8_t)((s_a - 0x0004) - (uint8_t)(0x01 - s_status_c));
             goto bb_3;
 bb_2:
@@ -1927,7 +1808,6 @@ bb_3:
   /*$164B*/ s_status_c = 0x01;
             if (s_status_d)
               goto bb_5;
-bb_4:
   /*$164C*/ s_a = (uint8_t)((s_a - 0x0002) - (uint8_t)(0x01 - s_status_c));
             goto bb_6;
 bb_5:
@@ -1943,15 +1823,13 @@ bb_6:
   /*$165C*/ tmp1_U8 = ram_peek(0x000a);
             s_a = tmp1_U8;
             branchTarget = true;
-            if (!(tmp1_U8 >= 0x04))
-              goto bb_8;
-bb_7:
-  /*$1660*/ CYCLES_EDGE(0x1660, 1);
-  /*$1667*/ CYCLES(0x1667, 16);
-            s_y = 0x00;
-  /*$166B*/ poke(ram_peek16al(0x0008), 0x00);
-  /*$166D*/ if (ret_addr) pop16(); return;
-bb_8:
+            if ((tmp1_U8 >= 0x04)) {
+    /*$1660*/ CYCLES_EDGE(0x1660, 1);
+    /*$1667*/ CYCLES(0x1667, 16);
+              s_y = 0x00;
+    /*$166B*/ poke(ram_peek16al(0x0008), 0x00);
+    /*$166D*/ if (ret_addr) pop16(); return;
+            }
   /*$1662*/ CYCLES(0x1662, 14);
             s_y = 0x03;
   /*$1664*/ poke((ram_peek16al(0x0008) + 0x0003), s_a);
@@ -1968,7 +1846,6 @@ void func_1738(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1738*/ CYCLES(0x1738, 6);
             tmp1_U8 = ram_peek(0x0320);
             s_a = tmp1_U8;
@@ -1988,7 +1865,6 @@ bb_2:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_4;
-bb_3:
   /*$1729*/ CYCLES_EDGE(0x1729, 1);
             branchTarget = true;
             goto bb_2;
@@ -1999,7 +1875,6 @@ bb_4:
             branchTarget = true;
             if ((tmp1_U8 & 0x80))
               goto bb_6;
-bb_5:
   /*$172C*/ CYCLES_EDGE(0x172c, 1);
             branchTarget = true;
             goto bb_1;
@@ -2017,7 +1892,6 @@ bb_8:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_10;
-bb_9:
   /*$173E*/ CYCLES_EDGE(0x173e, 1);
   /*$1745*/ CYCLES(0x1745, 52);
             tmp1_U8 = ram_peek(0x0321);
@@ -2033,7 +1907,6 @@ bb_10:
             branchTarget = true;
             if (s_status_c)
               goto bb_12;
-bb_11:
   /*$1740*/ CYCLES_EDGE(0x1740, 1);
   /*$17B0*/ CYCLES(0x17b0, 35);
             s_a = ram_peek(0x0321);
@@ -2058,7 +1931,6 @@ bb_15:
   /*$1754*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_17;
-bb_16:
   /*$1755*/ s_a = (uint8_t)((s_a + 0x0004) + s_status_c);
             goto bb_18;
 bb_17:
@@ -2069,7 +1941,6 @@ bb_18:
   /*$175C*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_20;
-bb_19:
   /*$175D*/ s_a = (uint8_t)((s_a + 0x0070) + s_status_c);
             goto bb_21;
 bb_20:
@@ -2083,7 +1954,6 @@ bb_21:
   /*$176D*/ s_status_c = 0x01;
             if (s_status_d)
               goto bb_23;
-bb_22:
   /*$176E*/ tmp1_U8 = (uint8_t)((s_a - 0x0004) - (uint8_t)(0x01 - s_status_c));
             s_status_n = (tmp1_U8 & 0x80);
             s_a = tmp1_U8;
@@ -2096,7 +1966,6 @@ bb_24:
             branchTarget = true;
             if (s_status_n)
               goto bb_26;
-bb_25:
   /*$1770*/ CYCLES_EDGE(0x1770, 1);
   /*$178D*/ CYCLES(0x178d, 4);
             ram_poke(0x0323, s_a);
@@ -2106,7 +1975,6 @@ bb_26:
             s_status_c = 0x00;
             if (s_status_d)
               goto bb_28;
-bb_27:
   /*$1773*/ tmp3_U16 = s_a;
             tmp2_U16 = (tmp3_U16 + 0x0007) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp2_U16, (uint8_t)tmp3_U16, (uint8_t)0x0007);
@@ -2124,7 +1992,6 @@ bb_29:
             branchTarget = true;
             if ((tmp1_U8 >= 0xf0))
               goto bb_31;
-bb_30:
   /*$1780*/ CYCLES_EDGE(0x1780, 1);
             branchTarget = true;
             goto bb_34;
@@ -2135,7 +2002,6 @@ bb_31:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_33;
-bb_32:
   /*$1784*/ CYCLES_EDGE(0x1784, 1);
             branchTarget = true;
             goto bb_34;
@@ -2152,7 +2018,6 @@ bb_34:
   /*$1793*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_36;
-bb_35:
   /*$1794*/ s_a = (uint8_t)((s_a + 0x0070) + s_status_c);
             goto bb_37;
 bb_36:
@@ -2166,7 +2031,6 @@ bb_37:
   /*$17A3*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_39;
-bb_38:
   /*$17A4*/ tmp2_U16 = s_a;
             tmp3_U16 = (tmp2_U16 + 0x0004) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp2_U16, (uint8_t)0x0004);
@@ -2196,7 +2060,6 @@ bb_44:
   /*$17BB*/ s_status_c = 0x01;
             if (s_status_d)
               goto bb_46;
-bb_45:
   /*$17BC*/ tmp2_U16 = s_a;
             tmp3_U16 = (tmp2_U16 - 0x0001) - (uint8_t)(0x01 - s_status_c);
             s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp2_U16, (uint8_t)0xfffe);
@@ -2219,14 +2082,12 @@ bb_47:
   /*$17CC*/ tmp1_U8 = tmp1_U8 >= 0x04;
             s_status_c = tmp1_U8;
             branchTarget = true;
-            if (!tmp1_U8)
-              goto bb_49;
-bb_48:
-  /*$17CE*/ CYCLES_EDGE(0x17ce, 1);
-  /*$17D4*/ CYCLES(0x17d4, 12);
-  /*$17D6*/ ram_poke(0x0320, 0x00);
-  /*$17D9*/ if (ret_addr) pop16(); return;
-bb_49:
+            if (tmp1_U8) {
+    /*$17CE*/ CYCLES_EDGE(0x17ce, 1);
+    /*$17D4*/ CYCLES(0x17d4, 12);
+    /*$17D6*/ ram_poke(0x0320, 0x00);
+    /*$17D9*/ if (ret_addr) pop16(); return;
+            }
   /*$17D0*/ CYCLES(0x17d0, 10);
             ram_poke(0x0323, s_a);
   /*$17D3*/ if (ret_addr) pop16(); return;
@@ -2244,7 +2105,6 @@ void func_18e4(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$18E4*/ CYCLES(0x18e4, 21);
   /*$18E6*/ ram_poke(0x0008, 0x20);
   /*$18EA*/ ram_poke(0x0009, 0x03);
@@ -2259,7 +2119,6 @@ bb_0:
             branchTarget = true;
             if (tmp2_U8)
               goto bb_2;
-bb_1:
   /*$18F1*/ CYCLES_EDGE(0x18f1, 1);
             branchTarget = true;
             goto bb_26;
@@ -2277,7 +2136,6 @@ bb_2:
             branchTarget = true;
             if (!tmp3_U8)
               goto bb_4;
-bb_3:
   /*$18F8*/ CYCLES_EDGE(0x18f8, 1);
             branchTarget = true;
             goto bb_26;
@@ -2286,7 +2144,6 @@ bb_4:
             s_status_c = 0x00;
             if (s_status_d)
               goto bb_6;
-bb_5:
   /*$18FB*/ tmp4_U16 = s_a;
             tmp5_U16 = (tmp4_U16 + 0x000f) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)0x000f);
@@ -2306,7 +2163,6 @@ bb_7:
             branchTarget = true;
             if (tmp2_U8)
               goto bb_9;
-bb_8:
   /*$18FF*/ CYCLES_EDGE(0x18ff, 1);
             branchTarget = true;
             goto bb_26;
@@ -2324,7 +2180,6 @@ bb_9:
             branchTarget = true;
             if (!tmp3_U8)
               goto bb_11;
-bb_10:
   /*$1906*/ CYCLES_EDGE(0x1906, 1);
             branchTarget = true;
             goto bb_26;
@@ -2333,7 +2188,6 @@ bb_11:
             s_status_c = 0x00;
             if (s_status_d)
               goto bb_13;
-bb_12:
   /*$1909*/ tmp5_U16 = s_a;
             tmp4_U16 = (tmp5_U16 + 0x0005) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp4_U16, (uint8_t)tmp5_U16, (uint8_t)0x0005);
@@ -2353,7 +2207,6 @@ bb_14:
             branchTarget = true;
             if (tmp2_U8)
               goto bb_16;
-bb_15:
   /*$190D*/ CYCLES_EDGE(0x190d, 1);
             branchTarget = true;
             goto bb_26;
@@ -2367,7 +2220,6 @@ bb_16:
   /*$191A*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_18;
-bb_17:
   /*$191B*/ s_a = (uint8_t)((s_a + 0x000f) + s_status_c);
             goto bb_19;
 bb_18:
@@ -2382,7 +2234,6 @@ bb_19:
   /*$1924*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_21;
-bb_20:
   /*$1925*/ s_a = (uint8_t)((s_a + 0x0004) + s_status_c);
             goto bb_22;
 bb_21:
@@ -2396,7 +2247,6 @@ bb_22:
   /*$192C*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_24;
-bb_23:
   /*$192D*/ s_a = (uint8_t)((s_a + 0x0070) + s_status_c);
             goto bb_25;
 bb_24:
@@ -2438,7 +2288,6 @@ bb_29:
             branchTarget = true;
             if (s_status_c)
               goto bb_31;
-bb_30:
   /*$1945*/ CYCLES_EDGE(0x1945, 1);
             branchTarget = true;
             goto bb_32;
@@ -2460,7 +2309,6 @@ void func_1af0(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1AF0*/ CYCLES(0x1af0, 16);
   /*$1AF4*/ poke((ram_peek16al(0x0008) + 0x0003), 0x00);
   /*$1AF6*/ func_1530(0x1af8);
@@ -2481,13 +2329,11 @@ void func_1d80(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1D80*/ CYCLES(0x1d80, 39);
             s_a = ram_peek(0x00e0);
   /*$1D82*/ s_status_c = 0x01;
             if (s_status_d)
               goto bb_2;
-bb_1:
   /*$1D83*/ s_a = (uint8_t)((s_a - 0x000e) - (uint8_t)(0x01 - s_status_c));
             goto bb_3;
 bb_2:
@@ -2497,7 +2343,6 @@ bb_3:
   /*$1D87*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_5;
-bb_4:
   /*$1D88*/ s_a = (uint8_t)((s_a + 0x002a) + s_status_c);
             goto bb_6;
 bb_5:
@@ -2508,7 +2353,6 @@ bb_6:
   /*$1D8E*/ s_status_c = 0x01;
             if (s_status_d)
               goto bb_8;
-bb_7:
   /*$1D8F*/ s_a = (uint8_t)((s_a - 0x0003) - (uint8_t)(0x01 - s_status_c));
             goto bb_9;
 bb_8:
@@ -2520,7 +2364,6 @@ bb_9:
   /*$1D95*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_11;
-bb_10:
   /*$1D96*/ s_a = (uint8_t)((s_a + 0x000c) + s_status_c);
             goto bb_12;
 bb_11:
@@ -2549,7 +2392,6 @@ bb_13:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_15;
-bb_14:
   /*$1ED4*/ CYCLES_EDGE(0x1ed4, 1);
             branchTarget = true;
             goto bb_13;
@@ -2567,7 +2409,6 @@ bb_16:
   /*$1EE3*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_18;
-bb_17:
   /*$1EE4*/ s_a = (uint8_t)((s_a + 0x0008) + s_status_c);
             goto bb_19;
 bb_18:
@@ -2578,7 +2419,6 @@ bb_19:
   /*$1EEB*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_21;
-bb_20:
   /*$1EEC*/ tmp2_U16 = s_a;
             tmp3_U16 = (tmp2_U16 + 0x0004) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp2_U16, (uint8_t)0x0004);
@@ -2599,7 +2439,6 @@ bb_22:
             branchTarget = true;
             if (s_status_n)
               goto bb_24;
-bb_23:
   /*$1EF0*/ CYCLES_EDGE(0x1ef0, 1);
             branchTarget = true;
             goto bb_16;
@@ -2615,7 +2454,6 @@ void func_1da0(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1DA0*/ CYCLES(0x1da0, 13);
   /*$1DA2*/ ram_poke(0x0000, 0x10);
   /*$1DA4*/ s_a = 0x00;
@@ -2631,7 +2469,6 @@ void func_1db0(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1DB0*/ CYCLES(0x1db0, 13);
   /*$1DB2*/ ram_poke(0x0000, 0x20);
   /*$1DB4*/ s_a = 0x60;
@@ -2647,7 +2484,6 @@ void func_1dc0(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1DC0*/ CYCLES(0x1dc0, 13);
   /*$1DC2*/ ram_poke(0x0000, 0x10);
   /*$1DC4*/ s_a = 0x50;
@@ -2664,7 +2500,6 @@ void func_1dd0(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1DD0*/ CYCLES(0x1dd0, 3);
             s_x = ram_peek(0x0000);
 bb_1:
@@ -2677,7 +2512,6 @@ bb_2:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_4;
-bb_3:
   /*$1DD8*/ CYCLES_EDGE(0x1dd8, 1);
             branchTarget = true;
             goto bb_2;
@@ -2691,7 +2525,6 @@ bb_4:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_6;
-bb_5:
   /*$1DDE*/ CYCLES_EDGE(0x1dde, 1);
             branchTarget = true;
             goto bb_1;
@@ -2709,7 +2542,6 @@ void func_1e00(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1E00*/ CYCLES(0x1e00, 14);
   /*$1E02*/ ram_poke(0x1e19, 0x00);
   /*$1E07*/ ram_poke(0x1e1a, 0x9b);
@@ -2729,7 +2561,6 @@ bb_2:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_4;
-bb_3:
   /*$1E20*/ CYCLES_EDGE(0x1e20, 1);
             branchTarget = true;
             goto bb_5;
@@ -2743,7 +2574,6 @@ bb_5:
             branchTarget = true;
             if ((tmp1_U8 >= 0x28))
               goto bb_7;
-bb_6:
   /*$1E28*/ CYCLES_EDGE(0x1e28, 1);
             branchTarget = true;
             goto bb_2;
@@ -2754,7 +2584,6 @@ bb_7:
             branchTarget = true;
             if ((tmp1_U8 >= 0xc0))
               goto bb_9;
-bb_8:
   /*$1E2D*/ CYCLES_EDGE(0x1e2d, 1);
             branchTarget = true;
             goto bb_1;
@@ -2793,7 +2622,6 @@ void func_1e40(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1E40*/ CYCLES(0x1e40, 3);
             s_x = ram_peek(0x0004);
 bb_1:
@@ -2809,7 +2637,6 @@ bb_2:
             branchTarget = true;
             if (!(s_y >= 0x28))
               goto bb_4;
-bb_3:
   /*$1E50*/ CYCLES_EDGE(0x1e50, 1);
             branchTarget = true;
             goto bb_5;
@@ -2829,7 +2656,6 @@ bb_5:
             branchTarget = true;
             if (!tmp2_U8)
               goto bb_7;
-bb_6:
   /*$1E5C*/ CYCLES_EDGE(0x1e5c, 1);
             branchTarget = true;
             goto bb_8;
@@ -2843,7 +2669,6 @@ bb_8:
             branchTarget = true;
             if (!(tmp2_U8 != ram_peek(0x0007)))
               goto bb_10;
-bb_9:
   /*$1E64*/ CYCLES_EDGE(0x1e64, 1);
             branchTarget = true;
             goto bb_2;
@@ -2859,7 +2684,6 @@ bb_10:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_12;
-bb_11:
   /*$1E69*/ CYCLES_EDGE(0x1e69, 1);
             branchTarget = true;
             goto bb_1;
@@ -2877,13 +2701,11 @@ void func_1e80(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1E80*/ CYCLES(0x1e80, 31);
   /*$1E82*/ s_a = (uint8_t)(ram_peek(0x0008) << 0x01);
   /*$1E83*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_2;
-bb_1:
   /*$1E84*/ s_a = (uint8_t)((s_a + 0x00a0) + s_status_c);
             goto bb_3;
 bb_2:
@@ -2900,7 +2722,6 @@ bb_3:
   /*$1E9C*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_5;
-bb_4:
   /*$1E9D*/ tmp1_U16 = s_a;
             tmp2_U16 = (tmp1_U16 + 0x00a0) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp2_U16, (uint8_t)tmp1_U16, (uint8_t)0x00a0);
@@ -2927,7 +2748,6 @@ void func_1ef3(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1EF3*/ CYCLES(0x1ef3, 8);
             s_a = 0x00;
   /*$1EF5*/ rom_mon_wait(0x1ef7);
@@ -2944,12 +2764,10 @@ void func_1fd0(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$1FD0*/ CYCLES(0x1fd0, 5);
             branchTarget = true;
             if (!ram_peek(0x00a0))
               goto bb_2;
-bb_1:
   /*$1FD2*/ CYCLES_EDGE(0x1fd2, 1);
   /*$1FD9*/ CYCLES(0x1fd9, 2);
             s_a = 0x50;
@@ -2976,7 +2794,6 @@ void func_2200(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2200*/ CYCLES(0x2200, 3);
             s_x = ram_peek(0x0004);
 bb_1:
@@ -2990,7 +2807,6 @@ bb_2:
             branchTarget = true;
             if (!(s_y >= 0x28))
               goto bb_4;
-bb_3:
   /*$2210*/ CYCLES_EDGE(0x2210, 1);
             branchTarget = true;
             goto bb_5;
@@ -3006,7 +2822,6 @@ bb_5:
             branchTarget = true;
             if (!(tmp1_U8 != ram_peek(0x0007)))
               goto bb_7;
-bb_6:
   /*$221D*/ CYCLES_EDGE(0x221d, 1);
             branchTarget = true;
             goto bb_2;
@@ -3016,7 +2831,6 @@ bb_7:
             branchTarget = true;
             if (!(s_y >= 0x28))
               goto bb_9;
-bb_8:
   /*$2223*/ CYCLES_EDGE(0x2223, 1);
             branchTarget = true;
             goto bb_10;
@@ -3030,7 +2844,6 @@ bb_10:
             branchTarget = true;
             if ((tmp1_U8 >= ram_peek(0x0005)))
               goto bb_12;
-bb_11:
   /*$222A*/ CYCLES_EDGE(0x222a, 1);
             branchTarget = true;
             goto bb_1;
@@ -3051,7 +2864,6 @@ void func_2240(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2240*/ CYCLES(0x2240, 10);
   /*$2242*/ ram_poke(0x0008, 0x00);
   /*$2246*/ ram_poke(0x0009, 0x03);
@@ -3062,7 +2874,6 @@ bb_1:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_3;
-bb_2:
   /*$224C*/ CYCLES_EDGE(0x224c, 1);
             branchTarget = true;
             goto bb_33;
@@ -3076,7 +2887,6 @@ bb_3:
   /*$2253*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_5;
-bb_4:
   /*$2254*/ s_a = (uint8_t)((s_a + 0x0008) + s_status_c);
             goto bb_6;
 bb_5:
@@ -3091,7 +2901,6 @@ bb_6:
   /*$225D*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_8;
-bb_7:
   /*$225E*/ s_a = (uint8_t)((s_a + 0x0004) + s_status_c);
             goto bb_9;
 bb_8:
@@ -3105,7 +2914,6 @@ bb_9:
   /*$2265*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_11;
-bb_10:
   /*$2266*/ s_a = (uint8_t)((s_a + 0x0070) + s_status_c);
             goto bb_12;
 bb_11:
@@ -3124,7 +2932,6 @@ bb_12:
   /*$2286*/ s_status_c = 0x01;
             if (s_status_d)
               goto bb_14;
-bb_13:
   /*$2287*/ tmp1_U8 = (uint8_t)((s_a - ram_peek(0x0000)) - (uint8_t)(0x01 - s_status_c));
             s_status_n = (tmp1_U8 & 0x80);
             s_a = tmp1_U8;
@@ -3138,7 +2945,6 @@ bb_15:
             branchTarget = true;
             if (s_status_n)
               goto bb_17;
-bb_16:
   /*$228B*/ CYCLES_EDGE(0x228b, 1);
             branchTarget = true;
             goto bb_39;
@@ -3147,7 +2953,6 @@ bb_17:
             s_status_c = 0x00;
             if (s_status_d)
               goto bb_19;
-bb_18:
   /*$228E*/ s_a = (uint8_t)((s_a + 0x0007) + s_status_c);
             goto bb_20;
 bb_19:
@@ -3162,7 +2967,6 @@ bb_20:
   /*$2295*/ s_status_c = 0x01;
             if (s_status_d)
               goto bb_22;
-bb_21:
   /*$2296*/ s_a = (uint8_t)((s_a - 0x0001) - (uint8_t)(0x01 - s_status_c));
             goto bb_23;
 bb_22:
@@ -3173,7 +2977,6 @@ bb_23:
             branchTarget = true;
             if ((tmp1_U8 >= 0xf0))
               goto bb_25;
-bb_24:
   /*$229C*/ CYCLES_EDGE(0x229c, 1);
             branchTarget = true;
             goto bb_39;
@@ -3182,7 +2985,6 @@ bb_25:
             branchTarget = true;
             if (!(s_a >= 0xf9))
               goto bb_27;
-bb_26:
   /*$22A0*/ CYCLES_EDGE(0x22a0, 1);
             branchTarget = true;
             goto bb_39;
@@ -3194,7 +2996,6 @@ bb_27:
   /*$22A6*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_29;
-bb_28:
   /*$22A7*/ s_a = (uint8_t)((s_a + 0x0001) + s_status_c);
             goto bb_30;
 bb_29:
@@ -3205,7 +3006,6 @@ bb_30:
             branchTarget = true;
             if ((tmp1_U8 >= 0x08))
               goto bb_32;
-bb_31:
   /*$22AD*/ CYCLES_EDGE(0x22ad, 1);
   /*$22B8*/ CYCLES(0x22b8, 10);
             s_x = 0x10;
@@ -3234,7 +3034,6 @@ bb_35:
             branchTarget = true;
             if (s_status_not_z)
               goto bb_37;
-bb_36:
   /*$22C1*/ CYCLES_EDGE(0x22c1, 1);
             branchTarget = true;
             goto bb_38;
@@ -3256,7 +3055,6 @@ bb_39:
   /*$22D9*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_41;
-bb_40:
   /*$22DA*/ s_a = (uint8_t)((s_a + 0x0001) + s_status_c);
             goto bb_42;
 bb_41:
@@ -3267,7 +3065,6 @@ bb_42:
             branchTarget = true;
             if ((tmp1_U8 >= 0x03))
               goto bb_44;
-bb_43:
   /*$22E0*/ CYCLES_EDGE(0x22e0, 1);
             branchTarget = true;
             goto bb_51;
@@ -3280,7 +3077,6 @@ bb_44:
   /*$22EA*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_46;
-bb_45:
   /*$22EB*/ s_a = (uint8_t)((s_a + 0x0001) + s_status_c);
             goto bb_47;
 bb_46:
@@ -3289,7 +3085,6 @@ bb_47:
             branchTarget = true;
             if ((s_a >= 0x03))
               goto bb_49;
-bb_48:
   /*$22EF*/ CYCLES_EDGE(0x22ef, 1);
             branchTarget = true;
             goto bb_50;
@@ -3306,7 +3101,6 @@ bb_51:
   /*$2312*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_53;
-bb_52:
   /*$2313*/ tmp2_U16 = s_a;
             tmp3_U16 = (tmp2_U16 + 0x0008) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp2_U16, (uint8_t)0x0008);
@@ -3320,13 +3114,11 @@ bb_54:
   /*$2315*/ tmp1_U8 = s_a >= 0x40;
             s_status_c = tmp1_U8;
             branchTarget = true;
-            if (!tmp1_U8)
-              goto bb_56;
-bb_55:
-  /*$2317*/ CYCLES_EDGE(0x2317, 1);
-  /*$231E*/ CYCLES(0x231e, 6);
-            if (ret_addr) pop16(); return;
-bb_56:
+            if (tmp1_U8) {
+    /*$2317*/ CYCLES_EDGE(0x2317, 1);
+    /*$231E*/ CYCLES(0x231e, 6);
+              if (ret_addr) pop16(); return;
+            }
   /*$2319*/ CYCLES(0x2319, 6);
             ram_poke(0x0008, s_a);
             branchTarget = true;
@@ -3343,7 +3135,6 @@ void func_2380(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2380*/ CYCLES(0x2380, 2);
             s_y = 0x60;
 bb_1:
@@ -3355,7 +3146,6 @@ bb_1:
             branchTarget = true;
             if ((tmp1_U8 & 0x80))
               goto bb_3;
-bb_2:
   /*$2388*/ CYCLES_EDGE(0x2388, 1);
             branchTarget = true;
             goto bb_1;
@@ -3376,7 +3166,6 @@ bb_4:
             branchTarget = true;
             if ((tmp1_U8 >= 0x08))
               goto bb_6;
-bb_5:
   /*$23B0*/ CYCLES_EDGE(0x23b0, 1);
             branchTarget = true;
             goto bb_4;
@@ -3396,7 +3185,6 @@ bb_7:
             branchTarget = true;
             if (tmp3_U8)
               goto bb_9;
-bb_8:
   /*$23BD*/ CYCLES_EDGE(0x23bd, 1);
             branchTarget = true;
             goto bb_7;
@@ -3416,7 +3204,6 @@ void func_2400(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2400*/ CYCLES(0x2400, 10);
   /*$2402*/ ram_poke(0x0008, 0x40);
   /*$2406*/ ram_poke(0x0009, 0x03);
@@ -3436,7 +3223,6 @@ bb_1:
             branchTarget = true;
             if (ram_peek(0x000a))
               goto bb_3;
-bb_2:
   /*$242E*/ CYCLES_EDGE(0x242e, 1);
             branchTarget = true;
             goto bb_24;
@@ -3446,7 +3232,6 @@ bb_3:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_5;
-bb_4:
   /*$2434*/ CYCLES_EDGE(0x2434, 1);
   /*$2452*/ CYCLES(0x2452, 20);
   /*$2454*/ tmp4_U8 = peek((ram_peek16al(0x0008) + 0x0002));
@@ -3463,7 +3248,6 @@ bb_5:
   /*$243A*/ s_status_c = 0x01;
             if (s_status_d)
               goto bb_7;
-bb_6:
   /*$243B*/ s_a = (uint8_t)((s_a - 0x0001) - (uint8_t)(0x01 - s_status_c));
             goto bb_8;
 bb_7:
@@ -3473,7 +3257,6 @@ bb_8:
             branchTarget = true;
             if (!(s_a >= tmp1_U8))
               goto bb_10;
-bb_9:
   /*$2441*/ CYCLES_EDGE(0x2441, 1);
             branchTarget = true;
             goto bb_13;
@@ -3488,7 +3271,6 @@ bb_11:
             branchTarget = true;
             if (!s_status_not_z)
               goto bb_13;
-bb_12:
   /*$2449*/ CYCLES_EDGE(0x2449, 1);
             branchTarget = true;
             goto bb_19;
@@ -3507,7 +3289,6 @@ bb_16:
             branchTarget = true;
             if ((s_a >= tmp4_U8))
               goto bb_18;
-bb_17:
   /*$245D*/ CYCLES_EDGE(0x245d, 1);
             branchTarget = true;
             goto bb_13;
@@ -3527,7 +3308,6 @@ bb_19:
             branchTarget = true;
             if ((tmp1_U8 >= 0x20))
               goto bb_21;
-bb_20:
   /*$246B*/ CYCLES_EDGE(0x246b, 1);
             branchTarget = true;
             goto bb_23;
@@ -3536,7 +3316,6 @@ bb_21:
             branchTarget = true;
             if ((s_a >= 0x88))
               goto bb_23;
-bb_22:
   /*$246F*/ CYCLES_EDGE(0x246f, 1);
             branchTarget = true;
             goto bb_24;
@@ -3559,7 +3338,6 @@ bb_24:
   /*$2493*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_26;
-bb_25:
   /*$2494*/ tmp2_U16 = s_a;
             tmp3_U16 = (tmp2_U16 + 0x0005) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp2_U16, (uint8_t)0x0005);
@@ -3577,13 +3355,11 @@ bb_27:
             s_status_c = tmp4_U8;
             s_status_n = ((uint8_t)(tmp1_U8 - 0x54) & 0x80);
             branchTarget = true;
-            if (!tmp4_U8)
-              goto bb_29;
-bb_28:
-  /*$249A*/ CYCLES_EDGE(0x249a, 1);
-  /*$249F*/ CYCLES(0x249f, 6);
-            if (ret_addr) pop16(); return;
-bb_29:
+            if (tmp4_U8) {
+    /*$249A*/ CYCLES_EDGE(0x249a, 1);
+    /*$249F*/ CYCLES(0x249f, 6);
+              if (ret_addr) pop16(); return;
+            }
   /*$249C*/ CYCLES(0x249c, 3);
             branchTarget = true;
             goto bb_1;
@@ -3597,7 +3373,6 @@ void func_24a0(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$24A0*/ CYCLES(0x24a0, 6);
             func_2240(0x24a2);
   /*$24A3*/ CYCLES(0x24a3, 7);
@@ -3606,7 +3381,6 @@ bb_0:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_2;
-bb_1:
   /*$24A5*/ CYCLES_EDGE(0x24a5, 1);
             branchTarget = true;
             goto bb_3;
@@ -3628,7 +3402,6 @@ void func_2500(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2500*/ CYCLES(0x2500, 3);
             s_x = ram_peek(0x0004);
 bb_1:
@@ -3647,7 +3420,6 @@ bb_2:
             branchTarget = true;
             if ((tmp1_U8 & 0x80))
               goto bb_4;
-bb_3:
   /*$2513*/ CYCLES_EDGE(0x2513, 1);
             branchTarget = true;
             goto bb_2;
@@ -3658,7 +3430,6 @@ bb_4:
             branchTarget = true;
             if ((tmp1_U8 >= ram_peek(0x0005)))
               goto bb_6;
-bb_5:
   /*$2518*/ CYCLES_EDGE(0x2518, 1);
             branchTarget = true;
             goto bb_1;
@@ -3686,7 +3457,6 @@ void func_2520(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2520*/ CYCLES(0x2520, 14);
   /*$2522*/ ram_poke(0x2539, 0x00);
   /*$2527*/ ram_poke(0x253a, 0x77);
@@ -3706,7 +3476,6 @@ bb_2:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_4;
-bb_3:
   /*$2540*/ CYCLES_EDGE(0x2540, 1);
             branchTarget = true;
             goto bb_5;
@@ -3720,7 +3489,6 @@ bb_5:
             branchTarget = true;
             if ((tmp1_U8 >= 0x28))
               goto bb_7;
-bb_6:
   /*$2548*/ CYCLES_EDGE(0x2548, 1);
             branchTarget = true;
             goto bb_2;
@@ -3731,7 +3499,6 @@ bb_7:
             branchTarget = true;
             if ((tmp1_U8 >= 0xa0))
               goto bb_9;
-bb_8:
   /*$254D*/ CYCLES_EDGE(0x254d, 1);
             branchTarget = true;
             goto bb_1;
@@ -3749,7 +3516,6 @@ void func_2550(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2550*/ CYCLES(0x2550, 10);
   /*$2552*/ ram_poke(0x0006, 0x77);
   /*$2556*/ ram_poke(0x0007, 0x9e);
@@ -3776,7 +3542,6 @@ bb_3:
             branchTarget = true;
             if ((tmp1_U8 >= 0x1e))
               goto bb_5;
-bb_4:
   /*$2578*/ CYCLES_EDGE(0x2578, 1);
             branchTarget = true;
             goto bb_3;
@@ -3785,7 +3550,6 @@ bb_5:
             branchTarget = true;
             if (!(s_x != ram_peek(0x0006)))
               goto bb_7;
-bb_6:
   /*$257C*/ CYCLES_EDGE(0x257c, 1);
             branchTarget = true;
             goto bb_2;
@@ -3799,7 +3563,6 @@ bb_7:
             branchTarget = true;
             if ((tmp1_U8 >= 0x89))
               goto bb_9;
-bb_8:
   /*$2589*/ CYCLES_EDGE(0x2589, 1);
             branchTarget = true;
             goto bb_1;
@@ -3817,7 +3580,6 @@ void func_2590(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2590*/ CYCLES(0x2590, 16);
   /*$2592*/ ram_poke(0x0004, 0x00);
   /*$2596*/ ram_poke(0x0005, 0xa8);
@@ -3845,7 +3607,6 @@ bb_2:
             branchTarget = true;
             if ((tmp1_U8 & 0x80))
               goto bb_4;
-bb_3:
   /*$25BD*/ CYCLES_EDGE(0x25bd, 1);
             branchTarget = true;
             goto bb_2;
@@ -3856,7 +3617,6 @@ bb_4:
             branchTarget = true;
             if ((tmp1_U8 >= 0xa7))
               goto bb_6;
-bb_5:
   /*$25C2*/ CYCLES_EDGE(0x25c2, 1);
             branchTarget = true;
             goto bb_1;
@@ -3890,7 +3650,6 @@ void func_2600(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2600*/ CYCLES(0x2600, 2);
             s_x = 0x8b;
 bb_1:
@@ -3911,7 +3670,6 @@ bb_2:
             branchTarget = true;
             if ((tmp2_U8 >= ram_peek(0x0007)))
               goto bb_4;
-bb_3:
   /*$2619*/ CYCLES_EDGE(0x2619, 1);
             branchTarget = true;
             goto bb_2;
@@ -3922,7 +3680,6 @@ bb_4:
             branchTarget = true;
             if ((tmp2_U8 >= 0x9f))
               goto bb_6;
-bb_5:
   /*$261E*/ CYCLES_EDGE(0x261e, 1);
             branchTarget = true;
             goto bb_1;
@@ -3939,7 +3696,6 @@ void func_2680(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2680*/ CYCLES(0x2680, 5);
   /*$2682*/ ram_poke(0x0008, 0x00);
 bb_1:
@@ -3954,7 +3710,6 @@ bb_1:
   /*$2697*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_3;
-bb_2:
   /*$2698*/ s_a = (uint8_t)((s_a + 0x0003) + s_status_c);
             goto bb_4;
 bb_3:
@@ -3971,7 +3726,6 @@ bb_4:
             branchTarget = true;
             if ((tmp1_U8 >= 0x05))
               goto bb_6;
-bb_5:
   /*$26AA*/ CYCLES_EDGE(0x26aa, 1);
             branchTarget = true;
             goto bb_1;
@@ -3989,7 +3743,6 @@ void func_26c0(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$26C0*/ CYCLES(0x26c0, 5);
   /*$26C2*/ ram_poke(0x0008, 0x03);
 bb_1:
@@ -4003,7 +3756,6 @@ bb_1:
   /*$26D7*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_3;
-bb_2:
   /*$26D8*/ s_a = (uint8_t)((s_a + 0x0003) + s_status_c);
             goto bb_4;
 bb_3:
@@ -4026,7 +3778,6 @@ bb_5:
             branchTarget = true;
             if ((tmp1_U8 >= 0x9f))
               goto bb_7;
-bb_6:
   /*$26F4*/ CYCLES_EDGE(0x26f4, 1);
             branchTarget = true;
             goto bb_5;
@@ -4040,7 +3791,6 @@ bb_7:
             branchTarget = true;
             if ((tmp1_U8 & 0x80))
               goto bb_9;
-bb_8:
   /*$26FD*/ CYCLES_EDGE(0x26fd, 1);
             branchTarget = true;
             goto bb_1;
@@ -4056,7 +3806,6 @@ void func_2745(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2745*/ CYCLES(0x2745, 6);
             if (ret_addr) pop16(); return;
 }
@@ -4071,7 +3820,6 @@ void func_2750(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2750*/ CYCLES(0x2750, 23);
   /*$2752*/ ram_poke(0x000a, 0x00);
   /*$2756*/ ram_poke(0x000b, 0x96);
@@ -4092,7 +3840,6 @@ bb_2:
             branchTarget = true;
             if ((tmp1_U8 & 0x80))
               goto bb_4;
-bb_3:
   /*$2708*/ CYCLES_EDGE(0x2708, 1);
             branchTarget = true;
             goto bb_2;
@@ -4109,7 +3856,6 @@ bb_5:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_7;
-bb_6:
   /*$2712*/ CYCLES_EDGE(0x2712, 1);
             branchTarget = true;
             goto bb_5;
@@ -4120,7 +3866,6 @@ bb_7:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_9;
-bb_8:
   /*$2715*/ CYCLES_EDGE(0x2715, 1);
             branchTarget = true;
             goto bb_5;
@@ -4138,7 +3883,6 @@ bb_10:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_12;
-bb_11:
   /*$2722*/ CYCLES_EDGE(0x2722, 1);
             branchTarget = true;
             goto bb_10;
@@ -4149,7 +3893,6 @@ bb_12:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_14;
-bb_13:
   /*$2725*/ CYCLES_EDGE(0x2725, 1);
             branchTarget = true;
             goto bb_10;
@@ -4160,7 +3903,6 @@ bb_14:
   /*$272C*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_16;
-bb_15:
   /*$272D*/ tmp1_U8 = (uint8_t)((s_a + 0x0004) + s_status_c);
             s_status_not_z = tmp1_U8;
             s_a = tmp1_U8;
@@ -4174,7 +3916,6 @@ bb_17:
             branchTarget = true;
             if (!s_status_not_z)
               goto bb_19;
-bb_18:
   /*$2731*/ CYCLES_EDGE(0x2731, 1);
             branchTarget = true;
             goto bb_20;
@@ -4186,7 +3927,6 @@ bb_20:
             branchTarget = true;
             if (!(ram_peek(0x000a) != ram_peek(0x0004)))
               goto bb_22;
-bb_21:
   /*$2739*/ CYCLES_EDGE(0x2739, 1);
             branchTarget = true;
             goto bb_1;
@@ -4197,7 +3937,6 @@ bb_22:
             branchTarget = true;
             if (!(tmp1_U8 != ram_peek(0x0005)))
               goto bb_24;
-bb_23:
   /*$273F*/ CYCLES_EDGE(0x273f, 1);
             branchTarget = true;
             goto bb_1;
@@ -4217,7 +3956,6 @@ void func_2770(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2770*/ CYCLES(0x2770, 23);
   /*$2772*/ ram_poke(0x000a, 0xa0);
   /*$2776*/ ram_poke(0x000b, 0x98);
@@ -4238,7 +3976,6 @@ bb_2:
             branchTarget = true;
             if ((tmp1_U8 & 0x80))
               goto bb_4;
-bb_3:
   /*$2708*/ CYCLES_EDGE(0x2708, 1);
             branchTarget = true;
             goto bb_2;
@@ -4255,7 +3992,6 @@ bb_5:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_7;
-bb_6:
   /*$2712*/ CYCLES_EDGE(0x2712, 1);
             branchTarget = true;
             goto bb_5;
@@ -4266,7 +4002,6 @@ bb_7:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_9;
-bb_8:
   /*$2715*/ CYCLES_EDGE(0x2715, 1);
             branchTarget = true;
             goto bb_5;
@@ -4284,7 +4019,6 @@ bb_10:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_12;
-bb_11:
   /*$2722*/ CYCLES_EDGE(0x2722, 1);
             branchTarget = true;
             goto bb_10;
@@ -4295,7 +4029,6 @@ bb_12:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_14;
-bb_13:
   /*$2725*/ CYCLES_EDGE(0x2725, 1);
             branchTarget = true;
             goto bb_10;
@@ -4306,7 +4039,6 @@ bb_14:
   /*$272C*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_16;
-bb_15:
   /*$272D*/ tmp3_U16 = s_a;
             tmp4_U16 = (tmp3_U16 + 0x0004) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0x0004);
@@ -4325,7 +4057,6 @@ bb_17:
             branchTarget = true;
             if (!s_status_not_z)
               goto bb_19;
-bb_18:
   /*$2731*/ CYCLES_EDGE(0x2731, 1);
             branchTarget = true;
             goto bb_20;
@@ -4337,7 +4068,6 @@ bb_20:
             branchTarget = true;
             if (!(ram_peek(0x000a) != ram_peek(0x0004)))
               goto bb_22;
-bb_21:
   /*$2739*/ CYCLES_EDGE(0x2739, 1);
             branchTarget = true;
             goto bb_1;
@@ -4346,7 +4076,6 @@ bb_22:
             branchTarget = true;
             if (!(ram_peek(0x000b) != ram_peek(0x0005)))
               goto bb_24;
-bb_23:
   /*$273F*/ CYCLES_EDGE(0x273f, 1);
             branchTarget = true;
             goto bb_1;
@@ -4366,7 +4095,6 @@ void func_2790(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2790*/ CYCLES(0x2790, 23);
   /*$2792*/ ram_poke(0x000a, 0xa0);
   /*$2796*/ ram_poke(0x000b, 0x98);
@@ -4387,7 +4115,6 @@ bb_2:
             branchTarget = true;
             if ((tmp1_U8 & 0x80))
               goto bb_4;
-bb_3:
   /*$2708*/ CYCLES_EDGE(0x2708, 1);
             branchTarget = true;
             goto bb_2;
@@ -4404,7 +4131,6 @@ bb_5:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_7;
-bb_6:
   /*$2712*/ CYCLES_EDGE(0x2712, 1);
             branchTarget = true;
             goto bb_5;
@@ -4415,7 +4141,6 @@ bb_7:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_9;
-bb_8:
   /*$2715*/ CYCLES_EDGE(0x2715, 1);
             branchTarget = true;
             goto bb_5;
@@ -4433,7 +4158,6 @@ bb_10:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_12;
-bb_11:
   /*$2722*/ CYCLES_EDGE(0x2722, 1);
             branchTarget = true;
             goto bb_10;
@@ -4444,7 +4168,6 @@ bb_12:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_14;
-bb_13:
   /*$2725*/ CYCLES_EDGE(0x2725, 1);
             branchTarget = true;
             goto bb_10;
@@ -4455,7 +4178,6 @@ bb_14:
   /*$272C*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_16;
-bb_15:
   /*$272D*/ tmp3_U16 = s_a;
             tmp4_U16 = (tmp3_U16 + 0x0004) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp4_U16, (uint8_t)tmp3_U16, (uint8_t)0x0004);
@@ -4474,7 +4196,6 @@ bb_17:
             branchTarget = true;
             if (!s_status_not_z)
               goto bb_19;
-bb_18:
   /*$2731*/ CYCLES_EDGE(0x2731, 1);
             branchTarget = true;
             goto bb_20;
@@ -4486,7 +4207,6 @@ bb_20:
             branchTarget = true;
             if (!(ram_peek(0x000a) != ram_peek(0x0004)))
               goto bb_22;
-bb_21:
   /*$2739*/ CYCLES_EDGE(0x2739, 1);
             branchTarget = true;
             goto bb_1;
@@ -4499,7 +4219,6 @@ bb_22:
             branchTarget = true;
             if (!(tmp1_U8 != tmp2_U8))
               goto bb_24;
-bb_23:
   /*$273F*/ CYCLES_EDGE(0x273f, 1);
             branchTarget = true;
             goto bb_1;
@@ -4517,7 +4236,6 @@ void func_2800(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2800*/ CYCLES(0x2800, 10);
   /*$2802*/ ram_poke(0x0006, 0x77);
   /*$2806*/ ram_poke(0x0007, 0x9f);
@@ -4544,7 +4262,6 @@ bb_3:
             branchTarget = true;
             if ((tmp1_U8 >= 0x1e))
               goto bb_5;
-bb_4:
   /*$2828*/ CYCLES_EDGE(0x2828, 1);
             branchTarget = true;
             goto bb_3;
@@ -4555,7 +4272,6 @@ bb_5:
             branchTarget = true;
             if (!(tmp1_U8 != ram_peek(0x0007)))
               goto bb_7;
-bb_6:
   /*$282E*/ CYCLES_EDGE(0x282e, 1);
             branchTarget = true;
             goto bb_2;
@@ -4573,7 +4289,6 @@ bb_7:
             branchTarget = true;
             if (!tmp2_U8)
               goto bb_9;
-bb_8:
   /*$2839*/ CYCLES_EDGE(0x2839, 1);
             branchTarget = true;
             goto bb_1;
@@ -4592,7 +4307,6 @@ void func_2880(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2880*/ CYCLES(0x2880, 15);
   /*$2882*/ ram_poke(0x2899, 0x00);
   /*$2887*/ ram_poke(0x289a, 0x6e);
@@ -4613,7 +4327,6 @@ bb_2:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_4;
-bb_3:
   /*$28A0*/ CYCLES_EDGE(0x28a0, 1);
             branchTarget = true;
             goto bb_5;
@@ -4627,7 +4340,6 @@ bb_5:
             branchTarget = true;
             if ((tmp1_U8 >= ram_peek(0x0007)))
               goto bb_7;
-bb_6:
   /*$28A8*/ CYCLES_EDGE(0x28a8, 1);
             branchTarget = true;
             goto bb_2;
@@ -4644,7 +4356,6 @@ bb_7:
             branchTarget = true;
             if (tmp3_U8)
               goto bb_9;
-bb_8:
   /*$28B0*/ CYCLES_EDGE(0x28b0, 1);
             branchTarget = true;
             goto bb_1;
@@ -4664,7 +4375,6 @@ void func_2900(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2900*/ CYCLES(0x2900, 23);
   /*$2902*/ ram_poke(0x0090, 0x99);
   /*$2906*/ ram_poke(0x0091, 0x9a);
@@ -4681,7 +4391,6 @@ bb_1:
   /*$28DC*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_3;
-bb_2:
   /*$28DD*/ tmp2_U16 = s_a;
             tmp3_U16 = (tmp2_U16 + 0x0006) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp2_U16, (uint8_t)0x0006);
@@ -4706,7 +4415,6 @@ bb_4:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_6;
-bb_5:
   /*$28ED*/ CYCLES_EDGE(0x28ed, 1);
             branchTarget = true;
             goto bb_1;
@@ -4733,7 +4441,6 @@ bb_1:
             branchTarget = true;
             if (!(tmp1_U8 & 0x80))
               goto bb_3;
-bb_2:
   /*$2A06*/ CYCLES_EDGE(0x2a06, 1);
   /*$2A0E*/ CYCLES(0x2a0e, 4);
             tmp1_U8 = s_a;
@@ -4772,7 +4479,6 @@ void func_2a20(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2A20*/ CYCLES(0x2a20, 23);
   /*$2A22*/ ram_poke(0x0000, 0x17);
   /*$2A26*/ ram_poke(0x0001, 0x0b);
@@ -4834,7 +4540,6 @@ void func_2aa0(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2AA0*/ CYCLES(0x2aa0, 18);
             s_y = 0x00;
   /*$2AA4*/ poke(ram_peek16al(0x0000), 0xa0);
@@ -4862,7 +4567,6 @@ void func_2b30(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2B30*/ CYCLES(0x2b30, 48);
             tmp1_U8 = ram_peek(0x000a);
   /*$2B35*/ ram_poke(0x2b13, ram_peek((0x2b58 + tmp1_U8)));
@@ -4888,7 +4592,6 @@ bb_2:
             branchTarget = true;
             if (!(s_y >= 0x28))
               goto bb_4;
-bb_3:
   /*$2B10*/ CYCLES_EDGE(0x2b10, 1);
             branchTarget = true;
             goto bb_5;
@@ -4908,7 +4611,6 @@ bb_5:
             branchTarget = true;
             if (!(tmp4_U8 != ram_peek(0x0007)))
               goto bb_7;
-bb_6:
   /*$2B1F*/ CYCLES_EDGE(0x2b1f, 1);
             branchTarget = true;
             goto bb_2;
@@ -4925,7 +4627,6 @@ bb_7:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_9;
-bb_8:
   /*$2B27*/ CYCLES_EDGE(0x2b27, 1);
             branchTarget = true;
             goto bb_1;
@@ -4945,7 +4646,6 @@ bb_12:
   /*$2B4B*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_14;
-bb_13:
   /*$2B4C*/ tmp2_U16 = s_a;
             tmp3_U16 = (tmp2_U16 + 0x0005) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp2_U16, (uint8_t)0x0005);
@@ -4969,7 +4669,6 @@ void func_2b60(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2B60*/ CYCLES(0x2b60, 6);
             func_2b30(0x2b62);
   /*$2B63*/ CYCLES(0x2b63, 6);
@@ -4987,7 +4686,6 @@ void func_2b70(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2B70*/ CYCLES(0x2b70, 2);
             s_x = 0x10;
 bb_1:
@@ -5000,7 +4698,6 @@ bb_2:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_4;
-bb_3:
   /*$2B75*/ CYCLES_EDGE(0x2b75, 1);
             branchTarget = true;
             goto bb_2;
@@ -5015,7 +4712,6 @@ bb_5:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_7;
-bb_6:
   /*$2B7D*/ CYCLES_EDGE(0x2b7d, 1);
             branchTarget = true;
             goto bb_5;
@@ -5027,7 +4723,6 @@ bb_7:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_9;
-bb_8:
   /*$2B83*/ CYCLES_EDGE(0x2b83, 1);
             branchTarget = true;
             goto bb_1;
@@ -5045,7 +4740,6 @@ void func_2c40(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2C40*/ CYCLES(0x2c40, 2);
             s_x = 0xa8;
 bb_1:
@@ -5060,7 +4754,6 @@ bb_2:
             branchTarget = true;
             if (!(s_y >= 0x28))
               goto bb_4;
-bb_3:
   /*$2C54*/ CYCLES_EDGE(0x2c54, 1);
             branchTarget = true;
             goto bb_8;
@@ -5074,7 +4767,6 @@ bb_4:
             branchTarget = true;
             if ((tmp1_U8 & 0x80))
               goto bb_6;
-bb_5:
   /*$2C60*/ CYCLES_EDGE(0x2c60, 1);
             branchTarget = true;
             goto bb_4;
@@ -5086,7 +4778,6 @@ bb_6:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_8;
-bb_7:
   /*$2C67*/ CYCLES_EDGE(0x2c67, 1);
             branchTarget = true;
             goto bb_2;
@@ -5097,7 +4788,6 @@ bb_8:
             branchTarget = true;
             if ((tmp1_U8 >= 0xb0))
               goto bb_10;
-bb_9:
   /*$2C6C*/ CYCLES_EDGE(0x2c6c, 1);
             branchTarget = true;
             goto bb_1;
@@ -5116,7 +4806,6 @@ void func_2c80(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2C80*/ CYCLES(0x2c80, 73);
             tmp1_U8 = s_x;
   /*$2C83*/ tmp2_U8 = s_y;
@@ -5147,7 +4836,6 @@ void func_2cb0(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2CB0*/ CYCLES(0x2cb0, 73);
             tmp1_U8 = s_x;
   /*$2CB3*/ tmp2_U8 = s_y;
@@ -5175,7 +4863,6 @@ void func_2ce0(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2CE0*/ CYCLES(0x2ce0, 6);
             func_2c80(0x2ce2);
   /*$2CE3*/ CYCLES(0x2ce3, 3);
@@ -5190,7 +4877,6 @@ void func_2ce8(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2CE8*/ CYCLES(0x2ce8, 6);
             func_2cb0(0x2cea);
   /*$2CEB*/ CYCLES(0x2ceb, 3);
@@ -5206,7 +4892,6 @@ void func_2d00(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2D00*/ CYCLES(0x2d00, 19);
   /*$2D06*/ s_x = (uint8_t)((uint8_t)((ram_peek(0x0080) & 0x0f) << 0x01) + 0x01);
   /*$2D07*/ s_y = 0x0f;
@@ -5241,7 +4926,6 @@ void func_2d38(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2D38*/ CYCLES(0x2d38, 16);
   /*$2D3C*/ s_a = (uint8_t)((s_a >> 0x04) << 0x01);
   /*$2D3D*/ if (ret_addr) pop16(); return;
@@ -5254,7 +4938,6 @@ void func_2d40(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2D40*/ CYCLES(0x2d40, 19);
   /*$2D46*/ s_x = (uint8_t)((uint8_t)((ram_peek(0x0083) & 0x0f) << 0x01) + 0x01);
   /*$2D47*/ s_y = 0x0f;
@@ -5289,13 +4972,11 @@ void func_2d80(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2D80*/ CYCLES(0x2d80, 18);
             s_a = ram_peek(0x0086);
   /*$2D82*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_2;
-bb_1:
   /*$2D83*/ tmp1_U16 = s_a;
             tmp2_U16 = (tmp1_U16 + 0x0001) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp2_U16, (uint8_t)tmp1_U16, (uint8_t)0x0001);
@@ -5319,7 +5000,6 @@ void func_2d90(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2D90*/ CYCLES(0x2d90, 14);
   /*$2D94*/ s_x = (uint8_t)((uint8_t)(ram_peek(0x0087) << 0x01) + 0x01);
   /*$2D95*/ s_y = 0x27;
@@ -5337,7 +5017,6 @@ void func_2e00(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2E00*/ CYCLES(0x2e00, 38);
             s_status_d = 0x01;
   /*$2E03*/ tmp1_U16 = adc_dec16(s_x, ram_peek(0x0080), 0x00);
@@ -5346,7 +5025,6 @@ bb_0:
   /*$2E07*/ s_a = s_y;
             if (0x01)
               goto bb_2;
-bb_1:
   /*$2E08*/ tmp1_U16 = (s_a + ram_peek(0x0081)) + s_status_c;
             s_status_c = (uint8_t)(tmp1_U16 >> 8);
             s_a = ((uint8_t)tmp1_U16);
@@ -5360,7 +5038,6 @@ bb_3:
   /*$2E0C*/ s_a = 0x00;
             if (s_status_d)
               goto bb_5;
-bb_4:
   /*$2E0E*/ tmp1_U16 = s_a;
             tmp2_U16 = ram_peek(0x0082);
             tmp3_U16 = (tmp1_U16 + tmp2_U16) + s_status_c;
@@ -5389,7 +5066,6 @@ void func_2f00(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2F00*/ CYCLES(0x2f00, 4);
             s_x = 0x00;
   /*$2F02*/ s_y = 0xa7;
@@ -5416,7 +5092,6 @@ bb_1:
             branchTarget = true;
             if (tmp3_U8)
               goto bb_3;
-bb_2:
   /*$2F24*/ CYCLES_EDGE(0x2f24, 1);
             branchTarget = true;
             goto bb_1;
@@ -5435,13 +5110,11 @@ void func_2f80(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2F80*/ CYCLES(0x2f80, 6);
             func_3000(0x2f82);
   /*$2F83*/ CYCLES(0x2f83, 41);
             if (s_status_d)
               goto bb_2;
-bb_1:
   /*$2F83*/ s_a = (uint8_t)((s_a + 0x0006) + s_status_c);
             goto bb_3;
 bb_2:
@@ -5452,7 +5125,6 @@ bb_3:
   /*$2F89*/ s_status_c = 0x01;
             if (s_status_d)
               goto bb_5;
-bb_4:
   /*$2F8A*/ s_a = (uint8_t)((s_a - ram_peek(0x0000)) - (uint8_t)(0x01 - s_status_c));
             goto bb_6;
 bb_5:
@@ -5461,7 +5133,6 @@ bb_6:
   /*$2F8C*/ s_status_c = 0x01;
             if (s_status_d)
               goto bb_8;
-bb_7:
   /*$2F8D*/ tmp1_U16 = s_a;
             tmp2_U16 = (tmp1_U16 - 0x0005) - (uint8_t)(0x01 - s_status_c);
             s_status_c = (uint8_t)(0x01 - ((uint8_t)(tmp2_U16 >> 8) & 0x01));
@@ -5489,7 +5160,6 @@ bb_9:
             branchTarget = true;
             if (!tmp3_U8)
               goto bb_11;
-bb_10:
   /*$2FE5*/ CYCLES_EDGE(0x2fe5, 1);
   /*$2FE8*/ CYCLES(0x2fe8, 2);
             branchTarget = true;
@@ -5532,13 +5202,11 @@ void func_2fa0(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2FA0*/ CYCLES(0x2fa0, 9);
             s_x = 0x00;
             branchTarget = true;
             if ((uint8_t)((ram_peek(0x00ff) << 0x01) >> 8))
               goto bb_2;
-bb_1:
   /*$2FA5*/ CYCLES_EDGE(0x2fa5, 1);
             branchTarget = true;
             goto bb_3;
@@ -5552,7 +5220,6 @@ bb_3:
   /*$2FAD*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_5;
-bb_4:
   /*$2FAE*/ tmp1_U16 = s_a;
             tmp2_U16 = ram_peek(0x0086);
             tmp3_U16 = (tmp1_U16 + tmp2_U16) + s_status_c;
@@ -5569,7 +5236,6 @@ bb_6:
             branchTarget = true;
             if (tmp4_U8)
               goto bb_8;
-bb_7:
   /*$2FB2*/ CYCLES_EDGE(0x2fb2, 1);
   /*$2FB5*/ CYCLES(0x2fb5, 4);
             branchTarget = true;
@@ -5593,7 +5259,6 @@ bb_10:
             branchTarget = true;
             if (!(ram_peek(0x0c00) != 0x40))
               goto bb_12;
-bb_11:
   /*$2FBE*/ CYCLES_EDGE(0x2fbe, 1);
   /*$2FC3*/ CYCLES(0x2fc3, 3);
             branchTarget = true;
@@ -5631,7 +5296,6 @@ bb_17:
             branchTarget = true;
             if ((tmp5_U8 >= 0x28))
               goto bb_19;
-bb_18:
   /*$AD19*/ CYCLES_EDGE(0xad19, 1);
             branchTarget = true;
             goto bb_17;
@@ -5644,7 +5308,6 @@ bb_19:
             branchTarget = true;
             if (tmp5_U8)
               goto bb_21;
-bb_20:
   /*$AD1E*/ CYCLES_EDGE(0xad1e, 1);
             branchTarget = true;
             goto bb_16;
@@ -5673,22 +5336,19 @@ void func_2fd3(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$2FD3*/ CYCLES(0x2fd3, 4);
             tmp1_U8 = s_a;
             s_status_c = (tmp1_U8 >= 0x40);
             branchTarget = true;
-            if (!(tmp1_U8 != 0x40))
-              goto bb_2;
-bb_1:
-  /*$2FD5*/ CYCLES_EDGE(0x2fd5, 1);
-  /*$2FD8*/ CYCLES(0x2fd8, 6);
-            func_2f80(0x2fda);
-  /*$2FDB*/ CYCLES(0x2fdb, 6);
-            func_2f00(0x2fdd);
-  /*$2FDE*/ CYCLES(0x2fde, 6);
-            if (ret_addr) pop16(); return;
-bb_2:
+            if ((tmp1_U8 != 0x40)) {
+    /*$2FD5*/ CYCLES_EDGE(0x2fd5, 1);
+    /*$2FD8*/ CYCLES(0x2fd8, 6);
+              func_2f80(0x2fda);
+    /*$2FDB*/ CYCLES(0x2fdb, 6);
+              func_2f00(0x2fdd);
+    /*$2FDE*/ CYCLES(0x2fde, 6);
+              if (ret_addr) pop16(); return;
+            }
   /*$2FD7*/ CYCLES(0x2fd7, 6);
             if (ret_addr) pop16(); return;
 }
@@ -5701,13 +5361,11 @@ void func_3000(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$3000*/ CYCLES(0x3000, 18);
             s_a = ram_peek(0x00e2);
   /*$3002*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_2;
-bb_1:
   /*$3003*/ s_a = (uint8_t)((s_a + 0x0060) + s_status_c);
             goto bb_3;
 bb_2:
@@ -5720,7 +5378,6 @@ bb_3:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_5;
-bb_4:
   /*$300C*/ CYCLES_EDGE(0x300c, 1);
             branchTarget = true;
             goto bb_14;
@@ -5729,7 +5386,6 @@ bb_5:
             s_status_c = 0x00;
             if (s_status_d)
               goto bb_7;
-bb_6:
   /*$300F*/ s_a = (uint8_t)((s_a + 0x0050) + s_status_c);
             goto bb_8;
 bb_7:
@@ -5740,7 +5396,6 @@ bb_8:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_10;
-bb_9:
   /*$3012*/ CYCLES_EDGE(0x3012, 1);
             branchTarget = true;
             goto bb_14;
@@ -5749,7 +5404,6 @@ bb_10:
             s_status_c = 0x00;
             if (s_status_d)
               goto bb_12;
-bb_11:
   /*$3015*/ s_a = (uint8_t)((s_a + 0x0050) + s_status_c);
             goto bb_13;
 bb_12:
@@ -5764,7 +5418,6 @@ bb_14:
   /*$301E*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_16;
-bb_15:
   /*$301F*/ s_a = (uint8_t)((s_a + 0x000b) + s_status_c);
             goto bb_17;
 bb_16:
@@ -5777,7 +5430,6 @@ bb_17:
   /*$3027*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_19;
-bb_18:
   /*$3028*/ s_a = (uint8_t)((s_a + 0x0007) + s_status_c);
             goto bb_20;
 bb_19:
@@ -5799,7 +5451,6 @@ void func_3040(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$3040*/ CYCLES(0x3040, 33);
             ram_poke(0x1078, s_a);
   /*$3046*/ push8(ram_peek(0x36cd));
@@ -5821,7 +5472,6 @@ void func_3070(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$3070*/ CYCLES(0x3070, 25);
   /*$3072*/ ram_poke(0x000a, 0x00);
   /*$3076*/ ram_poke(0x000b, 0x86);
@@ -5845,7 +5495,6 @@ bb_2:
             branchTarget = true;
             if ((tmp1_U8 >= 0xa7))
               goto bb_4;
-bb_3:
   /*$309B*/ CYCLES_EDGE(0x309b, 1);
             branchTarget = true;
             goto bb_2;
@@ -5856,7 +5505,6 @@ bb_4:
             branchTarget = true;
             if ((tmp1_U8 & 0x80))
               goto bb_6;
-bb_5:
   /*$309F*/ CYCLES_EDGE(0x309f, 1);
             branchTarget = true;
             goto bb_9;
@@ -5867,7 +5515,6 @@ bb_6:
             branchTarget = true;
             if ((ram_peek(0x0004) >= 0x28))
               goto bb_8;
-bb_7:
   /*$30AB*/ CYCLES_EDGE(0x30ab, 1);
             branchTarget = true;
             goto bb_9;
@@ -5881,7 +5528,6 @@ bb_9:
             branchTarget = true;
             if ((tmp1_U8 & 0x80))
               goto bb_11;
-bb_10:
   /*$30B0*/ CYCLES_EDGE(0x30b0, 1);
             branchTarget = true;
             goto bb_12;
@@ -5896,7 +5542,6 @@ bb_12:
             branchTarget = true;
             if (!(tmp1_U8 != 0x01))
               goto bb_14;
-bb_13:
   /*$30BE*/ CYCLES_EDGE(0x30be, 1);
   /*$30C5*/ CYCLES(0x30c5, 4);
             branchTarget = true;
@@ -5922,7 +5567,6 @@ bb_17:
   /*$30CD*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_19;
-bb_18:
   /*$30CE*/ tmp4_U16 = (s_a + 0x0001) + s_status_c;
             s_status_c = (uint8_t)(tmp4_U16 >> 8);
             s_a = ((uint8_t)tmp4_U16);
@@ -5936,7 +5580,6 @@ bb_20:
   /*$30D2*/ s_a = ram_peek(0x000b);
             if (s_status_d)
               goto bb_22;
-bb_21:
   /*$30D4*/ tmp4_U16 = s_a;
             tmp5_U16 = tmp4_U16 + s_status_c;
             s_status_v = ovf8((uint8_t)tmp5_U16, (uint8_t)tmp4_U16, (uint8_t)0x0000);
@@ -5962,7 +5605,6 @@ void func_3440(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$3440*/ CYCLES(0x3440, 3);
             s_x = ram_peek(0x0004);
 bb_1:
@@ -5976,7 +5618,6 @@ bb_2:
             branchTarget = true;
             if (!(s_y >= 0x28))
               goto bb_4;
-bb_3:
   /*$3450*/ CYCLES_EDGE(0x3450, 1);
             branchTarget = true;
             goto bb_5;
@@ -5994,7 +5635,6 @@ bb_5:
             branchTarget = true;
             if (!(tmp2_U8 != ram_peek(0x0007)))
               goto bb_7;
-bb_6:
   /*$3461*/ CYCLES_EDGE(0x3461, 1);
             branchTarget = true;
             goto bb_2;
@@ -6006,7 +5646,6 @@ bb_7:
             branchTarget = true;
             if (!tmp2_U8)
               goto bb_9;
-bb_8:
   /*$3466*/ CYCLES_EDGE(0x3466, 1);
             branchTarget = true;
             goto bb_13;
@@ -6018,7 +5657,6 @@ bb_9:
   /*$3471*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_11;
-bb_10:
   /*$3472*/ s_a = (uint8_t)((s_a + 0x0009) + s_status_c);
             goto bb_12;
 bb_11:
@@ -6030,7 +5668,6 @@ bb_13:
             branchTarget = true;
             if ((s_x >= ram_peek(0x0005)))
               goto bb_15;
-bb_14:
   /*$3479*/ CYCLES_EDGE(0x3479, 1);
             branchTarget = true;
             goto bb_1;
@@ -6050,7 +5687,6 @@ void func_3480(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$3480*/ CYCLES(0x3480, 58);
             tmp1_U8 = ram_peek(0x0071);
             s_a = tmp1_U8;
@@ -6071,7 +5707,6 @@ bb_2:
             branchTarget = true;
             if (!(s_y >= 0x28))
               goto bb_4;
-bb_3:
   /*$3410*/ CYCLES_EDGE(0x3410, 1);
             branchTarget = true;
             goto bb_5;
@@ -6089,7 +5724,6 @@ bb_5:
             branchTarget = true;
             if (!(tmp2_U8 != ram_peek(0x0007)))
               goto bb_7;
-bb_6:
   /*$3421*/ CYCLES_EDGE(0x3421, 1);
             branchTarget = true;
             goto bb_2;
@@ -6101,7 +5735,6 @@ bb_7:
             branchTarget = true;
             if (!tmp2_U8)
               goto bb_9;
-bb_8:
   /*$3426*/ CYCLES_EDGE(0x3426, 1);
             branchTarget = true;
             goto bb_13;
@@ -6113,7 +5746,6 @@ bb_9:
   /*$3431*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_11;
-bb_10:
   /*$3432*/ s_a = (uint8_t)((s_a + 0x0009) + s_status_c);
             goto bb_12;
 bb_11:
@@ -6125,7 +5757,6 @@ bb_13:
             branchTarget = true;
             if ((s_x >= ram_peek(0x0005)))
               goto bb_15;
-bb_14:
   /*$3439*/ CYCLES_EDGE(0x3439, 1);
             branchTarget = true;
             goto bb_1;
@@ -6145,7 +5776,6 @@ bb_18:
   /*$348D*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_20;
-bb_19:
   /*$348E*/ s_a = (uint8_t)((s_a + 0x0009) + s_status_c);
             goto bb_21;
 bb_20:
@@ -6157,7 +5787,6 @@ bb_21:
   /*$3499*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_23;
-bb_22:
   /*$349A*/ s_a = (uint8_t)((s_a + 0x0039) + s_status_c);
             goto bb_24;
 bb_23:
@@ -6173,7 +5802,6 @@ bb_24:
   /*$34AA*/ s_status_c = 0x01;
             if (s_status_d)
               goto bb_26;
-bb_25:
   /*$34AB*/ tmp1_U8 = (uint8_t)((s_a - 0x0002) - (uint8_t)(0x01 - s_status_c));
             s_status_n = (tmp1_U8 & 0x80);
             s_a = tmp1_U8;
@@ -6186,7 +5814,6 @@ bb_27:
             branchTarget = true;
             if (s_status_n)
               goto bb_29;
-bb_28:
   /*$34AD*/ CYCLES_EDGE(0x34ad, 1);
             branchTarget = true;
             goto bb_33;
@@ -6196,7 +5823,6 @@ bb_29:
   /*$34B1*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_31;
-bb_30:
   /*$34B2*/ s_a = (uint8_t)((s_a + 0x0007) + s_status_c);
             goto bb_32;
 bb_31:
@@ -6209,7 +5835,6 @@ bb_33:
   /*$34B8*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_35;
-bb_34:
   /*$34B9*/ s_a = (uint8_t)((s_a + ram_peek(0x0077)) + s_status_c);
             goto bb_36;
 bb_35:
@@ -6220,7 +5845,6 @@ bb_36:
             branchTarget = true;
             if ((tmp1_U8 >= 0xa0))
               goto bb_38;
-bb_37:
   /*$34BF*/ CYCLES_EDGE(0x34bf, 1);
   /*$34C8*/ CYCLES(0x34c8, 7);
             tmp1_U8 = ram_peek(0x0072);
@@ -6243,7 +5867,6 @@ bb_40:
             branchTarget = true;
             if ((s_a >= 0xf8))
               goto bb_42;
-bb_41:
   /*$34D0*/ CYCLES_EDGE(0x34d0, 1);
   /*$3510*/ CYCLES(0x3510, 11);
   /*$3512*/ ram_poke(0x0070, 0x00);
@@ -6253,7 +5876,6 @@ bb_42:
             branchTarget = true;
             if (!(ram_peek(0x0070) != 0x03))
               goto bb_44;
-bb_43:
   /*$34D6*/ CYCLES_EDGE(0x34d6, 1);
             branchTarget = true;
             goto bb_49;
@@ -6264,7 +5886,6 @@ bb_44:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_46;
-bb_45:
   /*$34DA*/ CYCLES_EDGE(0x34da, 1);
             branchTarget = true;
             goto bb_49;
@@ -6274,15 +5895,13 @@ bb_46:
   /*$34E0*/ tmp1_U8 = (uint8_t)(ram_peek(0x0074) - 0x01);
             ram_poke(0x0074, tmp1_U8);
             branchTarget = true;
-            if (!tmp1_U8)
-              goto bb_48;
-bb_47:
-  /*$34E2*/ CYCLES_EDGE(0x34e2, 1);
-            branchTarget = true;
-            goto bb_49;
-bb_48:
-  /*$34E4*/ CYCLES(0x34e4, 5);
-  /*$34E6*/ ram_poke(0x0074, 0x01);
+            if (tmp1_U8) {
+    /*$34E2*/ CYCLES_EDGE(0x34e2, 1);
+              branchTarget = true;
+            } else {
+    /*$34E4*/ CYCLES(0x34e4, 5);
+    /*$34E6*/ ram_poke(0x0074, 0x01);
+            }
 bb_49:
   /*$34E8*/ CYCLES(0x34e8, 55);
             tmp1_U8 = ram_peek(0x0071);
@@ -6291,7 +5910,6 @@ bb_49:
   /*$34EC*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_51;
-bb_50:
   /*$34ED*/ s_a = (uint8_t)((s_a + 0x000c) + s_status_c);
             goto bb_52;
 bb_51:
@@ -6304,7 +5922,6 @@ bb_52:
   /*$34F5*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_54;
-bb_53:
   /*$34F6*/ s_a = (uint8_t)((s_a + 0x0009) + s_status_c);
             goto bb_55;
 bb_54:
@@ -6316,7 +5933,6 @@ bb_55:
   /*$3501*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_57;
-bb_56:
   /*$3502*/ s_a = (uint8_t)((s_a + 0x0039) + s_status_c);
             goto bb_58;
 bb_57:
@@ -6339,7 +5955,6 @@ void func_3570(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$3570*/ CYCLES(0x3570, 6);
             rom_mon_wait(0x3572);
   /*$3573*/ CYCLES(0x3573, 11);
@@ -6360,14 +5975,12 @@ void func_3584(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$3584*/ CYCLES(0x3584, 10);
             tmp1_U8 = io_peek(0xc061);
   /*$3587*/ tmp2_U8 = io_peek(0xc062);
             branchTarget = true;
             if (!((tmp1_U8 & tmp2_U8) & 0x80))
               goto bb_2;
-bb_1:
   /*$358A*/ CYCLES_EDGE(0x358a, 1);
             branchTarget = true;
             goto bb_4;
@@ -6376,33 +5989,32 @@ bb_2:
             tmp2_U8 = io_peek(0xc061);
   /*$358F*/ tmp1_U8 = io_peek(0xc062);
             branchTarget = true;
-            if (!((tmp2_U8 | tmp1_U8) & 0x80))
-              goto bb_4;
-bb_3:
-  /*$3592*/ CYCLES_EDGE(0x3592, 1);
-  /*$35F0*/ CYCLES(0x35f0, 3);
-  /*$3700*/ CYCLES(0x3700, 108);
-  /*$3702*/ ram_poke(0x138c, 0xad);
-  /*$3705*/ ram_poke(0x1300, 0xad);
-  /*$370A*/ ram_poke(0x138d, 0x62);
-  /*$370F*/ ram_poke(0x1301, 0x61);
-  /*$3714*/ ram_poke(0x138e, 0xc0);
-  /*$3717*/ ram_poke(0x1302, 0xc0);
-  /*$371C*/ ram_poke(0x138f, 0x30);
-  /*$371F*/ ram_poke(0x1303, 0x30);
-  /*$3724*/ ram_poke(0x1390, 0x05);
-  /*$3729*/ ram_poke(0x1304, 0x07);
-  /*$372E*/ ram_poke(0x1305, 0x60);
-  /*$3731*/ ram_poke(0x1391, 0x60);
-  /*$3736*/ ram_poke(0x1060, 0x20);
-  /*$373B*/ ram_poke(0x1061, 0xb0);
-  /*$3740*/ ram_poke(0x1062, 0x36);
-  /*$3745*/ ram_poke(0x1063, 0x4c);
-  /*$374A*/ ram_poke(0x1064, 0x80);
-  /*$374F*/ ram_poke(0x1065, 0x11);
-  /*$3752*/ s_status_not_z = 0x80;
-            s_status_n = 0x80;
-  /*$3754*/ if (ret_addr) pop16(); return;
+            if (((tmp2_U8 | tmp1_U8) & 0x80)) {
+    /*$3592*/ CYCLES_EDGE(0x3592, 1);
+    /*$35F0*/ CYCLES(0x35f0, 3);
+    /*$3700*/ CYCLES(0x3700, 108);
+    /*$3702*/ ram_poke(0x138c, 0xad);
+    /*$3705*/ ram_poke(0x1300, 0xad);
+    /*$370A*/ ram_poke(0x138d, 0x62);
+    /*$370F*/ ram_poke(0x1301, 0x61);
+    /*$3714*/ ram_poke(0x138e, 0xc0);
+    /*$3717*/ ram_poke(0x1302, 0xc0);
+    /*$371C*/ ram_poke(0x138f, 0x30);
+    /*$371F*/ ram_poke(0x1303, 0x30);
+    /*$3724*/ ram_poke(0x1390, 0x05);
+    /*$3729*/ ram_poke(0x1304, 0x07);
+    /*$372E*/ ram_poke(0x1305, 0x60);
+    /*$3731*/ ram_poke(0x1391, 0x60);
+    /*$3736*/ ram_poke(0x1060, 0x20);
+    /*$373B*/ ram_poke(0x1061, 0xb0);
+    /*$3740*/ ram_poke(0x1062, 0x36);
+    /*$3745*/ ram_poke(0x1063, 0x4c);
+    /*$374A*/ ram_poke(0x1064, 0x80);
+    /*$374F*/ ram_poke(0x1065, 0x11);
+    /*$3752*/ s_status_not_z = 0x80;
+              s_status_n = 0x80;
+    /*$3754*/ if (ret_addr) pop16(); return;
+            }
 bb_4:
   /*$3594*/ CYCLES(0x3594, 6);
             tmp1_U8 = io_peek(0xc000);
@@ -6410,35 +6022,33 @@ bb_4:
             tmp1_U8 = tmp1_U8 & 0x80;
             s_status_n = tmp1_U8;
             branchTarget = true;
-            if (!tmp1_U8)
-              goto bb_6;
-bb_5:
-  /*$3597*/ CYCLES_EDGE(0x3597, 1);
-  /*$359A*/ CYCLES(0x359a, 110);
-  /*$359C*/ ram_poke(0x138c, 0xad);
-  /*$359F*/ ram_poke(0x1300, 0xad);
-  /*$35A2*/ ram_poke(0x1060, 0xad);
-  /*$35A7*/ ram_poke(0x138d, 0x00);
-  /*$35AA*/ ram_poke(0x1301, 0x00);
-  /*$35AD*/ ram_poke(0x1061, 0x00);
-  /*$35B2*/ ram_poke(0x138e, 0xc0);
-  /*$35B5*/ ram_poke(0x1302, 0xc0);
-  /*$35B8*/ ram_poke(0x1062, 0xc0);
-  /*$35BD*/ ram_poke(0x138f, 0xc9);
-  /*$35C0*/ ram_poke(0x1065, 0xc9);
-  /*$35C3*/ ram_poke(0x1305, 0xc9);
-  /*$35C8*/ ram_poke(0x1390, 0xc1);
-  /*$35CD*/ ram_poke(0x1391, 0xd0);
-  /*$35D2*/ ram_poke(0x1392, 0x24);
-  /*$35D7*/ ram_poke(0x1303, 0x10);
-  /*$35DA*/ ram_poke(0x1063, 0x10);
-  /*$35DF*/ ram_poke(0x1304, 0x2a);
-  /*$35E4*/ ram_poke(0x1306, 0xda);
-  /*$35E9*/ ram_poke(0x1064, 0x49);
-  /*$35EC*/ s_status_not_z = 0x80;
-            s_status_n = 0x80;
-  /*$35EE*/ if (ret_addr) pop16(); return;
-bb_6:
+            if (tmp1_U8) {
+    /*$3597*/ CYCLES_EDGE(0x3597, 1);
+    /*$359A*/ CYCLES(0x359a, 110);
+    /*$359C*/ ram_poke(0x138c, 0xad);
+    /*$359F*/ ram_poke(0x1300, 0xad);
+    /*$35A2*/ ram_poke(0x1060, 0xad);
+    /*$35A7*/ ram_poke(0x138d, 0x00);
+    /*$35AA*/ ram_poke(0x1301, 0x00);
+    /*$35AD*/ ram_poke(0x1061, 0x00);
+    /*$35B2*/ ram_poke(0x138e, 0xc0);
+    /*$35B5*/ ram_poke(0x1302, 0xc0);
+    /*$35B8*/ ram_poke(0x1062, 0xc0);
+    /*$35BD*/ ram_poke(0x138f, 0xc9);
+    /*$35C0*/ ram_poke(0x1065, 0xc9);
+    /*$35C3*/ ram_poke(0x1305, 0xc9);
+    /*$35C8*/ ram_poke(0x1390, 0xc1);
+    /*$35CD*/ ram_poke(0x1391, 0xd0);
+    /*$35D2*/ ram_poke(0x1392, 0x24);
+    /*$35D7*/ ram_poke(0x1303, 0x10);
+    /*$35DA*/ ram_poke(0x1063, 0x10);
+    /*$35DF*/ ram_poke(0x1304, 0x2a);
+    /*$35E4*/ ram_poke(0x1306, 0xda);
+    /*$35E9*/ ram_poke(0x1064, 0x49);
+    /*$35EC*/ s_status_not_z = 0x80;
+              s_status_n = 0x80;
+    /*$35EE*/ if (ret_addr) pop16(); return;
+            }
   /*$3599*/ CYCLES(0x3599, 6);
             if (ret_addr) pop16(); return;
 }
@@ -6454,14 +6064,12 @@ void func_3600(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$3600*/ CYCLES(0x3600, 19);
   /*$3602*/ ram_poke(0x361c, 0x90);
   /*$3605*/ s_a = ram_peek(0x000a);
   /*$3607*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_2;
-bb_1:
   /*$3608*/ tmp1_U16 = s_a;
             tmp2_U16 = (tmp1_U16 + 0x0039) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp2_U16, (uint8_t)tmp1_U16, (uint8_t)0x0039);
@@ -6491,7 +6099,6 @@ bb_5:
             branchTarget = true;
             if ((tmp4_U8 >= 0x1c))
               goto bb_7;
-bb_6:
   /*$3626*/ CYCLES_EDGE(0x3626, 1);
             branchTarget = true;
             goto bb_5;
@@ -6507,7 +6114,6 @@ bb_7:
             branchTarget = true;
             if (tmp3_U8)
               goto bb_9;
-bb_8:
   /*$362B*/ CYCLES_EDGE(0x362b, 1);
             branchTarget = true;
             goto bb_4;
@@ -6524,7 +6130,6 @@ void func_3630(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$3630*/ CYCLES(0x3630, 5);
   /*$3632*/ ram_poke(0x000a, 0x00);
 bb_1:
@@ -6539,7 +6144,6 @@ bb_1:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_3;
-bb_2:
   /*$3640*/ CYCLES_EDGE(0x3640, 1);
             branchTarget = true;
             goto bb_1;
@@ -6558,7 +6162,6 @@ bb_4:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_6;
-bb_5:
   /*$364A*/ CYCLES_EDGE(0x364a, 1);
             branchTarget = true;
             goto bb_4;
@@ -6575,7 +6178,6 @@ void func_3650(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$3650*/ CYCLES(0x3650, 2);
             s_x = 0x01;
 bb_1:
@@ -6593,7 +6195,6 @@ bb_1:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_3;
-bb_2:
   /*$3663*/ CYCLES_EDGE(0x3663, 1);
             branchTarget = true;
             goto bb_1;
@@ -6615,14 +6216,12 @@ void func_37a0(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$37A0*/ CYCLES(0x37a0, 29);
   /*$37A2*/ ram_poke(0x37c5, 0xf0);
   /*$37A5*/ s_a = ram_peek(0x0006);
   /*$37A7*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_2;
-bb_1:
   /*$37A8*/ s_a = (uint8_t)((s_a + 0x0060) + s_status_c);
             goto bb_3;
 bb_2:
@@ -6633,7 +6232,6 @@ bb_3:
   /*$37AF*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_5;
-bb_4:
   /*$37B0*/ s_a = (uint8_t)((s_a + 0x0005) + s_status_c);
             goto bb_6;
 bb_5:
@@ -6657,7 +6255,6 @@ bb_7:
             branchTarget = true;
             if ((ram_peek(0x0004) >= ram_peek(0x0007)))
               goto bb_9;
-bb_8:
   /*$37D2*/ CYCLES_EDGE(0x37d2, 1);
             branchTarget = true;
             goto bb_7;
@@ -6689,7 +6286,6 @@ bb_1:
             branchTarget = true;
             if ((tmp1_U8 & 0x80))
               goto bb_3;
-bb_2:
   /*$3807*/ CYCLES_EDGE(0x3807, 1);
             branchTarget = true;
             goto bb_1;
@@ -6700,7 +6296,6 @@ bb_3:
             branchTarget = true;
             if (!ram_peek(0x00a0))
               goto bb_5;
-bb_4:
   /*$380E*/ CYCLES_EDGE(0x380e, 1);
             branchTarget = true;
             goto bb_24;
@@ -6712,7 +6307,6 @@ bb_5:
             branchTarget = true;
             if ((tmp1_U8 >= 0x07))
               goto bb_7;
-bb_6:
   /*$3816*/ CYCLES_EDGE(0x3816, 1);
             branchTarget = true;
             goto bb_8;
@@ -6726,7 +6320,6 @@ bb_8:
             branchTarget = true;
             if (!(ram_peek(0x0004) >= ram_peek(0x3821)))
               goto bb_10;
-bb_9:
   /*$3822*/ CYCLES_EDGE(0x3822, 1);
             branchTarget = true;
             goto bb_20;
@@ -6737,7 +6330,6 @@ bb_10:
   /*$382A*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_12;
-bb_11:
   /*$382B*/ s_a = (uint8_t)((s_a + 0x0008) + s_status_c);
             goto bb_13;
 bb_12:
@@ -6746,7 +6338,6 @@ bb_13:
             branchTarget = true;
             if ((s_a >= 0x28))
               goto bb_15;
-bb_14:
   /*$3830*/ CYCLES_EDGE(0x3830, 1);
             branchTarget = true;
             goto bb_19;
@@ -6755,7 +6346,6 @@ bb_15:
             s_status_c = 0x01;
             if (s_status_d)
               goto bb_17;
-bb_16:
   /*$3833*/ s_a = (uint8_t)((s_a - 0x0028) - (uint8_t)(0x01 - s_status_c));
             goto bb_18;
 bb_17:
@@ -6776,7 +6366,6 @@ bb_21:
             branchTarget = true;
             if ((tmp1_U8 & 0x80))
               goto bb_23;
-bb_22:
   /*$383E*/ CYCLES_EDGE(0x383e, 1);
             branchTarget = true;
             goto bb_21;
@@ -6790,7 +6379,6 @@ bb_24:
   /*$3846*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_26;
-bb_25:
   /*$3847*/ tmp2_U16 = s_a;
             tmp3_U16 = (tmp2_U16 + 0x0003) + s_status_c;
             s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp2_U16, (uint8_t)0x0003);
@@ -6804,7 +6392,6 @@ bb_27:
             branchTarget = true;
             if ((s_a >= 0xb9))
               goto bb_29;
-bb_28:
   /*$384B*/ CYCLES_EDGE(0x384b, 1);
             branchTarget = true;
             goto bb_30;
@@ -6823,7 +6410,6 @@ bb_30:
             branchTarget = true;
             if (!tmp4_U8)
               goto bb_32;
-bb_31:
   /*$3857*/ CYCLES_EDGE(0x3857, 1);
             branchTarget = true;
             goto bb_0;
@@ -6843,14 +6429,12 @@ void func_3860(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$3860*/ CYCLES(0x3860, 29);
   /*$3862*/ ram_poke(0x3885, 0xf0);
   /*$3865*/ s_a = ram_peek(0x0006);
   /*$3867*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_2;
-bb_1:
   /*$3868*/ s_a = (uint8_t)((s_a + 0x0060) + s_status_c);
             goto bb_3;
 bb_2:
@@ -6861,7 +6445,6 @@ bb_3:
   /*$386F*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_5;
-bb_4:
   /*$3870*/ s_a = (uint8_t)((s_a + 0x0005) + s_status_c);
             goto bb_6;
 bb_5:
@@ -6887,7 +6470,6 @@ bb_7:
             branchTarget = true;
             if ((tmp2_U8 >= ram_peek(0x0007)))
               goto bb_9;
-bb_8:
   /*$3894*/ CYCLES_EDGE(0x3894, 1);
             branchTarget = true;
             goto bb_7;
@@ -6896,7 +6478,6 @@ bb_9:
             s_status_c = 0x01;
             if (s_status_d)
               goto bb_11;
-bb_10:
   /*$3897*/ s_a = (uint8_t)((s_a - 0x0005) - (uint8_t)(0x01 - s_status_c));
             goto bb_12;
 bb_11:
@@ -6924,7 +6505,6 @@ bb_0:
             branchTarget = true;
             if ((tmp1_U8 != tmp2_U8))
               goto bb_2;
-bb_1:
   /*$AC04*/ CYCLES_EDGE(0xac04, 1);
             branchTarget = true;
             goto bb_6;
@@ -6933,7 +6513,6 @@ bb_2:
             branchTarget = true;
             if (!s_status_c)
               goto bb_4;
-bb_3:
   /*$AC06*/ CYCLES_EDGE(0xac06, 1);
             branchTarget = true;
             goto bb_19;
@@ -6942,7 +6521,6 @@ bb_4:
             branchTarget = true;
             if (s_status_c)
               goto bb_6;
-bb_5:
   /*$AC08*/ CYCLES_EDGE(0xac08, 1);
             branchTarget = true;
             goto bb_18;
@@ -6955,7 +6533,6 @@ bb_6:
             branchTarget = true;
             if ((tmp2_U8 != tmp1_U8))
               goto bb_8;
-bb_7:
   /*$AC0E*/ CYCLES_EDGE(0xac0e, 1);
             branchTarget = true;
             goto bb_12;
@@ -6964,7 +6541,6 @@ bb_8:
             branchTarget = true;
             if (!s_status_c)
               goto bb_10;
-bb_9:
   /*$AC10*/ CYCLES_EDGE(0xac10, 1);
             branchTarget = true;
             goto bb_19;
@@ -6973,7 +6549,6 @@ bb_10:
             branchTarget = true;
             if (s_status_c)
               goto bb_12;
-bb_11:
   /*$AC12*/ CYCLES_EDGE(0xac12, 1);
             branchTarget = true;
             goto bb_18;
@@ -6986,7 +6561,6 @@ bb_12:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_14;
-bb_13:
   /*$AC18*/ CYCLES_EDGE(0xac18, 1);
             branchTarget = true;
             goto bb_19;
@@ -6995,7 +6569,6 @@ bb_14:
             branchTarget = true;
             if (s_status_c)
               goto bb_16;
-bb_15:
   /*$AC1A*/ CYCLES_EDGE(0xac1a, 1);
             branchTarget = true;
             goto bb_18;
@@ -7004,7 +6577,6 @@ bb_16:
             branchTarget = true;
             if (s_status_c)
               goto bb_18;
-bb_17:
   /*$AC1C*/ CYCLES_EDGE(0xac1c, 1);
             branchTarget = true;
             goto bb_0;
@@ -7031,7 +6603,6 @@ void func_ae00(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$AE00*/ CYCLES(0xae00, 3);
             s_x = ram_peek(0x0004);
 bb_1:
@@ -7045,7 +6616,6 @@ bb_1:
             branchTarget = true;
             if (!ram_peek(0xae1c))
               goto bb_3;
-bb_2:
   /*$AE1D*/ CYCLES_EDGE(0xae1d, 1);
             branchTarget = true;
             goto bb_8;
@@ -7064,7 +6634,6 @@ bb_4:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_6;
-bb_5:
   /*$AE28*/ CYCLES_EDGE(0xae28, 1);
             branchTarget = true;
             goto bb_4;
@@ -7073,7 +6642,6 @@ bb_6:
             branchTarget = true;
             if (!s_status_c)
               goto bb_8;
-bb_7:
   /*$AE2A*/ CYCLES_EDGE(0xae2a, 1);
             branchTarget = true;
             goto bb_11;
@@ -7091,7 +6659,6 @@ bb_9:
             branchTarget = true;
             if ((tmp1_U8 >= ram_peek(0x0009)))
               goto bb_11;
-bb_10:
   /*$AE37*/ CYCLES_EDGE(0xae37, 1);
             branchTarget = true;
             goto bb_9;
@@ -7102,7 +6669,6 @@ bb_11:
   /*$AE3C*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_13;
-bb_12:
   /*$AE3D*/ tmp4_U16 = (s_a + ram_peek(0x000a)) + s_status_c;
             s_status_c = (uint8_t)(tmp4_U16 >> 8);
             s_a = ((uint8_t)tmp4_U16);
@@ -7116,7 +6682,6 @@ bb_14:
             branchTarget = true;
             if (s_status_c)
               goto bb_16;
-bb_15:
   /*$AE41*/ CYCLES_EDGE(0xae41, 1);
             branchTarget = true;
             goto bb_18;
@@ -7128,7 +6693,6 @@ bb_16:
             branchTarget = true;
             if (!s_status_not_z)
               goto bb_18;
-bb_17:
   /*$AE48*/ CYCLES_EDGE(0xae48, 1);
             branchTarget = true;
             goto bb_19;
@@ -7141,7 +6705,6 @@ bb_19:
             branchTarget = true;
             if ((s_x >= ram_peek(0x0005)))
               goto bb_21;
-bb_20:
   /*$AE53*/ CYCLES_EDGE(0xae53, 1);
             branchTarget = true;
             goto bb_1;
@@ -7158,7 +6721,6 @@ void func_ae58(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$AE58*/ CYCLES(0xae58, 16);
             tmp1_U8 = (uint8_t)(ram_peek(0xae1c) + 0x01);
             s_status_not_z = tmp1_U8;
@@ -7191,7 +6753,6 @@ bb_0:
             branchTarget = true;
             if (!(ram_peek(0x000a) & 0x1f))
               goto bb_2;
-bb_1:
   /*$AEA4*/ CYCLES_EDGE(0xaea4, 1);
             branchTarget = true;
             goto bb_3;
@@ -7205,7 +6766,6 @@ bb_3:
   /*$AEAB*/ s_status_c = 0x01;
             if (s_status_d)
               goto bb_5;
-bb_4:
   /*$AEAC*/ tmp1_U16 = s_a;
             tmp2_U16 = (tmp1_U16 - 0x0008) - (uint8_t)(0x01 - s_status_c);
             s_status_c = (uint8_t)(0x01 - ((uint8_t)(tmp2_U16 >> 8) & 0x01));
@@ -7223,7 +6783,6 @@ bb_6:
             branchTarget = true;
             if (!s_status_c)
               goto bb_8;
-bb_7:
   /*$AEB0*/ CYCLES_EDGE(0xaeb0, 1);
             branchTarget = true;
             goto bb_0;
@@ -7245,7 +6804,6 @@ void func_aec0(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$AEC0*/ CYCLES(0xaec0, 2);
             s_x = 0x54;
 bb_1:
@@ -7264,7 +6822,6 @@ bb_2:
             branchTarget = true;
             if ((tmp1_U8 >= 0x15))
               goto bb_4;
-bb_3:
   /*$AED7*/ CYCLES_EDGE(0xaed7, 1);
             branchTarget = true;
             goto bb_2;
@@ -7277,7 +6834,6 @@ bb_4:
             branchTarget = true;
             if (tmp1_U8)
               goto bb_6;
-bb_5:
   /*$AEDC*/ CYCLES_EDGE(0xaedc, 1);
             branchTarget = true;
             goto bb_1;
@@ -7296,7 +6852,6 @@ void func_b9a0(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$B9A0*/ CYCLES(0xb9a0, 20);
   /*$B9A2*/ ram_poke(0x0000, 0x00);
   /*$B9A6*/ ram_poke(0x0001, 0x40);
@@ -7311,7 +6866,6 @@ bb_1:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_3;
-bb_2:
   /*$B9B4*/ CYCLES_EDGE(0xb9b4, 1);
   /*$B9B7*/ CYCLES(0xb9b7, 2);
             branchTarget = true;
@@ -7336,7 +6890,6 @@ bb_5:
   /*$B9BD*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_7;
-bb_6:
   /*$B9BE*/ tmp2_U16 = (s_a + 0x0001) + s_status_c;
             s_status_c = (uint8_t)(tmp2_U16 >> 8);
             s_a = ((uint8_t)tmp2_U16);
@@ -7350,7 +6903,6 @@ bb_8:
   /*$B9C2*/ s_a = ram_peek(0x0001);
             if (s_status_d)
               goto bb_10;
-bb_9:
   /*$B9C4*/ s_a = (uint8_t)(s_a + s_status_c);
             goto bb_11;
 bb_10:
@@ -7363,7 +6915,6 @@ bb_12:
   /*$B9CA*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_14;
-bb_13:
   /*$B9CB*/ tmp2_U16 = (s_a + 0x0001) + s_status_c;
             s_status_c = (uint8_t)(tmp2_U16 >> 8);
             s_a = ((uint8_t)tmp2_U16);
@@ -7377,7 +6928,6 @@ bb_15:
   /*$B9CF*/ s_a = ram_peek(0x0005);
             if (s_status_d)
               goto bb_17;
-bb_16:
   /*$B9D1*/ tmp2_U16 = s_a;
             tmp3_U16 = tmp2_U16 + s_status_c;
             s_status_v = ovf8((uint8_t)tmp3_U16, (uint8_t)tmp2_U16, (uint8_t)0x0000);
@@ -7401,7 +6951,6 @@ bb_19:
             branchTarget = true;
             if (!tmp1_U8)
               goto bb_21;
-bb_20:
   /*$B9E3*/ CYCLES_EDGE(0xb9e3, 1);
             branchTarget = true;
             goto bb_19;
@@ -7411,7 +6960,6 @@ bb_21:
   /*$B9E6*/ s_status_c = 0x00;
             if (s_status_d)
               goto bb_23;
-bb_22:
   /*$B9E7*/ tmp3_U16 = (s_a + ram_peek(0x0000)) + s_status_c;
             s_status_c = (uint8_t)(tmp3_U16 >> 8);
             s_a = ((uint8_t)tmp3_U16);
@@ -7425,7 +6973,6 @@ bb_24:
   /*$B9EB*/ s_a = ram_peek(0x0001);
             if (s_status_d)
               goto bb_26;
-bb_25:
   /*$B9ED*/ s_a = (uint8_t)(s_a + s_status_c);
             goto bb_27;
 bb_26:
@@ -7444,7 +6991,6 @@ void func_ba00(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$BA00*/ CYCLES(0xba00, 6);
             func_b9a0(0xba02);
   /*$BA03*/ CYCLES(0xba03, 2);
@@ -7461,7 +7007,6 @@ bb_1:
             branchTarget = true;
             if ((tmp1_U8 >= 0xa5))
               goto bb_3;
-bb_2:
   /*$BA1E*/ CYCLES_EDGE(0xba1e, 1);
             branchTarget = true;
             goto bb_1;
@@ -7479,7 +7024,6 @@ bb_4:
             branchTarget = true;
             if ((tmp1_U8 & 0x80))
               goto bb_6;
-bb_5:
   /*$BA31*/ CYCLES_EDGE(0xba31, 1);
             branchTarget = true;
             goto bb_4;
@@ -7499,7 +7043,6 @@ bb_7:
             branchTarget = true;
             if ((tmp1_U8 & 0x80))
               goto bb_9;
-bb_8:
   /*$BA4C*/ CYCLES_EDGE(0xba4c, 1);
             branchTarget = true;
             goto bb_7;
@@ -7517,7 +7060,6 @@ void func_bad8(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$BAD8*/ CYCLES(0xbad8, 2);
             s_x = 0x43;
 bb_1:
@@ -7533,7 +7075,6 @@ bb_1:
             branchTarget = true;
             if ((tmp1_U8 & 0x80))
               goto bb_3;
-bb_2:
   /*$BAED*/ CYCLES_EDGE(0xbaed, 1);
             branchTarget = true;
             goto bb_1;
@@ -7549,7 +7090,6 @@ void func_baf0(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$BAF0*/ CYCLES(0xbaf0, 6);
             func_ba00(0xbaf2);
   /*$BAF3*/ CYCLES(0xbaf3, 6);
@@ -7570,7 +7110,6 @@ void FUNC_SAV1(uint16_t ret_addr) {
   if (ret_addr)
     push16(ret_addr); // Fake return address.
 
-bb_0:
   /*$FF4C*/ CYCLES(0xff4c, 29);
             ram_poke(0x0046, s_x);
   /*$FF4E*/ ram_poke(0x0047, s_y);
