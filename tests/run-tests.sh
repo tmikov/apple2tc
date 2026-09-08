@@ -1067,6 +1067,13 @@ if ! "$bin/tests/a2host/joystick-test" > joystick-out.txt; then
 fi
 rm joystick-out.txt
 
+# The game port's timing, against the real ROM's PREAD rather than against
+# the arithmetic that produced the constant. See tests/gameport/.
+if ! ./gameport/pread-acceptance.sh "$bin"; then
+  echo "FAIL: game port PREAD calibration" >&2
+  exit 1
+fi
+
 # --- Probes -----------------------------------------------------------------
 #
 # The probe compiler is tested through --probe-dump, which compiles a script,
