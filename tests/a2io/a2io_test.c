@@ -265,11 +265,39 @@ static void test_game_port(void) {
   a2_io_done(&io);
 }
 
+/// The 32-bit cycle counter a2_io_peek() receives wraps about every 71
+/// minutes of emulated time. The clock behind the paddle one-shots must not,
+/// or an expired timer comes back to life. Walk the counter all the way
+/// around its wrap in frame-sized steps -- the way a host ticks it -- and
+/// check every step was counted.
+static void test_clock_extension(void) {
+  a2_iostate_t io;
+  a2_io_init(&io);
+
+  // One 1/60 s frame at 1.02 MHz, and enough of them to pass 2^32 cycles.
+  enum { FRAME_CYCLES = 17030, FRAMES = 300000 };
+  uint64_t expected = 0;
+  unsigned stamp = 0;
+  for (unsigned i = 0; i < FRAMES; ++i) {
+    stamp += FRAME_CYCLES;
+    expected += FRAME_CYCLES;
+    a2_io_tick(&io, stamp);
+  }
+
+  printf("  clock: %llu, expected %llu\n",
+      (unsigned long long)io.clock, (unsigned long long)expected);
+  check(io.clock == expected, "the extended clock counts across the 32-bit wrap");
+  check(expected > 0x100000000ull, "and the walk really did pass a wrap");
+
+  a2_io_done(&io);
+}
+
 int main(void) {
   test_speaker();
   test_kbdstrb();
   test_keyboard_latch();
   test_type_ahead();
+  test_clock_extension();
   test_game_port();
 
   if (failures) {

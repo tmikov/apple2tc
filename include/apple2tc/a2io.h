@@ -227,6 +227,19 @@ typedef struct {
   void (*spkr_cb)(void *ctx, unsigned cycles);
   /// Debug flags.
   uint8_t debug;
+  /// Cycles since power-on, extended past the 32 bits a2_io_peek() receives.
+  ///
+  /// The paddle one-shots are timed against this rather than against the raw
+  /// stamp because 32-bit arithmetic cannot express "already expired" for an
+  /// arbitrarily old deadline. An absolute `expiry` compared with
+  /// `(int32_t)(cycles - expiry) < 0` reports a one-shot as still high on a
+  /// machine that never triggered one, and revives every expired timer about
+  /// 35 minutes on; measuring elapsed time from a 32-bit trigger instead only
+  /// moves the revival to exactly one full wrap. Widening the clock removes
+  /// the class.
+  uint64_t clock;
+  /// The last 32-bit stamp seen, which is what `clock` is extended from.
+  unsigned clock_last;
   /// Disk II controller state.
   a2_disk2_t disk2;
 } a2_iostate_t;
@@ -263,6 +276,19 @@ static inline unsigned a2_io_keys_expect(const a2_iostate_t *io) {
 }
 uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles);
 void a2_io_poke(a2_iostate_t *io, uint16_t addr, uint8_t value, unsigned cycles);
+
+/// Advance the extended clock without performing an IO access.
+///
+/// `clock` is exact only while consecutive stamps are **strictly less than**
+/// 2^32 cycles apart -- a gap of exactly one wrap presents the same value and
+/// yields a delta of zero -- and arrive in execution order, equal stamps
+/// allowed. A reset of the CPU counter must be paired with a2_io_init(), so
+/// the restart is not mistaken for a wrap.
+///
+/// Soft-switch accesses advance it on their own. This exists so a host can
+/// guarantee the bound for a program that touches no soft switch for a long
+/// time: a2host calls it once per frame, and a frame is ~17,000 cycles.
+void a2_io_tick(a2_iostate_t *io, unsigned cycles);
 
 /// Initialize disk2 controller state.
 void a2_disk2_init(a2_disk2_t *disk);

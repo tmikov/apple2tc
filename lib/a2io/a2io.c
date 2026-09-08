@@ -450,7 +450,20 @@ static void kbdstrb(a2_iostate_t *io) {
   }
 }
 
+/// Extend the 32-bit stamp onto io->clock. The cast makes the subtraction
+/// modular, so this is exact for any gap shorter than 2^32 cycles.
+static void advance_clock(a2_iostate_t *io, unsigned cycles) {
+  io->clock += (unsigned)(cycles - io->clock_last);
+  io->clock_last = cycles;
+}
+
+void a2_io_tick(a2_iostate_t *io, unsigned cycles) {
+  advance_clock(io, cycles);
+}
+
 uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
+  advance_clock(io, cycles);
+
   // Disk II boot ROM: $C600-$C6FF (only when a disk is mounted).
   if (addr >= 0xC600 && addr <= 0xC6FF &&
       (io->disk2.drive[0].mounted || io->disk2.drive[1].mounted))
@@ -566,6 +579,8 @@ uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
 }
 
 void a2_io_poke(a2_iostate_t *io, uint16_t addr, uint8_t value, unsigned cycles) {
+  advance_clock(io, cycles);
+
   // Disk II soft switches need dedicated write handling.
   if ((addr & 0xCFF0) == 0xC0E0) {
     a2_disk2_poke(&io->disk2, addr & 0x0F, value, cycles);
