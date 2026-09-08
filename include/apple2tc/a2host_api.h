@@ -153,9 +153,11 @@ void a2host_joy_set_button(a2host_joybtn_t btn, bool down);
 /// delivers a KEY_UP at all.
 void a2host_joy_release_all(void);
 
-/// Whether --joystick asked the front end to start in joystick mode. Only a
-/// front end with a keyboard acts on it; a2run and a2mcp accept and ignore
-/// the option rather than rejecting one their GUI twin understands.
+/// Whether --joystick asked the front end to start in joystick mode. a2run
+/// shares this parser and has no mode to be in, so it accepts and ignores
+/// the option; a2mcp filters argv against its own whitelist before this
+/// parser runs and rejects it, the same pre-existing treatment it gives
+/// --fast and --hgr-mode=.
 bool a2host_joystick_at_start(void);
 
 /* --- Driving the machine -------------------------------------------------- */
