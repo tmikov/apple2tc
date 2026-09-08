@@ -20,19 +20,31 @@ add_a2_program(neptunec1
   )
 
 # The extern variant: $FCA8 (MON_WAIT), the one ROM entry point Neptune calls,
-# is supplied by the hand-written reference/rom.c instead of being decompiled.
+# is supplied by the hand-written rom.c instead of being decompiled.
 #
 # reference/neptune-ext.c is the only file compiled here -- it #includes both
-# the generated reference/neptunec1-ext.c and the hand-written reference/rom.c,
+# the generated reference/neptunec1-ext.c and the hand-written rom.c,
 # which must share a translation unit because system2-inc.h defines the machine
 # state with internal linkage. The other sources are listed so they appear in
 # IDEs and must never be compiled separately, hence HEADER_FILE_ONLY: doing so
 # would give each object its own private copy of the machine and still link.
 add_a2_program(neptunec1-ext
   reference/neptune-ext.c
-  reference/neptunec1-ext.c reference/rom.c
+  reference/neptunec1-ext.c rom.c
   ${A2TC_INC}/system.h ${A2TC_INC}/system2.h
   )
 set_source_files_properties(
-  reference/neptunec1-ext.c reference/rom.c
+  reference/neptunec1-ext.c rom.c
   PROPERTIES HEADER_FILE_ONLY TRUE)
+
+# The artifact. neptune.c is hand-maintained: seeded once from the generated
+# extern build by scripts/seed-artifact.sh, and converted from there. It is the
+# thing this directory exists to produce, and scripts/verify.sh gates it against
+# the same golden traces as the two generated builds -- which is what makes
+# editing it safe.
+add_a2_program(neptune
+  neptune.c rom.c game-image.inc rom-image.inc
+  ${A2TC_INC}/system.h ${A2TC_INC}/system2.h
+  )
+set_source_files_properties(
+  rom.c game-image.inc rom-image.inc PROPERTIES HEADER_FILE_ONLY TRUE)

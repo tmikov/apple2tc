@@ -88,7 +88,11 @@ cd "$here"
 #                  Apple II ROM decompiled alongside the game. Both traces are
 #                  recorded from this one.
 #   neptunec1-ext  the same game with $FCA8 (MON_WAIT) replaced by the
-#                  hand-written reference/rom.c.
+#                  hand-written rom.c.
+#   neptune        the artifact: hand-maintained, seeded from neptunec1-ext and
+#                  converted from there. This is the build the directory exists
+#                  to produce, and gating it against traces recorded from the
+#                  generated one is what makes editing it safe.
 #
 # Both matching the same trace is what proves the hand-written replacement
 # behaves identically to the decompiled original, cycle counts included -- and
@@ -96,6 +100,7 @@ cd "$here"
 # rewritten by hand cannot pass while being subtly wrong.
 ref="$bin/decoded/neptune/neptunec1-run"
 ext="$bin/decoded/neptune/neptunec1-ext-run"
+art="$bin/decoded/neptune/neptune-run"
 a2run="$bin/tools/a2run/a2run"
 entry=3523
 
@@ -226,6 +231,7 @@ for s in "${scenarios[@]}"; do
   fi
   check "$name" ref "$ref" "$keys" "$frames" "$trace"
   check "$name" ext "$ext" "$keys" "$frames" "$trace"
+  check "$name" art "$art" "$keys" "$frames" "$trace"
 done
 
 exit $status

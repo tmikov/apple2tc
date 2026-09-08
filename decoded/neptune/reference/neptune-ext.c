@@ -34,4 +34,4 @@
 
 #include "neptunec1-ext.c"
 
-#include "rom.c"
+#include "../rom.c"
