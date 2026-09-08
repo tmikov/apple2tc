@@ -74,6 +74,11 @@ static bool haveFirstTick_ = false;
 /// characters and as keydown events.
 static int ignoreNextCh_ = -1;
 
+/// Whether the arrow keys drive the virtual joystick rather than sending the
+/// Apple II's own arrow characters. Off unless --joystick asked otherwise, so
+/// nothing regresses for anyone not looking for it.
+static bool joyMode_ = false;
+
 static a2host_gui_event_hook event_hook_ = NULL;
 
 void a2host_gui_set_event_hook(a2host_gui_event_hook hook) {
@@ -153,6 +158,7 @@ static void init_cb(void) {
   hgrMode_ = a2host_initial_hgr_mode();
   persistEnabled_ = a2host_initial_persist_enabled();
   persistDecay_ = a2host_initial_persist_decay();
+  joyMode_ = a2host_joystick_at_start();
 
   a2_sound_init(&sound_);
   a2host_init_emulation();
@@ -177,7 +183,7 @@ static void cleanup_cb(void) {
 }
 
 /// Name shown in the window title when a display option changes; see
-/// report_display_state().
+/// report_status().
 static const char *hgr_mode_name(a2_hgr_mode_t mode) {
   switch (mode) {
   case A2_HGR_COLOR:
@@ -194,22 +200,28 @@ static const char *hgr_mode_name(a2_hgr_mode_t mode) {
 }
 
 /// The window title is the only status display this front end has, so every
-/// key that changes a display option re-derives it and calls this. Never
-/// called from init_cb(), so the title is exactly a2host_argv0() -- as it has
-/// always been -- until a key is pressed.
-static void report_display_state(void) {
+/// key that changes an option re-derives it and calls this. Never called from
+/// init_cb(), so the title is exactly a2host_argv0() -- as it has always been
+/// -- until a key is pressed.
+static void report_status(void) {
   char title[128];
   if (persistEnabled_) {
     snprintf(
         title,
         sizeof(title),
-        "%s -- HGR:%s Persist:on(%.2f)",
+        "%s -- HGR:%s Persist:on(%.2f) Joy:%s",
         a2host_argv0(),
         hgr_mode_name(hgrMode_),
-        (double)persistDecay_);
+        (double)persistDecay_,
+        joyMode_ ? "on" : "off");
   } else {
     snprintf(
-        title, sizeof(title), "%s -- HGR:%s Persist:off", a2host_argv0(), hgr_mode_name(hgrMode_));
+        title,
+        sizeof(title),
+        "%s -- HGR:%s Persist:off Joy:%s",
+        a2host_argv0(),
+        hgr_mode_name(hgrMode_),
+        joyMode_ ? "on" : "off");
   }
   sapp_set_window_title(title);
 }
@@ -413,7 +425,7 @@ static bool handle_display_key(const sapp_event *ev) {
       hgrMode_ = A2_HGR_COLOR;
       break;
     }
-    report_display_state();
+    report_status();
     return true;
   case SAPP_KEYCODE_F4:
     // Toggle phosphor persistence. Reset the buffer on the way to "on" so
@@ -421,7 +433,7 @@ static bool handle_display_key(const sapp_event *ev) {
     persistEnabled_ = !persistEnabled_;
     if (persistEnabled_)
       memset(&persistBuf_, 0, sizeof(persistBuf_));
-    report_display_state();
+    report_status();
     return true;
   case SAPP_KEYCODE_F5:
     // Less persistence (faster fade).
@@ -429,7 +441,7 @@ static bool handle_display_key(const sapp_event *ev) {
       persistDecay_ -= 0.05f;
     else
       persistDecay_ = 0.0f;
-    report_display_state();
+    report_status();
     return true;
   case SAPP_KEYCODE_F6:
     // More persistence (slower fade). Kept below 1: at or above it the
@@ -438,11 +450,110 @@ static bool handle_display_key(const sapp_event *ev) {
       persistDecay_ += 0.05f;
     else
       persistDecay_ = 0.95f;
-    report_display_state();
+    report_status();
     return true;
   default:
     return false;
   }
+}
+
+/// Map a sokol keycode to a virtual-joystick direction. Returns false if this
+/// key is not one.
+static bool joy_dir_of_key(sapp_keycode code, a2host_joydir_t *out) {
+  switch (code) {
+  case SAPP_KEYCODE_LEFT:
+    *out = A2HOST_JOYDIR_LEFT;
+    return true;
+  case SAPP_KEYCODE_RIGHT:
+    *out = A2HOST_JOYDIR_RIGHT;
+    return true;
+  case SAPP_KEYCODE_UP:
+    *out = A2HOST_JOYDIR_UP;
+    return true;
+  case SAPP_KEYCODE_DOWN:
+    *out = A2HOST_JOYDIR_DOWN;
+    return true;
+  default:
+    return false;
+  }
+}
+
+/// ...and to a host button.
+static bool joy_btn_of_key(sapp_keycode code, a2host_joybtn_t *out) {
+  switch (code) {
+  case SAPP_KEYCODE_SPACE:
+    *out = A2HOST_JOYBTN_SPACE;
+    return true;
+  case SAPP_KEYCODE_LEFT_ALT:
+    *out = A2HOST_JOYBTN_ALT;
+    return true;
+  case SAPP_KEYCODE_LEFT_CONTROL:
+    *out = A2HOST_JOYBTN_CTRL;
+    return true;
+  default:
+    return false;
+  }
+}
+
+/// F7, the joystick keys, and the events that must release a held stick.
+///
+/// Unlike handle_display_key() this runs *after* event_cb()'s replay guard.
+/// That function may run ahead of the guard because F3-F6 never reach the
+/// machine; F7 and the stick do, so a cycle-stamped replay must not see them.
+///
+/// Returns whether the event was consumed.
+static bool handle_joystick_key(const sapp_event *ev) {
+  // A key released outside the window delivers no KEY_UP, so anything that
+  // takes focus away has to release the stick or it stays railed.
+  if (ev->type == SAPP_EVENTTYPE_UNFOCUSED || ev->type == SAPP_EVENTTYPE_ICONIFIED ||
+      ev->type == SAPP_EVENTTYPE_SUSPENDED) {
+    a2host_joy_release_all();
+    return false; // not ours to consume; other handlers may want it
+  }
+
+  if (ev->type == SAPP_EVENTTYPE_KEY_DOWN && ev->key_code == SAPP_KEYCODE_F7) {
+    joyMode_ = !joyMode_;
+    // Leaving the mode with a key held would strand the stick at a rail.
+    if (!joyMode_)
+      a2host_joy_release_all();
+    report_status();
+    return true;
+  }
+
+  if (!joyMode_)
+    return false;
+
+  // Space produces a CHAR event as well as a KEY_DOWN, and letting it through
+  // would put a keystroke the player never intended into $C000. At Neptune's
+  // title screen that risks selecting the keyboard scheme -- the buttons are
+  // tested first, but the latch outlives the button, so a tap landing between
+  // two polls leaves the stale key as the only evidence. In joystick mode the
+  // strobe is never cleared either, because the joystick forms Neptune
+  // installs at $1300 and $138C branch past the STA $C010 the keyboard forms
+  // execute.
+  //
+  // Suppressed as a condition on the mode rather than through ignoreNextCh_:
+  // that flag is cleared at the top of every event, and the KEY_UP handling
+  // below -- plus sokol's own synthetic KEY_UP for Super-modified keys on
+  // macOS -- can land between the KEY_DOWN and the CHAR.
+  if (ev->type == SAPP_EVENTTYPE_CHAR)
+    return ev->char_code == ' ';
+
+  if (ev->type == SAPP_EVENTTYPE_KEY_DOWN || ev->type == SAPP_EVENTTYPE_KEY_UP) {
+    bool down = ev->type == SAPP_EVENTTYPE_KEY_DOWN;
+    a2host_joydir_t dir;
+    if (joy_dir_of_key(ev->key_code, &dir)) {
+      a2host_joy_set_dir(dir, down);
+      return true;
+    }
+    a2host_joybtn_t btn;
+    if (joy_btn_of_key(ev->key_code, &btn)) {
+      a2host_joy_set_button(btn, down);
+      return true;
+    }
+  }
+
+  return false;
 }
 
 static void event_cb(const sapp_event *ev) {
@@ -461,6 +572,11 @@ static void event_cb(const sapp_event *ev) {
   // A cycle-stamped recording is driving input; real keystrokes must not
   // perturb it.
   if (a2host_key_replay_active())
+    return;
+
+  // F7 and the stick. After the guard, unlike handle_display_key() -- see
+  // that function's comment, and this one's.
+  if (handle_joystick_key(ev))
     return;
 
   // If we are reading from a file, just ensure that the keyboard queue us full,
