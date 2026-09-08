@@ -996,8 +996,11 @@ void a2host_joy_set_button(a2host_joybtn_t btn, bool down);
 void a2host_joy_release_all(void);
 
 /// Whether --joystick asked the front end to start in joystick mode. Only a
-/// front end with a keyboard acts on it; a2run and a2mcp accept and ignore
-/// the option rather than rejecting one their GUI twin understands.
+/// front end with a keyboard acts on it; a2run accepts and ignores the
+/// option rather than rejecting one its GUI twin understands. a2mcp never
+/// reaches this parser at all -- mcp_main.cpp filters argv against its own
+/// hardcoded whitelist first and rejects --joystick there, the same
+/// pre-existing treatment it gives --fast and --hgr-mode=.
 bool a2host_joystick_at_start(void);
 ```
 

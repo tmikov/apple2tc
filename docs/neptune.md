@@ -138,6 +138,23 @@ right, keep going right, fire*, and a burst like `KJA` cancels itself. An
 earlier session sent doubled direction keys throughout and concluded from the
 resulting stillness that the ship was not responding at all.
 
+**The joystick path avoids all of this.** Neptune supports a stick as well as
+the keyboard and picks whichever you touch first at the title screen
+(`$3584`). Where the keyboard toggles a direction, `$36B0` stores an absolute
+one every pass, so a held stick means "keep moving" and a centred one means
+"stop" — no second press to reverse.
+
+Neptune is wired the unusual way round: `$C062` (PB1) is fire and `$C061`
+(PB0) is the secondary weapon, where most games put the trigger on PB0. So it
+wants the button override:
+
+```bash
+a2emu --disk1=dsk/Neptune.dsk --joystick --joy-buttons=space:1,alt:0
+```
+
+Space fires, Left-Alt drops the secondary weapon, the arrow keys are the
+stick, and F7 toggles the mode off again.
+
 ## It never shows a whole picture
 
 Neptune is single-buffered and draws by erasing and redrawing, so at a given
