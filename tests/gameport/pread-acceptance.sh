@@ -10,6 +10,11 @@
 # pins the interval: the chosen constant must pass, and stepping past its
 # upper end must fail. See the design doc for why the midpoint is chosen.
 set -e
+# Without this, a failed `od` inside a `$( ... | ... )` substitution is
+# invisible: the substitution's exit status is the last stage's (`sed`, which
+# is 0 on empty input), so a missing or unreadable snapshot file silently
+# becomes an empty `got` instead of a script failure at the point of failure.
+set -o pipefail
 
 bin="${1:?usage: pread-acceptance.sh <build-dir>}"
 a6502="$bin/tools/a6502/a6502"
@@ -21,10 +26,32 @@ trap 'rm -rf "$tmp"' EXIT
 
 "$a6502" "$here/pread.s" "$tmp/pread.b33"
 
+# a2run's own probe_snapshot_missed() guard already fails the run if
+# --snapshot-at= is never reached, so in practice a missing file means a2run
+# already exited non-zero and `set -e` stopped the script before this runs.
+# Checked anyway rather than relied upon: that guard lives in a2host.c, not
+# here, and this makes the dependency explicit instead of leaving a bad
+# snapshot to be misdiagnosed as PREAD returning the wrong answer. The size
+# check is exact because probe_take_snapshot() (lib/a2host/probe.c) always
+# writes the full 64K RAM image in one fwrite -- anything else is a short or
+# stale file, not a smaller-but-valid one.
+check_snapshot() {
+  if [ ! -f "$1" ]; then
+    echo "FAIL: no snapshot at \$30E; a2run wrote no RAM image ($1)" >&2
+    exit 1
+  fi
+  size="$(wc -c < "$1")"
+  if [ "$size" -ne 65536 ]; then
+    echo "FAIL: snapshot at \$30E is $size bytes, not 65536; a2run wrote an incomplete RAM image ($1)" >&2
+    exit 1
+  fi
+}
+
 # Four positions in one run: the rails, one either side of centre.
 "$a2run" "$tmp/pread.b33" --headless --frames=200 --no-sound \
     --paddle=0:0 --paddle=1:1 --paddle=2:127 --paddle=3:255 \
     --snapshot-at=30E --snapshot-out="$tmp/out.ram" > /dev/null
+check_snapshot "$tmp/out.ram"
 
 got="$(od -An -tu1 -j 0x1F00 -N 4 "$tmp/out.ram" | tr -s ' ' | sed 's/^ //')"
 want="0 1 127 255"
@@ -37,6 +64,7 @@ fi
 "$a2run" "$tmp/pread.b33" --headless --frames=200 --no-sound \
     --paddle=0:128 --paddle=1:254 --paddle=2:64 --paddle=3:192 \
     --snapshot-at=30E --snapshot-out="$tmp/out2.ram" > /dev/null
+check_snapshot "$tmp/out2.ram"
 
 got2="$(od -An -tu1 -j 0x1F00 -N 4 "$tmp/out2.ram" | tr -s ' ' | sed 's/^ //')"
 want2="128 254 64 192"
