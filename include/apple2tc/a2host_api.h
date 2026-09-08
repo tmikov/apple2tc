@@ -99,6 +99,29 @@ void a2host_reboot(void);
 /// is what renders it, replays keys into it and hashes it.
 a2_iostate_t *a2host_io(void);
 
+/// The four direction keys of the virtual joystick.
+///
+/// Held-key state lives in the host, not the front end. Splitting it means
+/// a reset can only reach half: centre the axis while the front end still
+/// believes Left is held, and the next Right press reads as centred, then
+/// rails *left* when Right is released.
+typedef enum {
+  A2HOST_JOYDIR_LEFT,
+  A2HOST_JOYDIR_RIGHT,
+  A2HOST_JOYDIR_UP,
+  A2HOST_JOYDIR_DOWN,
+  A2HOST_JOYDIR_COUNT
+} a2host_joydir_t;
+
+/// Host buttons, named rather than numbered so --joy-buttons= can talk about
+/// them without this library knowing anything about sokol keycodes.
+typedef enum {
+  A2HOST_JOYBTN_SPACE,
+  A2HOST_JOYBTN_ALT,
+  A2HOST_JOYBTN_CTRL,
+  A2HOST_JOYBTN_COUNT
+} a2host_joybtn_t;
+
 /* --- Driving the machine -------------------------------------------------- */
 
 /// Run one frame: feed pending keys, run the engine for a frame's worth of
