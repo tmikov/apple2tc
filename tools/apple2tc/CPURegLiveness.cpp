@@ -450,7 +450,12 @@ struct Barriers {
   /// 'P': an EncodeFlags instruction -- PHP or BRK. It reads C, Z, I, D, V and
   /// N in one go, so all six become live at once.
   bool encodeFlags = false;
-  /// 'L': a DecodeFlag instruction -- PLP or RTI. Writes the same six at once.
+  /// 'L': PLP or RTI, which write the same six at once. Both lower to
+  /// DecodeFlag over the byte a Pop8 produced -- and DecodeFlag alone is not
+  /// the marker, because decimal-mode ADC and SBC use it too, to pull N, V, Z
+  /// and C out of the opaque result of AdcDec/SbcDec. Those are ordinary
+  /// arithmetic and no barrier at all; in Bolo they outnumber the real thing
+  /// by an order of magnitude. The Pop8 operand is what tells them apart.
   bool decodeFlag = false;
   /// 'J': JmpInd or JSRInd. initBB() forces such a block's liveOut to kAll,
   /// which floods backwards through the function's liveIn.
@@ -507,9 +512,12 @@ Barriers findBarriers(
       case ValueKind::EncodeFlags:
         b.encodeFlags = true;
         break;
-      case ValueKind::DecodeFlag:
-        b.decodeFlag = true;
+      case ValueKind::DecodeFlag: {
+        auto *opaque = dyn_cast<Instruction>(inst.getOperand(0));
+        if (opaque && opaque->getKind() == ValueKind::Pop8)
+          b.decodeFlag = true;
         break;
+      }
       case ValueKind::JmpInd:
       case ValueKind::JSRInd:
         b.indBranch = true;
@@ -570,7 +578,8 @@ void dumpRegLiveness(ir::Module *mod, CPURegLiveness *lv, FILE *os) {
   fprintf(os, "# barriers, always 7 characters, in this order:\n");
   fprintf(os, "#   PLJRXUK\n");
   fprintf(os, "#   P  EncodeFlags (PHP, BRK): reads C,Z,I,D,V,N in one instruction\n");
-  fprintf(os, "#   L  DecodeFlag (PLP, RTI): writes C,Z,I,D,V,N in one instruction\n");
+  fprintf(os, "#   L  PLP or RTI: writes C,Z,I,D,V,N in one instruction. Recognised as a\n");
+  fprintf(os, "#      DecodeFlag over a Pop8, since decimal ADC/SBC also use DecodeFlag\n");
   fprintf(os, "#   J  JmpInd or JSRInd: the block's liveOut is forced to all-ones\n");
   fprintf(os, "#   R  a raw RTS terminator: also an IndirectBranch, same forcing\n");
   fprintf(os, "#   X  calls an external routine, whose gen and modified are all-ones\n");

@@ -1,6 +1,6 @@
-// Loaded binary at [$0300..$0356]
-// code labels: 10
-// data labels: 8
+// Loaded binary at [$0300..$037B]
+// code labels: 14
+// data labels: 12
 # apple2tc --dump-reg-liveness
 #
 # One FUNC row per function, then a summary. Every row has the same fields, so
@@ -26,7 +26,8 @@
 # barriers, always 7 characters, in this order:
 #   PLJRXUK
 #   P  EncodeFlags (PHP, BRK): reads C,Z,I,D,V,N in one instruction
-#   L  DecodeFlag (PLP, RTI): writes C,Z,I,D,V,N in one instruction
+#   L  PLP or RTI: writes C,Z,I,D,V,N in one instruction. Recognised as a
+#      DecodeFlag over a Pop8, since decimal ADC/SBC also use DecodeFlag
 #   J  JmpInd or JSRInd: the block's liveOut is forced to all-ones
 #   R  a raw RTS terminator: also an IndirectBranch, same forcing
 #   X  calls an external routine, whose gen and modified are all-ones
@@ -39,41 +40,43 @@
 # addr  live-in    live-out   modified   kall   barrs   lvl  name
 FUNC  $0330 .......... .........C .........C -      ------- norm func_0330
 FUNC  $0340 .......... .......... .......... -      ------- norm func_0340
-FUNC  $0350 ..Y....... .......... .......... -      ------- norm func_0350
-FUNC  ----- .......... AXYN....ZC AXYN....ZC -      ---R-U- low  func1
+FUNC  $0350 ..Y....... ...N....Z. ...N....Z. -      ------- norm func_0350
+FUNC  $0360 ...NV.DIZC .......... .......... -      P------ norm func_0360
+FUNC  $0370 .......... .......... .......... -      ------- norm func_0370
+FUNC  ----- .......... AXYNVBDIZC AXYNVBDIZC body   PL-R-U- low  func1
 #
 # summary
-SUM functions 4
+SUM functions 6
 SUM external 0
-SUM kall 0
+SUM kall 1
 SUM kall-extern 0
-SUM kall-body 0
-SUM live-in-any-reg 1
-SUM live-out-any-reg 2
-SUM live-in-any-flag 0
-SUM live-out-any-flag 2
-SUM barrier-encodeflags 0
-SUM barrier-decodeflag 0
-SUM barrier-flagop 0
+SUM kall-body 1
+SUM live-in-any-reg 2
+SUM live-out-any-reg 3
+SUM live-in-any-flag 1
+SUM live-out-any-flag 3
+SUM barrier-encodeflags 2
+SUM barrier-decodeflag 1
+SUM barrier-flagop 2
 SUM barrier-indbranch 0
 SUM barrier-rawrts 1
 SUM barrier-callsextern 0
 SUM barrier-uncalled 1
 SUM barrier-blindcaller 0
-SUM call-sites 3
+SUM call-sites 5
 SUM call-sites-blind 0
-SUM called-functions 3
-SUM called-live-out-any-flag 1
+SUM called-functions 5
+SUM called-live-out-any-flag 2
 # REG <letter> in <n> out <n> mod <n> calledout <n>
 # `calledout` counts live-out over called functions only -- the ones whose
 # live-out an actual call site narrowed. `out` includes the 'U' rows.
 REG A in 0 out 1 mod 1 calledout 0
 REG X in 0 out 1 mod 1 calledout 0
 REG Y in 1 out 1 mod 1 calledout 0
-REG N in 0 out 1 mod 1 calledout 0
-REG V in 0 out 0 mod 0 calledout 0
-REG B in 0 out 0 mod 0 calledout 0
-REG D in 0 out 0 mod 0 calledout 0
-REG I in 0 out 0 mod 0 calledout 0
-REG Z in 0 out 1 mod 1 calledout 0
-REG C in 0 out 2 mod 2 calledout 1
+REG N in 1 out 2 mod 2 calledout 1
+REG V in 1 out 1 mod 1 calledout 0
+REG B in 0 out 1 mod 1 calledout 0
+REG D in 1 out 1 mod 1 calledout 0
+REG I in 1 out 1 mod 1 calledout 0
+REG Z in 1 out 2 mod 2 calledout 1
+REG C in 1 out 2 mod 2 calledout 1

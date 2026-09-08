@@ -90,6 +90,17 @@ if ! grep -q '^FUNC  \$0350 \.\.Y\.\{7\} ' reglive-O2-test.txt; then
   grep '^FUNC  \$0350' reglive-O2-test.txt >&2
   exit 1
 fi
+# PHP/PLP are barriers; a decimal ADC lowers to the same DecodeFlag and is not.
+if ! grep -q '^FUNC  \$0360 \.\.\.NV\.DIZC .* PL----- ' reglive-O2-test.txt; then
+  echo "FAIL: PHP/PLP were not reported as flag barriers with every flag live-in" >&2
+  grep '^FUNC  \$0360' reglive-O2-test.txt >&2
+  exit 1
+fi
+if grep -q '^FUNC  \$0370 .* .L..... ' reglive-O2-test.txt; then
+  echo "FAIL: a decimal-mode ADC was counted as a PLP" >&2
+  grep '^FUNC  \$0370' reglive-O2-test.txt >&2
+  exit 1
+fi
 rm reglive-test.txt reglive-O2-test.txt reglive.b33
 
 # --code-at: hand-asserted dynamic branch edges. Two baselines, so this pins

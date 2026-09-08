@@ -14,6 +14,14 @@
 ;                     and absent from its live-out.
 ;   usesy ($350)      indexes with Y without loading it, so Y must be in its
 ;                     live-in.
+;   savedflags ($360) PHP and PLP, which lower to EncodeFlags and DecodeFlag
+;                     and touch all six flags at once. It must carry both the
+;                     P and the L barrier, and PHP makes every flag live-in.
+;   decimaladd ($370) decimal-mode ADC. It lowers to DecodeFlag as well -- to
+;                     pull the flags out of the opaque AdcDec result -- but it
+;                     is ordinary arithmetic and no barrier, so it must NOT
+;                     carry L. Counting it as one was a real bug: in Bolo it
+;                     reported 53 routines containing a PLP where there are 5.
 ;
 ; Two baselines, at -O2 and -O3, because the two say different things. At -O2
 ; the sets above are visible as written. At -O3 the second dce() pass is itself
@@ -41,6 +49,8 @@ next:
         jsr     clobbernz
         ldy     #4
         jsr     usesy
+        jsr     savedflags
+        jsr     decimaladd
 loop:
         jmp     loop
 
@@ -66,4 +76,28 @@ clobbernz:
 usesy:
         lda     $1100,y
         sta     $1101
+        rts
+
+        org     $360
+; PHP and PLP. Both lower to the all-six-flags EncodeFlags / DecodeFlag pair,
+; so this routine must carry both the P and the L barrier.
+savedflags:
+        php
+        lda     $1007
+        sta     $1008
+        plp
+        rts
+
+        org     $370
+; Decimal-mode addition. It also lowers to DecodeFlag -- to pull N, V, Z and C
+; out of the opaque AdcDec result -- but it is ordinary arithmetic and no
+; barrier at all, so this routine must NOT carry L. Reporting it as PLP was a
+; real bug: in Bolo it turned 5 routines into 53.
+decimaladd:
+        sed
+        clc
+        lda     $1009
+        adc     #$11
+        sta     $100a
+        cld
         rts
