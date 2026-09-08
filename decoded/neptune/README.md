@@ -93,3 +93,65 @@ emulation dependency. Two notes on the ends of that list:
   strobes, which reads as "no button held" (dz `01a074d9`). Neptune reads them
   about once per attract cycle. Nothing observed so far depends on the answer,
   but the code that does is in scope and cannot be exercised.
+
+## Step 2: recover procedures
+
+*Reproduce with `apple2tc ... -O3 --irc1 --routines-report=<path>`. The report
+already says why every candidate was rejected; the playbook is explicit that
+you read it rather than write a script to infer it.*
+
+**85 accepted, 13 rejected.** All 13 triage cleanly, and none of them is
+decompiler over-strictness:
+
+| rejected | why | call sites |
+| --- | --- | --- |
+| `$1100` | `terminator JmpInd` | 8 |
+| `$0E00` `$1300` `$1380` | `terminator JmpInd` | 3 each |
+| `$0F00` `$1060` `$1B80` `$24D0` | `terminator JmpInd` | 1 each |
+| `$2150` | cascade: calls `$0F00` | 1 |
+| `$3340` | cascade: calls the synthetic interrupt block | 1 |
+| `$DB5C` `$FDED` | ROM; `$DB5C` is the b33-loading artifact | — |
+| `$10100` | the synthetic interrupt-entry block | — |
+
+Measured, not assumed: `--alt-exit`, `--prune-returns` and `--ret-addr` in
+every combination all leave it at exactly 85/13. `--alt-exit` is the playbook's
+remedy for Snake Byte's `$6A32`, and this is not that shape.
+
+### The shape the rejections describe
+
+**Neptune's top level is four main loops, not one.** `$2000`, `$2080`, `$2100`
+and `$2180`, each ending by jumping through a zero-page vector:
+
+| vector | value | loop |
+| --- | --- | --- |
+| `$36/$37` | `$2000` | reached from `$1F9A`, `$2062` |
+| `$38/$39` | `$2080` | reached from `$20D4` |
+| `$4E/$4F` | `$2100` | reached from `$2146` |
+| `$3A/$3B` | `$2180` | reached from `$218F` |
+
+The eight `JmpInd` rejections are the subsystems those loops call. They are
+rejected because they do not cleanly return: their control flow runs past their
+own `RTS` — `$1380`'s exits at `$13B7`, but blocks after it continue into
+shared tails — and reaches the loops' indirect dispatch. That is a real
+property of the program, not a classifier being fussy, and it is what step 5
+will have to express.
+
+### A finding worth having, deliberately not acted on
+
+`BNE X` immediately followed by `BEQ X` is an unconditional transfer — one of
+the two always fires, and nothing between them can change the flags. Neptune
+uses the idiom 8 times (`$0E72` `$0E77` `$0E8E` `$0F72` `$0F77` `$0F8E`
+`$1B5C` `$22BF`), and the tracer does not model it, so it decodes the padding
+that follows as code:
+
+- 11 bogus `BRK` instructions,
+- **40 of the 48 ROM instructions** in the listing, because `BRK` is modelled
+  as a call into a synthesised interrupt block — none of it ever executed,
+- 2 of the 13 rejections above (`$10100` and its cascade `$3340`).
+
+Filed as dz `01a07f1a-09bb` and left alone. Suppressing the fall-through is
+only sound when nothing else can reach the second branch — a `JMP` into it
+would make the fall-through live again — which needs predecessor information
+the tracer does not have until after the padding is already decoded. Step 4
+removes that ROM anyway. Snake Byte has zero such pairs, so nothing there is
+affected either way.
