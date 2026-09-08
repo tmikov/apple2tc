@@ -216,6 +216,45 @@ jump-tracing disassembler does when a computed branch lands in a table: `$1185`
 is warned about, and `$1184` is `BMI $11A8`, so `$1185` is that instruction's
 operand byte. `decompile.sh` fails if the count climbs above 12.
 
+### The decompiled C runs, and proves the reading is right
+
+`as-generated/neptune-simple-c.c` is the `--simple-c` transliteration, built by
+CMake as `neptune-as-generated` (windowed) and `neptune-as-generated-run`
+(console). **It works**, and that is a stronger statement than "it compiles":
+
+Run the decompiled build and the interpreter side by side with **no input**,
+each capturing at `$3535` — the point where the title wait times out into the
+attract demo. After **5.75 million cycles** of execution they agree on
+everything that matters:
+
+| | |
+|---|---|
+| RAM `$0000-$BFFF` | **byte-identical** |
+| registers, soft switches | identical |
+| cycle counter | differs by 53 (0.001%) |
+
+So the disassembly is a correct *reading* of the game, not merely a plausible
+one. It also starts absurdly fast: the decompiled build reaches `$3523` in **62
+cycles**, because it has no ROM boot to perform at all.
+
+**Cycle-stamped input does not carry across engines.** Replaying `play2.keys`
+against the decompiled build with the offset rebased for it still diverges: at
+`$3580` the interpreter has `X=$A5` and the decompiled build `X=$A4`, one
+title-loop iteration apart, and the elapsed cycles differ by ~22k. That is the
+caveat recorded under *Runtime data* above, now measured rather than predicted
+— the two engines do not share a cycle coordinate, and the fix is a
+probe-stamped `.pkeys`, not a different constant.
+
+Getting this far required fixing a real decompiler bug: `--simple-c` emitted a
+**truncated** expression for a self-modified zero-page indexed operand
+(`LDA $B0,X` at `$3802`, whose operand byte the game rewrites), producing C
+that would not compile. `Disas::simpleCRead()` built its result in a
+`char buf[32]` and `snprintf` silently cut the 43-character result to 31. See
+dz `01a07eb4-5fa7`. Snake Byte never hit it — its only self-modified indexed
+operand spells to 30 characters and fits. `decompile.sh` now checks the
+generated C for unbalanced parentheses, which is what a truncation leaves
+behind.
+
 The largest thing still unidentified is `$6000-$ABFF`. It holds data — `$65F0`
 is an indexed base for the sprite-erase routine at `$3884`, `$9F00` for
 fourteen more sites — but only the *bases* have been derived, not the extents,

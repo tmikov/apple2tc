@@ -55,6 +55,7 @@ rundata=$here/../testdata/neptune.json
 knowndata=$here/../testdata/known-data.txt
 lst=$here/../as-generated/neptune.lst
 cov=$here/../testdata/coverage.txt
+simplec=$here/../as-generated/neptune-simple-c.c
 
 [ -x "$apple2tc" ] || { echo "$0: no apple2tc at $apple2tc" >&2; exit 1; }
 for f in "$b33" "$rundata" "$knowndata"; do
@@ -90,7 +91,30 @@ if [ "$warnings" -gt 12 ]; then
   exit 1
 fi
 
+# The --simple-c transliteration, which is built as neptune-as-generated. It is
+# a separate invocation because it goes through the disassembler rather than the
+# IR, so -O and --known-data mean nothing to it; only --run-data does.
+#
+# Generating it is not decoration. It is the only check that the disassembly is
+# a correct *reading* of the game rather than a plausible-looking one: it
+# compiles, it runs, and with no input it reaches $3535 with byte-identical RAM
+# to the interpreter. That test found a real decompiler bug (dz 01a07eb4-5fa7,
+# a truncated expression for self-modified zero-page indexed operands) that
+# nothing else in the tree exercises.
+"$apple2tc" --simple-c --run-data="$rundata" "$b33" > "$simplec" 2>/dev/null
+
+# Truncated output was how that bug showed up, and it is cheap to keep looking
+# for: an expression cut short leaves the line's parentheses unbalanced.
+if awk '{ o = gsub(/\(/, "("); c = gsub(/\)/, ")"); if (o != c) { print NR": "$0; bad++ } }
+        END { exit(bad ? 1 : 0) }' "$simplec" >&2; then
+  :
+else
+  echo "$0: generated C has unbalanced parentheses -- an expression was truncated" >&2
+  exit 1
+fi
+
 echo "wrote $lst"
+echo "wrote $simplec"
 echo "wrote $cov"
 sed -n '/^range /,/unknown nonzero/p' "$cov"
 echo "$warnings 'invalid instruction' warnings (6 expected; see the header)"

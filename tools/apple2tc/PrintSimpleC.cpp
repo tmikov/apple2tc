@@ -486,7 +486,12 @@ bool Disas::printSimpleCInst(FILE *f, uint16_t pc, CPUInst inst) {
 }
 
 std::string Disas::simpleCRead(CPUInst inst) const {
-  char buf[32];
+  // Concatenated rather than snprintf'd into a fixed buffer. A self-modified
+  // operand's address expression is not a literal -- Zpg_X spells it
+  // "(uint8_t)(ram_peek(0x3803) + s_x)" -- and wrapping that in peek_zpg()
+  // reaches 42 characters, which silently truncated in the buf[32] this used
+  // to use. The result was emitted C that stopped mid-expression and failed to
+  // compile a long way from the cause. See dz 01a07eb4-5fa7.
   switch (inst.addrMode) {
   case CPUAddrMode::A:
   case CPUAddrMode::Imm:
@@ -501,14 +506,12 @@ std::string Disas::simpleCRead(CPUInst inst) const {
   case CPUAddrMode::Ind:
   case CPUAddrMode::X_Ind:
   case CPUAddrMode::Ind_Y:
-    snprintf(buf, sizeof(buf), "peek(%s)", simpleCAddr(inst).c_str());
-    return buf;
+    return "peek(" + simpleCAddr(inst) + ")";
 
   case CPUAddrMode::Zpg:
   case CPUAddrMode::Zpg_X:
   case CPUAddrMode::Zpg_Y:
-    snprintf(buf, sizeof(buf), "peek_zpg(%s)", simpleCAddr(inst).c_str());
-    return buf;
+    return "peek_zpg(" + simpleCAddr(inst) + ")";
 
   case CPUAddrMode::_last:
   case CPUAddrMode::_invalid:
