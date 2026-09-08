@@ -132,10 +132,11 @@ void a2_io_tick(a2_iostate_t *io, unsigned cycles);
 In `lib/a2io/a2io.c`, above `a2_io_peek()`:
 
 ```c
-/// Extend the 32-bit stamp onto io->clock. The cast makes the subtraction
-/// modular, so this is exact for any gap shorter than 2^32 cycles.
+/// Extend the 32-bit stamp onto io->clock. Both operands of the subtraction
+/// are already `unsigned`, so it is modular arithmetic on its own and is
+/// exact for any gap shorter than 2^32 cycles.
 static void advance_clock(a2_iostate_t *io, unsigned cycles) {
-  io->clock += (unsigned)(cycles - io->clock_last);
+  io->clock += cycles - io->clock_last;
   io->clock_last = cycles;
 }
 
@@ -1548,7 +1549,7 @@ Robotron and Bolo both read paddles, so both change. Build them before and after
 
 ```bash
 ./decoded/rom/probe-acceptance.sh cmake-build-debug
-./decoded/snake-byte/probe-acceptance.sh cmake-build-debug
+./decoded/snake-byte/scripts/probe-acceptance.sh cmake-build-debug
 ```
 
 Expected: both pass — they read only buttons, which stay unpressed.

@@ -143,9 +143,12 @@ because the hardware triggers on any access, read or write.
 Every `a2_io_peek()`/`a2_io_poke()` first advances the clock:
 
 ```
-io->clock += (unsigned)(cycles - io->clock_last);
+io->clock += cycles - io->clock_last;
 io->clock_last = cycles;
 ```
+
+Both operands of the subtraction are already `unsigned`, so it is modular
+arithmetic on its own -- no cast needed to make it so.
 
 Arming then sets, for each paddle:
 
@@ -193,17 +196,18 @@ allowed. A reset of the CPU counter must be paired with reinitialising the IO
 state, so the restart is not seen as a wrap.
 
 All three hold. A fixed-step frame is ~17,000 cycles and a wall-clock slice is
-capped at 0.200 s ≈ 204,600 cycles (`a2host.c:852`), both far below the limit.
-`a2host_reboot()` restarts the counter at zero but goes through `a2_io_done()`
-and `a2_io_init()` (`a2host.c:786`, `733`), which clear the clock and every
+capped at 0.200 s ≈ 204,600 cycles (the slice cap in `a2host_simulate_frame()`),
+both far below the limit. `a2host_reboot()` restarts the counter at zero but
+goes through `a2_io_done()` and `a2_io_init()`, which clear the clock and every
 deadline with it. A decoded program that never calls `a2_io_tick()` still
 advances the clock on every soft-switch access; that this leaves it relying on
 the same bound is documented at the function rather than assumed silently.
 
-The advance happens **first** in `a2_io_peek()`/`a2_io_poke()`, before the
-early returns for the Disk II boot ROM and soft switches (`a2io.c:455`,
-`571`), so a read observes its own cycle. `a2_io_poke()`'s tail-call to
-`a2_io_peek()` carries the same stamp, so the second advance adds zero.
+The advance happens **first** in `a2_io_peek()`/`a2_io_poke()`, before
+`a2_io_peek()`'s Disk II boot-ROM early return and its dispatch into
+`a2_disk2_peek()` for the Disk II soft switches, so a read observes its own
+cycle. `a2_io_poke()`'s tail-call to `a2_io_peek()` carries the same stamp, so
+the second advance adds zero.
 
 At init everything is zero, so `0 < 0` is inactive at any clock value.
 
@@ -537,7 +541,7 @@ ends booting the ROM, so it is necessary but not sufficient here: the port is
 now always emulated, and the programs that read it are the decoded ones.
 
 So the regression set also includes `decoded/rom/probe-acceptance.sh` and
-`decoded/snake-byte/probe-acceptance.sh`, plus before/after comparisons of
+`decoded/snake-byte/scripts/probe-acceptance.sh`, plus before/after comparisons of
 **both** paddle readers — `decoded/bolo` and `decoded/robotron`. A diff in
 those two is expected, and Robotron's is expected to be a reading near 93
 rather than 127 for the reason given above; an *unexplained* diff anywhere
