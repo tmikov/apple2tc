@@ -350,13 +350,54 @@ static void test_buttons_and_mirroring(void) {
 
   a2_io_set_button(&io, 2, true);
   bool mirrored = true;
-  for (unsigned off = 0; off < 8; ++off) {
+  for (unsigned off = 0; off < 4; ++off) {
     uint8_t direct = a2_io_peek(&io, (uint16_t)(A2_TAPEIN + off), 0);
     uint8_t mirror = a2_io_peek(&io, (uint16_t)(A2_TAPEIN + 8 + off), 0);
     if (direct != mirror)
       mirrored = false;
   }
-  check(mirrored, "$C068-$C06F mirror $C060-$C067");
+  check(mirrored, "$C068-$C06B mirror $C060-$C063");
+
+  // The paddle half of the mirror needs one-shots that are actually armed and
+  // in different states to mean anything: read before any A2_PTRIG and every
+  // paddle is 0x00 on both sides regardless of whether the decode's paddle
+  // arm exists at all, because an unarmed expiry of 0 makes `clock < expiry`
+  // false the same way a deleted arm's fallback-to-0 would. Four distinct
+  // positions, triggered once, sampled where they disagree, closes that gap.
+  static const uint8_t kPositions[4] = {0, 60, 150, 255};
+  for (unsigned n = 0; n < 4; ++n)
+    a2_io_set_paddle(&io, n, kPositions[n]);
+  a2_io_peek(&io, A2_PTRIG, 0);
+
+  // Cycle 1000 lands after paddle 0 and 1 have expired and before 2 and 3
+  // have -- a genuine mix of high and low, not the uniform case a deleted
+  // paddle arm collapses to.
+  const unsigned sample = 1000;
+  bool paddlesMirrored = true;
+  for (unsigned off = 4; off < 8; ++off) {
+    uint8_t direct = a2_io_peek(&io, (uint16_t)(A2_TAPEIN + off), sample);
+    uint8_t mirror = a2_io_peek(&io, (uint16_t)(A2_TAPEIN + 8 + off), sample);
+    if (direct != mirror)
+      paddlesMirrored = false;
+  }
+  check(paddlesMirrored, "$C06C-$C06F mirror $C064-$C067");
+
+  // And the mirror check alone cannot catch a deleted decode arm -- both
+  // sides run the identical addr&7 computation, so they agree at 0x00
+  // whether the arm is there or not. This is what actually exercises it:
+  // each paddle must read the value the model predicts, not merely agree
+  // with its own mirror.
+  for (unsigned n = 0; n < 4; ++n) {
+    bool expectHigh = sample < paddle_expiry_for(kPositions[n]);
+    char what[80];
+    snprintf(
+        what,
+        sizeof(what),
+        "paddle %u reads %s as its one-shot's state predicts",
+        n,
+        expectHigh ? "high" : "low");
+    check(paddle_high(&io, n, sample) == expectHigh, what);
+  }
 
   a2_io_done(&io);
 }
@@ -379,6 +420,12 @@ static void test_game_port(void) {
     check(false, "stderr could be captured");
     return;
   }
+  // Ascending order matters and is not incidental: this sweep reaches
+  // $C064-$C06F (the paddles and their mirror) before it ever touches
+  // $C070-$C07F (A2_PTRIG), so every paddle one-shot is still unarmed when it
+  // is read here and reads 0x00 for that reason alone. Reverse the sweep and
+  // A2_PTRIG would fire before the paddles are read, some would read 0x80,
+  // and this would fail while blaming the device instead of the sweep order.
   bool all_zero = true;
   for (unsigned addr = A2_TAPEIN; addr != A2_PTRIG + 0x10; ++addr)
     if (a2_io_peek(&io, (uint16_t)addr, 0) != 0)
@@ -426,8 +473,8 @@ static void test_clock_extension(void) {
     a2_io_tick(&io, stamp);
   }
 
-  printf("  clock: %llu, expected %llu\n",
-      (unsigned long long)io.clock, (unsigned long long)expected);
+  printf(
+      "  clock: %llu, expected %llu\n", (unsigned long long)io.clock, (unsigned long long)expected);
   check(io.clock == expected, "the extended clock counts across the 32-bit wrap");
   check(expected > 0x100000000ull, "and the walk really did pass a wrap");
 

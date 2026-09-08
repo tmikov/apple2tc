@@ -67,12 +67,16 @@ bool a2host_joy_parse_buttons(a2host_joy_t *j, const char *spec) {
 }
 
 void a2host_joy_dir(a2host_joy_t *j, a2host_joydir_t dir, bool down) {
-  if (dir < A2HOST_JOYDIR_COUNT)
+  // Cast before comparing: GCC and Clang give an all-non-negative enum an
+  // unsigned underlying type, so a negative argument would already be
+  // rejected there, but MSVC's enums are `int`, and an unchecked negative
+  // would index dirHeld[-1].
+  if ((unsigned)dir < A2HOST_JOYDIR_COUNT)
     j->dirHeld[dir] = down;
 }
 
 void a2host_joy_button(a2host_joy_t *j, a2host_joybtn_t btn, bool down) {
-  if (btn < A2HOST_JOYBTN_COUNT)
+  if ((unsigned)btn < A2HOST_JOYBTN_COUNT)
     j->btnHeld[btn] = down;
 }
 

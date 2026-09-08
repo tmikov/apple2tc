@@ -45,9 +45,12 @@ frees the latch, so it does not. **A control has to exercise the same conditions
 as the case under test.** One that only proves the harness works against a
 cooperative program proves nothing about an uncooperative one.
 
-The buttons are still not emulated and Neptune still reads them, roughly once
-per attract cycle; see dz issue `01a074d9`. That is a real gap. It is simply not
-what was stopping the keyboard.
+The buttons were not emulated at the time this was written; dz issue
+`01a074d9` tracked that as a real gap. The game port — paddles and
+pushbuttons alike — is emulated now, and Neptune's own reads of `$C061`/
+`$C062` are what it was calibrated against; see the joystick path under
+"Controls" below for how to drive it. Either way, the missing buttons were
+never what was stopping the keyboard.
 
 ## Reproducing anything here
 

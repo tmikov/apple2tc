@@ -151,6 +151,10 @@ static void stream_userdata_cb(float *buffer, int num_frames, int num_channels, 
   a2_sound_cb((a2_sound_t *)user_data, buffer, num_frames, num_channels);
 }
 
+/// Forward-declared: init_cb() needs it (see the call below) but it is
+/// defined further down, next to the other status-display helpers.
+static void report_status(void);
+
 static void init_cb(void) {
   init_window();
   stm_setup();
@@ -159,6 +163,12 @@ static void init_cb(void) {
   persistEnabled_ = a2host_initial_persist_enabled();
   persistDecay_ = a2host_initial_persist_decay();
   joyMode_ = a2host_joystick_at_start();
+  // See report_status()'s comment: normally never called from here, but
+  // --joystick means the arrows silently stop typing before any key is
+  // pressed, so a user who asked to start in joystick mode needs the title
+  // to say so from the first frame.
+  if (joyMode_)
+    report_status();
 
   a2_sound_init(&sound_);
   a2host_init_emulation();
@@ -200,9 +210,12 @@ static const char *hgr_mode_name(a2_hgr_mode_t mode) {
 }
 
 /// The window title is the only status display this front end has, so every
-/// key that changes an option re-derives it and calls this. Never called from
-/// init_cb(), so the title is exactly a2host_argv0() -- as it has always been
-/// -- until a key is pressed.
+/// key that changes an option re-derives it and calls this. Not called from
+/// init_cb() in general, so the title is exactly a2host_argv0() -- as it has
+/// always been -- until a key is pressed. The one exception is joystick mode:
+/// init_cb() does call this, but only when --joystick started the session in
+/// that mode, because then the arrows silently stop typing before any key is
+/// pressed and the title needs to say so from the first frame.
 static void report_status(void) {
   char title[128];
   if (persistEnabled_) {
@@ -505,10 +518,13 @@ static bool joy_btn_of_key(sapp_keycode code, a2host_joybtn_t *out) {
 static bool handle_joystick_key(const sapp_event *ev) {
   // A key released outside the window delivers no KEY_UP, so anything that
   // takes focus away has to release the stick or it stays railed. Gated on
-  // the mode: the KEY_DOWN dispatch that would hold a direction or button
-  // sits behind the same `if (!joyMode_) return false;` below, so nothing
-  // can be held while the mode is off, and releasing here would only
-  // overwrite an unrelated --paddle= startup value with the centre reading.
+  // the mode for two reasons, both needed: first, the KEY_DOWN dispatch that
+  // would hold a direction or button sits behind the same
+  // `if (!joyMode_) return false;` below, so nothing can be held while the
+  // mode is off -- but that alone would not rule out state carried across a
+  // mode change. Second, every transition into mode-off already released via
+  // F7's own handler (below), so by the time the mode is off the release here
+  // would be a no-op anyway.
   if (joyMode_ &&
       (ev->type == SAPP_EVENTTYPE_UNFOCUSED || ev->type == SAPP_EVENTTYPE_ICONIFIED ||
        ev->type == SAPP_EVENTTYPE_SUSPENDED)) {

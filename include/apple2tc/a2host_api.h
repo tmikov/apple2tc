@@ -134,10 +134,15 @@ void a2host_joy_set_button(a2host_joybtn_t btn, bool down);
 /// Release every direction key and every button, and push the resulting
 /// centred, unpressed state to the machine.
 ///
-/// Not a convenience. It is the fix for every stuck-stick case -- focus lost
-/// mid-hold, joystick mode switched off mid-hold, machine rebooted -- and in
-/// particular for the fact that a key released outside the window never
-/// delivers a KEY_UP at all.
+/// Not a convenience. It is the fix for the front end's own stuck-stick
+/// cases -- focus lost mid-hold, joystick mode switched off mid-hold -- and
+/// in particular for the fact that a key released outside the window never
+/// delivers a KEY_UP at all. A reboot needs the same reset but cannot call
+/// this: by the time a2host_reboot() gets there, a2_io_done() has already
+/// torn the device down, and this function would push into an io_ that no
+/// longer exists. It calls the internal a2host_joy_reset() on the policy
+/// state directly instead, then lets a2host_init_emulation() bring the
+/// device back up already centred.
 void a2host_joy_release_all(void);
 
 /// Whether --joystick asked the front end to start in joystick mode. a2run
