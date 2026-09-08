@@ -1,0 +1,99 @@
+declared data:
+  $0C00-$0CBF    192 bytes  tbl_hgr_row_hi
+  $0D00-$0DBF    192 bytes  tbl_hgr_row_lo
+  $4000-$5FFF   8192 bytes  hgr_page2_framebuffer
+
+range $0000-$BFFF  49152 bytes
+  code              8114   16.5%
+  declared data     8576   17.4%
+  unknown zero     13134   26.7%
+  unknown nonzero  19328   39.3%   <- what is left to identify
+    $6000-$ABFF  19456 bytes, 11763 nonzero
+    $AEDF-$B99F   2753 bytes, 2231 nonzero
+    $0128-$0BFF   2776 bytes, 1960 nonzero
+    $389C-$3FFF   1892 bytes, 1172 nonzero
+    $BB00-$BFFF   1280 bytes, 1007 nonzero
+    $0003-$00FF    253 bytes, 234 nonzero
+    $BA4F-$BAD7    137 bytes, 136 nonzero
+    $366A-$36FF    150 bytes, 95 nonzero
+    $AD5D-$ADFF    163 bytes, 81 nonzero
+    $0CC0-$0CFF     64 bytes, 64 nonzero
+    $11FD-$123F     67 bytes, 56 nonzero
+    $231F-$237F     97 bytes, 50 nonzero
+    $1351-$137F     47 bytes, 47 nonzero
+    $37D5-$37FF     43 bytes, 36 nonzero
+    $ACC5-$ACFF     59 bytes, 29 nonzero
+    $2913-$293F     45 bytes, 28 nonzero
+    $22F8-$230F     24 bytes, 22 nonzero
+    $AC59-$AC82     42 bytes, 21 nonzero
+    $24AF-$24CF     33 bytes, 18 nonzero
+    $2621-$267F     95 bytes, 17 nonzero
+    $28B6-$28CF     26 bytes, 16 nonzero
+    $AD21-$AD3F     31 bytes, 15 nonzero
+    $3755-$376F     27 bytes, 14 nonzero
+    $32C6-$333F    122 bytes, 12 nonzero
+    $2065-$2078     20 bytes, 12 nonzero
+    $1D42-$1D7F     62 bytes, 12 nonzero
+    $2FF3-$2FFF     13 bytes, 11 nonzero
+    $2F27-$2F7F     89 bytes, 11 nonzero
+    $2192-$21FF    110 bytes, 10 nonzero
+    $1579-$1581      9 bytes, 9 nonzero
+    $186C-$187F     20 bytes, 9 nonzero
+    $12F0-$12FF     16 bytes, 9 nonzero
+    $23C0-$23FF     64 bytes, 8 nonzero
+    $2B69-$2B6F      7 bytes, 7 nonzero
+    $16DB-$16FF     37 bytes, 7 nonzero
+    $2B2A-$2B2F      6 bytes, 6 nonzero
+    $2B53-$2B5F     13 bytes, 6 nonzero
+    $3795-$379F     11 bytes, 4 nonzero
+    $AE5F-$AE7F     33 bytes, 4 nonzero
+    $2166-$217F     26 bytes, 4 nonzero
+    $AEB7-$AEBF      9 bytes, 4 nonzero
+    $1CB5-$1CFF     75 bytes, 4 nonzero
+    $1488-$148F      8 bytes, 3 nonzero
+    $1DBB-$1DBF      5 bytes, 3 nonzero
+    $2CDD-$2CDF      3 bytes, 3 nonzero
+    $2CAD-$2CAF      3 bytes, 3 nonzero
+    $1CA6-$1CA8      3 bytes, 3 nonzero
+    $171C-$171E      3 bytes, 3 nonzero
+    $19A6-$19A8      3 bytes, 3 nonzero
+    $321B-$321F      5 bytes, 3 nonzero
+    $2742-$2744      3 bytes, 3 nonzero
+    $18D6-$18D8      3 bytes, 3 nonzero
+    $AC2B-$AC2F      5 bytes, 2 nonzero
+    $251D-$251F      3 bytes, 2 nonzero
+    $2A93-$2A9F     13 bytes, 2 nonzero
+    $AE56-$AE57      2 bytes, 2 nonzero
+    $0EE2-$0EFF     30 bytes, 2 nonzero
+    $34C6-$34C7      2 bytes, 2 nonzero
+    $1E6C-$1E7F     20 bytes, 2 nonzero
+    $2CE6-$2CE7      2 bytes, 2 nonzero
+    $AC46-$AC4A      5 bytes, 2 nonzero
+    $2CEE-$2CFF     18 bytes, 2 nonzero
+    $180E-$185F     82 bytes, 2 nonzero
+    $1743-$1744      2 bytes, 2 nonzero
+    $2B86-$2BFF    122 bytes, 1 nonzero
+    $105B-$105B      1 bytes, 1 nonzero
+    $10B1-$10FF     79 bytes, 1 nonzero
+    $3052-$306F     30 bytes, 1 nonzero
+    $2A1A-$2A1F      6 bytes, 1 nonzero
+    $2D9A-$2D9F      6 bytes, 1 nonzero
+    $2D8D-$2D8F      3 bytes, 1 nonzero
+    $2D74-$2D7F     12 bytes, 1 nonzero
+    $2F9F-$2F9F      1 bytes, 1 nonzero
+    $1BF3-$1BF3      1 bytes, 1 nonzero
+    $2D34-$2D37      4 bytes, 1 nonzero
+    $AD4D-$AD4F      3 bytes, 1 nonzero
+    $35EF-$35EF      1 bytes, 1 nonzero
+range $D000-$FFFF  12288 bytes
+  code                82    0.7%
+  declared data        0    0.0%
+  unknown zero       326    2.7%
+  unknown nonzero  11880   96.7%   <- what is left to identify
+    $DB71-$FA3F   7887 bytes, 7649 nonzero
+    $D000-$DAFA   2811 bytes, 2765 nonzero
+    $FA59-$FCA7    591 bytes, 572 nonzero
+    $FDF0-$FF4B    348 bytes, 340 nonzero
+    $FCB4-$FDEC    313 bytes, 306 nonzero
+    $FF59-$FFFF    167 bytes, 163 nonzero
+    $DB03-$DB5B     89 bytes, 85 nonzero

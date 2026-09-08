@@ -181,6 +181,48 @@ decompiled and the generated build replays this recording, the stamps will
 drift exactly as Snake Byte's did, and the answer then is a probe-stamped
 `.pkeys`, not a bigger constant.
 
+### The disassembly: `decoded/neptune/as-generated/neptune.lst`
+
+`decoded/neptune/scripts/decompile.sh` regenerates it, with
+`testdata/coverage.txt` beside it saying what is identified and what is not.
+Three inputs, in order of how much each adds: the b33 (so the trace starts at
+`$3523` inside Neptune rather than at the reset vector inside the ROM boot),
+`--run-data` (997 → 1085 code labels), and `--known-data` — which changes the
+listing not at all and exists only to turn "unknown" into a named region in the
+coverage report.
+
+Where that leaves `$0000-$BFFF`: **16.5% identified code, 17.4% declared data,
+26.7% unknown-but-zero, 39.3% unknown and nonzero.**
+
+**There is no `--code-at`, and that is a finding rather than an omission.**
+Snake Byte needs one because its indirect jumps go where the tracer cannot
+follow. Neptune's six in-game indirect jumps all dispatch through zero-page
+vectors that *no game code ever writes* — the loader set them before the
+capture, so each has a single fixed value:
+
+| site | target | | site | target |
+|---|---|---|---|---|
+| `$11F0 JMP ($0200)` | `$1D00` | | `$20D4 JMP ($38)` | `$2080` |
+| `$1F9A JMP ($36)` | `$2000` | | `$218F JMP ($3A)` | `$2180` |
+| `$2062 JMP ($36)` | `$2000` | | `$2146 JMP ($4E)` | `$2100` |
+
+All six land inside already-identified code, so hand-asserted edges would add
+nothing. A capture taken at a different moment could hold different values, and
+this table is then the thing to re-derive rather than trust.
+
+The six `invalid instruction` warnings are expected and are **not** caused by
+the run data — the count is 6 with it and 6 without. They are what a
+jump-tracing disassembler does when a computed branch lands in a table: `$1185`
+is warned about, and `$1184` is `BMI $11A8`, so `$1185` is that instruction's
+operand byte. `decompile.sh` fails if the count climbs above 12.
+
+The largest thing still unidentified is `$6000-$ABFF`. It holds data — `$65F0`
+is an indexed base for the sprite-erase routine at `$3884`, `$9F00` for
+fourteen more sites — but only the *bases* have been derived, not the extents,
+and `known-data.txt` deliberately declares neither. Bit-7 density varies across
+it (`$8000-$8FFF` is 2.1%, consistent with 7-bit shape data; `$A000-$ABFF` is
+38%), which suggests several kinds of content rather than one table.
+
 ### DOS is not in memory, and the disk driver is dead code
 
 Worth knowing before reading the top of the image, because it looks like the

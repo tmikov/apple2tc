@@ -1,0 +1,54 @@
+# Regions of neptune.b33 identified as something other than code, for
+# apple2tc's --coverage report.
+#
+# Format: "FROM TO name", addresses hexadecimal with an optional '$' prefix,
+# '#' starts a comment.
+#
+# Deciding that bytes are data is a conclusion about the program, not something
+# the disassembler can derive, so every line here needs its evidence. The
+# coverage report flags any range that the disassembler also reached as code,
+# which is the check that these claims stay true.
+
+# --- hi-res drawing tables -------------------------------------------------
+# Read as a pair at $3878/$387D, which builds a ($00) pointer from them:
+#
+#   3878: LDA $0C00,Y   ; -> $01, the HIGH byte
+#   387D: LDA $0D00,Y   ; -> $00, the LOW byte
+#
+# so $0C00 is the high table and $0D00 the low one, and not the other way
+# round. Combined, entries 0..191 reproduce the standard hi-res row address
+# base + (r&7)*$400 + ((r>>3)&7)*$80 + (r>>6)*$28 for base $4000 -- all 192 of
+# them, exactly, and none of them for base $2000. That is the derivation, and
+# it also settles which page this game draws on. Entries past 191 are $FF00
+# filler, so the tables are declared as 192 bytes rather than 256.
+0C00 0CBF tbl_hgr_row_hi
+0D00 0DBF tbl_hgr_row_lo
+
+# --- the screen ------------------------------------------------------------
+# Hi-res page 2 is the framebuffer, on three independent grounds:
+#   - it is the displayed page (vid_control $0C at the capture point),
+#   - the row tables above decode to exactly this range, and
+#   - of the 184 pages of $0800-$BFFF, 160 are byte-identical to sectors of
+#     dsk/Neptune.dsk and the only 24 that differ are inside $4100-$5FFF --
+#     i.e. the game has drawn on this and on nothing else.
+# The writes agree: the indexed store bases in the code include $4350, $4750,
+# $4B50, $4F50, $5350, $5750 and $5B50, spaced exactly $400 apart, which is the
+# hi-res interleave.
+4000 5FFF hgr_page2_framebuffer
+
+# --- NOT declared, and why -------------------------------------------------
+#
+# $6000-$ABFF, the largest unknown span. It contains data -- $65F0 is read as
+# an indexed base by the sprite-erase routine at $3884, and $9F00 by fourteen
+# more sites -- but the *extents* have not been derived, only the bases, and a
+# range guessed from a base is exactly the kind of claim this file exists to
+# not make. Bit-7 density varies across it ($8000-$8FFF is 2.1%, consistent
+# with 7-bit shape data; $A000-$ABFF is 38%), which suggests more than one kind
+# of content rather than one table to declare.
+#
+# $BB00-$BFFF is code, not data, and declaring it here would be a lie. It is a
+# Disk II driver plus language-card and message text that Neptune's loader
+# blitted in from stale disk sectors; six probes across $BC57-$BF67 fired zero
+# times in a 3000-frame disk boot, against controls that fired 630 and 2 times.
+# So it is unreachable code, which the coverage report should keep reporting as
+# unidentified rather than have hidden behind a data declaration.
