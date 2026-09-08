@@ -221,6 +221,143 @@ static void test_type_ahead(void) {
   a2_io_done(&io);
 }
 
+/// Arm the one-shots and return the clock value at which paddle `n` drops.
+static uint64_t paddle_expiry_for(uint8_t position) {
+  return (uint64_t)A2_PADDLE_CYCLES_PER_COUNT * position + A2_PADDLE_OFFSET;
+}
+
+/// Bit 7 of a PADDLn read at `cycles`, having triggered at `trigger`.
+static bool paddle_high(a2_iostate_t *io, unsigned n, unsigned cycles) {
+  return (a2_io_peek(io, (uint16_t)(A2_PADDL0 + n), cycles) & 0x80) != 0;
+}
+
+/// A zeroed a2_gameport_t is hard left and hard up, not centre. An unattended
+/// machine must not read as a player shoving the stick into a corner, so
+/// a2_io_init() sets the positions explicitly and this pins that it does.
+static void test_paddle_centred_at_init(void) {
+  a2_iostate_t io;
+  a2_io_init(&io);
+
+  a2_io_peek(&io, A2_PTRIG, 0);
+  uint64_t centre = paddle_expiry_for(A2_PADDLE_CENTER);
+  uint64_t zero = paddle_expiry_for(0);
+
+  check(paddle_high(&io, 0, (unsigned)zero + 1),
+      "a freshly initialised paddle is not at the zero rail");
+  check(paddle_high(&io, 0, (unsigned)centre - 1),
+      "it is still high one cycle before the centre position expires");
+  check(!paddle_high(&io, 0, (unsigned)centre),
+      "and low at it");
+
+  a2_io_done(&io);
+}
+
+/// The one-shot boundaries, across the range. Set, trigger, and sample either
+/// side of the computed expiry.
+static void test_paddle_boundaries(void) {
+  static const uint8_t kPositions[] = {0, 1, 127, 255};
+  a2_iostate_t io;
+
+  for (unsigned i = 0; i < sizeof(kPositions) / sizeof(kPositions[0]); ++i) {
+    uint8_t pos = kPositions[i];
+    a2_io_init(&io);
+    a2_io_set_paddle(&io, 0, pos);
+    a2_io_peek(&io, A2_PTRIG, 0);
+
+    uint64_t expiry = paddle_expiry_for(pos);
+    char what[80];
+    snprintf(what, sizeof(what), "paddle %u is high until its expiry", pos);
+    check(paddle_high(&io, 0, (unsigned)expiry - 1), what);
+    snprintf(what, sizeof(what), "paddle %u is low at its expiry", pos);
+    check(!paddle_high(&io, 0, (unsigned)expiry), what);
+
+    a2_io_done(&io);
+  }
+}
+
+/// A machine that has never touched $C070 has no one-shot running, at any
+/// cycle. This is what an absolute 32-bit deadline gets wrong: with expiry 0,
+/// (int32_t)(0x80000000 - 0) is negative and reads as "still high".
+static void test_paddle_never_triggered(void) {
+  a2_iostate_t io;
+  a2_io_init(&io);
+  check(!paddle_high(&io, 0, 0x80000000u),
+      "a paddle never triggered reads low at 2^31");
+  a2_io_done(&io);
+}
+
+/// ...and an expired one stays expired, however long ago it fired. Two
+/// distances, because the two wrong formulations fail at different ones: the
+/// absolute deadline revives at 2^31, elapsed-from-trigger at a full wrap.
+static void test_paddle_stays_expired(void) {
+  a2_iostate_t io;
+
+  a2_io_init(&io);
+  a2_io_set_paddle(&io, 0, A2_PADDLE_CENTER);
+  a2_io_peek(&io, A2_PTRIG, 1000);
+  check(!paddle_high(&io, 0, 1000u + 0x80000000u),
+      "an expired paddle is still expired 2^31 cycles later");
+  a2_io_done(&io);
+
+  // The full wrap has to be walked, not jumped: a single leap of 2^32 breaks
+  // a2_io_tick()'s contract and would prove nothing.
+  a2_io_init(&io);
+  a2_io_set_paddle(&io, 0, A2_PADDLE_CENTER);
+  a2_io_peek(&io, A2_PTRIG, 1000);
+  enum { FRAME_CYCLES = 17030 };
+  unsigned stamp = 1000;
+  for (unsigned i = 0; i < 300000; ++i) {
+    stamp += FRAME_CYCLES;
+    a2_io_tick(&io, stamp);
+  }
+  check(!paddle_high(&io, 0, 1000),
+      "and still expired when the 32-bit stamp comes all the way round");
+  a2_io_done(&io);
+}
+
+/// Triggering again restarts the timer rather than extending it.
+static void test_paddle_rearm(void) {
+  a2_iostate_t io;
+  a2_io_init(&io);
+  a2_io_set_paddle(&io, 0, A2_PADDLE_CENTER);
+
+  uint64_t span = paddle_expiry_for(A2_PADDLE_CENTER);
+  a2_io_peek(&io, A2_PTRIG, 0);
+  a2_io_peek(&io, A2_PTRIG, 100);
+  check(paddle_high(&io, 0, (unsigned)span + 99),
+      "re-arming restarts the one-shot from the new trigger");
+  check(!paddle_high(&io, 0, (unsigned)span + 100),
+      "and it expires a span after that trigger, not the first one");
+
+  a2_io_done(&io);
+}
+
+/// The three pushbuttons, and the $C068-$C06F mirror the 74LS251 produces by
+/// decoding only A0-A2.
+static void test_buttons_and_mirroring(void) {
+  a2_iostate_t io;
+  a2_io_init(&io);
+
+  check((a2_io_peek(&io, A2_BUTN0, 0) & 0x80) == 0, "PB0 reads low when up");
+  a2_io_set_button(&io, 0, true);
+  check((a2_io_peek(&io, A2_BUTN0, 0) & 0x80) != 0, "PB0 reads high when held");
+  check((a2_io_peek(&io, A2_BUTN1, 0) & 0x80) == 0, "and PB1 is unaffected");
+  a2_io_set_button(&io, 0, false);
+  check((a2_io_peek(&io, A2_BUTN0, 0) & 0x80) == 0, "PB0 reads low again once released");
+
+  a2_io_set_button(&io, 2, true);
+  bool mirrored = true;
+  for (unsigned off = 0; off < 8; ++off) {
+    uint8_t direct = a2_io_peek(&io, (uint16_t)(A2_TAPEIN + off), 0);
+    uint8_t mirror = a2_io_peek(&io, (uint16_t)(A2_TAPEIN + 8 + off), 0);
+    if (direct != mirror)
+      mirrored = false;
+  }
+  check(mirrored, "$C068-$C06F mirror $C060-$C067");
+
+  a2_io_done(&io);
+}
+
 /// The game port is not emulated and says nothing about it. Reads there used to
 /// fall through a2_io_peek's default arm, which prints one line per access --
 /// and a program polls the buttons every frame, so a run of dsk/Neptune.dsk
@@ -333,6 +470,12 @@ int main(void) {
   test_keyboard_latch();
   test_type_ahead();
   test_clock_extension();
+  test_paddle_centred_at_init();
+  test_paddle_boundaries();
+  test_paddle_never_triggered();
+  test_paddle_stays_expired();
+  test_paddle_rearm();
+  test_buttons_and_mirroring();
   test_game_port();
 
   if (failures) {
