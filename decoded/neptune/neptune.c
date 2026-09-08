@@ -110,8 +110,8 @@ void func_3040(uint16_t ret_addr);
 void func_3070(uint16_t ret_addr);
 void func_3440(uint16_t ret_addr);
 void func_3480(uint16_t ret_addr);
-void func_3570(uint16_t ret_addr);
-void func_3584(uint16_t ret_addr);
+void delay_one_tick(uint16_t ret_addr);
+void poll_input_select_mode(uint16_t ret_addr);
 void func_3600(uint16_t ret_addr);
 void func_3630(uint16_t ret_addr);
 void func_3650(uint16_t ret_addr);
@@ -5948,7 +5948,7 @@ bb_58:
 }
 
 
-void func_3570(uint16_t ret_addr) {
+void delay_one_tick(uint16_t ret_addr) {
   bool branchTarget = true;
   uint8_t tmp1_U8;
 
@@ -5967,7 +5967,7 @@ void func_3570(uint16_t ret_addr) {
 }
 
 
-void func_3584(uint16_t ret_addr) {
+void poll_input_select_mode(uint16_t ret_addr) {
   bool branchTarget = true;
   uint8_t tmp1_U8;
   uint8_t tmp2_U8;
@@ -16968,7 +16968,7 @@ void func_t001(uint16_t ret_addr) {
       break;
     case 1637:  // $3528
       /*$3528*/ CYCLES(0x3528, 6);
-                func_3584(0x352a);
+                poll_input_select_mode(0x352a);
                 branchTarget = true; block_id = 1638;
       break;
     case 1638:  // $352B
@@ -16994,7 +16994,7 @@ void func_t001(uint16_t ret_addr) {
     case 1640:  // $352D
       /*$352D*/ CYCLES(0x352d, 8);
                 s_a = 0x40;
-      /*$352F*/ func_3570(0x3531);
+      /*$352F*/ delay_one_tick(0x3531);
                 branchTarget = true; block_id = 1641;
       break;
     case 1641:  // $3532
