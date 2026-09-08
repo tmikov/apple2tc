@@ -475,3 +475,47 @@ That does not mean the remaining 78 entries are dead: the gate reaches 43% of
 blocks, and the unused entries are presumably the other states' returns. It
 means the conversion has an order that traffic, not structure, chose — and the
 first five things to convert are now named rather than estimated.
+
+## The first routine, analysed to the point of conversion
+
+`$1380` — `fire_control`, the player's gun — is the smallest of the five and
+was taken as far as the edit before stopping. It is worth writing down because
+what it found is not specific to this routine.
+
+**Its block set is perfectly closed.** 60 switch cases, `$1380-$1487`, and
+measured rather than assumed:
+
+| | |
+| --- | --- |
+| `block_id` targets leaving the set | **0** |
+| calls out | `func_1490` only, already a real function |
+| call sites in | 3 — `$201B`, `$209B`, `$20BC`, i.e. the main loops |
+| dynamic-return blocks | `$13B7`, `$1487` (`pop16() + 1`) |
+
+So the classifier's rejection was wrong about the shape: this *is* a routine
+with two returns, and extracting it into a C function is mechanical.
+
+**Except for one block, and that block is the whole lesson.** `$1391` also
+dispatches dynamically, but not through `pop16()`:
+
+```c
+block_id = find_block_id_func_t001(0x1391, (0x1393 + (int8_t)ram_peek(0x1392)));
+```
+
+`$1392` is a branch's *operand byte*, and `poll_input_select_mode` writes it —
+`ram_poke(0x1392, 0x24)` in the keyboard arm, while the joystick arm rewrites
+`$138F-$1391` into different instructions altogether. **The routine's control
+flow shape depends on which input device was chosen at the title screen.**
+
+In keyboard mode the target computes to `$13B7`, inside the routine, and the
+extraction closes. In joystick mode it does not, and joystick mode is
+unreachable under the gate because `$C061`/`$C062` are not emulated — so an
+extraction that assumed the keyboard shape would pass every oracle and still be
+wrong for a mode that a fixed emulator would reach.
+
+That is the playbook's own warning arriving in a new form: *"a relaxation that
+passes every oracle can still be wrong, and the way to tell is structural."*
+The honest shapes are to keep `$1391` as a dispatch the function can exit
+through, or to make the input mode an explicit parameter of the program rather
+than a property of its instruction bytes. That is a design decision, not a
+transcription, and it is where this stops.
