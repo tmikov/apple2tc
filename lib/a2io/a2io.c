@@ -417,7 +417,7 @@ void a2_io_set_button(a2_iostate_t *io, unsigned n, bool down) {
   if (down)
     io->gameport.buttons |= (uint8_t)(1u << n);
   else
-    io->gameport.buttons &= (uint8_t)~(1u << n);
+    io->gameport.buttons &= (uint8_t) ~(1u << n);
 }
 
 void a2_io_done(a2_iostate_t *io) {
