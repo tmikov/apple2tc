@@ -504,9 +504,14 @@ static bool joy_btn_of_key(sapp_keycode code, a2host_joybtn_t *out) {
 /// Returns whether the event was consumed.
 static bool handle_joystick_key(const sapp_event *ev) {
   // A key released outside the window delivers no KEY_UP, so anything that
-  // takes focus away has to release the stick or it stays railed.
-  if (ev->type == SAPP_EVENTTYPE_UNFOCUSED || ev->type == SAPP_EVENTTYPE_ICONIFIED ||
-      ev->type == SAPP_EVENTTYPE_SUSPENDED) {
+  // takes focus away has to release the stick or it stays railed. Gated on
+  // the mode: the KEY_DOWN dispatch that would hold a direction or button
+  // sits behind the same `if (!joyMode_) return false;` below, so nothing
+  // can be held while the mode is off, and releasing here would only
+  // overwrite an unrelated --paddle= startup value with the centre reading.
+  if (joyMode_ &&
+      (ev->type == SAPP_EVENTTYPE_UNFOCUSED || ev->type == SAPP_EVENTTYPE_ICONIFIED ||
+       ev->type == SAPP_EVENTTYPE_SUSPENDED)) {
     a2host_joy_release_all();
     return false; // not ours to consume; other handlers may want it
   }
