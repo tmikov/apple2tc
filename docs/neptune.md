@@ -133,6 +133,54 @@ two that matter when reading it:
   that entry landed exactly on a frame boundary reproduced 1591 consecutive
   frame hashes of the disk run byte for byte.
 
+### Runtime data: `decoded/neptune/testdata/neptune.json`
+
+`decoded/neptune/scripts/collect.sh` replays `play2.keys` against the b33 and
+writes the `--run-data=` file apple2tc wants. Feeding it in finds code a static
+trace cannot: **997 code labels without it, 1085 with**, from 29 new runtime
+blocks. That gap is not incidental — the collector reports **20 generations**,
+so Neptune rewrites its own code as it runs, and the addresses only a run can
+discover are the ones the decompiler most needs told to it.
+
+```bash
+apple2tc -O3 --irc1 --run-data=decoded/neptune/testdata/neptune.json \
+  decoded/neptune/testdata/neptune.b33 > neptune-c1.c
+```
+
+**Collect against the b33, not against the disk.** Measured on the same play
+session: a disk boot produces 459 branch targets and the b33 run 305, and the
+156 the disk run adds are 49 in ROM, 26 in the `$C600` boot slot, and the rest
+the loader at `$0500`/`$0800` and the load machinery in `$Axxx-$Bxxx`. None of
+it is Neptune, and the b33 run still keeps 300 of the 301 game targets. The
+boot is a third of what a disk collection records and none of what the game is.
+
+`play2.keys` is stamped in absolute cycles from reset against a *disk* boot, so
+it cannot be replayed against the b33 unchanged; `collect.sh` rebases it by
+`(disk entry - b33 entry)` — **21,682,581 cycles** — which it measures with
+`--snapshot-at=$3523` in each run rather than hardcoding. A constant suffices
+because from the entry point on the two are the same machine and the 6502 has
+nothing external to drift against.
+
+The rebased recording is committed as `testdata/play2-cold.keys`, following
+snake-byte's `play-cold.pkeys` — *cold* meaning a build that starts at the
+game's entry rather than booting into it. It is generated, carries a header
+saying so, and `collect.sh` is the only thing that writes it. Having it in the
+tree means the played session can be replayed without regenerating anything:
+
+```bash
+a2run --frames=1929 decoded/neptune/testdata/neptune.b33 \
+  --key-file=decoded/neptune/testdata/play2-cold.keys
+```
+
+which ends on `SC:00180` with shields up, the same as the disk replay of
+`play2.keys` it was derived from.
+
+One caveat to carry forward: cycle stamps are an engine-dependent coordinate.
+This works because both runs are the same interpreter. If Neptune is ever
+decompiled and the generated build replays this recording, the stamps will
+drift exactly as Snake Byte's did, and the answer then is a probe-stamped
+`.pkeys`, not a bigger constant.
+
 ### DOS is not in memory, and the disk driver is dead code
 
 Worth knowing before reading the top of the image, because it looks like the
