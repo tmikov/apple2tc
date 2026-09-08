@@ -1,0 +1,60 @@
+# "ADDR name" pairs for the interactive disassembler:
+#
+#     id> loadbin snapshot.bin 0
+#     id> labels ../decoded/neptune/testdata/labels.txt
+#     id> dis $3523 $3540
+#
+# It is also the working list for step 6.1 of docs/decompiling/playbook.md,
+# which is where these names reach the C.
+#
+# THE RULE FOR THIS FILE
+#
+# "A name asserting something unproven is worse than no name." Every line below
+# carries its evidence, and an address whose purpose is merely suspected is
+# deliberately absent -- 84 functions have address-derived names in neptune.c
+# and only the ones here have earned better.
+
+# --- the top level ---------------------------------------------------------
+# Four main loops, each ending by jumping through its own zero-page vector.
+# Derived in step 2 from the routine report's rejections plus the vector values
+# in the captured image; see README.md.
+2000 main_loop_via_36        # JMP ($36); $36/$37 holds $2000
+2080 main_loop_via_38        # JMP ($38); $38/$39 holds $2080
+2100 main_loop_via_4e        # JMP ($4E); $4E/$4F holds $2100
+2180 main_loop_via_3a        # JMP ($3A); $3A/$3B holds $2180
+
+# --- the title screen ------------------------------------------------------
+# $3523 is where neptune.b33 starts. STA KBDSTRB, then 256 rounds of
+# poll-and-delay; a key branches to $3580 and a timeout falls through to the
+# attract demo at $3535. Read directly off the disassembly.
+3523 title_wait_for_input
+3528 title_wait_loop
+3570 delay_one_tick           # LDA #$40, JSR MON_WAIT, JSR $AEC0
+3580 title_input_seen         # BMI target: something was pressed
+3535 title_timed_out          # falls through to the attract demo
+
+# --- input mode selection --------------------------------------------------
+# $3584 reads the two joystick buttons and the keyboard, and then *writes code*
+# into three sites, which is what the collector's 21 generations are. The bytes
+# it pokes decode as the instructions named below, so the naming is derivation
+# rather than inference.
+3584 poll_input_select_mode
+3700 patch_input_joystick     # writes AD 61 C0 / AD 62 C0 = LDA $C061 / $C062
+359A patch_input_keyboard     # writes AD 00 C0 = LDA $C000, CMP #$C1, CMP #$DA
+
+# The three sites those patches rewrite. Named for what they are rather than
+# what they do, because what they do is whichever patch last ran.
+1060 input_site_a
+1300 input_site_b
+138C input_site_c
+
+# --- hi-res drawing --------------------------------------------------------
+# Verified in testdata/known-data.txt: all 192 entries reproduce the standard
+# hi-res row address formula for base $4000, and none of them for $2000.
+0C00 tbl_hgr_row_hi
+0D00 tbl_hgr_row_lo
+3876 erase_sprite_row         # reads the row tables, EOR #$FF / AND / STA
+
+# --- ROM -------------------------------------------------------------------
+# The only ROM entry point the game calls; see testdata/rom.externs.
+FCA8 rom_mon_wait

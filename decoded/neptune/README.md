@@ -285,3 +285,63 @@ trace.
 
 That was luck. `$3523` was chosen because it is where space starts a game, not
 for this.
+
+## Step 5: structural conversion — started, not finished
+
+`neptune.c` is the artifact, gated alongside the two generated builds by
+`scripts/verify.sh`. Two mechanical passes have run, both verified:
+
+| pass | effect |
+| --- | --- |
+| dead `bb_N:` labels removed | 453 labels; `same-code.sh` confirms identical instructions |
+| simple-if and if/else diamond relooped | 9 sites, then 7 more labels fell out |
+
+**18,886 → 18,431 lines.** That is a small dent, and the reason is worth
+stating plainly rather than working around: a relooper that is *obviously*
+right only fires where the target is the next label, the body has no labels of
+its own, and nothing else jumps in. The generated code rarely looks like that —
+`branchTarget` assignments and `CYCLES_EDGE` charges interleave with the
+control flow, and the playbook's own warning applies at every site:
+
+> "Which side of a branch pays the extra cycle depends on the branch... Writing
+> all eight the same way was one decision and seven bugs."
+
+That is a judgement per site, not a pattern match.
+
+### What remains, measured
+
+| | |
+| --- | --- |
+| live `bb_N:` labels across 84 functions | **727** |
+| cases in the `run_emulated` dispatch switch | **1,853** |
+| functions with 16+ labels | 21, led by `func_1490` at 123 |
+
+The switch is the bulk, and shrinking it means recovering the eight routines
+step 2 rejected — the ones that do not cleanly return, because control runs
+past their `RTS` into the four main loops' indirect dispatch. That is hand
+work, and it is what the rest of this step is.
+
+### `testdata/labels.txt`
+
+The names earned so far, each with its evidence, following the playbook's rule
+that "a name asserting something unproven is worse than no name". It makes the
+disassembly readable now and is the working list for step 6.1:
+
+```
+title_wait_for_input:
+3523: STA KBDSTRB
+3526: LDX #$00
+title_wait_loop:
+3528: JSR poll_input_select_mode
+352B: BMI title_input_seen
+352F: JSR delay_one_tick
+3533: BNE title_wait_loop
+title_timed_out:
+```
+
+The substantive find behind those names is `$3584`, which reads the joystick
+buttons and the keyboard and then *writes code* into three input sites,
+choosing the game's input device once at the title screen. That is the
+self-modification the collector reports as 21 generations. See the *Why it
+reads the joystick buttons* section of `docs/neptune.md`, including the one
+part of it that does not yet add up.

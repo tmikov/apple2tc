@@ -262,6 +262,44 @@ and `known-data.txt` deliberately declares neither. Bit-7 density varies across
 it (`$8000-$8FFF` is 2.1%, consistent with 7-bit shape data; `$A000-$ABFF` is
 38%), which suggests several kinds of content rather than one table.
 
+### Why it reads the joystick buttons: it patches itself for them
+
+This is the answer to the `$C061`/`$C062` reads recorded above, and it came out
+of the decompilation rather than out of playing.
+
+`$3584` — the routine the title screen polls, `poll_input_select_mode` in
+`decoded/neptune/testdata/labels.txt` — reads *both* joystick buttons and the
+keyboard, and then **writes code** into three sites. The bytes it pokes decode
+as instructions, which is what makes the reading a derivation rather than a
+guess:
+
+| condition | what it writes | where |
+| --- | --- | --- |
+| both buttons held | `AD 61 C0` / `AD 62 C0` = `LDA $C061` / `LDA $C062` | `$1060` `$1300` `$138C` |
+| a key pressed | `AD 00 C0` = `LDA $C000`, plus `CMP #$C1` and `CMP #$DA` | the same three |
+
+So Neptune does not test the input device every frame. It decides **once**, at
+the title screen, and rewrites its three input routines for whichever device
+answered. `$C1` and `$DA` are `'A'` and `'Z'` with bit 7 set, which is the
+keyboard arm compiling the key map into itself.
+
+That also identifies the self-modifying code the collector reports as 21
+generations: it is this, not an obfuscation.
+
+**And it is why the unemulated buttons matter more than they looked.** With
+`$C061`/`$C062` returning 0 (dz `01a074d9`), the joystick arm at `$3700` can
+never be taken, so an entire input mode is unreachable — not merely a control
+scheme nobody chose, but a branch of the program no recording can ever cover.
+The gate confirms it: `$3700` has zero hits across both scenarios.
+
+**One thing here is not yet explained**, and is recorded as a question rather
+than dressed up: across the `play` scenario `$3584` runs 93 times and the
+"nothing pressed" exit at `$3599` runs 92, yet neither patch arm (`$359A`,
+`$3700`) nor the "input seen" target (`$3580`) is reached at all — even though
+that scenario demonstrably starts a game. So the path by which a keypress
+actually starts play is not the one the title loop's `BMI` suggests, and
+somewhere there is a caller of `$3584` this reading has not accounted for.
+
 ### DOS is not in memory, and the disk driver is dead code
 
 Worth knowing before reading the top of the image, because it looks like the
