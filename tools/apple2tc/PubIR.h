@@ -49,5 +49,10 @@ std::vector<std::pair<uint16_t, std::string>> loadExternRoutines(
     ir::Module *mod,
     const std::string &path);
 std::shared_ptr<CPURegLiveness> liveness(ir::Module *mod);
+/// Write one row per function -- live-in, live-out, modified, and the things
+/// that force those sets to be conservative -- followed by a summary. Meant to
+/// answer questions about what actually crosses a call boundary; the format is
+/// documented by the legend it prints.
+void dumpRegLiveness(ir::Module *mod, CPURegLiveness *lv, FILE *os);
 
 void printIRC1(ir::Module *mod, FILE *os, bool trees);

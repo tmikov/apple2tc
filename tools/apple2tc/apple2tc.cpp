@@ -60,6 +60,7 @@ static void printHelp() {
   fprintf(stderr, "  --simple-c          Generate simple C code\n");
   fprintf(stderr, "  --ir                Generate IR\n");
   fprintf(stderr, "  --irc1              Generate C1 representation of the IR\n");
+  fprintf(stderr, "  --dump-reg-liveness Dump per-function CPU register liveness\n");
   fprintf(stderr, "  --no-ir-trees       Do not reconstruct trees in IR dump\n");
   fprintf(stderr, "  --ret-addr          Preserve subroutines return address on the stack\n");
   fprintf(stderr, "  --prune-returns     Drop RTS return edges no surviving call can produce\n");
@@ -82,6 +83,7 @@ int main(int argc, char **argv) {
     GenSimpleC,
     GenIR,
     GenIRC1,
+    DumpRegLiveness,
   };
   bool noGenerations = false;
   bool preserveRetAddr = false;
@@ -125,6 +127,10 @@ int main(int argc, char **argv) {
     }
     if (strcmp(argv[i], "--irc1") == 0) {
       action = Action::GenIRC1;
+      continue;
+    }
+    if (strcmp(argv[i], "--dump-reg-liveness") == 0) {
+      action = Action::DumpRegLiveness;
       continue;
     }
     if (strcmp(argv[i], "--no-ir-trees") == 0) {
@@ -248,7 +254,8 @@ int main(int argc, char **argv) {
       dis->printSimpleC(stdout);
       break;
     case Action::GenIR:
-    case Action::GenIRC1: {
+    case Action::GenIRC1:
+    case Action::DumpRegLiveness: {
       auto irCtx = newIRContext(verbosity, preserveRetAddr, altExits, pruneReturns);
       auto *mod = genIR(dis, *irCtx);
       if (optLevel > 0)
@@ -303,6 +310,9 @@ int main(int argc, char **argv) {
       if (action == Action::GenIR) {
         auto regLiveness = liveness(mod);
         dumpModule(mod, irTrees, regLiveness.get());
+      } else if (action == Action::DumpRegLiveness) {
+        auto regLiveness = liveness(mod);
+        dumpRegLiveness(mod, regLiveness.get(), stdout);
       } else {
         printIRC1(mod, stdout, irTrees);
       }

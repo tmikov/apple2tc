@@ -51,13 +51,15 @@ public:
         f(static_cast<CPURegKind>(i));
   }
 
-private:
+  /// Everything the analysis knows about one function. Public because
+  /// getFuncData() hands it out and callers outside this file need to name it.
   struct FuncData {
     LivenessSets sets{};
     /// Registers modified by the function.
     SetType modified = 0;
   };
 
+private:
   Module *const mod_;
   CallGraph const cg_;
   std::unordered_map<const BasicBlock *, LivenessSets> bbSets_{};

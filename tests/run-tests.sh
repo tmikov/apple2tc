@@ -62,6 +62,36 @@ $a6502 callcycle.s callcycle.b33 && $apple2tc -O3 --ir callcycle.b33 > callcycle
 diff -q callcycle.ir callcycle-test.ir
 rm callcycle-test.ir callcycle.b33
 
+# --dump-reg-liveness: what actually crosses a call boundary, per function.
+# reglive.s has hand-known flag behaviour -- see the comment at the top of it --
+# so these baselines pin what the option reports rather than that it runs. Two
+# of them, at -O2 and -O3, because the -O3 dce() pass is driven by this same
+# liveness and deletes the stores it proves dead; the pair is what separates
+# "the flag is not live" from "the store is already gone".
+$a6502 reglive.s reglive.b33 && $apple2tc reglive.b33 -O3 --dump-reg-liveness > reglive-test.txt
+diff -q reglive.dump reglive-test.txt
+$apple2tc reglive.b33 -O2 --dump-reg-liveness > reglive-O2-test.txt
+diff -q reglive-O2.dump reglive-O2-test.txt
+# Said outright, so a regression reads as more than an unexplained baseline
+# diff. At -O2 setcarry writes A, N, Z and C, and only C survives to its
+# caller; clobbernz writes N and Z that nothing ever reads; usesy needs Y.
+if ! grep -q '^FUNC  \$0330 \.\{10\} \.\{9\}C A\.\.N\.\.\.\.ZC ' reglive-O2-test.txt; then
+  echo "FAIL: a routine returning its answer in carry did not report C alone live-out" >&2
+  grep '^FUNC  \$0330' reglive-O2-test.txt >&2
+  exit 1
+fi
+if ! grep -q '^FUNC  \$0340 \.\{10\} \.\{10\} AX\.N\.\.\.\.Z\. ' reglive-O2-test.txt; then
+  echo "FAIL: N and Z clobbered with no reader were not reported dead" >&2
+  grep '^FUNC  \$0340' reglive-O2-test.txt >&2
+  exit 1
+fi
+if ! grep -q '^FUNC  \$0350 \.\.Y\.\{7\} ' reglive-O2-test.txt; then
+  echo "FAIL: a routine indexing with Y did not report Y live-in" >&2
+  grep '^FUNC  \$0350' reglive-O2-test.txt >&2
+  exit 1
+fi
+rm reglive-test.txt reglive-O2-test.txt reglive.b33
+
 # --code-at: hand-asserted dynamic branch edges. Two baselines, so this pins
 # down what the option changes rather than merely that it runs -- without the
 # edges neither continuation in codeat.s is reachable at all.
