@@ -1867,3 +1867,38 @@ frame and cycle counters restart at zero), and is called from
 exactly `a2run`/`a2emu`/`a2mcp`: a decompiled build links the no-op
 `shutdown_emulated()` from `include/apple2tc/system-inc.h`, which never calls
 it and cannot reboot.
+
+## Neptune — a second game through the playbook (branch `neptune`)
+
+Unrelated to Snake Byte above, and deliberately kept out of the sections that
+describe it. `decoded/neptune/README.md` is the entry point; `docs/neptune.md`
+is the game notebook.
+
+**Steps 1–4 of `docs/decompiling/playbook.md` are done, step 5 is started.**
+The playbook's own maturity note now carries the second-game comparison; the
+short version is that Neptune is decompiled from a `.b33` that starts at the
+game's own entry, which made step 4b free and cut steps 1–3 down with it. 98.8%
+of the disassembled instructions are the game, one ROM entry point, 85 of 98
+routine candidates accepted with no decompiler changes.
+
+Three builds, all gated by `decoded/neptune/scripts/verify.sh` against the same
+golden traces: `neptunec1` (generated), `neptunec1-ext` (with a hand-written
+`$FCA8`), and `neptune` (the artifact being converted).
+
+**What is left is step 5 and beyond**, and it is the bulk: 727 live `bb_N:`
+labels across 84 functions, and an 1,853-case dispatch switch whose shrinkage
+needs the eight routines step 2 rejected recovered by hand. Those eight do not
+cleanly return — control runs past their `RTS` into the four main loops'
+indirect dispatch, which is a real property of the program rather than a
+classifier being fussy.
+
+Two things found on the way that are worth knowing before touching it:
+
+- **`$3584` selects the input device once, at the title screen, by writing
+  code** into `$1060`, `$1300` and `$138C`. That is the self-modification the
+  collector reports as 21 generations. The joystick arm can never run, because
+  `$C061`/`$C062` are not emulated (dz `01a074d9`) — so an entire input mode is
+  unreachable rather than merely unchosen.
+- **The gate reaches 43% of blocks.** Anything outside that is transcription it
+  cannot check, and the playbook's rule applies: decode by hand and validate
+  against a scratch run-data rather than editing the committed recording.

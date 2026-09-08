@@ -82,6 +82,32 @@ game-independent and how much oracle each step spends was not.
 A step whose "what bites" is thin is a step nobody has worked twice. That is
 information, not an omission to be filled in.
 
+**Steps 1–4 have now been run a second time**, on Neptune (2026-09-07,
+`decoded/neptune/`). The prediction held: the order was right, and cost was
+what differed — by an order of magnitude, in Neptune's favour, for one reason.
+
+Neptune is decompiled from a `.b33` that *starts at the game's own entry* with
+a captured machine state, so step 4b was effectively done before step 1 began.
+The knock-on through the earlier steps is the thing worth carrying forward:
+
+| | Snake Byte | Neptune |
+| --- | --- | --- |
+| game's share of disassembled instructions | the minority | 98.8% |
+| distinct ROM entry points called | 9 | 1 |
+| routine candidates accepted | 53 → 75 after fixes | 85 of 98, no fixes needed |
+| golden trace, distinct states | few | 80% and 90% |
+
+So **the entry point is not merely step 4b's business — it dominates steps 1, 2
+and 3 as well.** Snake Byte's step 1 warns that entry-point choice dominates
+output size; the stronger form, from having done it twice, is that starting
+inside the game makes the ROM stop being a subject at all. If a second binary
+can be captured mid-flight, capture it first and run the spine afterwards.
+
+Two costs went the other way and are Neptune's own. It self-modifies (21
+generations, all of it one routine that patches the input path for joystick or
+keyboard), and it drives the speaker from 21 sites where Snake Byte has none,
+so timing fidelity is load-bearing earlier than step 6.6 suggests.
+
 ---
 
 # The procedure
