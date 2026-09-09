@@ -5,6 +5,7 @@
 #   ./verify.sh [build-dir]              check the build against the traces
 #   ./verify.sh [build-dir] --record     re-record the traces and the key file
 #   ./verify.sh [build-dir] --coverage   report what the scenarios actually reach
+#   ./verify.sh [build-dir] --hits A...  hit counts for specific addresses
 #
 # This is step 3 of docs/decompiling/playbook.md, the step the rest of the
 # method is denominated in: every later change is trusted because this still
@@ -59,16 +60,19 @@ set -eu
 
 record=
 coverage=
+hits=
+want=
 bin=${BIN:-}
 while [ $# -gt 0 ]; do
   case $1 in
     --record) record=1 ;;
     --coverage) coverage=1 ;;
+    --hits) coverage=1; hits=1 ;;
     # An unrecognised argument is an error rather than nothing: the sibling
     # script in decoded/snake-byte once ignored its arguments and silently
     # tested a stale build directory, producing four false PASSes.
-    -*) echo "Usage: $0 [build-dir] [--record|--coverage]" >&2; exit 1 ;;
-    *) bin=$1 ;;
+    -*) echo "Usage: $0 [build-dir] [--record|--coverage|--hits ADDR...]" >&2; exit 1 ;;
+    *) if [ -n "$hits" ]; then want="$want $1"; else bin=$1; fi ;;
   esac
   shift
 done
@@ -215,8 +219,34 @@ if [ -n "$coverage" ]; then
     cat "$tmp/cov-$name.txt" >> "$tmp/all.txt"
   done
   u=$(sort -u "$tmp/all.txt" | wc -l)
-  printf "%-10s %4d of %d blocks (%d%%)\n" "union" "$u" "$total" $((100 * u / total))
-  exit 0
+  if [ -z "$hits" ]; then
+    printf "%-10s %4d of %d blocks (%d%%)\n" "union" "$u" "$total" $((100 * u / total))
+    exit 0
+  fi
+
+  # Per-address hit counts, with the instrumentability of each stated rather
+  # than implied. This exists because a probe that was never installed reports
+  # zero hits and reads exactly like code that never ran -- which produced
+  # three wrong conclusions in this directory before the guard was written.
+  # A CYCLES_EDGE site is the usual reason: it charges a taken-branch penalty
+  # and deliberately does not dispatch a probe, so it can never be observed.
+  status=0
+  for a in $want; do
+    a=$(echo "$a" | tr 'a-f' 'A-F' | sed 's/^\$//')
+    if ! grep -qix "$a" "$tmp/blocks.txt"; then
+      why="not a CYCLES site"
+      if grep -qi "CYCLES_EDGE(0x$(echo "$a" | tr 'A-F' 'a-f')," as-generated/neptunec1.c; then
+        why="CYCLES_EDGE only -- never dispatches a probe"
+      fi
+      printf "  \$%-6s NOT INSTRUMENTED (%s) -- no conclusion available\n" "$a" "$why"
+      status=1
+      continue
+    fi
+    pa=$(grep -cix "$a" "$tmp/cov-attract.txt" || true)
+    pp=$(grep -cix "$a" "$tmp/cov-play.txt" || true)
+    printf "  \$%-6s attract=%-6s play=%s\n" "$a" "$pa" "$pp"
+  done
+  exit $status
 fi
 
 status=0
