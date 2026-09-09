@@ -268,15 +268,31 @@ This is the answer to the `$C061`/`$C062` reads recorded above, and it came out
 of the decompilation rather than out of playing.
 
 `$3584` — the routine the title screen polls, `poll_input_select_mode` in
-`decoded/neptune/testdata/labels.txt` — reads *both* joystick buttons and the
+`decoded/neptune/testdata/labels.txt` — reads both joystick buttons and the
 keyboard, and then **writes code** into three sites. The bytes it pokes decode
 as instructions, which is what makes the reading a derivation rather than a
 guess:
 
+```
+3584: LDA PB0 / AND PB1 / BMI $3594     ; BOTH held -> the keyboard test
+358C: LDA PB0 / ORA PB1 / BMI $35F0     ; exactly one -> $3700, the stick
+3594: LDA KBD / BMI $359A / RTS         ; a key -> the keyboard installer
+```
+
 | condition | what it writes | where |
 | --- | --- | --- |
-| both buttons held | `AD 61 C0` / `AD 62 C0` = `LDA $C061` / `LDA $C062` | `$1060` `$1300` `$138C` |
+| exactly one button held | `AD 61 C0` / `AD 62 C0` = `LDA $C061` / `LDA $C062` | `$1060` `$1300` `$138C` |
 | a key pressed | `AD 00 C0` = `LDA $C000`, plus `CMP #$C1` and `CMP #$DA` | the same three |
+
+**The `AND` at `$3587` is a guard, not a condition.** It treats both-high as
+noise and declines to read it as a stick, so holding *both* buttons is exactly
+the case that does not select the joystick — it falls through to the keyboard
+test. This document said the opposite until the reading was checked against the
+disassembly above; the corrected rule is that **one** button held at the title
+screen selects the stick. `$C062` is also Neptune's fire button — `$3700` patches
+`$138C`, the site the keyboard arm compares against `#$C1` (`'A'`, which the
+disk's own help screen calls FIRE) — so one button held is both "select the
+stick" and "fire".
 
 So Neptune does not test the input device every frame. It decides **once**, at
 the title screen, and rewrites its three input routines for whichever device
@@ -286,11 +302,15 @@ keyboard arm compiling the key map into itself.
 That also identifies the self-modifying code the collector reports as 21
 generations: it is this, not an obfuscation.
 
-**And it is why the unemulated buttons matter more than they looked.** With
-`$C061`/`$C062` returning 0 (dz `01a074d9`), the joystick arm at `$3700` can
-never be taken, so an entire input mode is unreachable — not merely a control
-scheme nobody chose, but a branch of the program no recording can ever cover.
-The gate confirms it: `$3700` has zero hits across both scenarios.
+**This used to be unreachable, and is not any more.** While `$C061`/`$C062`
+returned 0 (dz `01a074d9`), the joystick arm at `$3700` could never be taken:
+an entire input mode that no recording could cover, and `$3700` had zero hits
+across every scenario. The game port is now emulated on `master` —
+`lib/a2host/joystick.c`, with the buttons, the four paddle one-shots and
+`PTRIG`, an arrow-key virtual joystick in `a2emu` behind F7, and `--joystick`,
+`--joy-buttons=` and `--paddle=<n>:<v>`. So the mode is now exercisable, and the
+routines whose *shape* depends on it — `$1060`, `$1300`, `$1380` — can be
+converted against an oracle instead of transcribed blind.
 
 The counts bear the reading out exactly. Instrumenting every `CYCLES()` site
 and replaying both scenarios:

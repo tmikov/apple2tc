@@ -48,7 +48,7 @@ fragmentation rather than quantity.*
 | --- | --- | --- |
 | game's share of disassembled instructions | the minority | **98.8%** (4032 of 4080) |
 | distinct ROM entry points called | 9 | **1** |
-| hardware surface | 7 addresses | 10 addresses |
+| hardware surface | 7 addresses | 10 traced, 12 real |
 
 **The ROM is already gone, and that is the b33's doing.** The playbook's step 1
 warns that entry-point choice dominates output size: Snake Byte traces from the
@@ -82,17 +82,36 @@ c1 build — which starts at `$0000` directly — never touches it.
 | `$C050` `$C051` `$C052` `$C055` `$C057` | video mode, page, mixed | 12 |
 | `$C061` `$C062` | joystick buttons 0 and 1 | 4 |
 
-Ten addresses across a 48KB image, so most of the work is pure logic with no
-emulation dependency. Two notes on the ends of that list:
+**That table is a lower bound, and reading it as the surface was a mistake.**
+It comes from the disassembly, and the disassembly only covers code the tracer
+reached. Neptune picks its input device once at the title screen; the joystick
+arm is never taken in any scenario here, so the paddle reader at `$36B0` is
+never decoded, and a surface read off the listing omits it silently. The table
+above was published claiming ten addresses and "no paddle reads" before anyone
+scanned the image.
+
+So `scripts/scope.sh` now scans the raw `.b33` as well, matching absolute
+operands in `$C000-$C0FF` against a byte-pattern table of every absolute load,
+store, compare and ALU opcode. That over-reports — misaligned data matches too
+— which is the right direction for a bound to err in. It finds **25**, and the
+15 the listing missed sort into three groups:
+
+| | |
+| --- | --- |
+| `$C070` (PTRIG), `$C064` (PADDL0) | real, at `$36B2`/`$36BC` — the paddle reader, reached only via `JSR $36B0` |
+| `$C081` `$C083` `$C088`-`$C08F` | real, at `$BC00-$BFFF` — the disk loader, `LDA $C08C,X` with X = slot×16; dead once the b33 enters at `$3523` |
+| `$C01F` `$C04C` `$C0C8` | data. `$1E31` runs into `BRK` and zeros, `$7616` into `$FF $FF` |
+
+Two notes on the rest of the list:
 
 - **`$C030`, the speaker, is the busiest thing here at 21 sites.** Snake Byte
   touches no speaker at all. Sound is going to be a real part of this
   conversion rather than a footnote, and `$C030` is timing-sensitive by
   construction — a speaker click is a *cycle*, not a value.
-- **`$C061`/`$C062` are not emulated.** `lib/a2io` returns 0 for the game I/O
-  strobes, which reads as "no button held" (dz `01a074d9`). Neptune reads them
-  about once per attract cycle. Nothing observed so far depends on the answer,
-  but the code that does is in scope and cannot be exercised.
+- **`$C061`/`$C062` were not emulated, and now are.** `lib/a2io` used to return
+  0 for the game I/O strobes, reading as "no button held" (dz `01a074d9`), so
+  the joystick arm was in scope and could not be exercised. The game port is
+  emulated on `master` as of `lib/a2host/joystick.c`.
 
 ## Step 2: recover procedures
 
@@ -523,17 +542,22 @@ block_id = find_block_id_func_t001(0x1391, (0x1393 + (int8_t)ram_peek(0x1392)));
 flow shape depends on which input device was chosen at the title screen.**
 
 In keyboard mode the target computes to `$13B7`, inside the routine, and the
-extraction closes. In joystick mode it does not, and joystick mode is
-unreachable under the gate because `$C061`/`$C062` are not emulated — so an
-extraction that assumed the keyboard shape would pass every oracle and still be
-wrong for a mode that a fixed emulator would reach.
+extraction closes. In joystick mode it does not — so an extraction that assumed
+the keyboard shape would pass every oracle and still be wrong for the other
+mode.
 
 That is the playbook's own warning arriving in a new form: *"a relaxation that
 passes every oracle can still be wrong, and the way to tell is structural."*
 The honest shapes are to keep `$1391` as a dispatch the function can exit
 through, or to make the input mode an explicit parameter of the program rather
-than a property of its instruction bytes. That is a design decision, not a
-transcription, and it is where this stops.
+than a property of its instruction bytes.
+
+**When this was written the second shape could not be measured at all**, because
+`$C061`/`$C062` returned 0 and the joystick arm was unreachable under any
+recording. That is no longer true: the emulated game port on `master` makes the
+mode selectable, so the right move is a fourth scenario that holds one button at
+the title screen and pins the joystick shape against a real oracle, rather than
+choosing between the two shapes on judgement.
 
 ## What the top level actually is: a state machine
 
