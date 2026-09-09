@@ -58,10 +58,18 @@ class IdentifySimpleRoutines {
   /// scanned after the caller -- so run() rescans until this stops growing.
   /// It only ever grows, which is what makes that terminate.
   std::unordered_map<BasicBlock *, std::vector<BasicBlock *>> altExitsOf_{};
-  /// Entry blocks that were considered and rejected, with the reason. A multimap
-  /// because distinct blocks can share a source address, and each rejection is
-  /// worth reporting.
-  std::multimap<uint32_t, std::string> rejected_{};
+  /// A rejection: why the candidate failed, and the blocks scanCandidate() had
+  /// walked when it gave up. The block set is the useful half for anyone
+  /// recovering the routine by hand -- the reason says what went wrong, the
+  /// blocks say how much of the routine had been established before it did.
+  struct Rejection {
+    std::string reason;
+    std::vector<uint32_t> walked;
+  };
+  /// Entry blocks that were considered and rejected. A multimap because
+  /// distinct blocks can share a source address, and each rejection is worth
+  /// reporting.
+  std::multimap<uint32_t, Rejection> rejected_{};
   FILE *const report_;
 
 public:
@@ -70,8 +78,12 @@ public:
   bool run();
 
 private:
-  /// Record why a candidate was rejected, and log it at high verbosity.
-  void reject(BasicBlock *entry, const std::string &reason);
+  /// Record why a candidate was rejected, along with the blocks walked so far,
+  /// and log it at high verbosity.
+  void reject(
+      BasicBlock *entry,
+      const std::string &reason,
+      const std::unordered_map<BasicBlock *, int> *walked = nullptr);
 
   /// Write a human-readable analysis of every routine candidate — accepted
   /// and rejected — to `report_`, if non-null.
@@ -233,13 +245,35 @@ void IdentifySimpleRoutines::emitReport() {
     fprintf(report_, "\n");
   }
 
-  for (auto &[addr, reason] : rejected_)
-    fprintf(report_, "REJECT $%04X  %s\n", addr, reason.c_str());
+  for (auto &[addr, rej] : rejected_) {
+    fprintf(report_, "REJECT $%04X  %s\n", addr, rej.reason.c_str());
+    // The blocks established before the walk gave up. Whoever recovers this
+    // routine by hand needs exactly this set, and re-deriving it from the
+    // emitted C means reimplementing the walk -- badly, as it turns out: a
+    // JSR into an unrecovered routine is emitted as `push16(ret); block_id =
+    // callee`, so a naive reader follows calls as if they were edges.
+    if (!rej.walked.empty()) {
+      fprintf(report_, "  walked %zu block(s):", rej.walked.size());
+      for (uint32_t a : rej.walked)
+        fprintf(report_, " $%04X", a);
+      fprintf(report_, "\n");
+    }
+  }
   fprintf(report_, "\n");
 }
 
-void IdentifySimpleRoutines::reject(BasicBlock *entry, const std::string &reason) {
-  rejected_.emplace(entry->getAddress().value_or(0x10000), reason);
+void IdentifySimpleRoutines::reject(
+    BasicBlock *entry,
+    const std::string &reason,
+    const std::unordered_map<BasicBlock *, int> *walked) {
+  Rejection rej{reason, {}};
+  if (walked) {
+    for (auto &[bb, depth] : *walked)
+      rej.walked.push_back(bb->getAddress().value_or(0x10000));
+    std::sort(rej.walked.begin(), rej.walked.end());
+    rej.walked.erase(std::unique(rej.walked.begin(), rej.walked.end()), rej.walked.end());
+  }
+  rejected_.emplace(entry->getAddress().value_or(0x10000), std::move(rej));
   if (ctx_->getVerbosity() > 1)
     fprintf(stderr, "fail: %s\n", reason.c_str());
 }
@@ -272,7 +306,7 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
                 "block $%04x reached at stack level %d and %d",
                 bb->getAddress().value_or(0),
                 it->second,
-                entryDepth));
+                entryDepth), &depthAt);
         return;
       }
       continue;
@@ -281,7 +315,7 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
     // Indirect branches except RTS are not allowed.
     auto *terminator = bb->getTerminator();
     if (terminator->getKind() != ValueKind::RTS && terminator->isIndirectBranch()) {
-      reject(entry, format("terminator %s", getValueKindName(terminator->getKind())));
+      reject(entry, format("terminator %s", getValueKindName(terminator->getKind())), &depthAt);
       return;
     }
 
@@ -313,7 +347,7 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
                 format(
                     "%s block $%04x stack level underflow",
                     getValueKindName(iRef.getKind()),
-                    bb->getAddress().value_or(0)));
+                    bb->getAddress().value_or(0)), &depthAt);
             return;
           }
           break;
@@ -322,7 +356,7 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
         reject(
             entry,
             format(
-                "%s block $%04x", getValueKindName(iRef.getKind()), bb->getAddress().value_or(0)));
+                "%s block $%04x", getValueKindName(iRef.getKind()), bb->getAddress().value_or(0)), &depthAt);
         return;
       }
     }
@@ -340,7 +374,7 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
             format(
                 "block $%04x stack level %d at RTS",
                 bb->getAddress().value_or(0),
-                depth));
+                depth), &depthAt);
         return;
       }
     } else if (terminator->getKind() == ValueKind::JSR) {
@@ -394,7 +428,7 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
           entry,
           format(
               "alternate exit to $%04x is inside the routine",
-              target->getAddress().value_or(0x10000)));
+              target->getAddress().value_or(0x10000)), &depthAt);
       return;
     }
   }
@@ -461,7 +495,7 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
         format(
             "invalid predecessor inst %s at $%04x",
             getValueKindName(inst->getKind()),
-            inst->getAddress().value_or(0x10000)));
+            inst->getAddress().value_or(0x10000)), &depthAt);
     return;
   }
 
@@ -507,9 +541,15 @@ bool IdentifySimpleRoutines::removeInvalidJSRs() {
               "Removing candidate $%04x because of invalid JSR to $%04x\n",
               cur->first->getAddress().value_or(0),
               jsrTarget->getAddress().value_or(0));
-        rejected_.emplace(
-            cur->first->getAddress().value_or(0x10000),
-            format("invalid JSR to $%04x", jsrTarget->getAddress().value_or(0x10000)));
+        // A cascade rejection is the informative case: this candidate passed
+        // its own checks, so its block set is complete rather than partial.
+        Rejection rej{
+            format("invalid JSR to $%04x", jsrTarget->getAddress().value_or(0x10000)), {}};
+        for (BasicBlock *bb : cur->second.blocks)
+          rej.walked.push_back(bb->getAddress().value_or(0x10000));
+        std::sort(rej.walked.begin(), rej.walked.end());
+        rej.walked.erase(std::unique(rej.walked.begin(), rej.walked.end()), rej.walked.end());
+        rejected_.emplace(cur->first->getAddress().value_or(0x10000), std::move(rej));
         candidates_.erase(cur);
         changed = true;
         break;
