@@ -133,13 +133,18 @@ decompiler over-strictness:
 
 | rejected | why | call sites |
 | --- | --- | --- |
-| `$1100` | `terminator JmpInd` | 8 |
-| `$0E00` `$1300` `$1380` | `terminator JmpInd` | 3 each |
-| `$0F00` `$1060` `$1B80` `$24D0` | `terminator JmpInd` | 1 each |
+| `$1100` | `terminator JmpInd at $11f0` | 8 |
+| `$0E00` `$1300` `$1380` | `JmpInd at $218f` / `$1303` / `$1391` | 3 each |
+| `$0F00` `$1060` `$1B80` `$24D0` | `JmpInd at $218f` / `$1063` / `$1c05` / `$1f9a` | 1 each |
 | `$2150` | cascade: calls `$0F00` | 1 |
 | `$3340` | cascade: calls the synthetic interrupt block | 1 |
 | `$DB5C` `$FDED` | ROM; `$DB5C` is the b33-loading artifact | — |
 | `$10100` | the synthetic interrupt-entry block | — |
+
+The addresses in that column were not there originally — the report said only
+`terminator JmpInd`, and dz `01a08414-48da` added the location. Reading them is
+what corrected the account of *why* these are blocked, below; seven identical
+reasons turn out to be three different problems.
 
 Measured, not assumed: `--alt-exit`, `--prune-returns` and `--ret-addr` in
 every combination all leave it at exactly 85/13. `--alt-exit` is the playbook's
@@ -434,21 +439,86 @@ runs two ticks and a slower counter:
 
 But they cannot be written as C until their callees are C functions, and five
 of those — `$0E00`, `$1100`, `$1300`, `$1380`, `$1B80` — are exactly the ones
-step 2 rejected. That is the cycle: the callees are rejected *because* control
-runs past their `RTS` into the loops' indirect dispatch, and the loops cannot
-be converted while the callees are switch blocks.
+step 2 rejected.
 
-Breaking it means hand-recovering those five, which is the playbook's "recover
-the remaining procedures by hand, rewriting idiom-based ones" and the reason
-that sentence comes before "reloop each function". They are not simple
-transcription: `$1380` branches *forward past its own `RTS`* at `$13B7` into
-shared tails, so deciding what its C signature even is — does it return, or
-does it transfer? — is the work.
+### Why they are rejected, corrected
 
-**So the remaining sequence is:** recover the five rejected callees by hand →
-convert the four main loops → the 24 top-level entry points go → repeat for the
-remaining 21 outside-function entry points → the map empties and the switch
-goes with it.
+This section used to say the callees are rejected *because control runs past
+their `RTS`* into the loops' indirect dispatch. **That is not what happens.**
+`routines.cpp` ends the walk at an `RTS` taken at stack depth zero and adds no
+successors, so a return cannot leak. The claim was inferred from a reason line
+that named a kind and no location; once the report named the terminator
+(dz `01a08414-48da`), seven identical-looking rejections turned out to be three
+unrelated problems:
+
+| cause | routines | the blocking terminator |
+| --- | --- | --- |
+| **a self-modified branch** — the operand byte is rewritten, so the target is not static | `$1060` `$1300` `$1380` | `$1063` `$1303` `$1391` |
+| **a self-modified `JMP` target** — the instruction is a direct `JMP`, but its low byte is written | `$1B80` | `$1C05`, low byte at `$1C06` |
+| **a vectored `JMP` in *other* code**, reached by a tail transfer out of the routine | `$0E00` `$0F00` `$24D0` | `$218F` = `JMP ($3A)`, `$1F9A` = `JMP ($36)` |
+| **its own vectored `JMP`** | `$1100` | `$11F0` = `JMP ($0200)` |
+
+The third row is the one the old text got wrong, and it matters because it
+points at a different fix. `$0E00`'s own terminators are eight `RTS` and five
+direct `JMP`s. It is not rejected for anything it contains: `$0EA6` is
+`JMP $1A20`, a *tail transfer into the state machine*, and the walk then runs
+through `$1A20`'s region into `main_loop_via_3A` and hits that loop's
+`JMP ($3A)`. `$0E00` is blocked by code it hands control to, not by code it is.
+
+So `$0E00` is not a function that fails to be recognised. It is a state-machine
+node with two kinds of exit — return to the caller, or transfer to state 1 —
+and the honest C for that is a function returning *which*, not a `void`. That
+is the playbook's "rewriting idiom-based ones", and it is a design decision
+rather than a transcription.
+
+**Asserting the six indirect targets does not help.** `--code-at` edges for all
+six in-game vectored jumps (`$11F0`→`$1D00`, `$1F9A`/`$2062`→`$2000`,
+`$20D4`→`$2080`, `$218F`→`$2180`, `$2146`→`$2100`) leave the count at exactly
+85/13. The rule at `routines.cpp:317` rejects any non-`RTS` indirect branch
+categorically; knowing the target does not make it not one. Measured, so that
+nobody spends the afternoon again.
+
+**So the remaining sequence is:** decide the state-machine signature for
+`$0E00`/`$0F00` → convert the four main loops → the 24 top-level entry points go
+→ repeat for the remaining 21 outside-function entry points → the map empties
+and the switch goes with it. `$1060`, `$1300` and `$1380` wait on a joystick
+scenario, since their shape is whichever arm patched them.
+
+### `$3340` is the difficulty configurator, and it explains `$0F00`
+
+Following `$1B80`'s self-modified `JMP` target to its writers landed on three
+`STA $1C06` sites in `$3340`, which turns out to be the routine that sets the
+game's difficulty by rewriting five places. It switches on `$86`:
+
+| `$86` | `$1C02`/`$1C0E` | `$1C06` | `$1B52` | `$20A1-$20A3` |
+| --- | --- | --- | --- | --- |
+| `< 2` | `$04` | `$11` → `JMP $1C11` | `$EA` `NOP` | `EA EA EA` — three `NOP`s |
+| `== 2` | `$04` | `$38` → `JMP $1C38` | `$EA` `NOP` | `20 00 0F` — `JSR $0F00` |
+| `> 2` | `$08` | `$38` → `JMP $1C38` | `$4A` `LSR A` | `20 00 0F` — `JSR $0F00` |
+
+A step size, a branch target, an instruction that is either a `NOP` or a
+`LSR A`, and a call site that is either present or `NOP`ed out. This is what
+the collector's 21 generations largely are, alongside
+`poll_input_select_mode` — not obfuscation, just a game that configures itself
+by writing its own code.
+
+It also answers a question the rejection list raises and never explains: **why
+is there a `$0F00` that looks like `$0E00`?** Because `$20A1` is the second
+copy's call site. Compared byte for byte over 256 bytes they differ in 32
+places, and every one classifies:
+
+| how many | what |
+| --- | --- |
+| 12 | a `+6` shift of a `$F0`-`$F5` zero-page operand — `$0F00` runs on the state block at `$F6`-`$FB` |
+| 1 | `$0E54`'s `0E` → `0F`, the self-referencing `JMP $0E80` → `JMP $0F80` |
+| 2 | `$90` → `$B0`, `BCC` → `BCS` — the same test with the opposite sense |
+| 17 | the tail: `$0F00` stops at `PLA / RTS` where `$0E00` continues into `JMP $1700` and `JMP $1B00`, and the rest is zero fill |
+
+One routine, two instances, on two state blocks. Both keep `JMP $1A20` at
+`+$A6`, so either can trigger the level-end transition on its own counter pair.
+For the artifact that is one function taking the block base, which is step 6.2's
+business — but it has to be known now, because writing them as two functions is
+a decision that would be expensive to undo.
 
 ### `testdata/labels.txt`
 

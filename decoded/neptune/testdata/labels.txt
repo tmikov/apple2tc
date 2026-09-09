@@ -91,6 +91,22 @@
 1400 shots_draw
 1350 tbl_shot_mask
 
+# --- Difficulty, and the object updater's two instances ----------------------
+# $3340 switches on $86 and rewrites five sites: the step size at $1C02/$1C0E,
+# the JMP target low byte at $1C06, an instruction at $1B52 that is either NOP
+# or LSR A, and the call site at $20A1 that is either three NOPs or JSR $0F00.
+# See the README for the table.
+3340 select_difficulty
+0086 difficulty
+#
+# $0E00 and $0F00 are one routine in two instances: 32 differing bytes over
+# 256, of which 12 are a +6 shift of a $F0-$F5 operand. $0E00 runs on the state
+# block at $F0, $0F00 on the one at $F6, and $0F00 is only called at the two
+# higher difficulties. Named for what is proven -- that they update a state
+# block and can end the level -- not for what the block holds.
+0E00 update_block_f0
+0F00 update_block_f6
+
 # --- Joystick mode ---------------------------------------------------------
 # Reached only when $3700 has patched `JSR $36B0` into $1060, which happens
 # when exactly one button is held at the title screen. See code-at.txt for why
