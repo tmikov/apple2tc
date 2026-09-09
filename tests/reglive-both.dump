@@ -1,0 +1,177 @@
+// Loaded binary at [$0300..$038A]
+// code labels: 19
+// data labels: 13
+#### BEGIN reg-liveness point=pre ####
+# sampled after routine identification, on a run where the store-deleting
+#   half of localCPURegSSA() was suppressed. Live ranges here are the 6502
+#   code's own, not ones a liveness-driven pass has already stretched.
+# apple2tc --dump-reg-liveness=pre
+#
+# One FUNC row per function, then a summary. Every row has the same fields, so
+# `grep '^FUNC'` and awk on $2..$8 aggregate it; `sort -k3` groups by live-in.
+#
+# Register mask, always 10 characters, in this order:
+#   AXYNVBDIZC
+#   A X Y      accumulator and the two index registers
+#   N V B D I  status N, V, B, D, I
+#   Z          STATUS_NotZ, the zero flag (stored inverted; liveness is the same)
+#   C          carry
+# A letter means the register is in the set, '.' means it is not.
+#
+# B is not a real machine flag: it exists only in the byte PHP pushes, and
+# emitEncodeFlags()/emitDecodeFlags() do not even include it. Anything reported
+# live for B comes from code that stores it explicitly, and is an artifact.
+#
+# kall: whether `modified` is the conservative all-ones set, and what forced it.
+#   -       modified is a real, computed set
+#   extern  the function is external, so nothing is known about it
+#   body    its own blocks genuinely kill every register
+#
+# barriers, always 7 characters, in this order:
+#   PLJRXUK
+#   P  EncodeFlags (PHP, BRK): reads C,Z,I,D,V,N in one instruction
+#   L  PLP or RTI: writes C,Z,I,D,V,N in one instruction. Recognised as a
+#      DecodeFlag over a Pop8, since decimal ADC/SBC also use DecodeFlag
+#   J  JmpInd or JSRInd. JSRInd always forces the block's liveOut to
+#      all-ones; a JmpInd does so only with no recorded targets
+#   R  a raw RTS terminator, which forces the same all-ones -- again only
+#      when the recording left it with no return targets
+#   X  calls an external routine, whose gen and modified are all-ones
+#   U  no known callers, so live-out was never narrowed below modified|gen
+#   K  called from a block whose liveOut is all-ones (see J and R): that call
+#      site could not narrow this function's live-out at all
+#
+# lvl: ext (no body), low (control flow not resolved), norm (a real routine).
+#
+# addr  live-in    live-out   modified   kall   barrs   lvl  name
+FUNC  $0330 .......... .........C A..N....ZC -      ------- norm func_0330
+FUNC  $0340 .......... .......... AX.N....Z. -      ------- norm func_0340
+FUNC  $0350 ..Y....... ...N....Z. A..N....Z. -      ------- norm func_0350
+FUNC  $0360 ...NV.DIZC .......... A..NVBDIZC -      PL----- norm func_0360
+FUNC  $0370 .......... .......... A..NV.D.ZC -      ------- norm func_0370
+FUNC  $0380 .......... .......... AX.N....Z. -      ------- norm func_0380
+FUNC  ----- .......... AXYNVBDIZC AXYNVBDIZC body   PL-R-U- low  func1
+#
+# summary
+SUM functions 7
+SUM external 0
+SUM kall 1
+SUM kall-extern 0
+SUM kall-body 1
+SUM live-in-any-reg 2
+SUM live-out-any-reg 3
+SUM live-in-any-flag 1
+SUM live-out-any-flag 3
+SUM barrier-encodeflags 2
+SUM barrier-decodeflag 2
+SUM barrier-flagop 2
+SUM barrier-indbranch 0
+SUM barrier-rawrts 1
+SUM barrier-callsextern 0
+SUM barrier-uncalled 1
+SUM barrier-blindcaller 0
+SUM call-sites 6
+SUM call-sites-blind 0
+SUM called-functions 6
+SUM called-live-out-any-flag 2
+# REG <letter> in <n> out <n> mod <n> calledout <n>
+# `calledout` counts live-out over called functions only -- the ones whose
+# live-out an actual call site narrowed. `out` includes the 'U' rows.
+REG A in 0 out 1 mod 7 calledout 0
+REG X in 0 out 1 mod 3 calledout 0
+REG Y in 1 out 1 mod 1 calledout 0
+REG N in 1 out 2 mod 7 calledout 1
+REG V in 1 out 1 mod 3 calledout 0
+REG B in 0 out 1 mod 2 calledout 0
+REG D in 1 out 1 mod 3 calledout 0
+REG I in 1 out 1 mod 2 calledout 0
+REG Z in 1 out 2 mod 7 calledout 1
+REG C in 1 out 2 mod 4 calledout 1
+#### END reg-liveness point=pre ####
+#### BEGIN reg-liveness point=post ####
+# sampled at the end of the ordinary pipeline. localCPURegSSA() has already
+#   deleted the stores it proved dead, and a deleted store is a deleted kill, so
+#   a range here can reach back further than it does in the 6502 code.
+# apple2tc --dump-reg-liveness=post
+#
+# One FUNC row per function, then a summary. Every row has the same fields, so
+# `grep '^FUNC'` and awk on $2..$8 aggregate it; `sort -k3` groups by live-in.
+#
+# Register mask, always 10 characters, in this order:
+#   AXYNVBDIZC
+#   A X Y      accumulator and the two index registers
+#   N V B D I  status N, V, B, D, I
+#   Z          STATUS_NotZ, the zero flag (stored inverted; liveness is the same)
+#   C          carry
+# A letter means the register is in the set, '.' means it is not.
+#
+# B is not a real machine flag: it exists only in the byte PHP pushes, and
+# emitEncodeFlags()/emitDecodeFlags() do not even include it. Anything reported
+# live for B comes from code that stores it explicitly, and is an artifact.
+#
+# kall: whether `modified` is the conservative all-ones set, and what forced it.
+#   -       modified is a real, computed set
+#   extern  the function is external, so nothing is known about it
+#   body    its own blocks genuinely kill every register
+#
+# barriers, always 7 characters, in this order:
+#   PLJRXUK
+#   P  EncodeFlags (PHP, BRK): reads C,Z,I,D,V,N in one instruction
+#   L  PLP or RTI: writes C,Z,I,D,V,N in one instruction. Recognised as a
+#      DecodeFlag over a Pop8, since decimal ADC/SBC also use DecodeFlag
+#   J  JmpInd or JSRInd. JSRInd always forces the block's liveOut to
+#      all-ones; a JmpInd does so only with no recorded targets
+#   R  a raw RTS terminator, which forces the same all-ones -- again only
+#      when the recording left it with no return targets
+#   X  calls an external routine, whose gen and modified are all-ones
+#   U  no known callers, so live-out was never narrowed below modified|gen
+#   K  called from a block whose liveOut is all-ones (see J and R): that call
+#      site could not narrow this function's live-out at all
+#
+# lvl: ext (no body), low (control flow not resolved), norm (a real routine).
+#
+# addr  live-in    live-out   modified   kall   barrs   lvl  name
+FUNC  $0330 .......... .........C .........C -      ------- norm func_0330
+FUNC  $0340 .......... .......... .......... -      ------- norm func_0340
+FUNC  $0350 ..Y....... ...N....Z. ...N....Z. -      ------- norm func_0350
+FUNC  $0360 ...NV.DIZC .......... .......... -      P------ norm func_0360
+FUNC  $0370 .......... .......... .......... -      ------- norm func_0370
+FUNC  $0380 .......... .......... .......... -      ------- norm func_0380
+FUNC  ----- .......... AXYNVBDIZC AXYNVBDIZC body   PL-R-U- low  func1
+#
+# summary
+SUM functions 7
+SUM external 0
+SUM kall 1
+SUM kall-extern 0
+SUM kall-body 1
+SUM live-in-any-reg 2
+SUM live-out-any-reg 3
+SUM live-in-any-flag 1
+SUM live-out-any-flag 3
+SUM barrier-encodeflags 2
+SUM barrier-decodeflag 1
+SUM barrier-flagop 2
+SUM barrier-indbranch 0
+SUM barrier-rawrts 1
+SUM barrier-callsextern 0
+SUM barrier-uncalled 1
+SUM barrier-blindcaller 0
+SUM call-sites 6
+SUM call-sites-blind 0
+SUM called-functions 6
+SUM called-live-out-any-flag 2
+# REG <letter> in <n> out <n> mod <n> calledout <n>
+# `calledout` counts live-out over called functions only -- the ones whose
+# live-out an actual call site narrowed. `out` includes the 'U' rows.
+REG A in 0 out 1 mod 1 calledout 0
+REG X in 0 out 1 mod 1 calledout 0
+REG Y in 1 out 1 mod 1 calledout 0
+REG N in 1 out 2 mod 2 calledout 1
+REG V in 1 out 1 mod 1 calledout 0
+REG B in 0 out 1 mod 1 calledout 0
+REG D in 1 out 1 mod 1 calledout 0
+REG I in 1 out 1 mod 1 calledout 0
+REG Z in 1 out 2 mod 2 calledout 1
+REG C in 1 out 2 mod 2 calledout 1
+#### END reg-liveness point=post ####

@@ -28,7 +28,12 @@ ir::Module *genIR(const std::shared_ptr<Disas> &disas, ir::IRContext &ctx);
 void dumpModule(ir::Module *mod, bool irTrees, CPURegLiveness *liveness);
 
 /// SSA conversion of LoadR8/StoreR8 within individual basic blocks.
-bool localCPURegSSA(ir::Module *mod);
+/// \param keepStores do not delete stores, only redundant loads. A deleted
+///     StoreR8 is also a deleted kill, and a register whose kill is gone stays
+///     live further back; the only caller that wants this is a measurement of
+///     the original code's live ranges, which must not be taken on a program
+///     this pass has already reshaped. See --dump-reg-liveness=pre.
+bool localCPURegSSA(ir::Module *mod, bool keepStores = false);
 bool dce(ir::Module *mod);
 bool simplify(ir::Module *mod);
 bool simplifyCFG(ir::Module *mod);
@@ -53,6 +58,12 @@ std::shared_ptr<CPURegLiveness> liveness(ir::Module *mod);
 /// that force those sets to be conservative -- followed by a summary. Meant to
 /// answer questions about what actually crosses a call boundary; the format is
 /// documented by the legend it prints.
-void dumpRegLiveness(ir::Module *mod, CPURegLiveness *lv, FILE *os);
+///
+/// \p point names the place in the pipeline the liveness was sampled at --
+/// "pre" or "post". When non-null the table is wrapped in BEGIN/END marker
+/// lines carrying that name, so that two tables in one stream can never be
+/// confused, by a reader or by a script. Null produces the historical
+/// unlabelled dump.
+void dumpRegLiveness(ir::Module *mod, CPURegLiveness *lv, FILE *os, const char *point = nullptr);
 
 void printIRC1(ir::Module *mod, FILE *os, bool trees);

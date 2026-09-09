@@ -13,6 +13,7 @@
 #include "apple2tc/support.h"
 
 #include <algorithm>
+#include <cstring>
 #include <deque>
 #include <string>
 #include <unordered_map>
@@ -590,8 +591,30 @@ const char *levelName(Function *func) {
 
 } // anonymous namespace
 
-void dumpRegLiveness(ir::Module *mod, CPURegLiveness *lv, FILE *os) {
-  fprintf(os, "# apple2tc --dump-reg-liveness\n");
+/// One line per sampling point, explaining what the table below it measures.
+/// Kept next to the pipeline comment in apple2tc.cpp that places the points.
+static const char *pointBlurb(const char *point) {
+  if (strcmp(point, "pre") == 0) {
+    return "sampled after routine identification, on a run where the store-deleting\n"
+           "#   half of localCPURegSSA() was suppressed. Live ranges here are the 6502\n"
+           "#   code's own, not ones a liveness-driven pass has already stretched.";
+  }
+  if (strcmp(point, "post") == 0) {
+    return "sampled at the end of the ordinary pipeline. localCPURegSSA() has already\n"
+           "#   deleted the stores it proved dead, and a deleted store is a deleted kill, so\n"
+           "#   a range here can reach back further than it does in the 6502 code.";
+  }
+  return "unknown sampling point";
+}
+
+void dumpRegLiveness(ir::Module *mod, CPURegLiveness *lv, FILE *os, const char *point) {
+  if (point) {
+    fprintf(os, "#### BEGIN reg-liveness point=%s ####\n", point);
+    fprintf(os, "# %s\n", pointBlurb(point));
+    fprintf(os, "# apple2tc --dump-reg-liveness=%s\n", point);
+  } else {
+    fprintf(os, "# apple2tc --dump-reg-liveness\n");
+  }
   fprintf(os, "#\n");
   fprintf(os, "# One FUNC row per function, then a summary. Every row has the same fields, so\n");
   fprintf(os, "# `grep '^FUNC'` and awk on $2..$8 aggregate it; `sort -k3` groups by live-in.\n");
@@ -798,4 +821,7 @@ void dumpRegLiveness(ir::Module *mod, CPURegLiveness *lv, FILE *os) {
         modCount[i],
         calledOutCount[i]);
   }
+
+  if (point)
+    fprintf(os, "#### END reg-liveness point=%s ####\n", point);
 }

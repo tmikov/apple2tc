@@ -101,7 +101,59 @@ if grep -q '^FUNC  \$0370 .* .L..... ' reglive-O2-test.txt; then
   grep '^FUNC  \$0370' reglive-O2-test.txt >&2
   exit 1
 fi
-rm reglive-test.txt reglive-O2-test.txt reglive.b33
+
+# The two sampling points. `post` is where the option has always sampled; `pre`
+# is a separate run of the pipeline with the store-deleting half of
+# localCPURegSSA() suppressed, so the table reports the 6502 code's own live
+# ranges instead of ones a liveness-driven pass already stretched.
+$apple2tc reglive.b33 -O3 --dump-reg-liveness=both > reglive-both-test.txt
+diff -q reglive-both.dump reglive-both-test.txt
+# The two sections must not be interchangeable, to a reader or to a script.
+for point in pre post; do
+  if ! grep -q "^#### BEGIN reg-liveness point=$point ####$" reglive-both-test.txt ||
+     ! grep -q "^#### END reg-liveness point=$point ####$" reglive-both-test.txt; then
+    echo "FAIL: the $point section is not delimited by its own markers" >&2
+    exit 1
+  fi
+done
+sec() {
+  sed -n "/^#### BEGIN reg-liveness point=$1 ####\$/,/^#### END reg-liveness point=$1 ####\$/p" "$2" |
+    grep '^FUNC'
+}
+# Bare --dump-reg-liveness is the historical unlabelled dump, and it is the post
+# section: the two must agree row for row, or the default silently changed.
+sec post reglive-both-test.txt > reglive-post-rows.txt
+grep '^FUNC' reglive.dump > reglive-default-rows.txt
+diff -q reglive-default-rows.txt reglive-post-rows.txt
+# setcarry at $0330 writes A, N, Z and C and only C reaches its caller, so by the
+# post point the other three stores are gone and `modified` has forgotten they
+# were ever written. That difference is the whole reason the option grew a
+# sampling point, so it is asserted rather than left to the baseline.
+if ! sec pre reglive-both-test.txt | grep -q '^FUNC  \$0330 \.\{10\} \.\{9\}C A\.\.N\.\.\.\.ZC '; then
+  echo "FAIL: the pre point did not report every register setcarry actually writes" >&2
+  exit 1
+fi
+if ! sec post reglive-both-test.txt | grep -q '^FUNC  \$0330 \.\{10\} \.\{9\}C \.\{9\}C '; then
+  echo "FAIL: the post point reported stores that dead-store elimination had removed" >&2
+  exit 1
+fi
+# -O2 isolates the suppression itself: with no -O3 wave between them, the two
+# sections differ only by what the first localCPURegSSA() deleted. deadstore at
+# $0380 puts its X store on a path that never reaches the RTS, which is the only
+# thing in this fixture that pass can already prove dead.
+$apple2tc reglive.b33 -O2 --dump-reg-liveness=both > reglive-O2-both-test.txt
+if ! sec pre reglive-O2-both-test.txt | grep -q '^FUNC  \$0380 \.\{10\} \.\{10\} AX\.N\.\.\.\.Z\. '; then
+  echo "FAIL: the pre point lost a store the first localCPURegSSA() deletes" >&2
+  sec pre reglive-O2-both-test.txt | grep '^FUNC  \$0380' >&2
+  exit 1
+fi
+if ! sec post reglive-O2-both-test.txt | grep -q '^FUNC  \$0380 \.\{10\} \.\{10\} A\.\.N\.\.\.\.Z\. '; then
+  echo "FAIL: the post point kept a store the first localCPURegSSA() deletes" >&2
+  sec post reglive-O2-both-test.txt | grep '^FUNC  \$0380' >&2
+  exit 1
+fi
+rm reglive-test.txt reglive-O2-test.txt reglive-both-test.txt reglive-O2-both-test.txt \
+  reglive-post-rows.txt reglive-default-rows.txt reglive.b33
 
 # --code-at: hand-asserted dynamic branch edges. Two baselines, so this pins
 # down what the option changes rather than merely that it runs -- without the

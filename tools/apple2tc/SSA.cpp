@@ -117,13 +117,17 @@ static bool removeRegStores(BasicBlock *bb, const CPURegLiveness &liveness) {
   return changed;
 }
 
-bool localCPURegSSA(Module *mod) {
+bool localCPURegSSA(Module *mod, bool keepStores) {
   auto liveness = CPURegLiveness::calc(mod);
   bool changed = false;
   for (auto &func : mod->functions()) {
     for (auto &bb : func.basicBlocks()) {
       changed |= removeRegLoads(&bb, *liveness);
-      changed |= removeRegStores(&bb, *liveness);
+      // removeRegLoads() only folds a load into an earlier value, so it never
+      // removes a kill and never lengthens a live range. removeRegStores() does
+      // both, which is why it is the half that a liveness measurement suppresses.
+      if (!keepStores)
+        changed |= removeRegStores(&bb, *liveness);
     }
   }
   return changed;

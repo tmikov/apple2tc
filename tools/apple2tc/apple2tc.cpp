@@ -60,7 +60,11 @@ static void printHelp() {
   fprintf(stderr, "  --simple-c          Generate simple C code\n");
   fprintf(stderr, "  --ir                Generate IR\n");
   fprintf(stderr, "  --irc1              Generate C1 representation of the IR\n");
-  fprintf(stderr, "  --dump-reg-liveness Dump per-function CPU register liveness\n");
+  fprintf(stderr, "  --dump-reg-liveness[=pre|post|both]\n");
+  fprintf(stderr, "                      Dump per-function CPU register liveness. `post` (the\n");
+  fprintf(stderr, "                      default) samples at the end of optimization, `pre`\n");
+  fprintf(stderr, "                      before the passes that consume liveness and delete\n");
+  fprintf(stderr, "                      stores. An explicit =arg labels the section(s)\n");
   fprintf(stderr, "  --no-ir-trees       Do not reconstruct trees in IR dump\n");
   fprintf(stderr, "  --ret-addr          Preserve subroutines return address on the stack\n");
   fprintf(stderr, "  --prune-returns     Drop RTS return edges no surviving call can produce\n");
@@ -85,6 +89,14 @@ int main(int argc, char **argv) {
     GenIRC1,
     DumpRegLiveness,
   };
+  // Which sampling points --dump-reg-liveness asked for, and whether to label
+  // the sections it prints. Bare --dump-reg-liveness stays the historical
+  // unlabelled dump at the post point; any explicit =pre/=post/=both labels its
+  // sections, because a table that outlives the command line has to say which
+  // point it came from.
+  bool dumpLivenessPre = false;
+  bool dumpLivenessPost = false;
+  bool labelLiveness = false;
   bool noGenerations = false;
   bool preserveRetAddr = false;
   bool altExits = false;
@@ -129,7 +141,20 @@ int main(int argc, char **argv) {
       action = Action::GenIRC1;
       continue;
     }
-    if (strcmp(argv[i], "--dump-reg-liveness") == 0) {
+    if (strncmp(argv[i], "--dump-reg-liveness", 19) == 0) {
+      const char *arg = argv[i] + 19;
+      if (*arg == 0) {
+        dumpLivenessPost = true;
+      } else if (strcmp(arg, "=post") == 0) {
+        dumpLivenessPost = labelLiveness = true;
+      } else if (strcmp(arg, "=pre") == 0) {
+        dumpLivenessPre = labelLiveness = true;
+      } else if (strcmp(arg, "=both") == 0) {
+        dumpLivenessPre = dumpLivenessPost = labelLiveness = true;
+      } else {
+        fprintf(stderr, "--dump-reg-liveness: expected nothing, =pre, =post or =both\n");
+        return 1;
+      }
       action = Action::DumpRegLiveness;
       continue;
     }
@@ -256,66 +281,108 @@ int main(int argc, char **argv) {
     case Action::GenIR:
     case Action::GenIRC1:
     case Action::DumpRegLiveness: {
-      auto irCtx = newIRContext(verbosity, preserveRetAddr, altExits, pruneReturns);
-      auto *mod = genIR(dis, *irCtx);
-      if (optLevel > 0)
-        localCPURegSSA(mod);
-      if (optLevel > 1)
-        dce(mod);
-      if (optLevel > 2) {
-        if (simplify(mod))
+      // The pipeline, as a callable, because a "pre" liveness measurement needs
+      // its own run of it -- see the comment on the sampling point below.
+      auto runPipeline = [&](bool samplePre) -> int {
+        auto irCtx = newIRContext(verbosity, preserveRetAddr, altExits, pruneReturns);
+        auto *mod = genIR(dis, *irCtx);
+        if (optLevel > 0)
+          localCPURegSSA(mod, /*keepStores=*/samplePre);
+        if (optLevel > 1)
           dce(mod);
-      }
-      // Externalizing must happen before routine identification: a routine that
-      // calls an unidentifiable ROM entry point is itself rejected.
-      if (!externRoutinesPath.empty()) {
-        auto externs = loadExternRoutines(mod, externRoutinesPath);
-        // Every --inline-str routine must be among them; see the check at
-        // parse time for why this is fatal rather than advisory.
-        for (uint16_t addr : dis->getInlineStr()) {
-          bool found = false;
-          for (auto &[externAddr, name] : externs)
-            found = found || externAddr == addr;
-          if (!found) {
-            fprintf(
-                stderr,
-                "--inline-str: $%04X is not in %s. A declared routine must be replaced by a\n"
-                "hand-written one, which receives the string's address as its ret_addr.\n",
-                addr,
-                externRoutinesPath.c_str());
-            return 2;
+        if (optLevel > 2) {
+          if (simplify(mod))
+            dce(mod);
+        }
+        // Externalizing must happen before routine identification: a routine that
+        // calls an unidentifiable ROM entry point is itself rejected.
+        if (!externRoutinesPath.empty()) {
+          auto externs = loadExternRoutines(mod, externRoutinesPath);
+          // Every --inline-str routine must be among them; see the check at
+          // parse time for why this is fatal rather than advisory.
+          for (uint16_t addr : dis->getInlineStr()) {
+            bool found = false;
+            for (auto &[externAddr, name] : externs)
+              found = found || externAddr == addr;
+            if (!found) {
+              fprintf(
+                  stderr,
+                  "--inline-str: $%04X is not in %s. A declared routine must be replaced by a\n"
+                  "hand-written one, which receives the string's address as its ret_addr.\n",
+                  addr,
+                  externRoutinesPath.c_str());
+              return 2;
+            }
           }
+          externRoutines(mod, externs);
         }
-        externRoutines(mod, externs);
-      }
-      if (optLevel > 1) {
-        FILE *report = nullptr;
-        if (!routinesReportPath.empty()) {
-          if ((report = fopen(routinesReportPath.c_str(), "wt")) == nullptr) {
-            perror(routinesReportPath.c_str());
-            return 2;
+        if (optLevel > 1) {
+          FILE *report = nullptr;
+          if (!routinesReportPath.empty()) {
+            if ((report = fopen(routinesReportPath.c_str(), "wt")) == nullptr) {
+              perror(routinesReportPath.c_str());
+              return 2;
+            }
           }
+          while (identifySimpleRoutines(mod, report)) {
+          }
+          if (report)
+            fclose(report);
         }
-        while (identifySimpleRoutines(mod, report)) {
+        // The "pre" sampling point of --dump-reg-liveness.
+        //
+        // What the dump exists to answer -- which registers the 6502 code actually
+        // makes cross a call boundary -- only means anything once call boundaries
+        // exist, so the point has to be after identifySimpleRoutines(): before it
+        // the whole binary is one function and the table has one row. It also has to
+        // be before anything has deleted a store, because a deleted StoreR8 is a
+        // deleted kill, and the reads that survive it then reach further back --
+        // measured live ranges get *longer*, and the measurement has reshaped the
+        // program it is reporting on.
+        //
+        // No point in the pass order satisfies both, because the store-deleting half
+        // of localCPURegSSA() runs at -O1, long before routine identification. So
+        // "pre" is not a point in one run: it is its own run, with that half
+        // suppressed (`keepStores` above) and everything else -- including the load
+        // folding that routine identification needs -- left alone. That is why
+        // runPipeline() exists and why =both runs it twice.
+        //
+        // The suppression is not cosmetic. On the four decoded/ corpora it leaves the
+        // set of identified routines identical, and it moves the flags: Robotron's Z
+        // live-out is 46 functions with the early store deletion and 15 without it,
+        // on the same 135 routines. Almost all of the difference between "pre" and
+        // "post" is this pass, not the -O3 wave below.
+        if (samplePre) {
+          auto regLiveness = liveness(mod);
+          dumpRegLiveness(mod, regLiveness.get(), stdout, "pre");
+          return 0;
         }
-        if (report)
-          fclose(report);
-      }
-      if (optLevel > 2) {
-        simplifyCFG(mod);
-        simplify(mod);
-        localCPURegSSA(mod);
-        dce(mod);
-      }
-      if (action == Action::GenIR) {
-        auto regLiveness = liveness(mod);
-        dumpModule(mod, irTrees, regLiveness.get());
-      } else if (action == Action::DumpRegLiveness) {
-        auto regLiveness = liveness(mod);
-        dumpRegLiveness(mod, regLiveness.get(), stdout);
-      } else {
-        printIRC1(mod, stdout, irTrees);
-      }
+        if (optLevel > 2) {
+          simplifyCFG(mod);
+          simplify(mod);
+          localCPURegSSA(mod);
+          dce(mod);
+        }
+        if (action == Action::GenIR) {
+          auto regLiveness = liveness(mod);
+          dumpModule(mod, irTrees, regLiveness.get());
+        } else if (action == Action::DumpRegLiveness) {
+          if (dumpLivenessPost) {
+            auto regLiveness = liveness(mod);
+            dumpRegLiveness(mod, regLiveness.get(), stdout, labelLiveness ? "post" : nullptr);
+          }
+        } else {
+          printIRC1(mod, stdout, irTrees);
+        }
+        return 0;
+      };
+
+      if (dumpLivenessPre)
+        if (int res = runPipeline(true))
+          return res;
+      if (action != Action::DumpRegLiveness || dumpLivenessPost)
+        if (int res = runPipeline(false))
+          return res;
       break;
     }
     }

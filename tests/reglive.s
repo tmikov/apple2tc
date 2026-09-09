@@ -1,6 +1,6 @@
 ; Hand-known flag behaviour, for --dump-reg-liveness.
 ;
-; Three routines, each chosen so that one column of the dump is decidable by
+; Every routine below is chosen so that one column of the dump is decidable by
 ; reading this file rather than by trusting the analysis:
 ;
 ;   setcarry ($330)   returns its answer in the carry flag and in nothing else.
@@ -22,6 +22,9 @@
 ;                     is ordinary arithmetic and no barrier, so it must NOT
 ;                     carry L. Counting it as one was a real bug: in Bolo it
 ;                     reported 53 routines containing a PLP where there are 5.
+;
+; A sixth routine, deadstore ($380), is not about a flag but about *when* the
+; liveness is sampled -- see its own comment, and reglive-both.dump.
 ;
 ; Two baselines, at -O2 and -O3, because the two say different things. At -O2
 ; the sets above are visible as written. At -O3 the second dce() pass is itself
@@ -51,6 +54,7 @@ next:
         jsr     usesy
         jsr     savedflags
         jsr     decimaladd
+        jsr     deadstore
 loop:
         jmp     loop
 
@@ -100,4 +104,22 @@ decimaladd:
         adc     #$11
         sta     $100a
         cld
+        rts
+
+        org     $380
+; A store that -O1 can already see is dead, which is what separates the two
+; sampling points. Every other flag store in this fixture reaches an RTS, and an
+; RTS with no recorded return targets forces all-ones live-out, so nothing is
+; provably dead that early and the pre and post tables would agree. Here the X
+; store is on a path that never reaches the RTS at all -- it falls into a
+; self-loop -- so its live-out is empty and the store goes. X is written nowhere
+; else in this routine, so it is in `modified` at the pre point and gone at the
+; post one.
+deadstore:
+        lda     $100b
+        bne     done
+        ldx     #$00
+stuck:
+        jmp     stuck
+done:
         rts

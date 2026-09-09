@@ -1,6 +1,6 @@
-// Loaded binary at [$0300..$037B]
-// code labels: 14
-// data labels: 12
+// Loaded binary at [$0300..$038A]
+// code labels: 19
+// data labels: 13
 # apple2tc --dump-reg-liveness
 #
 # One FUNC row per function, then a summary. Every row has the same fields, so
@@ -45,10 +45,11 @@ FUNC  $0340 .......... .......... AX.N....Z. -      ------- norm func_0340
 FUNC  $0350 ..Y....... ...N....Z. A..N....Z. -      ------- norm func_0350
 FUNC  $0360 ...NV.DIZC .......... A..NVBDIZC -      PL----- norm func_0360
 FUNC  $0370 .......... .......... A..NV.D.ZC -      ------- norm func_0370
+FUNC  $0380 .......... .......... A..N....Z. -      ------- norm func_0380
 FUNC  ----- .......... AXYNVBDIZC AXYNVBDIZC body   PL-R-U- low  func1
 #
 # summary
-SUM functions 6
+SUM functions 7
 SUM external 0
 SUM kall 1
 SUM kall-extern 0
@@ -65,20 +66,20 @@ SUM barrier-rawrts 1
 SUM barrier-callsextern 0
 SUM barrier-uncalled 1
 SUM barrier-blindcaller 0
-SUM call-sites 5
+SUM call-sites 6
 SUM call-sites-blind 0
-SUM called-functions 5
+SUM called-functions 6
 SUM called-live-out-any-flag 2
 # REG <letter> in <n> out <n> mod <n> calledout <n>
 # `calledout` counts live-out over called functions only -- the ones whose
 # live-out an actual call site narrowed. `out` includes the 'U' rows.
-REG A in 0 out 1 mod 6 calledout 0
+REG A in 0 out 1 mod 7 calledout 0
 REG X in 0 out 1 mod 2 calledout 0
 REG Y in 1 out 1 mod 1 calledout 0
-REG N in 1 out 2 mod 6 calledout 1
+REG N in 1 out 2 mod 7 calledout 1
 REG V in 1 out 1 mod 3 calledout 0
 REG B in 0 out 1 mod 2 calledout 0
 REG D in 1 out 1 mod 3 calledout 0
 REG I in 1 out 1 mod 2 calledout 0
-REG Z in 1 out 2 mod 6 calledout 1
+REG Z in 1 out 2 mod 7 calledout 1
 REG C in 1 out 2 mod 4 calledout 1
