@@ -2146,10 +2146,31 @@ Keep these claims in their own file, never in the recording: the recording's
 worth is that it is a faithful record of what happened, and every asserted edge
 needs its own written argument.
 
+**When there is no branch to hang the edge on, say less rather than more.** A
+line with a *single* address is a root: these bytes are code, with no claim
+about what reaches them. That is the honest form for self-modifying code, where
+the call exists only as a byte pattern some other routine stores — Neptune's
+`$3700` writes `JSR $36B0` into `$1060`, so nothing in the image branches to
+`$36B0` and the origin, read as it sits, is a `LDA`. An edge would have to
+invent a predecessor.
+
+A root is deliberately weaker: it seeds disassembly and nothing else, so the
+target is decompiled *without* becoming a dynamic block. That is the right
+outcome — no runtime transfer reaches it in the configuration being
+decompiled — but it means a root can never fix an `Unknown address`. If that is
+your symptom, you need an edge, and the origin is the thing to go find.
+
+Reach for a root only when you have looked for the branch and there is not one.
+"Nothing references this" usually means the reference is computed and you have
+not found it yet; a root asserted over a missing edge silently converts a
+reachability question into an unreachable function.
+
 **`--code-at` cannot tell you whether you pointed it at data.** That untraced
 bytes are code is exactly what you are asserting. It checks only that the target
-starts a block and the origin is a branch, and warns if the target decodes to an
-invalid instruction. **The real check is where the data boundaries land**: if the
+starts a block and, for an edge, that the origin is a branch; it warns if the
+target decodes to an invalid instruction. A root gets even that much and no
+more, which is the price of being able to name code that only exists once the
+program has rewritten itself. **The real check is where the data boundaries land**: if the
 disassembler, following your edge, stops exactly at the tables and font you
 expected — `$75B3-$75D0` and `$66A9` here — rather than running through them,
 the edge was pointed at something real.
