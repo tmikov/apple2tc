@@ -587,3 +587,69 @@ transcription of the binary.
 exactly what an address-to-block map is for, and it is why the switch cannot be
 dismantled routine by routine from the bottom up: the top level has to be
 expressed first, because the "leaf" routines jump into it.
+
+## Why half the program is unreachable: the state machine is never entered
+
+Coverage saturates at 49% and the missing half is not scattered — it is three
+of the four main loops and everything they call. This is the account of why,
+and it ends in a question for someone who has played the game.
+
+**`$A0` selects the state**, at `$1F96`:
+
+```
+1F96: LDA $A0
+1F98: BNE $1F9D
+1F9A: JMP ($36)     ; $A0 == 0 -> main_loop_via_36     <- the only one ever seen
+1F9D: CMP #$01
+1F9F: BNE $1FC2     ; $A0 >= 2 -> $1FC2, which sets $F5 = 2
+1FA1: ...           ; $A0 == 1 -> $1FB0 -> $1A20 -> main_loop_via_38
+```
+
+**Every writer of `$A0` outside the loops sets it to zero.** There are three —
+`$355F`, `$2869`, `$ACC0` — and all three are `LDA #$00 / STA $A0 / JMP $1F00`.
+The five writers that set 1 or 2 are all *inside* the loops they perpetuate, so
+they cannot start a state, only continue it.
+
+That leaves exactly one non-circular way into state 1: `$0EA6`, inside `$0E00`,
+whose guard is
+
+```
+0E9A: LDA $F0 / CMP $F2 / BNE $0EA9      ; a progress counter against a target
+0EA0: LDA $F1 / CMP $F3 / BNE $0EA9
+0EA6: JMP $1A20                          ; equal -> end of level, next state
+```
+
+`$F0/$F1` advances as the game runs; `$F2/$F3` is the target it is compared
+against. **At the b33's capture point `$F0`, `$F1`, `$F2`, `$F3` and `$F5` are
+all `$FF`** — none of them is in the live zero-page set, so nothing wrote them.
+The code that *would* set the target, `$1A3C` and `$1A40` writing `$48` and
+`$89`, sits inside `$1A20` — which only runs once a level has already ended.
+
+So the level-end target is whatever uninitialised memory happens to hold, and
+this emulator makes that `$FFFF`: `lib/cpuemu/emu6502.cpp` does
+`memset(ram_, 0xFF, 0x10000)`, and `system-inc.h` does the same for the
+generated engine.
+
+Measured, so that none of this rests on the reading alone:
+
+| | |
+| --- | --- |
+| `$1A20`, `$1A50`, `$1FB0`, `$1FC2`, `$1A4C`, `$2079` | 0 hits, all three scenarios |
+| `$2080`, `$2100`, `$2180` | 0 hits |
+| `$0E00` | 630 / 1219 / more — the routine itself runs constantly |
+| patching `$F5` to `$00` in the b33 | changes nothing; `$1A20` is not reached to test it |
+
+### The question this raises
+
+**Does Neptune progress past level 1 on real hardware?**
+
+If it does, then this emulator's `$FF` RAM fill is changing the game's behaviour
+and half the binary is unreachable for a reason that is our doing rather than
+the game's — the same shape of problem as the unemulated joystick buttons, and
+worth a dz issue against the fill.
+
+If it does not — if Neptune genuinely plays one level until you die — then the
+other three states are something else entirely, and the code behind them may
+only ever have been reachable on a differently-configured machine.
+
+Nothing here can answer that; it needs someone who has played it.
