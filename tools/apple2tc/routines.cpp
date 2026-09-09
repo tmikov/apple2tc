@@ -315,7 +315,17 @@ void IdentifySimpleRoutines::scanCandidate(BasicBlock *entry) {
     // Indirect branches except RTS are not allowed.
     auto *terminator = bb->getTerminator();
     if (terminator->getKind() != ValueKind::RTS && terminator->isIndirectBranch()) {
-      reject(entry, format("terminator %s", getValueKindName(terminator->getKind())), &depthAt);
+      // Name the block, not just the kind. The walk can be a hundred blocks
+      // across several kilobytes, and the offending one is often not in the
+      // routine's own address range at all -- it is reached through a tail JMP
+      // that transferred somewhere else, and "terminator JmpInd" against the
+      // entry address reads as if the routine itself ended in one.
+      reject(
+          entry,
+          format(
+              "terminator %s at $%04x",
+              getValueKindName(terminator->getKind()),
+              terminator->getAddress().value_or(bb->getAddress().value_or(0x10000))), &depthAt);
       return;
     }
 
