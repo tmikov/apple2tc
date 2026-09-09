@@ -74,7 +74,8 @@ static void printHelp() {
   fprintf(stderr, "  --run-data=d.json   Load runtime data from specified file\n");
   fprintf(stderr, "  --routines-report=f Write routine candidate analysis to file\n");
   fprintf(stderr, "  --extern-routines=f Declare the routines listed in the file external\n");
-  fprintf(stderr, "  --code-at=f         Add hand-asserted 'origin target' branch edges\n");
+  fprintf(stderr, "  --code-at=f         Add hand-asserted 'origin target' branch edges, or\n");
+  fprintf(stderr, "                      a lone 'target' asserting code with no known origin\n");
   fprintf(stderr, "  --inline-str=f      Routines taking a NUL-terminated string after the JSR\n");
   fprintf(stderr, "  --coverage=f        Write a code/data coverage report to file\n");
   fprintf(stderr, "  --known-data=f      Declare 'from to name' data ranges for --coverage\n");

@@ -1,0 +1,7 @@
+# A root for codeatroot.s: one address on a line, asserting that it is code
+# without claiming what reaches it. The '$' prefix is optional here too.
+#
+# $330 is the handler the program writes into the slot at $320. There is no
+# branch anywhere that targets it, so an 'origin target' edge has nothing to
+# attach to -- a root is the only honest way to say this.
+$330

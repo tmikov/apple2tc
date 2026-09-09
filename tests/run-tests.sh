@@ -183,6 +183,31 @@ if ! grep -q 'StoreR8       STATUS_C, 0x00' codeat-noedges-test.ir; then
 fi
 rm codeat-test.ir codeat-noedges-test.ir
 
+# --code-at roots: a lone address, asserting code with no claim about what
+# reaches it. This is the self-modifying case -- codeatroot.s writes a JSR into
+# a slot at runtime, so its handler has no static reference and an 'origin
+# target' edge would have no branch to attach to. Two baselines again.
+$a6502 codeatroot.s codeatroot.b33
+$apple2tc codeatroot.b33 --code-at=codeatroot.txt -O3 --ir > codeatroot-test.ir
+diff -q codeatroot.ir codeatroot-test.ir
+$apple2tc codeatroot.b33 -O3 --ir > codeatroot-noroot-test.ir
+diff -q codeatroot-noroot.ir codeatroot-noroot-test.ir
+# Said directly, because "the baselines differ" would not say which direction is
+# wrong. The handler stores $42 to $1000 and nothing else in the fixture does.
+if ! grep -q 'RamPoke8      0x1000, 0x42' codeatroot-test.ir; then
+  echo "FAIL: a --code-at root did not bring its unreferenced handler into the IR" >&2
+  exit 1
+fi
+if grep -q '0x42' codeatroot-noroot-test.ir; then
+  echo "FAIL: the handler is reachable without the root, so the fixture proves nothing" >&2
+  exit 1
+fi
+# Deliberately not asserted here: that a root, unlike an edge, adds no entry to
+# the generated address-to-block map. It does not -- but codeatroot.s has no
+# dynamic dispatch site for a wrong implementation to attach one to, so the
+# check cannot fail and would be noise. The contract is stated at CodeAtEdge.
+rm codeatroot-test.ir codeatroot-noroot-test.ir codeatroot.b33
+
 # --inline-str: routines taking a NUL-terminated string after the JSR. Two
 # baselines again, and for the same reason -- without the option the tracer
 # follows the fall-through into the text, and $C8 $C9 $00 decodes as
@@ -364,9 +389,11 @@ expect_reject() {
 
 expect_reject "an origin that is not a branch"  "0300 0330"
 expect_reject "an origin inside an instruction" "0301 0330"
-expect_reject "a line with only one address"    "0306"
+expect_reject "a line with three addresses"     "0306 0330 0340"
 expect_reject "a malformed hex address"         "030g 0330"
 expect_reject "an address wider than 16 bits"   "0306 10330"
+expect_reject "a root wider than 16 bits"       "10330"
+expect_reject "a malformed root"                "03g0"
 
 # A target pointing at data cannot be rejected -- that untraced bytes are code
 # is precisely what the option asserts -- but one that does not decode warns.

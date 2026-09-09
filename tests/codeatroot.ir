@@ -1,0 +1,139 @@
+// Loaded binary at [$0300..$0335]
+// --code-at: 1 roots applied
+// 1 new runtime blocks added
+// code labels: 13
+// data labels: 12
+// Gen    :
+// Kill   :
+// Mod    : A, X, Y, STATUS_N, STATUS_V, STATUS_B, STATUS_D, STATUS_I, STATUS_NotZ, STATUS_C
+// LiveIn :
+// LiveOut: A, X, Y, STATUS_N, STATUS_V, STATUS_B, STATUS_D, STATUS_I, STATUS_NotZ, STATUS_C
+function func1
+%bb1:  // Pred() Succ(%bb_0320, %bb_0317)
+                 StoreR8       X, 0x00
+                 StoreR8       Y, 0x00
+                 StoreSP       0xff
+                 StoreR8       STATUS_V, 0x00
+                 StoreR8       STATUS_B, 0x00
+                 StoreR8       STATUS_D, 0x00
+                 StoreR8       STATUS_I, 0x00
+                 StoreR8       STATUS_C, 0x00
+/*$0300*/        AddCycles     30
+/*$0302*/        RamPoke8      0x0320, 0x20
+/*$0307*/        RamPoke8      0x0321, 0x30
+/*$030C*/        RamPoke8      0x0322, 0x03
+/*$030F*/        StoreR8       STATUS_NotZ, 0x60
+                 StoreR8       STATUS_N, 0x00
+                 StoreR8       A, 0x60
+/*$0311*/        RamPoke8      0x0323, 0x60
+/*$0314*/        JSR           %bb_0320, %bb_0317
+%bb_0317:  // [$0317] Pred(%bb1) Succ(%bb7, %bb2)
+/*$0317*/        AddCycles     7
+                 JSR           %bb7, %bb2
+%bb2:  // [$0319] Pred(%bb_0317) Succ()
+/*$0319*/        Abort         0x0317, 0x0319, 0x02
+%bb_0319:  // [$0319] Pred() Succ()
+                 AddCycles     0
+                 Abort         0x0319, 0x0319, 0x03
+%bb_0320:  // [$0320] Pred(%bb1) Succ(%bb7, %bb3)
+/*$0320*/        AddCycles     7
+                 JSR           %bb7, %bb3
+%bb3:  // [$0322] Pred(%bb_0320) Succ()
+/*$0322*/        Abort         0x0320, 0x0322, 0x02
+%bb_0322:  // [$0322] Pred() Succ(%bb7, %bb4)
+                 AddCycles     7
+                 JSR           %bb7, %bb4
+%bb4:  // [$0324] Pred(%bb_0322) Succ()
+/*$0324*/        Abort         0x0322, 0x0324, 0x02
+%bb_0324:  // [$0324] Pred() Succ()
+                 AddCycles     0
+                 Abort         0x0324, 0x0324, 0x03
+%bb_0330:  // [$0330] Pred() Succ()
+/*$0330*/        AddCycles     12
+                 StoreR8       STATUS_NotZ, 0x42
+                 StoreR8       STATUS_N, 0x00
+                 StoreR8       A, 0x42
+/*$0332*/        RamPoke8      0x1000, 0x42
+/*$0335*/        RTS           0x00
+%bb5:  // [$FA47] Pred(%bb7) Succ()
+/*$FA47*/        AddEdgeCycles    1
+/*$FA4C*/        AddCycles     10
+          %39  = Pop8
+                 StoreR8       STATUS_C, (DecodeFlag %39 0x00)
+                 StoreR8       STATUS_NotZ, (DecodeFlag %39 0x01)
+                 StoreR8       STATUS_I, (DecodeFlag %39 0x02)
+                 StoreR8       STATUS_D, (DecodeFlag %39 0x03)
+                 StoreR8       STATUS_B, 0x00
+                 StoreR8       STATUS_V, (DecodeFlag %39 0x06)
+                 StoreR8       STATUS_N, (DecodeFlag %39 0x07)
+/*$FA4D*/        Call          FUNC_SAV1, 0xfffe
+/*$FA50*/        AddCycles     19
+          %55  = Pop8
+/*$FA51*/        RamPoke8      0x003a, %55
+/*$FA53*/ %57  = Pop8
+                 StoreR8       STATUS_NotZ, %57
+                 StoreR8       STATUS_N, (And8 %57 0x80)
+                 StoreR8       A, %57
+/*$FA54*/        RamPoke8      0x003b, %57
+/*$FA56*/        JmpInd        (CPUAddr2BB (RamPeek16al 0x03f0))
+%bb_fa49:  // [$FA49] Pred(%bb7) Succ()
+/*$FA49*/        AddCycles     5
+                 JmpInd        (CPUAddr2BB (RamPeek16al 0x03fe))
+%BB_SAV1:  // [$FF4C] Pred() Succ()
+/*$FF4C*/        AddCycles     29
+                 RamPoke8      0x0046, (LoadR8 X)
+/*$FF4E*/        RamPoke8      0x0047, (LoadR8 Y)
+/*$FF50*/        Push8         (EncodeFlags (LoadR8 STATUS_C) (LoadR8 STATUS_NotZ) (LoadR8 STATUS_I) (LoadR8 STATUS_D) (LoadR8 STATUS_V) (LoadR8 STATUS_N))
+/*$FF51*/ %83  = Pop8
+                 StoreR8       A, %83
+/*$FF52*/        RamPoke8      0x0048, %83
+/*$FF54*/ %86  = LoadSP
+                 StoreR8       STATUS_NotZ, %86
+                 StoreR8       STATUS_N, (And8 %86 0x80)
+                 StoreR8       X, %86
+/*$FF55*/        RamPoke8      0x0049, %86
+/*$FF57*/        StoreR8       STATUS_D, 0x00
+/*$FF58*/        RTS           0x00
+%bb_ffff:  // [$FFFF] Pred() Succ()
+/*$FFFF*/        AddCycles     0
+                 Abort         0xffff, 0xffff, 0x03
+%bb6:  // Pred() Succ()
+                 Exit
+%bb7:  // [$10100] Pred(%bb_0317, %bb_0320, %bb_0322) Succ(%bb5, %bb_fa49)
+/*$0317*/        Push8         (EncodeFlags (LoadR8 STATUS_C) (LoadR8 STATUS_NotZ) (LoadR8 STATUS_I) (LoadR8 STATUS_D) (LoadR8 STATUS_V) (LoadR8 STATUS_N))
+/*$FA40*/        AddCycles     18
+                 RamPoke8      0x0045, (LoadR8 A)
+/*$FA42*/ %108 = Pop8
+/*$FA43*/        Push8         %108
+/*$FA46*/ %111 = Shl16         (ZExt8t16 %108), 0x03
+          %112 = Trunc16t8     %111
+                 StoreR8       STATUS_C, (High8 (And16 %111 0x01ff))
+                 StoreR8       STATUS_NotZ, %112
+          %117 = And8          %112, 0x80
+                 StoreR8       STATUS_N, %117
+                 StoreR8       A, %112
+/*$FA47*/        JTrue         %117, %bb5, %bb_fa49
+end func1
+
+// Gen    : X, Y, STATUS_N, STATUS_V, STATUS_D, STATUS_I, STATUS_NotZ, STATUS_C
+// Kill   : X, STATUS_D
+// Mod    : X, STATUS_D
+// LiveIn : X, Y, STATUS_N, STATUS_V, STATUS_D, STATUS_I, STATUS_NotZ, STATUS_C
+// LiveOut: X, Y, STATUS_V, STATUS_D, STATUS_I, STATUS_C
+function FUNC_SAV1
+%bb_ff4c:  // [$FF4C] Pred() Succ(%bb8)
+/*$FF4C*/        AddCycles     29
+                 RamPoke8      0x0046, (LoadR8 X)
+/*$FF4E*/        RamPoke8      0x0047, (LoadR8 Y)
+/*$FF50*/        Push8         (EncodeFlags (LoadR8 STATUS_C) (LoadR8 STATUS_NotZ) (LoadR8 STATUS_I) (LoadR8 STATUS_D) (LoadR8 STATUS_V) (LoadR8 STATUS_N))
+/*$FF51*/ %134 = Pop8
+/*$FF52*/        RamPoke8      0x0048, %134
+/*$FF54*/ %136 = LoadSP
+                 StoreR8       X, %136
+/*$FF55*/        RamPoke8      0x0049, %136
+/*$FF57*/        StoreR8       STATUS_D, 0x00
+/*$FF58*/        Return        %bb8
+%bb8:  // Pred(%bb_ff4c) Succ()
+                 Exit
+end FUNC_SAV1
+

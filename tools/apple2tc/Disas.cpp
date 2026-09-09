@@ -272,14 +272,19 @@ void Disas::applyCodeAt() {
   if (!runData_)
     runData_ = std::make_unique<RuntimeData>();
 
+  size_t roots = 0;
   for (const auto &edge : codeAt_) {
-    // Seeds disassembly of the target.
+    // Seeds disassembly of the target. For a root this is the whole effect.
     runData_->branchTargets.push_back(edge.target);
+    if (!edge.origin) {
+      ++roots;
+      continue;
+    }
     // Makes the target a successor of the branch at the origin. That is what
     // turns it into a "dynamic block", which is what gets an entry in the
     // generated address-to-block map -- without it the target would be
     // decompiled but unreachable.
-    auto &targets = runData_->allBranches[edge.origin];
+    auto &targets = runData_->allBranches[*edge.origin];
     if (std::find(targets.begin(), targets.end(), edge.target) == targets.end()) {
       targets.push_back(edge.target);
       // RuntimeData::load() sorts each target list; keep that invariant.
@@ -293,7 +298,15 @@ void Disas::applyCodeAt() {
   std::sort(bt.begin(), bt.end());
   bt.erase(std::unique(bt.begin(), bt.end()), bt.end());
 
-  printf("// --code-at: %zu asserted edges applied\n", codeAt_.size());
+  // Say only what is there. A file of nothing but edges is the common case and
+  // its output line is a baseline in tests/, so it stays as it was.
+  size_t edges = codeAt_.size() - roots;
+  if (!roots)
+    printf("// --code-at: %zu asserted edges applied\n", edges);
+  else if (!edges)
+    printf("// --code-at: %zu roots applied\n", roots);
+  else
+    printf("// --code-at: %zu asserted edges and %zu roots applied\n", edges, roots);
 }
 
 void Disas::validateCodeAt() const {
@@ -322,11 +335,18 @@ void Disas::validateCodeAt() const {
       break; // Only the first instruction is of interest.
     }
 
+    // A root asserts nothing about what reaches the target, so there is no
+    // origin to check. The decode check above is all of the validation it gets,
+    // which is the price of being able to name code that only exists once the
+    // program has rewritten itself.
+    if (!edge.origin)
+      continue;
+
     std::optional<CPUInst> originInst{};
-    if (const AsmBlock *block = cfindAsmBlockContaining(edge.origin)) {
+    if (const AsmBlock *block = cfindAsmBlockContaining(*edge.origin)) {
       for (auto [addr, inst] : block->instructions(this)) {
-        if (addr >= edge.origin) {
-          if (addr == edge.origin)
+        if (addr >= *edge.origin) {
+          if (addr == *edge.origin)
             originInst = inst;
           break;
         }
@@ -336,7 +356,7 @@ void Disas::validateCodeAt() const {
     if (!originInst)
       throw std::runtime_error(format(
           "--code-at: origin $%04X is not the start of a disassembled instruction",
-          (unsigned)edge.origin));
+          (unsigned)*edge.origin));
 
     // These are exactly the instructions GenIR consults branchTargetsFrom() for.
     // A JMP or JSR with a plain literal operand is accepted here but cannot
@@ -345,8 +365,9 @@ void Disas::validateCodeAt() const {
         originInst->kind == CPUInstKind::BRK)
       throw std::runtime_error(format(
           "--code-at: the instruction at origin $%04X is not a branch. Only RTS, RTI, JMP, JSR "
-          "and conditional branches can be given extra targets",
-          (unsigned)edge.origin));
+          "and conditional branches can be given extra targets. To assert that the target is "
+          "code without claiming what reaches it, give it on a line by itself",
+          (unsigned)*edge.origin));
   }
 }
 

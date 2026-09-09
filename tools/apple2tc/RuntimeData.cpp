@@ -131,11 +131,12 @@ std::vector<CodeAtEdge> loadCodeAt(const std::string &path) {
 
     if (words.empty())
       continue;
-    if (words.size() != 2)
-      fail("expected '<hex-origin> <hex-target>'");
+    // One word is a root, two are an edge. See CodeAtEdge.
+    if (words.size() != 1 && words.size() != 2)
+      fail("expected '<hex-target>' or '<hex-origin> <hex-target>'");
 
     uint16_t addr[2] = {0, 0};
-    for (unsigned i = 0; i != 2; ++i) {
+    for (unsigned i = 0; i != words.size(); ++i) {
       // A '$' prefix is optional, so the file can look like 6502 source.
       std::string word = words[i][0] == '$' ? words[i].substr(1) : words[i];
       char *end;
@@ -147,7 +148,10 @@ std::vector<CodeAtEdge> loadCodeAt(const std::string &path) {
       addr[i] = (uint16_t)value;
     }
 
-    res.push_back(CodeAtEdge{.origin = addr[0], .target = addr[1]});
+    if (words.size() == 1)
+      res.push_back(CodeAtEdge{.origin = std::nullopt, .target = addr[0]});
+    else
+      res.push_back(CodeAtEdge{.origin = addr[0], .target = addr[1]});
   }
 
   return res;

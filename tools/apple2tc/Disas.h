@@ -320,13 +320,29 @@ struct RuntimeData {
 /// These edges are asserted by hand rather than observed, so they belong in
 /// their own file and not in the recording, which must stay a faithful record
 /// of what actually happened.
+///
+/// \c origin is absent for a *root*: an address asserted to be code with no
+/// claim about what reaches it. Self-modifying code is why that case exists.
+/// A game that rewrites its own input routine leaves a `JSR` that is only ever
+/// a stored byte pattern -- Neptune's $3700 writes `20 B0 36` into $1060, so
+/// $36B0 is called in joystick mode and unreferenced in the captured image.
+/// There is no branch to hang the edge on, because in the bytes as they sit
+/// the origin is a load. A root says "disassemble here" and asserts nothing
+/// further, which is exactly as much as can honestly be claimed.
+///
+/// A root is deliberately weaker than an edge: it seeds disassembly but adds
+/// no entry to allBranches, so the target does not become a dynamic block and
+/// gets no slot in the generated address-to-block map. That is correct -- no
+/// runtime transfer reaches it in the configuration being decompiled.
 struct CodeAtEdge {
-  uint16_t origin;
+  std::optional<uint16_t> origin;
   uint16_t target;
 };
 
-/// Parse a `--code-at` file. Each non-empty line is "ORIGIN TARGET", both
-/// hexadecimal with an optional '$' prefix; '#' starts a comment.
+/// Parse a `--code-at` file. '#' starts a comment; each remaining non-empty
+/// line is either "ORIGIN TARGET", asserting a branch edge, or a lone "TARGET",
+/// asserting a root (see CodeAtEdge). Addresses are hexadecimal with an
+/// optional '$' prefix.
 std::vector<CodeAtEdge> loadCodeAt(const std::string &path);
 
 /// Parse an `--inline-str` file: one routine address per line, hexadecimal with
