@@ -752,6 +752,37 @@ Measured, so that none of this rests on the reading alone:
 | `$0E00` | 630 / 1219 / more — the routine itself runs constantly |
 | patching `$F5` to `$00` in the b33 | changes nothing; `$1A20` is not reached to test it |
 
+### The chain, traced end to end
+
+The level-end path is not merely one unreached branch. It is the head of a
+chain that every measurement in this file eventually runs into, and it is worth
+writing out because each link is a hit count rather than a reading:
+
+```
+a level never ends                        $1A20   0 hits, all scenarios
+  -> the level-advance path never runs    $2840   0 hits
+  -> $86 is never incremented at $2857
+  -> $86 stays 0, set by $3535 after the title
+  -> select_difficulty takes its "< 2" arm
+  -> $20A1 stays EA EA EA
+  -> $0F00 is never called                $0F00   0 hits, 69 blocks
+  -> the $1C38 path is never taken        $1C38   0 hits
+```
+
+`$86` is the level, and it is bounded: `$2857` is `INC $86 / LDA $86 /
+CMP #$04 / BCC / LDA #$03 / STA $86`, so it counts 0, 1, 2, 3 and saturates.
+`$3340` maps that to three configurations, and two of the three are unreachable
+from level 0.
+
+**A near-miss worth recording.** No *generation* writes any of `$3340`'s five
+patch sites, and the obvious conclusion — that `$3340` never runs — is wrong.
+It runs: 1 hit in `attract`, 2 in `play`. Nothing appears in the generations
+because at `$86 < 2` every byte it writes is already the byte that is there.
+The image ships pre-configured for level 0. A generation list records *changes*,
+so a configurator writing its defaults is invisible in it, and "absent from the
+generations" is not "did not execute". The hit counts are the check that
+distinguishes them.
+
 ### The question this raises
 
 **Does a level ever end?** Every scenario here plays until the ship dies, and
@@ -761,6 +792,8 @@ which have been tested, but about the game: is level 1 completable, and if so
 what completes it — surviving a distance, a score, clearing a wave?
 
 Whatever the answer, it names an input sequence rather than a machine
-configuration, which means it can be turned into a fourth scenario and the
-gate can then reach the other three states. Until then the code behind them is
-transcription that no oracle can check.
+configuration, which means it can be turned into a fourth scenario. What that
+scenario buys is now quantified rather than hoped for: `$0F00`'s 69 blocks
+directly, plus the `$1C38` path, plus whatever states 1 and 2 reach — and it
+buys them *twice over*, because reaching level 2 and level 3 are separate
+configurations of the same code.

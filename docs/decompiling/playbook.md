@@ -2085,6 +2085,29 @@ apple2tc handles the declaration side with `--inline-str=<file>`. Declared
 routines must also be in `--extern-routines`, because a *generated* one would
 still pop a return address the option has moved.
 
+## Absent from the generations is not "did not execute"
+
+*Used by 3c and 5.*
+
+A generation list records code that *changed*, so a routine that writes its own
+defaults leaves no trace in it. Neptune's `$3340` patches five sites to select a
+difficulty; at level 0 every byte it writes is already the byte in the image,
+which ships pre-configured. Nothing about it appears in the 21 generations, and
+the obvious conclusion — that it never runs — is wrong. It runs on every game
+start.
+
+The failure mode is worth naming because it is silent and it points the wrong
+way: you conclude a configurator is unreachable, go looking for what would
+reach it, and the answer is nothing, because it was never unreachable. Hit
+counts distinguish the two and a generation list cannot.
+
+The same asymmetry runs the other way. A generation proves a write happened; it
+does not prove the write mattered, and a site patched with the value it already
+held is indistinguishable in the emitted code from one that was never patched.
+
+**Check:** Before concluding code did not run, check a hit count, not the
+generations.
+
 ## Self-modification is rarer than the warnings suggest
 
 *Used by 2 and 5.*

@@ -97,7 +97,11 @@
 # or LSR A, and the call site at $20A1 that is either three NOPs or JSR $0F00.
 # See the README for the table.
 3340 select_difficulty
-0086 difficulty
+# $86 is the level, not the difficulty: $3535 zeroes it after the title, $2857
+# is INC / CMP #$04 / saturate at 3, and $3340 maps its four values onto three
+# configurations. Named for the counter, not for what it is used to choose.
+0086 level
+2857 level_advance
 #
 # $0E00 and $0F00 are one routine in two instances: 32 differing bytes over
 # 256, of which 12 are a +6 shift of a $F0-$F5 operand. $0E00 runs on the state
