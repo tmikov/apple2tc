@@ -590,6 +590,56 @@ blocks, and the unused entries are presumably the other states' returns. It
 means the conversion has an order that traffic, not structure, chose — and the
 first five things to convert are now named rather than estimated.
 
+## What step 5 is now gated on: one decision, three routines
+
+Everything left in step 5 runs into the same question, and it is worth stating
+once rather than three times.
+
+The live dispatch is one main loop and four routines. Converting `$2000`,
+`$1060`, `$1100`, `$1300` and `$1380` removes 9 of the 12 map entries that are
+ever used. Of those:
+
+| routine | convertible today? | what stops it |
+| --- | --- | --- |
+| `$1100` | its own code, yes | but its internal return site `$1132` only goes static once `$1060` is a function |
+| `$1060` `$1300` `$1380` | no | their control-flow *shape* is a self-modified byte: `$1063`, `$1303`, `$1391` |
+| `$1B80` | no | its `JMP` target byte `$1C06` is written by `select_difficulty` |
+| `$2000` | no | needs the above |
+
+**These are the same problem twice.** In each case a byte of the instruction
+stream is not code, it is *configuration*: which input device was chosen, or
+which of three difficulty tiers is in force. The decompiler cannot tell the
+difference, so it models every one as a dynamic branch, and every dynamic
+branch is a map entry, and the map is what holds the switch up.
+
+Two honest shapes, and they are not equally good:
+
+1. **Transliterate.** Keep the patched byte as emulated RAM and dispatch on it,
+   exactly as the generated code does. Always correct, gate-checkable today,
+   and it preserves the switch — which is the thing step 5 exists to remove.
+
+2. **Lift the configuration into parameters.** `$1060` becomes a function of
+   the input mode; `$1B80` and `$1C05` become functions of the level. The
+   self-modification disappears and the dispatch with it.
+
+**The recommendation is 2**, for a reason that is structural rather than
+aesthetic. The patched bytes are not computed — every writer stores a *literal*.
+`$3700` and `$359A` each write a fixed byte string; `$3340` writes one of three
+fixed sets chosen by `$86`. So the value set is finite, known, and small, and a
+parameter is a faithful representation of it rather than a simplification.
+
+The cost is that only one arm of each is gate-checkable today: no scenario
+selects joystick mode, and none reaches level 2. That is the playbook's own
+warning — *"a relaxation that passes every oracle can still be wrong, and the
+way to tell is structural"* — and it argues for 2 as well, because shape 1
+would pass every oracle while quietly baking in the arm that happened to run.
+
+Both blockers are being worked on and neither is ours to finish: a parallel
+session is adding button and paddle replay, which makes joystick mode
+gate-checkable; and a recording that finishes a level makes levels 2 and 3
+gate-checkable. Until one lands, converting under shape 2 means writing an arm
+no oracle watches — which is allowed, and must be labelled where it happens.
+
 ## The first routine, analysed to the point of conversion
 
 `$1380` — `fire_control`, the player's gun — is the smallest of the five and
