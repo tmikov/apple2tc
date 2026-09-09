@@ -29,3 +29,34 @@
 # `4C 00 01`, this file generated them, and both the interpreter and the
 # --simple-c build execute the transfer on every run.
 0000 0100
+
+# --------------------------------------------------------------------------
+# $36B0: the paddle reader, code only because the game writes a call to it.
+#
+# A root rather than an edge, because there is no branch to attach an edge to.
+# poll_input_select_mode at $3584 chooses the input device once, at the title
+# screen, and then rewrites three sites. Its joystick arm, $3700, is a pure
+# constant patcher: it stores
+#
+#   $1060: 20 B0 36 4C 80 11   JSR $36B0 / JMP $1180
+#   $1300: AD 61 C0 30 07 60   LDA PB0 / BMI $130C / RTS
+#   $138C: AD 62 C0 30 05 60   LDA PB1 / BMI $1396 / RTS
+#
+# so `JSR $36B0` exists only as three bytes in $3700's operand stream. In the
+# captured image $1060 holds the keyboard arm's `LDA $C000`, which is not a
+# branch, so --code-at rejected the edge form here.
+#
+# The bytes decode cleanly as a textbook paddle read and nothing else fits:
+# INC $A1 / LDA PTRIG / LDY #$90 / (LDA PADDL0,X : BPL out : DEY : BNE) with
+# X = $A1 & 1, so one axis per call, alternating. The remaining count is then
+# banded by CPY #$10 and CPY #$30 into -1 / 0 / +1 stored to $E3 (paddle 1) or
+# $E4 (paddle 0). $3040 swaps the two immediates at $36CD and $36DB, which is
+# an axis inversion, and is why the listing warns that those bytes are
+# modified.
+#
+# This is an assertion about untraced bytes and cannot be checked by the gate:
+# no scenario here selects joystick mode, because holding a button is not yet
+# expressible in a headless replay. What can be said is that the region is not
+# reached as data either -- no generation in neptune.json writes $36B0-$36F5,
+# and the coverage report does not claim it.
+36B0

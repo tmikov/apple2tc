@@ -48,7 +48,7 @@ fragmentation rather than quantity.*
 | --- | --- | --- |
 | game's share of disassembled instructions | the minority | **98.8%** (4032 of 4080) |
 | distinct ROM entry points called | 9 | **1** |
-| hardware surface | 7 addresses | 10 traced, 12 real |
+| hardware surface | 7 addresses | 12 addresses |
 
 **The ROM is already gone, and that is the b33's doing.** The playbook's step 1
 warns that entry-point choice dominates output size: Snake Byte traces from the
@@ -81,26 +81,35 @@ c1 build — which starts at `$0000` directly — never touches it.
 | `$C030` | speaker | 21 |
 | `$C050` `$C051` `$C052` `$C055` `$C057` | video mode, page, mixed | 12 |
 | `$C061` `$C062` | joystick buttons 0 and 1 | 4 |
+| `$C070` `$C064` | PTRIG and PADDL0, in the paddle reader | 2 |
 
-**That table is a lower bound, and reading it as the surface was a mistake.**
-It comes from the disassembly, and the disassembly only covers code the tracer
-reached. Neptune picks its input device once at the title screen; the joystick
-arm is never taken in any scenario here, so the paddle reader at `$36B0` is
-never decoded, and a surface read off the listing omits it silently. The table
-above was published claiming ten addresses and "no paddle reads" before anyone
-scanned the image.
+**The last row was missing, and reading the table as the surface was a
+mistake.** It is derived from the disassembly, and the disassembly only covers
+code the tracer reached. Neptune picks its input device once at the title
+screen and *writes* its input routines; the joystick arm is never taken in any
+scenario here, so the paddle reader at `$36B0` was never decoded, and the
+surface was published as ten addresses and "no paddle reads".
 
-So `scripts/scope.sh` now scans the raw `.b33` as well, matching absolute
-operands in `$C000-$C0FF` against a byte-pattern table of every absolute load,
-store, compare and ALU opcode. That over-reports — misaligned data matches too
-— which is the right direction for a bound to err in. It finds **25**, and the
-15 the listing missed sort into three groups:
+Two things fixed it, and the order matters. First `scripts/scope.sh` learned to
+scan the raw `.b33` as well — absolute operands in `$C000-$C0FF`, matched
+against a byte-pattern table of every absolute load, store, compare and ALU
+opcode. That over-reports, since misaligned data matches too, which is the
+right direction for a bound to err in. It finds **25** and named the gap.
+
+Then the gap was closed rather than annotated: `--code-at` grew a *root* form
+(dz `01a08403-7af0`), a lone address asserting that bytes are code without
+claiming what reaches them, which is the only honest thing to say about a
+routine whose only caller is a byte pattern another routine stores. `$36B0` is
+now disassembled, and the listing-derived surface is 12. What the image scan
+still reports beyond that is accounted for:
 
 | | |
 | --- | --- |
-| `$C070` (PTRIG), `$C064` (PADDL0) | real, at `$36B2`/`$36BC` — the paddle reader, reached only via `JSR $36B0` |
 | `$C081` `$C083` `$C088`-`$C08F` | real, at `$BC00-$BFFF` — the disk loader, `LDA $C08C,X` with X = slot×16; dead once the b33 enters at `$3523` |
 | `$C01F` `$C04C` `$C0C8` | data. `$1E31` runs into `BRK` and zeros, `$7616` into `$FF $FF` |
+
+The scan stays in `scope.sh`. It is what would have caught this, and the next
+game will have its own untraced arm.
 
 Two notes on the rest of the list:
 
@@ -463,8 +472,9 @@ The substantive find behind those names is `$3584`, which reads the joystick
 buttons and the keyboard and then *writes code* into three input sites,
 choosing the game's input device once at the title screen. That is the
 self-modification the collector reports as 21 generations. See the *Why it
-reads the joystick buttons* section of `docs/neptune.md`, including the one
-part of it that does not yet add up.
+reads the joystick buttons* section of `docs/neptune.md` for the derivation,
+and for the reading that was inverted there until it was checked: **one**
+button held selects the stick, not both.
 
 ### A lead worth checking before the hand work starts
 

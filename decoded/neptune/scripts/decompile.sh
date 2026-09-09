@@ -19,12 +19,12 @@
 #   --known-data  does not change the listing at all; it is the accounting that
 #               turns "unknown" into a named region in the coverage report
 #
-# WHY THERE IS NO --code-at
+# WHAT --code-at IS AND IS NOT DOING HERE
 #
-# snake-byte needs one because its indirect jumps go somewhere the tracer
-# cannot follow. Neptune's six in-game indirect jumps all dispatch through
-# zero-page vectors, and no game code ever writes them -- the loader set them
-# before the capture, so each has a single fixed value:
+# Not the usual job. snake-byte needs edges because its indirect jumps go
+# somewhere the tracer cannot follow. Neptune's six in-game indirect jumps all
+# dispatch through zero-page vectors, and no game code ever writes them -- the
+# loader set them before the capture, so each has a single fixed value:
 #
 #   $11F0 JMP ($0200) -> $1D00     $20D4 JMP ($38) -> $2080
 #   $1F9A JMP ($36)   -> $2000     $218F JMP ($3A) -> $2180
@@ -34,6 +34,11 @@
 # edges would add nothing. If a future capture is taken at a different moment
 # these values can differ, and this list is then the thing to re-derive rather
 # than trust.
+#
+# What the file does carry is one edge for the b33's entry trampoline and one
+# *root* for $36B0, the paddle reader -- code that exists only because $3700
+# writes a call to it, so there is no branch anywhere to hang an edge on. Both
+# arguments are in the file itself.
 #
 # THE SIX "invalid instruction" WARNINGS
 #
@@ -73,6 +78,7 @@ trap 'rm -rf "$tmp"' EXIT
 "$apple2tc" --asm \
   --run-data="$rundata" \
   --known-data="$knowndata" \
+  --code-at="$codeat" \
   --coverage="$cov" \
   "$b33" > "$lst" 2> "$tmp/err"
 

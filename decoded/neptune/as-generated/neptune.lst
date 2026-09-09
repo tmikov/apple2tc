@@ -1,7 +1,8 @@
 // Loaded binary at [$0000..$BFFF]
-// 29 new runtime blocks added
-// code labels: 1085
-// data labels: 271
+// --code-at: 1 asserted edges and 1 roots applied
+// 30 new runtime blocks added
+// code labels: 1099
+// data labels: 272
 ; Code range [$0000-$0002]
 /*0000*/             org    $0000
 /*0000*/ START:                             ; xref
@@ -168,7 +169,7 @@
 /*009E*/             DFB    $FF
 /*009F*/             DFB    $FF
 /*00A0*/ M_A0        DFB    $FF ; xref $1F96 $1FD0 $205D $207B $20D2 $2144 $218D $22CB...
-/*00A1*/             DFB    $FF
+/*00A1*/ M_A1        DFB    $FF ; xref $36B0 $36B7
 /*00A2*/             DFB    $FF
 /*00A3*/             DFB    $FF
 /*00A4*/             DFB    $FF
@@ -10769,8 +10770,10 @@
 /*3043*/             LDA    M_36CD           ; $36CD
 /*3046*/             PHA
 /*3047*/             LDA    M_36DB           ; $36DB
+; WARNING: Instruction performs code modification
 /*304A*/             STA    M_36CD           ; $36CD
 /*304D*/             PLA
+; WARNING: Instruction performs code modification
 /*304E*/             STA    M_36DB           ; $36DB
 /*3051*/             RTS
 ; Data range [$3052-$306F]
@@ -12065,7 +12068,7 @@
 /*3665*/ L_3665:                             ; xref L_365F
 /*3665*/             LDA    #$00             ; $0000
 /*3667*/             JMP    L_FCA8           ; $FCA8
-; Data range [$366a-$36FF]
+; Data range [$366a-$36AF]
 /*366A*/             DFB    $A8
 /*366B*/             DFB    $FC
 /*366C*/             DFB    $00
@@ -12136,76 +12139,63 @@
 /*36AD*/             DFB    $00
 /*36AE*/             DFB    $00
 /*36AF*/             DFB    $00
-/*36B0*/             DFB    $E6
-/*36B1*/             DFB    $A1
-/*36B2*/             DFB    $AD
-/*36B3*/             DFB    $70
-/*36B4*/             DFB    $C0
-/*36B5*/             DFB    $A0
-/*36B6*/             DFB    $90
-/*36B7*/             DFB    $A5
-/*36B8*/             DFB    $A1
-/*36B9*/             DFB    $29
-/*36BA*/             DFB    $01
-/*36BB*/             DFB    $AA
-/*36BC*/             DFB    $BD
-/*36BD*/             DFB    $64
-/*36BE*/             DFB    $C0
-/*36BF*/             DFB    $10
-/*36C0*/             DFB    $03
-/*36C1*/             DFB    $88
-/*36C2*/             DFB    $D0
-/*36C3*/             DFB    $F8
-/*36C4*/             DFB    $E0
-/*36C5*/             DFB    $00
-/*36C6*/             DFB    $F0
-/*36C7*/             DFB    $17
-/*36C8*/             DFB    $C0
-/*36C9*/             DFB    $10
-/*36CA*/             DFB    $B0
-/*36CB*/             DFB    $05
-/*36CC*/             DFB    $A9
-/*36CD*/ M_36CD      DFB    $01 ; xref $3043 $304A
-/*36CE*/             DFB    $85
-/*36CF*/             DFB    $E3
-/*36D0*/             DFB    $60
-/*36D1*/             DFB    $C0
-/*36D2*/             DFB    $30
-/*36D3*/             DFB    $B0
-/*36D4*/             DFB    $05
-/*36D5*/             DFB    $A9
-/*36D6*/             DFB    $00
-/*36D7*/             DFB    $85
-/*36D8*/             DFB    $E3
-/*36D9*/             DFB    $60
-/*36DA*/             DFB    $A9
-/*36DB*/ M_36DB      DFB    $FF ; xref $3047 $304E
-/*36DC*/             DFB    $85
-/*36DD*/             DFB    $E3
-/*36DE*/             DFB    $60
-/*36DF*/             DFB    $C0
-/*36E0*/             DFB    $10
-/*36E1*/             DFB    $B0
-/*36E2*/             DFB    $05
-/*36E3*/             DFB    $A9
-/*36E4*/             DFB    $01
-/*36E5*/             DFB    $85
-/*36E6*/             DFB    $E4
-/*36E7*/             DFB    $60
-/*36E8*/             DFB    $C0
-/*36E9*/             DFB    $30
-/*36EA*/             DFB    $B0
-/*36EB*/             DFB    $05
-/*36EC*/             DFB    $A9
-/*36ED*/             DFB    $00
-/*36EE*/             DFB    $85
-/*36EF*/             DFB    $E4
-/*36F0*/             DFB    $60
-/*36F1*/             DFB    $A9
-/*36F2*/             DFB    $FF
-/*36F3*/             DFB    $85
-/*36F4*/             DFB    $E4
-/*36F5*/             DFB    $60
+; Code range [$36B0-$36BB]
+/*36B0*/             org    $36B0
+/*36B0*/ L_36B0:                             ; xref
+/*36B0*/             INC    M_A1             ; $00A1
+/*36B2*/             LDA    $C070            ; $C070
+/*36B5*/             LDY    #M_90            ; $0090
+/*36B7*/             LDA    M_A1             ; $00A1
+/*36B9*/             AND    #M_01            ; $0001
+/*36BB*/             TAX
+/*36BC*/ L_36BC:                             ; xref L_36B0 L_36C1
+/*36BC*/             LDA    $C064,X          ; $C064
+/*36BF*/             BPL    L_36C4           ; $36C4
+/*36C1*/ L_36C1:                             ; xref L_36BC
+/*36C1*/             DEY
+/*36C2*/             BNE    L_36BC           ; $36BC
+/*36C4*/ L_36C4:                             ; xref L_36BC L_36C1
+/*36C4*/             CPX    #$00             ; $0000
+/*36C6*/             BEQ    L_36DF           ; $36DF
+/*36C8*/ L_36C8:                             ; xref L_36C4
+/*36C8*/             CPY    #$10             ; $0010
+/*36CA*/             BCS    L_36D1           ; $36D1
+/*36CC*/ L_36CC:                             ; xref L_36C8
+; WARNING: Instruction byte 1 is modified
+/*36CC*/             LDA    #M_01            ; $0001
+/*36CE*/             STA    M_E3             ; $00E3
+/*36D0*/             RTS
+/*36D1*/ L_36D1:                             ; xref L_36C8
+/*36D1*/             CPY    #M_30            ; $0030
+/*36D3*/             BCS    L_36DA           ; $36DA
+/*36D5*/ L_36D5:                             ; xref L_36D1
+/*36D5*/             LDA    #$00             ; $0000
+/*36D7*/             STA    M_E3             ; $00E3
+/*36D9*/             RTS
+/*36DA*/ L_36DA:                             ; xref L_36D1
+; WARNING: Instruction byte 1 is modified
+/*36DA*/             LDA    #M_FF            ; $00FF
+/*36DC*/             STA    M_E3             ; $00E3
+/*36DE*/             RTS
+/*36DF*/ L_36DF:                             ; xref L_36C4
+/*36DF*/             CPY    #$10             ; $0010
+/*36E1*/             BCS    L_36E8           ; $36E8
+/*36E3*/ L_36E3:                             ; xref L_36DF
+/*36E3*/             LDA    #M_01            ; $0001
+/*36E5*/             STA    M_E4             ; $00E4
+/*36E7*/             RTS
+/*36E8*/ L_36E8:                             ; xref L_36DF
+/*36E8*/             CPY    #M_30            ; $0030
+/*36EA*/             BCS    L_36F1           ; $36F1
+/*36EC*/ L_36EC:                             ; xref L_36E8
+/*36EC*/             LDA    #$00             ; $0000
+/*36EE*/             STA    M_E4             ; $00E4
+/*36F0*/             RTS
+/*36F1*/ L_36F1:                             ; xref L_36E8
+/*36F1*/             LDA    #M_FF            ; $00FF
+/*36F3*/             STA    M_E4             ; $00E4
+/*36F5*/             RTS
+; Data range [$36f6-$36FF]
 /*36F6*/             DFB    $00
 /*36F7*/             DFB    $00
 /*36F8*/             DFB    $00

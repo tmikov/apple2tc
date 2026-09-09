@@ -91,6 +91,13 @@
 1400 shots_draw
 1350 tbl_shot_mask
 
+# --- Joystick mode ---------------------------------------------------------
+# Reached only when $3700 has patched `JSR $36B0` into $1060, which happens
+# when exactly one button is held at the title screen. See code-at.txt for why
+# $36B0 needs a --code-at root to be decoded at all.
+36B0 paddle_read_axis
+3040 paddle_invert_x
+
 # --- ROM -------------------------------------------------------------------
 # The only ROM entry point the game calls; see testdata/rom.externs.
 FCA8 rom_mon_wait

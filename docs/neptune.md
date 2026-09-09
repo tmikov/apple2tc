@@ -308,9 +308,57 @@ an entire input mode that no recording could cover, and `$3700` had zero hits
 across every scenario. The game port is now emulated on `master` —
 `lib/a2host/joystick.c`, with the buttons, the four paddle one-shots and
 `PTRIG`, an arrow-key virtual joystick in `a2emu` behind F7, and `--joystick`,
-`--joy-buttons=` and `--paddle=<n>:<v>`. So the mode is now exercisable, and the
-routines whose *shape* depends on it — `$1060`, `$1300`, `$1380` — can be
-converted against an oracle instead of transcribed blind.
+`--joy-buttons=` and `--paddle=<n>:<v>`.
+
+### The paddle reader, and why it took a tool change to see it
+
+`$3700` is a pure constant patcher — `LDA #imm / STA abs` twenty-one times,
+then `RTS`. It writes:
+
+```
+$1060: 20 B0 36 4C 80 11   JSR $36B0 / JMP $1180
+$1300: AD 61 C0 30 07 60   LDA PB0 / BMI $130C / RTS
+$138C: AD 62 C0 30 05 60   LDA PB1 / BMI $1396 / RTS
+```
+
+So `JSR $36B0` exists only as three bytes inside `$3700`'s operand stream.
+Nothing in the image *branches* to `$36B0`, which meant the tracer emitted all
+50 bytes of it as `DFB` and `--code-at` could not assert an edge either — the
+origin, `$1060`, holds the keyboard arm's `LDA $C000`, and an edge needs a
+branch. That is dz `01a08403-7af0`, now fixed: a `--code-at` line with a single
+address is a **root**, asserting that bytes are code without claiming what
+reaches them. `decoded/neptune/testdata/code-at.txt` carries the argument.
+
+With it, `$36B0` decodes as a textbook paddle read:
+
+```
+36B0: INC $A1                        ; one axis per call, alternating
+36B2: LDA PTRIG                      ; $C070, start the one-shots
+36B5: LDY #$90                       ; 144 iterations max
+36B7: LDA $A1 / AND #$01 / TAX
+36BC: LDA PADDL0,X / BPL out / DEY / BNE
+36C4: CPX #$00 / BEQ ...             ; X=0 -> $E4, X=1 -> $E3
+      CPY #$10 / BCS ...             ; two thresholds, three bands:
+      CPY #$30 / BCS ...             ;   Y<$10 -> +1, $10..$2F -> 0, >=$30 -> -1
+```
+
+Two details worth keeping. It reads **one paddle per call**, alternating on
+`$A1 & 1` — reading both in a frame costs too many cycles. And it stores the
+axis *absolutely* (`#$01`/`#$00`/`#$FF`), where the keyboard arm at `$1060`
+does a saturating ±1; that is why the stick can return to centre with no input
+and the keyboard cannot, and it is the difference that makes the two modes
+distinguishable in a test.
+
+`$3040` swaps the immediates at `$36CD` and `$36DB`, inverting the X axis —
+which is what the listing's "Instruction byte 1 is modified" warnings on those
+two lines are reporting. Its one caller is `$2FE0`.
+
+**What is still missing is an oracle, not a disassembly.** Selecting joystick
+mode means holding a button at the title screen, and a held button is not yet
+expressible in a headless `--key-file` replay: paddle and button state are not
+captured by any recorder and are ignored on replay. Until that lands, `$1060`,
+`$1300` and `$1380` — whose control-flow *shape* depends on which arm patched
+them — can be read but not gate-checked.
 
 The counts bear the reading out exactly. Instrumenting every `CYCLES()` site
 and replaying both scenarios:
