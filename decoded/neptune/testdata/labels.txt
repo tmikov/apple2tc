@@ -96,7 +96,24 @@
 # when exactly one button is held at the title screen. See code-at.txt for why
 # $36B0 needs a --code-at root to be decoded at all.
 36B0 paddle_read_axis
-3040 paddle_invert_x
+3040 paddle_invert_vertical
+
+# The two axis deltas the input routines produce, and the position they move.
+# Which axis is which is not taken from the paddle-numbering convention; it is
+# read off the consumers. $E3 drives $E0 alone, clamped to [$08..$9D] -- a
+# scanline range. $E4 drives $E1/$E2, where $E2 wraps at 7 and carries into
+# $E1, which is the 7-pixels-per-byte HGR column layout. So $E3 is vertical and
+# $E4 is horizontal, and $3040 -- which swaps the immediates at $36CD and $36DB,
+# both in the arm that stores $E3 -- inverts the vertical axis.
+#
+# $E0 and $E4 otherwise disassemble as ERR_UNDEFFUNC and HGRCOLOR, which are
+# Applesoft's zero-page names leaking in from the symbol database. Neptune is
+# not Applesoft and does not mean either thing.
+00E0 player_y
+00E1 player_col
+00E2 player_subx
+00E3 axis_vertical
+00E4 axis_horizontal
 
 # --- ROM -------------------------------------------------------------------
 # The only ROM entry point the game calls; see testdata/rom.externs.

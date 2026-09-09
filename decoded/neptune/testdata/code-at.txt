@@ -49,10 +49,11 @@
 # The bytes decode cleanly as a textbook paddle read and nothing else fits:
 # INC $A1 / LDA PTRIG / LDY #$90 / (LDA PADDL0,X : BPL out : DEY : BNE) with
 # X = $A1 & 1, so one axis per call, alternating. The remaining count is then
-# banded by CPY #$10 and CPY #$30 into -1 / 0 / +1 stored to $E3 (paddle 1) or
-# $E4 (paddle 0). $3040 swaps the two immediates at $36CD and $36DB, which is
-# an axis inversion, and is why the listing warns that those bytes are
-# modified.
+# banded by CPY #$10 and CPY #$30 into -1 / 0 / +1 stored to $E3 (paddle 1,
+# vertical) or $E4 (paddle 0, horizontal) -- see labels.txt for why those axes
+# are read off the consumers rather than off the paddle numbering. $3040 swaps
+# the two immediates at $36CD and $36DB, both in the $E3 arm, inverting the
+# vertical axis, and is why the listing warns that those bytes are modified.
 #
 # This is an assertion about untraced bytes and cannot be checked by the gate:
 # no scenario here selects joystick mode, because holding a button is not yet

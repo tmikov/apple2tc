@@ -349,9 +349,19 @@ does a saturating ±1; that is why the stick can return to centre with no input
 and the keyboard cannot, and it is the difference that makes the two modes
 distinguishable in a test.
 
-`$3040` swaps the immediates at `$36CD` and `$36DB`, inverting the X axis —
-which is what the listing's "Instruction byte 1 is modified" warnings on those
-two lines are reporting. Its one caller is `$2FE0`.
+`$3040` swaps the immediates at `$36CD` and `$36DB` — which is what the
+listing's "Instruction byte 1 is modified" warnings on those two lines are
+reporting. Both are in the arm that stores `$E3`, so it inverts the **vertical**
+axis; there is no equivalent found for the horizontal one. Its one caller is
+`$2FE0`, which also writes `$1078`, inside the `$1060` input routine.
+
+Which axis is which is read off the consumers rather than off the paddle
+numbering, because the numbering is a convention and the consumers are
+evidence. `$11C5` moves `$E0` by `$E3` and clamps it to `[$08..$9D]`, a
+scanline range. `$1180` moves `$E1`/`$E2` by `$E4`, where `$E2` wraps at 7 and
+carries into `$E1` — the 7-pixels-per-byte HGR column layout. So `$E3` is
+vertical, `$E4` horizontal. This paragraph said "X axis" until that was
+checked.
 
 **What is still missing is an oracle, not a disassembly.** Selecting joystick
 mode means holding a button at the title screen, and a held button is not yet
