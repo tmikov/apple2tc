@@ -519,3 +519,56 @@ The honest shapes are to keep `$1391` as a dispatch the function can exit
 through, or to make the input mode an explicit parameter of the program rather
 than a property of its instruction bytes. That is a design decision, not a
 transcription, and it is where this stops.
+
+## What the top level actually is: a state machine
+
+This is the finding that decides the shape of the C, and it came out of
+`--routines-report` once it started printing the blocks a *rejected* candidate
+had walked.
+
+| rejected | blocks walked | |
+| --- | --- | --- |
+| `$1060` | 3 | is the patched input site |
+| `$1300` | 3 | is the patched input site |
+| `$1380` | 14 | stops at the computed dispatch `$1391` |
+| `$1100` | 40 | ends at `$11F0`, `JMP ($0200)` |
+| `$0E00` | **152** | includes `$2080`, `$2100`, `$2180` |
+| `$0F00` | **136** | the same |
+
+`$0E00`'s walk reaching three different main loops is not the walk leaking. It
+is real, and traced to a single instruction:
+
+```
+1A4C: JMP $2079          <- inside $0E00's block set
+...
+2079: LDA #$01
+207B: STA $A0            <- the state variable
+207D: JSR $3800
+main_loop_via_38:
+2080: JSR $0E00 ...      <- and now this loop runs instead
+```
+
+So `$0E00` does not fail to return. **It hands over to a different top-level
+loop**, and never comes back. The four loops at `$2000`, `$2080`, `$2100` and
+`$2180` are game states; `$A0` is a state variable they set; and the
+"subsystems" the loops call can each end the current state and start another.
+
+Three things follow, and together they are why this step is not transcription.
+
+**`--alt-exit` was never going to help.** That flag is for a routine that
+unwinds into its *caller* — Snake Byte's `$6A32` doing `PLA / PLA / JMP`. This
+is a routine that transfers to a different *top level*. Measuring that the flag
+changed nothing was right; the reason is that it is a different phenomenon.
+
+**These are not functions and should not be written as functions.** A C shape
+that makes `$0E00` return a value the caller switches on would be inventing a
+contract the 6502 does not have — `$1A4C` is an unconditional jump, so there is
+no caller left to return to. The honest shapes are a state machine
+(`for (;;) state = run_state(state);`) or explicit tail calls, and choosing
+between them is a design decision about the artifact rather than a
+transcription of the binary.
+
+**It explains the dispatch switch.** A `JMP` into the middle of another loop is
+exactly what an address-to-block map is for, and it is why the switch cannot be
+dismantled routine by routine from the bottom up: the top level has to be
+expressed first, because the "leaf" routines jump into it.

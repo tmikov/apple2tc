@@ -23,6 +23,18 @@
 2100 main_loop_via_4e        # JMP ($4E); $4E/$4F holds $2100
 2180 main_loop_via_3a        # JMP ($3A); $3A/$3B holds $2180
 
+# --- state transitions -----------------------------------------------------
+# The four loops above are game states, and a routine can end the current state
+# by jumping into the head of another. $1A4C, inside $0E00's block set, is one:
+#
+#   1A4C: JMP $2079
+#   2079: LDA #$01 / STA $A0 / JSR $3800  -> falls into main_loop_via_38
+#
+# $A0 is the state variable the loops set. Named for the mechanism rather than
+# the meaning: which state is which is not established yet.
+2079 enter_state_via_38
+00A0 state_var
+
 # --- the title screen ------------------------------------------------------
 # $3523 is where neptune.b33 starts. STA KBDSTRB, then 256 rounds of
 # poll-and-delay; a key branches to $3580 and a timeout falls through to the
