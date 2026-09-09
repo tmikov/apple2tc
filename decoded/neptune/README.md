@@ -189,11 +189,24 @@ below are measured rather than assumed.
 
 ### What it covers
 
-| scenario | frames | distinct states | blocks reached |
-| --- | --- | --- | --- |
-| attract | 1200 | 956 (80%) | 314 of 1085 (29%) |
-| play | 1929 | 1730 (90%) | 465 of 1085 (43%) |
-| union | | | **467 of 1085 (43%)** |
+| scenario | frames | blocks reached |
+| --- | --- | --- |
+| attract | 1200 | 314 of 1085 (28%) |
+| play | 1929 | 465 of 1085 (42%) |
+| death | 8000 | 539 of 1085 (49%) |
+| union | | **539 of 1085 (49%)** |
+
+**`death` was derived, not recorded.** It is the same key file run four times
+as long: the recording simply stops, the player stops acting, and the game
+kills them. `SH:0` and an explosion arrive around frame 8000, then the game
+returns to the title and restarts the attract cycle — `$3523` fires 11 times
+over 20,000 frames. That is +74 blocks for the cost of running longer, and it
+needed nobody to play anything.
+
+It was calibrated the way the playbook insists a new scenario must be, because
+a scenario can buy trace coverage and no state coverage at all: mutating
+`s_x = 0x04` at `$3642`, a block only `death` reaches, fails `death` and passes
+`attract` and `play`.
 
 At function level, **40 of the 83** generated functions have their entry block
 reached.
@@ -212,7 +225,9 @@ Two things that surprise and are worth stating rather than hiding:
   value is not coverage: it is the only scenario that needs no key file, so it
   keeps working if the key coordinate ever breaks — which, given cycle stamps
   do not survive a change of engine, is a live risk rather than a hypothetical.
-- **57% of the decompiled blocks are never executed by the gate.** The
+- **51% of the decompiled blocks are never executed by the gate**, and
+  coverage *saturates* there: running 20,000 frames instead of 8,000 adds
+  nothing at all. The
   unreached functions cluster in `$2200-$3800` and `$AC00-$B9A0`. Every
   later step has to be read in that light: a change to code in those ranges is
   transcription that the oracle cannot check, and the playbook's rule for that

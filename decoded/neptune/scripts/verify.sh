@@ -30,6 +30,12 @@
 #             that still works if the key coordinate ever breaks.
 #   play      the recorded session from testdata/play2.keys: space to start a
 #             game, then movement, fire and bombs. Reaches SC:00180.
+#   death     the same keys, run four times as long. Nobody recorded this: the
+#             recording simply stops, the player stops acting, and the game
+#             kills them. It reaches SH:0 and an explosion around frame 8000,
+#             then returns to the title and starts the attract cycle again --
+#             $3523 fires 11 times over 20,000 frames. Worth +74 blocks over
+#             play alone, for the cost of running longer.
 #
 # WHY THE KEY FILE IS COMMITTED RATHER THAN DERIVED
 #
@@ -115,6 +121,7 @@ trap 'rm -rf "$tmp"' EXIT
 scenarios=(
   "attract:-:1200:testdata/attract.frames"
   "play:testdata/play2-gen.keys:1929:testdata/play.frames"
+  "death:testdata/play2-gen.keys:8000:testdata/death.frames"
 )
 
 run() {
