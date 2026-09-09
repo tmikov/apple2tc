@@ -630,6 +630,15 @@ this emulator makes that `$FFFF`: `lib/cpuemu/emu6502.cpp` does
 `memset(ram_, 0xFF, 0x10000)`, and `system-inc.h` does the same for the
 generated engine.
 
+**That looked like the cause and is not.** Rebuilding with
+`memset(ram_, 0x00, 0x10000)` and booting the disk with the same recording
+produces `$F0`-`$FA` all zero — `$F5` included, so the guard at `$1A22` would
+fall through — and changes nothing at all: `$1A20`, `$1A4C`, `$2079`, `$2080`,
+`$2100` and `$2180` still have zero hits, and the run reaches **511 blocks
+under either fill**. The blocker is the path *to* `$1A20`, not the guard inside
+it. The hypothesis was worth testing and it is dead; the RAM fill is not why
+half the program is unreachable.
+
 Measured, so that none of this rests on the reading alone:
 
 | | |
@@ -641,15 +650,13 @@ Measured, so that none of this rests on the reading alone:
 
 ### The question this raises
 
-**Does Neptune progress past level 1 on real hardware?**
+**Does a level ever end?** Every scenario here plays until the ship dies, and
+none of them finishes a level — the progress counter at `$F0/$F1` never meets
+its target. So the honest question is not about hardware or RAM fills, both of
+which have been tested, but about the game: is level 1 completable, and if so
+what completes it — surviving a distance, a score, clearing a wave?
 
-If it does, then this emulator's `$FF` RAM fill is changing the game's behaviour
-and half the binary is unreachable for a reason that is our doing rather than
-the game's — the same shape of problem as the unemulated joystick buttons, and
-worth a dz issue against the fill.
-
-If it does not — if Neptune genuinely plays one level until you die — then the
-other three states are something else entirely, and the code behind them may
-only ever have been reachable on a differently-configured machine.
-
-Nothing here can answer that; it needs someone who has played it.
+Whatever the answer, it names an input sequence rather than a machine
+configuration, which means it can be turned into a fourth scenario and the
+gate can then reach the other three states. Until then the code behind them is
+transcription that no oracle can check.
