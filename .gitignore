@@ -5,3 +5,4 @@ cmake-build*/
 .DS_Store
 embuild/
 *.swp
+.cache

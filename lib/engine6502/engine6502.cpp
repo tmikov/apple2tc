@@ -49,7 +49,7 @@ namespace {
 /// because the host is what renders it, replays keys into it and hashes it.
 class HostedEmu : public Emu6502 {
 public:
-  HostedEmu() : Emu6502(0xC000, 0xCFFF) {}
+  HostedEmu() : Emu6502(0xC000, 0xFFFF) {}
 
 protected:
   uint8_t ioPeek(uint16_t addr) override {
@@ -57,6 +57,9 @@ protected:
   }
   void ioPoke(uint16_t addr, uint8_t value) override {
     io_poke(addr, value);
+  }
+  void ioLoadROM(const uint8_t *rom, uint16_t size) override {
+    a2_language_card_load_rom(&a2host_io()->language_card, rom, size);
   }
 };
 

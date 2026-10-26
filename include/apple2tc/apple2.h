@@ -11,7 +11,6 @@
 #include "apple2tc/emu6502.h"
 
 #include <cstdio>
-#include <vector>
 
 class EmuApple2 : public Emu6502 {
 public:
@@ -31,7 +30,7 @@ public:
   /// In the future we may want to support dynamic callbacks per page, and
   /// register device behavior, etc, but for now this is sufficient.
   static constexpr uint16_t IO_RANGE_START = 0xC000;
-  static constexpr uint16_t IO_RANGE_END = 0xCFFF;
+  static constexpr uint16_t IO_RANGE_END = 0xFFFF;
 
   EmuApple2() : Emu6502(IO_RANGE_START, IO_RANGE_END) {
     a2_io_init(&io_);
@@ -56,6 +55,8 @@ protected:
   uint8_t ioPeek(uint16_t addr) override;
   /// Perform a write in the IO range.
   void ioPoke(uint16_t addr, uint8_t value) override;
+
+  void ioLoadROM(const uint8_t *rom, uint16_t size) override;
 
 private:
   a2_iostate_t io_;

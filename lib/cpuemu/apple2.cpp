@@ -17,3 +17,7 @@ uint8_t EmuApple2::ioPeek(uint16_t addr) {
 void EmuApple2::ioPoke(uint16_t addr, uint8_t value) {
   a2_io_poke(&io_, addr, value, getCycles());
 }
+
+void EmuApple2::ioLoadROM(const uint8_t *rom, uint16_t size) {
+  a2_language_card_load_rom(&io_.language_card, rom, size);
+}

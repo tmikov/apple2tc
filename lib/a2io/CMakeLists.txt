@@ -7,6 +7,7 @@ add_library(a2io
   a2io.c ${A2TC_INC}/a2io.h
   disk2.c disk2_tables.h
   font.cpp font.h
+  language_card.c
   soundqueue.c ${A2TC_INC}/soundqueue.h
   )
 

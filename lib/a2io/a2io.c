@@ -404,6 +404,11 @@ void a2_io_init(a2_iostate_t *io) {
   for (unsigned n = 0; n < 4; ++n)
     io->gameport.paddle[n] = A2_PADDLE_CENTER;
   a2_disk2_init(&io->disk2);
+  a2_language_card_init(&io->language_card);
+}
+
+void a2_io_load_rom(a2_iostate_t *io, const uint8_t *rom, size_t rom_size) {
+  a2_language_card_load_rom(&io->language_card, rom, rom_size);
 }
 
 void a2_io_set_paddle(a2_iostate_t *io, unsigned n, uint8_t value) {
@@ -484,10 +489,26 @@ void a2_io_tick(a2_iostate_t *io, unsigned cycles) {
 uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
   advance_clock(io, cycles);
 
+  // Update this here rather than at the end of the function because
+  // there's several early return paths
+  const uint16_t prev_io_addr = io->prev_io_addr;
+  io->prev_io_addr = addr;
+
   // Disk II boot ROM: $C600-$C6FF (only when a disk is mounted).
   if (addr >= 0xC600 && addr <= 0xC6FF &&
       (io->disk2.drive[0].mounted || io->disk2.drive[1].mounted))
     return a2_disk2_rom_peek(addr - 0xC600);
+
+  // Language card : $D000-$FFFF maps banked RAM & ROM, selectable by $C080-$C08F.
+  if (addr >= 0xD000 && addr <= 0xFFFF) {
+    return a2_language_card_peek(&io->language_card, addr - 0xD000);
+  }
+
+  // Language card : $C080-$C08F is used to configure read and write banks
+  if ((addr & A2_LC_MASK) == A2_LC_VAL) {
+    a2_language_card_decode_peek(&io->language_card, addr, prev_io_addr);
+    return 0;
+  }
 
   switch (addr & 0xCFF0) {
   case A2_KBD:
@@ -622,6 +643,13 @@ void a2_io_poke(a2_iostate_t *io, uint16_t addr, uint8_t value, unsigned cycles)
     a2_disk2_poke(&io->disk2, addr & 0x0F, value, cycles);
     return;
   }
+
+  // Handle the language card memory mapping
+  if (addr >= 0xD000 && addr <= 0xFFFF) {
+    a2_language_card_poke(&io->language_card, addr - 0xD000, value);
+    return;
+  }
+
   // One access per write. This used to peek twice, on the strength of "a write
   // is preceeded by a read" from the Apple II Reference Manual, but that is
   // about the addressing modes that perform a dummy read -- abs,X, abs,Y,

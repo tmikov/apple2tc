@@ -228,6 +228,34 @@ typedef struct {
   uint64_t expiry[4];
 } a2_gameport_t;
 
+typedef enum { A2_LC_RAM1, A2_LC_RAM2 } a2_banked_memory_ram_select_t;
+// Addresses from $D000-$FFFF are mapped to multiple locations of either RAM or ROM
+// If reads from ROM are selected, there's a flat 12K ROM from $D000-$FFFF.
+// If reads from RAM are selected, the 4K of RAM from $D000-$DFFF is shared between the two banks,
+// and the 12K of "unbanked?" RAM from $E000-$FFFF is a single shared RAM for both banks.
+// Writes always go to the selected bank regardless of the read-from-rom setting, and can be write-protected.
+typedef struct a2_language_card {
+  // 2 banks of 4K RAM from $D000-$DFFF. These are selected by reading $C08x with the msb of x set/cleared
+  // Writes will go to the selected back regardless of the read-from-rom setting, and can be write-protected.
+  // Reads will come from here if the read-from-rom setting is set to read from RAM, 
+  // otherwise they will come from the ROM below.
+  uint8_t bank1_ram[0x1000];
+  uint8_t bank2_ram[0x1000];
+
+  // Remaining 8K of high RAM from $E000-$FFFF is shared between the two banks.  Writes
+  // always go here, regardless of the bank selected or the read-from-rom setting.
+  // Reads will come from here if the read-from-rom setting is set to read from RAM, 
+  // otherwise they will come from the ROM below.
+  uint8_t high_ram[0x2000];
+
+  // ROM is not banked, just a flat 12K from $D000-$FFFF.
+  uint8_t rom[0x3000];
+
+  bool banked_memory_read_rom;
+  a2_banked_memory_ram_select_t banked_memory_ram_select;
+  bool banked_memory_write_protect;
+} a2_language_card_t;
+
 typedef struct {
   /// The keyboard latch: bits 0-6 of what $C000 reads. The Apple II keyboard
   /// is one byte plus one flag and no queue -- the encoder writes each new
@@ -286,6 +314,10 @@ typedef struct {
   a2_gameport_t gameport;
   /// Disk II controller state.
   a2_disk2_t disk2;
+
+  /// Language card state.
+  a2_language_card_t language_card;
+  uint16_t prev_io_addr;
 } a2_iostate_t;
 
 void a2_io_init(a2_iostate_t *io);
@@ -390,6 +422,12 @@ static inline uint8_t a2_io_get_vidpage_index(const a2_iostate_t *io) {
 uint16_t a2_io_get_hires_page_offset(const a2_iostate_t *io);
 /// Return the starting address of the active text page.
 uint16_t a2_io_get_text_page_offset(const a2_iostate_t *io);
+
+void a2_language_card_init(a2_language_card_t *lc);
+void a2_language_card_load_rom(a2_language_card_t *lc, const uint8_t *rom, uint16_t rom_size);
+uint8_t a2_language_card_peek(a2_language_card_t *lc, unsigned offset);
+void a2_language_card_poke(a2_language_card_t *lc, unsigned offset, uint8_t value);
+void a2_language_card_decode_peek(a2_language_card_t *lc, uint16_t addr, uint16_t prev_addr);
 
 #ifdef __cplusplus
 }
