@@ -95,7 +95,6 @@ void a2_language_card_poke(a2_language_card_t *lc, unsigned offset, uint8_t valu
 
 // See truth table at the top of this file for how the banked memory is selected and write protected.
 void a2_language_card_decode_peek(a2_language_card_t *lc, uint16_t addr, uint16_t prev_addr) {
-    printf("a2_language_card_decode_peek: addr = 0x%04X, prev_addr = 0x%04X\n", addr, prev_addr);
     // Write source is in the MSB of the address
     lc->banked_memory_ram_select = (addr & 0x0008) ? A2_LC_RAM1 : A2_LC_RAM2;
     if (!(addr & 0x0001)) {
@@ -105,5 +104,4 @@ void a2_language_card_decode_peek(a2_language_card_t *lc, uint16_t addr, uint16_
     }
     // Read source ROM is true if bit 1 ^ bit 0 == 1, else RAM
     lc->banked_memory_read_rom = ((addr & 0x0002) >> 1) ^ (addr & 0x0001);
-    printf("a2_language_card_decode_peek: banked_memory_ram_select = %d, banked_memory_write_protect = %d, banked_memory_read_rom = %d\n", lc->banked_memory_ram_select, lc->banked_memory_write_protect, lc->banked_memory_read_rom);
 }

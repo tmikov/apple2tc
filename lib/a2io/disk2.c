@@ -162,7 +162,32 @@ void a2_disk2_unmount(a2_disk2_t *disk, int drive_num) {
   drv->nib_data = NULL;
   drv->mounted = false;
 }
+static const int8_t kDetentFromPhases[16] = {
+  // Phase0 | Phase1 | Phase2 | Phase3 | Detent
+  //   0    | 0      | 0      | 0      | -1  N/A
+  //   1    | 0      | 0      | 0      | 0
+  //   0    | 1      | 0      | 0      | 2
+  //   1    | 1      | 0      | 0      | 1
+  
+  //   0    | 0      | 1      | 0      | 4
+  //   1    | 0      | 1      | 0      | -1  N/A
+  //   0    | 1      | 1      | 0      | 3
+  //   1    | 1      | 1      | 0      | 2
 
+  //   0    | 0      | 0      | 1      | 6
+  //   1    | 0      | 0      | 1      | 7
+  //   0    | 1      | 0      | 1      | -1  N/A
+  //   1    | 1      | 0      | 1      | 0
+
+  //   0    | 0      | 1      | 1      | 5
+  //   1    | 0      | 1      | 1      | 6
+  //   0    | 1      | 1      | 1      | 4
+  //   1    | 1      | 1      | 1      | -1  N/A
+
+  -1, 0,2,1,4,-1,3,2,6,7,-1,0,5,6,4,-1
+
+};
+#include <stdio.h>
 /// Handle stepper motor phase changes (offsets 0x0-0x7).
 ///
 /// Uses the AppleWin algorithm: on every phase change (ON or OFF), compute
@@ -173,12 +198,14 @@ void a2_disk2_unmount(a2_disk2_t *disk, int drive_num) {
 static void handle_stepper(a2_disk2_t *disk, unsigned offset) {
   int phase_num = offset >> 1;
   bool phase_on = offset & 1;
+  // printf("handle_stepper: phase %d, %s\n", phase_num, phase_on ? "ON" : "OFF");
 
   if (phase_on)
     disk->phases |= (1 << phase_num);
   else
     disk->phases &= ~(1 << phase_num);
 
+  #if 1
   // Compute direction from the current half-track position.
   // phase_position is the half-track (0-69). Use it mod 4 directly
   // to check which adjacent phases are energized.
@@ -189,6 +216,8 @@ static void handle_stepper(a2_disk2_t *disk, unsigned offset) {
   if (disk->phases & (1 << ((pp + 3) & 3)))
     direction -= 1;
 
+  // printf("handle_stepper: ->phases =%04X, phase_position %d, direction %d\n", disk->phases, pp, direction);
+
   if (direction != 0) {
     disk->phase_position += direction;
     if (disk->phase_position < 0)
@@ -197,12 +226,48 @@ static void handle_stepper(a2_disk2_t *disk, unsigned offset) {
       disk->phase_position = 69;
 
     int new_track = disk->phase_position / 2;
+    // printf("handle_stepper: new_track = %d\n", new_track);
     a2_disk2_drive_t *drv = &disk->drive[disk->selected_drive];
     if (drv->mounted && new_track != drv->current_track) {
+      // printf("New track: %d\n", new_track);
       drv->current_track = new_track;
-      drv->position = 0;
+      // drv->position = 0;
     }
   }
+  #else
+  a2_disk2_drive_t *drv = &disk->drive[disk->selected_drive];
+  const int16_t cur_track = drv->current_track;
+  const int8_t cur_phase = (cur_track % 8);
+  int16_t track = drv->current_track;
+  const int8_t detent = kDetentFromPhases[disk->phases & 0x0F];
+
+  printf("handle_stepper: ->phases =%01X, cur_track = %d, cur_phase %d, detent %d\n", disk->phases, cur_track, cur_phase, detent);
+    if (detent == -1) return;           // no net force / ambiguous
+    if (detent == cur_phase) return;    // already at requested detent
+
+    // Shortest-path rotation around the phase octagon: pick the smaller
+    // of the CW/CCW arcs, and step the head by that many quarter-tracks.
+    uint8_t slice_add      = (detent - cur_phase) & 7;
+    uint8_t slice_subtract = (cur_phase - detent) & 7;
+    printf("handle_stepper: slice_add = %d, slice_subtract = %d\n", slice_add, slice_subtract);
+    if (slice_add == slice_subtract) return;
+
+    if (slice_subtract < slice_add) {
+        track -= slice_subtract;
+    } else {
+        track += slice_add;
+    }
+    printf("handle_stepper: new track = %d\n", track);
+
+    if (track < 0) track = 0;
+    if (track > 139) track = 139;
+
+    if (track != cur_track) {
+        printf("New track: %d\n", track);
+        drv->current_track = track;
+        // drv->position = 0;
+    }
+    #endif
 }
 
 /// Check if the motor is spinning (on or coasting down).
@@ -236,6 +301,8 @@ static uint8_t read_nibble(a2_disk2_t *disk, unsigned cycles) {
 
     uint8_t *track_base = drv->nib_data + drv->current_track * DISK2_NIB_TRACK_SIZE;
     disk->data_register = track_base[drv->position];
+
+    // printf("read_nibble : track %d, pos %d, byte 0x%02X\n", drv->current_track, drv->position, disk->data_register);
     return disk->data_register;
   }
 

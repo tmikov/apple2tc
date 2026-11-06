@@ -156,7 +156,7 @@ public:
       value = ioPeek(addr);
     else
       value = ram_[addr];
-    // printf("peek: addr = 0x%04X, value = 0x%02X\n", addr, value);
+    // printf("peek: addr = %04X, value = %02X\n", addr, value);
     return value;
   }
   /// Read a 16-bit from memory, iospace, swoft switches, etc. Note that there
@@ -170,7 +170,7 @@ public:
 
   /// Write a 16-bit into memory, iospace, swoft switches, etc.
   void poke(uint16_t addr, uint8_t value) {
-    // printf("poke: addr = 0x%04X, value = 0x%02X\n", addr, value);
+    // printf("poke: addr = %04X, value = %02X\n", addr, value);
     if (addr >= ioRangeStart_ && addr <= ioRangeEnd_)
       ioPoke(addr, value);
     else if (addr < romStart_)

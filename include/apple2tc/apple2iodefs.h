@@ -100,10 +100,8 @@
 #define A2_HGR1SCRN 0x2000
 #define A2_HGR2SCRN 0x4000
 
-// "Language Card" area Switches
-
-#define A2_LC_VAL    0xC080
-#define A2_LC_MASK   0xFFF0
+// Language Card area, assuming slot 0 
+#define A2_LC    0xC080
 
 /// Enqueue a new key press.
 /// IO space range.
