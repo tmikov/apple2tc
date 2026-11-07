@@ -158,6 +158,11 @@ void a2host_joy_set_button(a2host_joybtn_t btn, bool down);
 /// device back up already centred.
 void a2host_joy_release_all(void);
 
+/// Toggle the disk in drive \\p drive between its primary image and the
+/// alternate image supplied via --diskN-alt=. Returns true only when a valid
+/// alternate image was present and the swap succeeded.
+bool a2host_toggle_disk_image(int drive);
+
 /// Whether --joystick asked the front end to start in joystick mode. a2run
 /// shares this parser and has no mode to be in, so it accepts and ignores
 /// the option; a2mcp filters argv against its own whitelist before this
