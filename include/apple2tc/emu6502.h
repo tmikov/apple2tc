@@ -8,8 +8,7 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
-#include <vector>
+#include <cstdio>
 
 class Emu6502 {
 public:
@@ -113,43 +112,60 @@ public:
     return cycles_;
   }
 
+  virtual void refreshMainRAMView() {}
+
   /// Return a read-only pointer to a 64KB buffer of RAM. Not all of that RAM is
-  /// actually usable.
+  /// actually usable. For the Apple II text/hires page buffers in low memory,
+  /// prefer EmuApple2::getTextPage() / getHiresPage(), which are outside the
+  /// language-card banked window and do not need to be re-materialized.
   [[nodiscard]] const uint8_t *getMainRAM() const {
+    const_cast<Emu6502 *>(this)->refreshMainRAMView();
     return ram_;
   }
   /// Return a writable pointer to a 64KB buffer of RAM. Not all of that RAM is
   /// actually usable.
   [[nodiscard]] uint8_t *getMainRAMWritable() {
+    refreshMainRAMView();
     return ram_;
   }
 
   /// Read a byte from the RAM buffer. The RAM buffer is not necessarily what
   /// the CPU sees, as it may be overlapped by IO, etc.
-  [[nodiscard]] uint8_t ram_peek(uint16_t addr) const {
-    return ram_[addr];
+  [[nodiscard]] uint8_t ram_peek(uint16_t addr) {
+    refreshMainRAMView();
+    // if (addr >= ioRangeStart_ && addr <= ioRangeEnd_)
+    //   fprintf(stderr, "ram_peek: addr = 0x%04X is in IO range\n", addr);
+    // return ram_[addr];
+    return peek(addr);
   }
   /// Read a 16-bit word from the RAM buffer. The RAM buffer is not necessarily
   /// what the CPU sees, as it may be overlapped by IO, etc.
-  [[nodiscard]] uint16_t ram_peek16(uint16_t addr) const {
+  [[nodiscard]] uint16_t ram_peek16(uint16_t addr) {
     return ram_peek(addr) + (ram_peek(addr + 1) << 8);
   }
   /// Write a byte into the RAM buffer. This is not the same as writing it into
   /// the address space: no IO decoding is performed, etc.
   void ram_poke(uint16_t addr, uint8_t value) {
-    ram_[addr] = value;
+    refreshMainRAMView();
+    if (addr >= ioRangeStart_ && addr <= ioRangeEnd_)
+      fprintf(stderr, "ram_poke: addr = 0x%04X value = 0x%02X is in IO range\n", addr, value);
+    poke(addr, value);
+    // ram_[addr] = value;
   }
 
-  /// Read a byte from memory, iospace, swoft switches, etc. Note that there
-  /// coudl be side effects, so the method isn't const.
+  /// Read a byte from memory, iospace, soft switches, etc. Note that there
+  /// could be side effects, so the method isn't const.
   /// Note that the type of the parameter is uint16_t,
   /// so when invoked with an integer expression, it will be truncated to 16
   /// bits. This is deliberate.
   uint8_t peek(uint16_t addr) {
+    uint8_t value;
     if (addr >= ioRangeStart_ && addr <= ioRangeEnd_)
-      return ioPeek(addr);
+      value = ioPeek(addr);
     else
-      return ram_[addr];
+      value = ram_[addr];
+    // printf("peek: addr = %04X, value = %02X\n", addr, value);
+    return value;
   }
   /// Read a 16-bit from memory, iospace, swoft switches, etc. Note that there
   //  /// coudl be side effects, so the method isn't const.
@@ -162,6 +178,7 @@ public:
 
   /// Write a 16-bit into memory, iospace, swoft switches, etc.
   void poke(uint16_t addr, uint8_t value) {
+    // printf("poke: addr = %04X, value = %02X\n", addr, value);
     if (addr >= ioRangeStart_ && addr <= ioRangeEnd_)
       ioPoke(addr, value);
     else if (addr < romStart_)
@@ -173,6 +190,8 @@ protected:
   virtual uint8_t ioPeek(uint16_t addr);
   /// Perform a write in the IO range.
   virtual void ioPoke(uint16_t addr, uint8_t value);
+
+  virtual void ioLoadROM(const uint8_t *rom, uint16_t size);
 
 private:
   void push8(uint8_t v) {
@@ -335,6 +354,7 @@ private:
   StopReason (*debugStateCB_)(void *ctx, Emu6502 *emu, uint16_t pc) = nullptr;
   void *debugStateCBCtx_ = nullptr;
 
+protected:
   /// 64Kb of RAM.
   uint8_t ram_[0x10000];
 };

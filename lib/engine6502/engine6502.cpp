@@ -49,7 +49,7 @@ namespace {
 /// because the host is what renders it, replays keys into it and hashes it.
 class HostedEmu : public Emu6502 {
 public:
-  HostedEmu() : Emu6502(0xC000, 0xCFFF) {}
+  HostedEmu() : Emu6502(0xC000, 0xFFFF) {}
 
 protected:
   uint8_t ioPeek(uint16_t addr) override {
@@ -57,6 +57,9 @@ protected:
   }
   void ioPoke(uint16_t addr, uint8_t value) override {
     io_poke(addr, value);
+  }
+  void ioLoadROM(const uint8_t *rom, uint16_t size) override {
+    a2_language_card_load_rom(&a2host_io()->language_card, rom, size);
   }
 };
 
@@ -66,8 +69,6 @@ a2_stop_reason_t s_stopReason = A2_STOP_CYCLES;
 
 std::string s_romPath;
 std::string s_runPath;
-std::string s_disk1Path;
-std::string s_disk2Path;
 std::string s_outPath;
 unsigned s_limit = 0;
 bool s_collect = false;
@@ -122,15 +123,6 @@ std::optional<uint16_t> loadB33(const std::vector<uint8_t> &data) {
   }
   fprintf(stderr, "%s: invalid b33 format\n", s_runPath.c_str());
   return std::nullopt;
-}
-
-void mountDisk(const std::string &path, int drive) {
-  auto data = readFileOrDie(path);
-  if (!a2_disk2_mount(&a2host_io()->disk2, drive, data.data(), data.size())) {
-    fprintf(stderr, "Failed to mount disk%d: %s (bad format or size)\n", drive + 1, path.c_str());
-    exit(2);
-  }
-  fprintf(stderr, "Mounted disk%d: %s\n", drive + 1, path.c_str());
 }
 
 void startCollecting() {
@@ -269,15 +261,6 @@ void init_emulated(void) {
     s_emu.loadROM(rom.data(), rom.size());
   }
 
-  if (!s_disk1Path.empty())
-    mountDisk(s_disk1Path, 0);
-  if (!s_disk2Path.empty())
-    mountDisk(s_disk2Path, 1);
-  // The CPU fetches instructions straight out of RAM, bypassing ioPeek(), so
-  // the boot ROM has to actually be there.
-  if (!s_disk1Path.empty() || !s_disk2Path.empty())
-    a2_disk2_install_rom(s_emu.getMainRAMWritable());
-
   s_emu.setDebugStateCB(&s_dbg, debugCB);
   // Collecting wants a complete picture; tracing does not want the keyboard and
   // delay loops.
@@ -365,10 +348,6 @@ bool engine_parse_arg(const char *arg) {
 
   if (prefix("--rom=", &s_romPath))
     return true;
-  if (prefix("--disk1=", &s_disk1Path))
-    return true;
-  if (prefix("--disk2=", &s_disk2Path))
-    return true;
   if (prefix("--out=", &s_outPath))
     return true;
   if (strcmp(arg, "--collect") == 0) {
@@ -399,8 +378,6 @@ void engine_print_help(void) {
   printf("\n 6502 interpreter engine:\n");
   printf(" <file>           DOS3.3 binary to load and run\n");
   printf(" --rom=path       Use this ROM instead of the built-in Apple II+\n");
-  printf(" --disk1=path     Mount a disk image in drive 1\n");
-  printf(" --disk2=path     Mount a disk image in drive 2\n");
   printf(" --from-rom       Enter the program via CALL from BASIC, so a\n");
   printf("                  collection covers the ROM boot as well\n");
   printf(" --preload        Put the program in RAM before the machine starts\n");

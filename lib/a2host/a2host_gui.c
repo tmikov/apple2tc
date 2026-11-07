@@ -532,13 +532,24 @@ static bool handle_joystick_key(const sapp_event *ev) {
     return false; // not ours to consume; other handlers may want it
   }
 
-  if (ev->type == SAPP_EVENTTYPE_KEY_DOWN && ev->key_code == SAPP_KEYCODE_F7) {
-    joyMode_ = !joyMode_;
-    // Leaving the mode with a key held would strand the stick at a rail.
-    if (!joyMode_)
-      a2host_joy_release_all();
-    report_status();
-    return true;
+  if (ev->type == SAPP_EVENTTYPE_KEY_DOWN) {
+    switch (ev->key_code) {
+    case SAPP_KEYCODE_F8:
+      a2host_toggle_disk_image(0);
+      return true;
+    case SAPP_KEYCODE_F9:
+      a2host_toggle_disk_image(1);
+      return true;
+    case SAPP_KEYCODE_F7:
+      joyMode_ = !joyMode_;
+      // Leaving the mode with a key held would strand the stick at a rail.
+      if (!joyMode_)
+        a2host_joy_release_all();
+      report_status();
+      return true;
+    default:
+      break;
+    }
   }
 
   if (!joyMode_)

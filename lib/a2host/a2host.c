@@ -26,7 +26,6 @@
 #include "joystick.h"
 #include "probe_internal.h"
 
-#include <ctype.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -70,6 +69,10 @@ static bool trace_keys_ = false;
 /// recording format: it must never be read by a2host_fixed_step() or
 /// anything else that affects emulation or pacing.
 static bool echo_keys_ = false;
+/// Alternate disk images and the current active side for drives 0 and 1.
+static char *disk_primary_path_[2] = {NULL, NULL};
+static char *disk_alternate_path_[2] = {NULL, NULL};
+static bool disk_active_alternate_[2] = {false, false};
 /// If set, path from --probe=, the script whose coordinate --record-keys
 /// stamps recorded keys with. Recorded separately from probe_loaded_ because
 /// the header comment below needs the path itself, not just whether one was
@@ -207,6 +210,90 @@ bool a2host_joystick_at_start(void) {
   return joystickAtStart_;
 }
 
+static char *dup_string(const char *s) {
+  if (!s)
+    return NULL;
+  size_t n = strlen(s) + 1;
+  char *p = malloc(n);
+  if (!p)
+    abort();
+  memcpy(p, s, n);
+  return p;
+}
+
+static bool mount_disk_file(int drive, const char *path) {
+  if (drive < 0 || drive > 1 || !path || !*path)
+    return false;
+
+  FILE *f = fopen(path, "rb");
+  if (!f) {
+    perror(path);
+    return false;
+  }
+
+  if (fseek(f, 0, SEEK_END) != 0) {
+    perror(path);
+    fclose(f);
+    return false;
+  }
+  long len = ftell(f);
+  if (len < 0) {
+    perror(path);
+    fclose(f);
+    return false;
+  }
+  rewind(f);
+
+  uint8_t *data = (uint8_t *)malloc((size_t)len);
+  if (!data) {
+    fprintf(stderr, "FATAL: out of memory while reading disk image %s\n", path);
+    fclose(f);
+    exit(2);
+  }
+
+  size_t got = fread(data, 1, (size_t)len, f);
+  fclose(f);
+  if (got != (size_t)len) {
+    fprintf(stderr, "WARNING: short read for disk image %s\n", path);
+    free(data);
+    return false;
+  }
+
+  if (!a2_disk2_mount(&io_.disk2, drive, data, (size_t)len)) {
+    fprintf(stderr, "Failed to mount disk%d: %s (bad format or size)\n", drive + 1, path);
+    free(data);
+    return false;
+  }
+
+  free(data);
+  return true;
+}
+
+bool a2host_toggle_disk_image(int drive) {
+  if (drive < 0 || drive > 1)
+    return false;
+
+  const char *next = NULL;
+  if (disk_active_alternate_[drive]) {
+    next = disk_primary_path_[drive];
+    disk_active_alternate_[drive] = false;
+  } else {
+    next = disk_alternate_path_[drive];
+    if (next)
+      disk_active_alternate_[drive] = true;
+  }
+
+  if (!next || !*next) {
+    fprintf(stderr, "No alternate disk configured for drive %d\n", drive + 1);
+    return false;
+  }
+
+  if (!mount_disk_file(drive, next))
+    return false;
+
+  return true;
+}
+
 /// Set by a front end with a real display; see a2host_set_wall_clock_pacing().
 static bool wall_clock_ = false;
 /// Seconds handed over by the last a2host_begin_repaint(), used to size the
@@ -332,7 +419,7 @@ void add_default_nondebug(void) {
 }
 
 static unsigned s_numDebugLines = 0;
-enum { MAX_DEBUG_LINES = 2000000 };
+enum { MAX_DEBUG_LINES = 20000000 };
 
 void debug_asm(uint16_t pc) {
   for (unsigned i = 0; i != s_num_nondebug; ++i) {
@@ -850,6 +937,13 @@ void a2host_init_emulation(void) {
   if (kbd_file_ || key_presses_ || scheduled_keys_)
     a2_io_push_key(&io_, '\r');
 
+  for (int drive = 0; drive < 2; ++drive) {
+    if (disk_primary_path_[drive] && *disk_primary_path_[drive])
+      mount_disk_file(drive, disk_primary_path_[drive]);
+  }
+  if (disk_primary_path_[0] || disk_primary_path_[1])
+    a2_disk2_install_rom((uint8_t *)get_ram());
+
   init_emulated();
 
   // init_emulated() is where a program registers buffered keys, so this is the
@@ -1095,6 +1189,12 @@ unsigned a2host_frame_no(void) {
 }
 
 void a2host_shutdown(void) {
+  for (int drive = 0; drive < 2; ++drive) {
+    free(disk_primary_path_[drive]);
+    disk_primary_path_[drive] = NULL;
+    free(disk_alternate_path_[drive]);
+    disk_alternate_path_[drive] = NULL;
+  }
   if (hash_file_) {
     fclose(hash_file_);
     hash_file_ = NULL;
@@ -1146,6 +1246,10 @@ static void print_help(void) {
   printf(" --no-sound       Disable sound\n");
   printf(" --kbd-file=path  Read ascii keyboard input from the specified file\n");
   printf(" --key-file=path  Read key presses and cycles from the specified file\n");
+  printf(" --disk1=path     Mount a disk image in drive 1\n");
+  printf(" --disk1-alt=path Alternate disk image for drive 1; F8 swaps it at runtime\n");
+  printf(" --disk2=path     Mount a disk image in drive 2\n");
+  printf(" --disk2-alt=path Alternate disk image for drive 2; F9 swaps it at runtime\n");
   printf(" --fast           Emulate a faster CPU\n");
   printf(" --compat         Debug info compatible with the emulator\n");
   printf(" --trace          Dump state at branch targets\n");
@@ -1201,6 +1305,26 @@ void a2host_parse_args(int argc, char *argv[]) {
     }
     if (strcmp(arg, "--no-sound") == 0) {
       sound_enabled_ = false;
+      continue;
+    }
+    if (strncmp(arg, "--disk1=", 8) == 0) {
+      free(disk_primary_path_[0]);
+      disk_primary_path_[0] = dup_string(arg + 8);
+      continue;
+    }
+    if (strncmp(arg, "--disk1-alt=", 12) == 0) {
+      free(disk_alternate_path_[0]);
+      disk_alternate_path_[0] = dup_string(arg + 12);
+      continue;
+    }
+    if (strncmp(arg, "--disk2=", 8) == 0) {
+      free(disk_primary_path_[1]);
+      disk_primary_path_[1] = dup_string(arg + 8);
+      continue;
+    }
+    if (strncmp(arg, "--disk2-alt=", 12) == 0) {
+      free(disk_alternate_path_[1]);
+      disk_alternate_path_[1] = dup_string(arg + 12);
       continue;
     }
     if (strcmp(arg, "--compat") == 0) {

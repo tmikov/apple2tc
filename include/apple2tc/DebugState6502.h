@@ -112,7 +112,7 @@ private:
 private:
   void addRecord(const InstRecord &rec);
   Emu6502::StopReason debugState(Emu6502 *emu, uint16_t pc);
-  Emu6502::StopReason collectData(const Emu6502 *emu, uint16_t pc);
+  Emu6502::StopReason collectData(Emu6502 *emu, uint16_t pc);
   void saveGeneration(const Emu6502 *emu, Emu6502::Regs regs);
 
 private:

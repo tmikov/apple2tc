@@ -44,8 +44,7 @@ Emu6502::Emu6502(unsigned int ioRangeStart, unsigned int ioRangeEnd)
 void Emu6502::loadROM(const uint8_t *rom, unsigned int size) {
   release_assert(size <= 0x10000, "ROM larger than 64KB");
   release_assert(romStart_ == 0x10000, "ROM already loaded");
-  romStart_ = 0x10000 - size;
-  memcpy(ram_ + romStart_, rom, size);
+  ioLoadROM(rom, size);
   reset();
 }
 
@@ -147,7 +146,8 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
     // reintroducing per-instruction work at every indexed access, so making
     // the interpreter "more correct" here would only reintroduce the
     // engine-vs-engine divergence this cycle model exists to remove.
-    uint8_t opcode = ram_[pc_];
+    // uint8_t opcode = ram_[pc_];
+    const uint8_t opcode = peek(pc_);
     cycles_ += decodeOpcode(opcode).cycles;
 
     switch (opcode) {
@@ -941,7 +941,8 @@ Emu6502::StopReason Emu6502::runFor(unsigned runCycles) {
       break;
 
     default:
-      fprintf(stderr, "Invalid instruction $%02X\n", ram_[pc_]);
+      fprintf(stderr, "Invalid instruction $%02X\n", opcode);
+      exit(0);
       // TODO: we might want to decode the invalid instructions the way the
       //       CPU would. Only if we find that it makes a difference.
       pc_ += 1;
@@ -963,4 +964,7 @@ uint8_t Emu6502::ioPeek(uint16_t addr) {
 
 void Emu6502::ioPoke(uint16_t addr, uint8_t value) {
   ioPeek(addr);
+}
+
+void Emu6502::ioLoadROM(const uint8_t *rom, uint16_t romSize) {
 }

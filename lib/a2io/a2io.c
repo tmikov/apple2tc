@@ -404,6 +404,11 @@ void a2_io_init(a2_iostate_t *io) {
   for (unsigned n = 0; n < 4; ++n)
     io->gameport.paddle[n] = A2_PADDLE_CENTER;
   a2_disk2_init(&io->disk2);
+  a2_language_card_init(&io->language_card);
+}
+
+void a2_io_load_rom(a2_iostate_t *io, const uint8_t *rom, size_t rom_size) {
+  a2_language_card_load_rom(&io->language_card, rom, rom_size);
 }
 
 void a2_io_set_paddle(a2_iostate_t *io, unsigned n, uint8_t value) {
@@ -484,34 +489,62 @@ void a2_io_tick(a2_iostate_t *io, unsigned cycles) {
 uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
   advance_clock(io, cycles);
 
+  // Update this here rather than at the end of the function because
+  // there's several early return paths
+  const uint16_t prev_io_addr = io->prev_io_addr;
+  io->prev_io_addr = addr;
+
   // Disk II boot ROM: $C600-$C6FF (only when a disk is mounted).
   if (addr >= 0xC600 && addr <= 0xC6FF &&
       (io->disk2.drive[0].mounted || io->disk2.drive[1].mounted))
     return a2_disk2_rom_peek(addr - 0xC600);
 
-  switch (addr & 0xCFF0) {
+  // Language card : $D000-$FFFF maps banked RAM & ROM, selectable by $C080-$C08F.
+  if (addr >= 0xD000 && addr <= 0xFFFF) {
+    return a2_language_card_peek(&io->language_card, addr - 0xD000);
+  }
+
+  switch (addr & 0xFFF0) {
+  // Each of these cases matches a full 16 byte range
+  // Make sure that within that range each individual address
+  // is correctly handled
   case A2_KBD:
-    if (io->debug & A2_DEBUG_IO1)
-      fprintf(stderr, "[%u] KBD\n", cycles);
-    return kbd(io);
+    if (addr == A2_KBD) {
+      if (io->debug & A2_DEBUG_IO1)
+        fprintf(stderr, "[%u] KBD\n", cycles);
+      return kbd(io);
+    }
+    break;
   case A2_KBDSTRB:
-    if (io->debug & A2_DEBUG_IO2)
-      fprintf(stderr, "[%u] KBDSTRB\n", cycles);
-    kbdstrb(io);
+    if (addr == A2_KBDSTRB) {
+      if (io->debug & A2_DEBUG_IO2)
+        fprintf(stderr, "[%u] KBDSTRB\n", cycles);
+      kbdstrb(io);
+      return 0;
+    }
     break;
   case A2_TAPEOUT:
-    if (io->debug & A2_DEBUG_IO1)
-      fprintf(stderr, "[%u] TAPEOUT\n", cycles);
+    if (addr == A2_TAPEOUT) {
+      if (io->debug & A2_DEBUG_IO1)
+        fprintf(stderr, "[%u] TAPEOUT\n", cycles);
+      return 0;
+    }
     break;
   case A2_SPKR:
-    if (io->debug & A2_DEBUG_IO1)
-      fprintf(stderr, "[%u] SPKR\n", cycles);
-    if (io->spkr_cb)
-      io->spkr_cb(io->spkr_cb_ctx, cycles);
+    if (addr == A2_SPKR) {
+      if (io->debug & A2_DEBUG_IO1)
+        fprintf(stderr, "[%u] SPKR\n", cycles);
+      if (io->spkr_cb)
+        io->spkr_cb(io->spkr_cb_ctx, cycles);
+      return 0;
+    }
     break;
   case A2_STROBE:
-    if (io->debug & A2_DEBUG_IO1)
-      fprintf(stderr, "[%u] STROBE\n", cycles);
+    if (addr == A2_STROBE) {
+      if (io->debug & A2_DEBUG_IO1)
+        fprintf(stderr, "[%u] STROBE\n", cycles);
+      return 0;
+    }
     break;
 
   case A2_TXTCLR:
@@ -520,22 +553,22 @@ uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
       if (io->debug & A2_DEBUG_IO1)
         fprintf(stderr, "[%u] TXTCLR\n", cycles);
       io->vid_control &= ~A2_VC_TEXT;
-      break;
+      return 0;
     case A2_TXTSET:
       if (io->debug & A2_DEBUG_IO1)
         fprintf(stderr, "[%u] TXTSET\n", cycles);
       io->vid_control |= A2_VC_TEXT;
-      break;
+      return 0;
     case A2_MIXCLR:
       if (io->debug & A2_DEBUG_IO1)
         fprintf(stderr, "[%u] MIXCLR\n", cycles);
       io->vid_control &= ~A2_VC_MIXED;
-      break;
+      return 0;
     case A2_MIXSET:
       if (io->debug & A2_DEBUG_IO1)
         fprintf(stderr, "[%u] MIXSET\n", cycles);
       io->vid_control |= A2_VC_MIXED;
-      break;
+      return 0;
     case A2_LOWSCR:
       if (io->debug & A2_DEBUG_IO1)
         fprintf(stderr, "[%u] LOWSCR\n", cycles);
@@ -547,24 +580,24 @@ uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
       if (io->vid_control & A2_VC_PAGE2)
         ++io->page_flips;
       io->vid_control &= ~A2_VC_PAGE2;
-      break;
+      return 0;
     case A2_HISCR:
       if (io->debug & A2_DEBUG_IO1)
         fprintf(stderr, "[%u] HISCR\n", cycles);
       if (!(io->vid_control & A2_VC_PAGE2))
         ++io->page_flips;
       io->vid_control |= A2_VC_PAGE2;
-      break;
+      return 0;
     case A2_LORES:
       if (io->debug & A2_DEBUG_IO1)
         fprintf(stderr, "[%u] LORES\n", cycles);
       io->vid_control &= ~A2_VC_HIRES;
-      break;
+      return 0;
     case A2_HIRES:
       if (io->debug & A2_DEBUG_IO1)
         fprintf(stderr, "[%u] HIRES\n", cycles);
       io->vid_control |= A2_VC_HIRES;
-      break;
+      return 0;
     default:
       if (io->debug & A2_DEBUG_IO1)
         fprintf(stderr, "[%u] ANNUNCIATORS $%04X\n", cycles, addr);
@@ -572,7 +605,7 @@ uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
     }
     break;
 
-  // Game I/O. The switch above dispatches on addr & 0xCFF0, so this arm is
+  // Game I/O. The switch above dispatches on addr & 0xFFF0, so this arm is
   // the whole of $C060-$C06F; the 74LS251 behind it decodes only A0-A2, which
   // is why $C068-$C06F mirror $C060-$C067.
   //
@@ -598,18 +631,28 @@ uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
   // tail-calls this function, so a write triggers too -- which is correct,
   // the hardware triggers on any access.
   case A2_PTRIG:
-    for (unsigned n = 0; n < 4; ++n)
-      io->gameport.expiry[n] = io->clock +
-          (uint64_t)A2_PADDLE_CYCLES_PER_COUNT * io->gameport.paddle[n] + A2_PADDLE_OFFSET;
+    if (addr == A2_PTRIG) {
+      for (unsigned n = 0; n < 4; ++n)
+        io->gameport.expiry[n] = io->clock +
+            (uint64_t)A2_PADDLE_CYCLES_PER_COUNT * io->gameport.paddle[n] + A2_PADDLE_OFFSET;
+      return 0;
+    }
     break;
+
+  // Language card : slot 0 $C080-$C08F is used to configure read and write banks
+  case A2_LC:
+    a2_language_card_decode_peek(&io->language_card, addr, prev_io_addr);
+    return 0;
 
   // Disk II soft switches: $C0E0-$C0EF.
   case 0xC0E0:
     return a2_disk2_peek(&io->disk2, addr & 0x0F, cycles);
 
   default:
-    fprintf(stderr, "[%u] Unsupported IO location read $%04X\n", cycles, addr);
+    break;
   }
+  fprintf(stderr, "[%u] Unsupported IO location read $%04X\n", cycles, addr);
+  fprintf(stdout, "[%u] Unsupported IO location read $%04X\n", cycles, addr);
 
   return 0;
 }
@@ -617,11 +660,31 @@ uint8_t a2_io_peek(a2_iostate_t *io, uint16_t addr, unsigned cycles) {
 void a2_io_poke(a2_iostate_t *io, uint16_t addr, uint8_t value, unsigned cycles) {
   advance_clock(io, cycles);
 
+  // Writes to these addresses shouldn't be passed through to peek?
+  switch (addr) {
+    case 0xC000:
+    case 0xC001:
+    case 0xC00C:
+    case 0xC00D:
+       fprintf(stdout, "[%u] Returning from poke $%04X\n", cycles, addr);
+       fprintf(stderr, "[%u] Returning from poke $%04X\n", cycles, addr);
+      return;
+  }
+
   // Disk II soft switches need dedicated write handling.
-  if ((addr & 0xCFF0) == 0xC0E0) {
+  if ((addr & 0xFFF0) == 0xC0E0) {
     a2_disk2_poke(&io->disk2, addr & 0x0F, value, cycles);
     return;
   }
+
+  // Handle the language card memory mapping - this will write to 
+  // banked RAM that shadows ROM at these locations regardless of
+  // the read source soft switch settings
+  if (addr >= 0xD000 && addr <= 0xFFFF) {
+    a2_language_card_poke(&io->language_card, addr - 0xD000, value);
+    return;
+  }
+
   // One access per write. This used to peek twice, on the strength of "a write
   // is preceeded by a read" from the Apple II Reference Manual, but that is
   // about the addressing modes that perform a dummy read -- abs,X, abs,Y,
