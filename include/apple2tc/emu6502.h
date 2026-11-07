@@ -112,37 +112,45 @@ public:
     return cycles_;
   }
 
+  virtual void refreshMainRAMView() {}
+
   /// Return a read-only pointer to a 64KB buffer of RAM. Not all of that RAM is
-  /// actually usable.
+  /// actually usable. For the Apple II text/hires page buffers in low memory,
+  /// prefer EmuApple2::getTextPage() / getHiresPage(), which are outside the
+  /// language-card banked window and do not need to be re-materialized.
   [[nodiscard]] const uint8_t *getMainRAM() const {
+    const_cast<Emu6502 *>(this)->refreshMainRAMView();
     return ram_;
   }
   /// Return a writable pointer to a 64KB buffer of RAM. Not all of that RAM is
   /// actually usable.
   [[nodiscard]] uint8_t *getMainRAMWritable() {
+    refreshMainRAMView();
     return ram_;
   }
 
   /// Read a byte from the RAM buffer. The RAM buffer is not necessarily what
   /// the CPU sees, as it may be overlapped by IO, etc.
-  [[nodiscard]] uint8_t ram_peek(uint16_t addr) const {
-    if (addr >= ioRangeStart_ && addr <= ioRangeEnd_)
-      fprintf(stderr, "ram_peek: addr = 0x%04X is in IO range\n", addr);
-    return ram_[addr];
+  [[nodiscard]] uint8_t ram_peek(uint16_t addr) {
+    refreshMainRAMView();
+    // if (addr >= ioRangeStart_ && addr <= ioRangeEnd_)
+    //   fprintf(stderr, "ram_peek: addr = 0x%04X is in IO range\n", addr);
+    // return ram_[addr];
+    return peek(addr);
   }
   /// Read a 16-bit word from the RAM buffer. The RAM buffer is not necessarily
   /// what the CPU sees, as it may be overlapped by IO, etc.
-  [[nodiscard]] uint16_t ram_peek16(uint16_t addr) const {
-    if (addr >= ioRangeStart_ && addr <= ioRangeEnd_)
-      fprintf(stderr, "ram_peek16: addr = 0x%04X is in IO range\n", addr);
+  [[nodiscard]] uint16_t ram_peek16(uint16_t addr) {
     return ram_peek(addr) + (ram_peek(addr + 1) << 8);
   }
   /// Write a byte into the RAM buffer. This is not the same as writing it into
   /// the address space: no IO decoding is performed, etc.
   void ram_poke(uint16_t addr, uint8_t value) {
+    refreshMainRAMView();
     if (addr >= ioRangeStart_ && addr <= ioRangeEnd_)
       fprintf(stderr, "ram_poke: addr = 0x%04X value = 0x%02X is in IO range\n", addr, value);
-    ram_[addr] = value;
+    poke(addr, value);
+    // ram_[addr] = value;
   }
 
   /// Read a byte from memory, iospace, soft switches, etc. Note that there
@@ -346,6 +354,7 @@ private:
   StopReason (*debugStateCB_)(void *ctx, Emu6502 *emu, uint16_t pc) = nullptr;
   void *debugStateCBCtx_ = nullptr;
 
+protected:
   /// 64Kb of RAM.
   uint8_t ram_[0x10000];
 };

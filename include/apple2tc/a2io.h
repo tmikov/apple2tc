@@ -254,6 +254,7 @@ typedef struct a2_language_card {
   bool banked_memory_read_rom;
   a2_banked_memory_ram_select_t banked_memory_ram_select;
   bool banked_memory_write_protect;
+  bool visible_memory_dirty;
 } a2_language_card_t;
 
 typedef struct {
@@ -427,6 +428,7 @@ void a2_language_card_init(a2_language_card_t *lc);
 void a2_language_card_load_rom(a2_language_card_t *lc, const uint8_t *rom, uint16_t rom_size);
 uint8_t a2_language_card_peek(a2_language_card_t *lc, unsigned offset);
 void a2_language_card_poke(a2_language_card_t *lc, unsigned offset, uint8_t value);
+void a2_language_card_sync_ram(a2_language_card_t *lc, uint8_t *ram);
 void a2_language_card_decode_peek(a2_language_card_t *lc, uint16_t addr, uint16_t prev_addr);
 
 #ifdef __cplusplus

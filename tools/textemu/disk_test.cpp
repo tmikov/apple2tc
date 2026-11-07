@@ -500,7 +500,7 @@ int main(int argc, const char **argv) {
 
   // Dump text screen.
   fprintf(stderr, "\n--- Text screen ---\n");
-  const uint8_t *page = emu->getMainRAM() + EmuApple2::TXT1SCRN;
+  const uint8_t *page = emu->getTextPage(0);
   for (unsigned y = 0; y < 24; y++) {
     unsigned offset = (y % 8) * 128 + (y / 8) * 40;
     for (unsigned x = 0; x < 40; x++) {

@@ -131,7 +131,7 @@ void DebugState6502::addRecord(const InstRecord &rec) {
   history_.push_back(rec);
 }
 
-static inline ThreeBytes ram_peek3(const Emu6502 *emu, uint16_t addr) {
+static inline ThreeBytes ram_peek3(Emu6502 *emu, uint16_t addr) {
   ThreeBytes b;
   b.d[0] = emu->ram_peek(addr);
   b.d[1] = emu->ram_peek(addr + 1);
@@ -211,7 +211,7 @@ Emu6502::StopReason DebugState6502::debugState(Emu6502 *emu, uint16_t pc) {
 /// If the instruction doesn't access memory, just return 0, so it is always safe
 /// to call this function.
 static uint16_t
-operandEA(const Emu6502 *emu, Emu6502::Regs regs, CPUAddrMode am, uint16_t operand) {
+operandEA(Emu6502 *emu, Emu6502::Regs regs, CPUAddrMode am, uint16_t operand) {
   switch (am) {
   case CPUAddrMode::Abs:
   case CPUAddrMode::Rel:
@@ -238,10 +238,10 @@ operandEA(const Emu6502 *emu, Emu6502::Regs regs, CPUAddrMode am, uint16_t opera
   }
 }
 
-static inline uint8_t stack_peek8(const Emu6502 *emu, unsigned sp) {
+static inline uint8_t stack_peek8(Emu6502 *emu, unsigned sp) {
   return emu->ram_peek(Emu6502::STACK_PAGE_ADDR + ((sp + 1) & 255));
 }
-static inline uint16_t stack_peek16(const Emu6502 *emu, uint8_t sp) {
+static inline uint16_t stack_peek16(Emu6502 *emu, uint8_t sp) {
   return stack_peek8(emu, sp) + stack_peek8(emu, sp + 1) * 256;
 }
 
@@ -267,7 +267,7 @@ static inline int getStackChange(CPUInstKind kind) {
   }
 }
 
-Emu6502::StopReason DebugState6502::collectData(const Emu6502 *emu, uint16_t pc) {
+Emu6502::StopReason DebugState6502::collectData(Emu6502 *emu, uint16_t pc) {
   ThreeBytes b = ram_peek3(emu, pc);
   CPUInst inst = decodeInst(pc, b);
   Emu6502::Regs regs = emu->getRegs();

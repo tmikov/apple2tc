@@ -50,6 +50,15 @@ public:
     return &io_;
   }
 
+  [[nodiscard]] const uint8_t *getTextPage(unsigned pageIndex) const {
+    return ram_ + (pageIndex ? TXT2SCRN : TXT1SCRN);
+  }
+  [[nodiscard]] const uint8_t *getHiresPage(unsigned pageIndex) const {
+    return ram_ + (pageIndex ? HGR2SCRN : HGR1SCRN);
+  }
+
+  void refreshMainRAMView() override;
+
 protected:
   /// Perform a read in the IO range.
   uint8_t ioPeek(uint16_t addr) override;
@@ -63,4 +72,4 @@ private:
 };
 
 /// Dump the BASIC program as binary tokens.
-void dumpApplesoftBasic(FILE *f, const EmuApple2 *emu);
+void dumpApplesoftBasic(FILE *f, EmuApple2 *emu);

@@ -43,6 +43,7 @@ void a2_language_card_init(a2_language_card_t *lc) {
   lc->banked_memory_read_rom = true;
   lc->banked_memory_ram_select = A2_LC_RAM2;
   lc->banked_memory_write_protect = true;
+  lc->visible_memory_dirty = true;
 }
 
 void a2_language_card_load_rom(a2_language_card_t *lc, const uint8_t *rom, uint16_t rom_size) {
@@ -53,6 +54,7 @@ void a2_language_card_load_rom(a2_language_card_t *lc, const uint8_t *rom, uint1
   // Load into highest addresses of the ROM area
   uint16_t rom_start = sizeof(lc->rom) - rom_size;
   memcpy(lc->rom + rom_start, rom, rom_size);
+  lc->visible_memory_dirty = true;
 }
 
 uint8_t a2_language_card_peek(a2_language_card_t *lc, unsigned offset) {
@@ -78,6 +80,7 @@ void a2_language_card_poke(a2_language_card_t *lc, unsigned offset, uint8_t valu
   }
   if (offset >= sizeof(lc->bank1_ram)) {
     lc->high_ram[offset - sizeof(lc->bank1_ram)] = value;
+    lc->visible_memory_dirty = true;
     return;
   }
   switch (lc->banked_memory_ram_select) {
@@ -91,17 +94,32 @@ void a2_language_card_poke(a2_language_card_t *lc, unsigned offset, uint8_t valu
     fprintf(stderr, "a2_language_card_poke: write to invalid write source %d banked memory at offset 0x%04X, value = 0x%02X\n", lc->banked_memory_ram_select, offset, value);
     break;
   }
+  lc->visible_memory_dirty = true;
+}
+
+void a2_language_card_sync_ram(a2_language_card_t *lc, uint8_t *ram) {
+  if (!lc->visible_memory_dirty)
+    return;
+  for (unsigned offset = 0; offset < 0x3000; ++offset)
+    ram[0xD000 + offset] = a2_language_card_peek(lc, offset);
+  lc->visible_memory_dirty = false;
 }
 
 // See truth table at the top of this file for how the banked memory is selected and write protected.
 void a2_language_card_decode_peek(a2_language_card_t *lc, uint16_t addr, uint16_t prev_addr) {
-    // Write source is in the MSB of the address
-    lc->banked_memory_ram_select = (addr & 0x0008) ? A2_LC_RAM1 : A2_LC_RAM2;
-    if (!(addr & 0x0001)) {
-        lc->banked_memory_write_protect = true;
-    } else if (addr == prev_addr) {
-        lc->banked_memory_write_protect = false;
-    }
-    // Read source ROM is true if bit 1 ^ bit 0 == 1, else RAM
-    lc->banked_memory_read_rom = ((addr & 0x0002) >> 1) ^ (addr & 0x0001);
+  const bool prev_read_rom = lc->banked_memory_read_rom;
+  const a2_banked_memory_ram_select_t prev_bank = lc->banked_memory_ram_select;
+
+  // Write source is in the MSB of the address
+  lc->banked_memory_ram_select = (addr & 0x0008) ? A2_LC_RAM1 : A2_LC_RAM2;
+  if (!(addr & 0x0001)) {
+    lc->banked_memory_write_protect = true;
+  } else if (addr == prev_addr) {
+    lc->banked_memory_write_protect = false;
+  }
+  // Read source ROM is true if bit 1 ^ bit 0 == 1, else RAM
+  lc->banked_memory_read_rom = ((addr & 0x0002) >> 1) ^ (addr & 0x0001);
+
+  if (lc->banked_memory_read_rom != prev_read_rom || lc->banked_memory_ram_select != prev_bank)
+    lc->visible_memory_dirty = true;
 }

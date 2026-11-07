@@ -7,7 +7,7 @@
 
 #include "apple2tc/apple2.h"
 
-void dumpApplesoftBasic(FILE *f, const EmuApple2 *emu) {
+void dumpApplesoftBasic(FILE *f, EmuApple2 *emu) {
   uint16_t start = emu->ram_peek16(EmuApple2::TXTTAB);
   uint16_t end = emu->ram_peek16(EmuApple2::PRGEND);
 

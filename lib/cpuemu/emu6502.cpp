@@ -55,7 +55,6 @@ void Emu6502::reset() {
   status_ = STATUS_IGNORED;
   sp_ = 0xFF;
   pc_ = peek16(RESET_VEC);
-  printf("Emu6502::reset: pc = 0x%04X\n", pc_);
 }
 
 uint8_t Emu6502::adcDecimal(uint8_t b) {
